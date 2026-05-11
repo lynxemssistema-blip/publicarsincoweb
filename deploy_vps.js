@@ -57,7 +57,7 @@ async function deploy() {
         
         echo "▶️ Iniciando a aplicação..."
         pm2 stop all || true > /dev/null 2>&1
-        pm2 start ecosystem.config.cjs
+        pm2 start ecosystem.config.js
         pm2 save > /dev/null 2>&1
         
         echo "🌐 Configurando Nginx para o domínio..."

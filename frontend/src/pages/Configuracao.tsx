@@ -18,6 +18,7 @@ export default function ConfiguracaoPage() {
 
     // Config Regras
     const [restringirApontamento, setRestringirApontamento] = useState('Não');
+    const [mostrarPowerBuild, setMostrarPowerBuild] = useState('Não');
     const [processosVisiveis, setProcessosVisiveis] = useState<string[]>(['corte', 'dobra', 'solda', 'pintura', 'montagem']);
     const [planoCorteFiltroDC, setPlanoCorteFiltroDC] = useState<'corte' | 'chaparia'>('corte');
     const [maxRegistros, setMaxRegistros] = useState<number>(500);
@@ -68,6 +69,9 @@ export default function ConfiguracaoPage() {
         setMaxRegistros(maxSalvo);
         const presets = [100, 300, 500, 1000, 5000];
         setMaxRegistrosCustom(presets.includes(maxSalvo) ? '' : String(maxSalvo));
+
+        const powerBuildSalvo = localStorage.getItem('sinco_mostrarPowerBuild') || 'Não';
+        setMostrarPowerBuild(powerBuildSalvo);
     };
 
     const fetchMenu = () => {
@@ -187,7 +191,8 @@ export default function ConfiguracaoPage() {
             planoCorteFiltroDC, 
             maxRegistros,
             processosVisiveis,
-            restringirApontamento
+            restringirApontamento,
+            mostrarPowerBuild
         });
 
         // 2. Tenta salvar na API (banco de dados)
@@ -546,6 +551,18 @@ export default function ConfiguracaoPage() {
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={restringirApontamento === 'Sim'} onChange={(e) => setRestringirApontamento(e.target.checked ? 'Sim' : 'Não')} />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#E0E800]/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#32423D]"></div>
+                            </label>
+                        </div>
+                        <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors mt-4">
+                            <div>
+                                <h3 className="font-medium text-gray-900">Visualizar módulo Power Build</h3>
+                                <p className="text-sm text-gray-500 mt-1 max-w-xl">
+                                    Habilita a exibição da seção lateral do sistema referente ao Power Build.
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" className="sr-only peer" checked={mostrarPowerBuild === 'Sim'} onChange={(e) => setMostrarPowerBuild(e.target.checked ? 'Sim' : 'Não')} />
                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#E0E800]/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#32423D]"></div>
                             </label>
                         </div>

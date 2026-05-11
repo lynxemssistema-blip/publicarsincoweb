@@ -4,7 +4,7 @@ import { defaultMenuItems } from './utils/constants'; // Import default structur
 import { AppLayout } from './layout/AppLayout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AlertProvider } from './contexts/AlertContext';
-import { AppConfigProvider } from './contexts/AppConfigContext';
+import { AppConfigProvider, useAppConfig } from './contexts/AppConfigContext';
 import LoginPage from './pages/Login';
 
 // Pages
@@ -40,8 +40,13 @@ import ProducaoPlanoCortePage from './pages/ProducaoPlanoCorte';
 import TesteFinalMontagemPage from './pages/TesteFinalMontagem';
 import CadastroUsuarioPage from './pages/CadastroUsuario';
 import BlockSetPage from './pages/BlockSet/BlockSet';
+import PowerBuildListPage from './pages/BlockSet/PowerBuildList';
+import PowerBuildImportPage from './pages/BlockSet/PowerBuildImport';
+import PowerBuildRevisionPage from './pages/BlockSet/PowerBuildRevision';
+import PowerBuildAgglutinationPage from './pages/BlockSet/PowerBuildAgglutination';
 function AppContent() {
   const { user, logout } = useAuth();
+  const { mostrarPowerBuild } = useAppConfig();
   const [activePageId, setActivePageId] = useState('dashboard');
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
   const [selectedRncItem, setSelectedRncItem] = useState<number | null>(null);
@@ -144,21 +149,27 @@ function AppContent() {
           }
 
           // Force add 'teste-final-montagem' restrito a alfatec2 e lynxlocal
-          const TFM_BANKS = ['lynxlocal', 'alfatec2'];
-          if (TFM_BANKS.includes(user.dbName ?? '')) {
+          if (user.dbName === 'lynxlocal' || user.dbName === 'alfatec2') {
             if (!savedMenu.find(item => item.id === 'teste-final-montagem')) {
               const tfmItem = defaultMenuItems.find(item => item.id === 'teste-final-montagem');
               if (tfmItem) {
-                const ceIdx = savedMenu.findIndex(item => item.id === 'controle-expedicao');
-                if (ceIdx >= 0) {
-                  savedMenu = [...savedMenu.slice(0, ceIdx + 1), tfmItem, ...savedMenu.slice(ceIdx + 1)];
-                } else {
-                  savedMenu = [...savedMenu, tfmItem];
-                }
+                 savedMenu = [...savedMenu, tfmItem];
               }
             }
           } else {
             savedMenu = savedMenu.filter(item => item.id !== 'teste-final-montagem');
+          }
+
+          // Force add 'power-build' (Power Build) dependendo apenas da configuração mostrarPowerBuild
+          if (mostrarPowerBuild) {
+            if (!savedMenu.find(item => item.id === 'power-build')) {
+              const pbItem = defaultMenuItems.find(item => item.id === 'power-build');
+              if (pbItem) {
+                savedMenu = [...savedMenu, pbItem];
+              }
+            }
+          } else {
+             savedMenu = savedMenu.filter(item => item.id !== 'power-build');
           }
 
           // Force add 'pesquisar-desenho' if missing
@@ -276,7 +287,7 @@ function AppContent() {
         }
       }
     }
-  }, [user]);
+  }, [user, mostrarPowerBuild]);
 
   const handleNavigate = (id: string) => {
     const item = findItemById(menuItems, id);
@@ -293,40 +304,6 @@ function AppContent() {
   };
 
   const handleSmartLogout = () => {
-    // 1. Check if masquerading (Entity impersonation)
-    const storedSA = localStorage.getItem('original_superadmin');
-    if (storedSA) {
-      try {
-        const saData = JSON.parse(storedSA);
-        if (saData.active) {
-          // Restore Superadmin Context
-          const superadminUser = {
-            id: 1,
-            nome: 'Superadmin',
-            login: saData.originalLogin || 'superadmin',
-            role: 'admin',
-            isSuperadmin: true,
-            superadmin: 'S'
-          };
-
-          localStorage.setItem('sinco_user', JSON.stringify(superadminUser));
-          window.location.href = '/superadmin';
-          return;
-        }
-      } catch (e) {
-        console.error("Error parsing superadmin state", e);
-      }
-    }
-
-    // 2. Check if the current user is explicitly a Superadmin ('S')
-    // "caso o conteudo do campo 'superadmin' ... seja dieferente de 'S', fechar o app, se não voltar para tela anterior"
-    if (user && user.superadmin === 'S') {
-      // "Voltar para tela anterior" -> In this context, it implies going to the Superadmin Panel
-      window.location.href = '/superadmin';
-      return;
-    }
-
-    // Fallback/Standard Logout ("fechar o app")
     logout();
   };
 
@@ -416,6 +393,18 @@ function AppContent() {
         return <SuperadminPage />;
       case 'blockset':
         return <BlockSetPage />;
+      case 'leitura-dados':
+      case 'powerbuild-import':
+        return <PowerBuildImportPage />;
+      case 'lista-planilhas':
+      case 'powerbuild-list':
+        return <PowerBuildListPage onNavigate={handleNavigate} />;
+      case 'revisao-itens':
+      case 'powerbuild-revision':
+        return <PowerBuildRevisionPage />;
+      case 'visualizacao-aglutinacao':
+      case 'powerbuild-agglutination':
+        return <PowerBuildAgglutinationPage />;
       default:
         // Handle custom pages or IDs dynamically if needed, for now fallback to Dashboard
         return <DashboardPage onNavigate={handleNavigate} />;

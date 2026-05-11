@@ -24,7 +24,6 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
     const [isDark, setIsDark] = useState(false);
     const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
     const [sidebarSearch, setSidebarSearch] = useState('');
-    const [appliedSearch, setAppliedSearch] = useState('');
     const [showHelp, setShowHelp] = useState(false);
 
     const currentHelp = helpContents[activePageId] || helpContents['default'];
@@ -97,15 +96,15 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
     };
 
     const filteredMenuItems = useMemo(
-        () => filterMenuItems(menuItems, appliedSearch),
-        [menuItems, appliedSearch]
+        () => filterMenuItems(menuItems, sidebarSearch),
+        [menuItems, sidebarSearch]
     );
 
     const renderMenuItem = (item: MenuItem, depth = 0, isMobile = false, isCollapsed = false) => {
         const Icon = getIcon(item.icon);
         const isActive = activePageId === item.id;
         const hasChildren = item.children && item.children.length > 0;
-        const isExpanded = expandedItems[item.id];
+        const isExpanded = expandedItems[item.id] || (!!sidebarSearch.trim() && hasChildren);
 
         return (
             <li key={item.id} className="mb-1" title={isCollapsed ? item.label : undefined}>
@@ -188,11 +187,10 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                             placeholder="Pesquisar menu..."
                             value={sidebarSearch}
                             onChange={e => setSidebarSearch(e.target.value)}
-                            onKeyDown={e => { if (e.key === 'Enter') setAppliedSearch(sidebarSearch); }}
                             className="w-full pl-9 pr-3 py-2 text-xs font-medium rounded-md bg-transparent border border-border focus:outline-none focus:bg-background focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-foreground/50 text-foreground transition-all duration-200"
                         />
                         {sidebarSearch && (
-                            <button onClick={() => { setSidebarSearch(''); setAppliedSearch(''); }} className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground/70">
+                            <button onClick={() => setSidebarSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground/70">
                                 <X size={12} />
                             </button>
                         )}
@@ -204,7 +202,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                 <ul>
                     {filteredMenuItems.map(item => renderMenuItem(item, 0, isMobile, isCollapsed))}
                 </ul>
-                {appliedSearch && filteredMenuItems.length === 0 && !isCollapsed && (
+                {sidebarSearch && filteredMenuItems.length === 0 && !isCollapsed && (
                     <p className="text-xs text-center text-foreground/40 mt-6 font-medium">Nenhum item encontrado</p>
                 )}
             </div>
@@ -223,14 +221,14 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                 </button>
                 <button
                     onClick={onLogout}
-                    title={isCollapsed ? 'Sair do Sistema' : undefined}
+                    title={isCollapsed ? 'Logoff' : undefined}
                     className={cn(
                         "flex items-center rounded-md hover:bg-destructive/10 hover:text-destructive focus:ring-1 focus:ring-destructive/50 transition-all text-sm font-medium text-foreground/80",
                         isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5 w-full"
                     )}
                 >
                     <LogOut size={18} strokeWidth={2} />
-                    {!isCollapsed && <span>Sair Seguro</span>}
+                    {!isCollapsed && <span>Logoff</span>}
                 </button>
             </div>
         </div>

@@ -115,19 +115,26 @@ export default function ApontamentoProducaoPage() {
     const [setorAtivo, setSetorAtivo] = useState<Setor>('corte');
     const [itens, setItens] = useState<ApontamentoItem[]>([]);
     const abortControllerRef = useRef<AbortController | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
+    const [hasSearched, setHasSearched] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [fromGlobal, setFromGlobal] = useState(false);
-    const [showTabs, setShowTabs] = useState(true); // new state for tabs visibility
+    const [showTabs, setShowTabs] = useState(true);
+
+    // Paginação
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [totalItems, setTotalItems] = useState(0);
+    const limit = 100; // Itens por página
 
     // Filters
-    const [searchTerm, setSearchTerm] = useState('');
+    const [planoCorteFilter, setPlanoCorteFilter] = useState('');
     const [projetoFilter, setProjetoFilter] = useState('');
     const [tagFilter, setTagFilter] = useState('');
     const [osFilter, setOsFilter] = useState('');
     const [clienteFilter, setClienteFilter] = useState('');
     const [itemFilter, setItemFilter] = useState('');
-    const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente' | 'concluido'>('todos');
+    const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente' | 'concluido'>('pendente');
     const [groupBy, setGroupBy] = useState<'os' | 'projeto' | 'tag' | 'cliente' | 'produto_principal'>('os');
     const checkPredecessorStatus = (item: ApontamentoItem, currentSetor: Setor) => {
         if (currentSetor === 'mapa' || currentSetor === 'mapaproducao') return { allowed: true };
@@ -378,9 +385,13 @@ export default function ApontamentoProducaoPage() {
             if (tagFilter) params.set('tag', tagFilter);
             if (osFilter) params.set('os', osFilter);
             if (clienteFilter) params.set('cliente', clienteFilter);
-            if (searchTerm) params.set('search', searchTerm);
+            if (planoCorteFilter) params.set('planoCorte', planoCorteFilter);
             if (itemFilter) params.set('item', itemFilter);
             if (statusFilter !== 'todos') params.set('status', statusFilter);
+            
+            // Paginação
+            params.set('page', String(page));
+            params.set('limit', String(limit));
 
             // Use different route for mapa
             const url = setorAtivo === 'mapa'
@@ -392,6 +403,13 @@ export default function ApontamentoProducaoPage() {
 
             if (json.success) {
                 setItens(json.data);
+                if (json.pagination) {
+                    setTotalPages(json.pagination.totalPages);
+                    setTotalItems(json.pagination.total);
+                } else {
+                    setTotalPages(1);
+                    setTotalItems(json.data.length);
+                }
             } else {
                 setError(json.message || 'Erro ao carregar itens');
             }
@@ -406,7 +424,7 @@ export default function ApontamentoProducaoPage() {
                 setLoading(false);
             }
         }
-    }, [setorAtivo, projetoFilter, tagFilter, osFilter, searchTerm, statusFilter, itemFilter, clienteFilter]);
+    }, [setorAtivo, projetoFilter, tagFilter, osFilter, planoCorteFilter, statusFilter, itemFilter, clienteFilter, page]);
 
     const handleCancelLoad = () => {
         if (abortControllerRef.current) {
@@ -417,29 +435,53 @@ export default function ApontamentoProducaoPage() {
         setError('O carregamento foi cancelado pelo usuário.');
     };
 
+    // Auto-load removido intencionalmente para performance
+    // Só carrega se houver page load de outra tela (com params) ou se o usuário clicar em pesquisar
     useEffect(() => {
-        const timer = setTimeout(() => fetchItens(), 300);
+        // Se a página mudou via paginação, busca automaticamente
+        if (hasActiveFilters) {
+            fetchItens();
+        }
         return () => {
-            clearTimeout(timer);
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort();
             }
         };
-    }, [fetchItens]);
+    }, [page, setorAtivo]);
+
+    const handleSearch = () => {
+        // Contar quantos filtros de "texto" foram preenchidos
+        const fields = [planoCorteFilter, projetoFilter, tagFilter, osFilter, itemFilter, clienteFilter];
+        const filledFieldsCount = fields.filter(f => f.trim().length > 0).length;
+
+        if (filledFieldsCount < 2) {
+            addToast({
+                type: 'error',
+                title: 'Busca Bloqueada',
+                message: 'Para garantir a performance, por favor preencha pelo menos 2 campos de filtro para pesquisar.',
+                duration: 6000
+            });
+            return;
+        }
+
+        setHasSearched(true);
+        setPage(1);
+        fetchItens();
+    };
 
     // Clear all filters
     const clearFilters = useCallback(() => {
-        setSearchTerm('');
+        setPlanoCorteFilter('');
         setProjetoFilter('');
         setTagFilter('');
         setOsFilter('');
         setItemFilter('');
-        setStatusFilter('todos');
+        setStatusFilter('pendente');
         setClienteFilter('');
     }, []);
 
     // Check if any filter is active
-    const hasActiveFilters = searchTerm || projetoFilter || tagFilter || osFilter || itemFilter || clienteFilter || statusFilter !== 'todos';
+    const hasActiveFilters = planoCorteFilter || projetoFilter || tagFilter || osFilter || itemFilter || clienteFilter || statusFilter !== 'pendente';
 
     // Fetch item details when opening modal
     const selectItem = async (item: ApontamentoItem) => {
@@ -947,22 +989,22 @@ export default function ApontamentoProducaoPage() {
                         className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 overflow-hidden"
                     >
                         <div className="flex flex-wrap items-end gap-3">
-                            {/* Search */}
+                            {/* Plano de Corte Filter */}
                             <div className="flex-1 min-w-[200px]">
-                                <label className="block text-xs font-medium text-gray-500 mb-1">Buscar</label>
+                                <label className="block text-xs font-medium text-gray-500 mb-1">Plano de Corte</label>
                                 <div className="flex items-center gap-2">
                                     <div className="relative flex-1">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                         <input
                                             type="text"
-                                            placeholder="OS, código, plano corte, descrição, espessura, material..."
-                                            value={searchTerm}
-                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            placeholder="Digite a descrição do plano de corte..."
+                                            value={planoCorteFilter}
+                                            onChange={(e) => setPlanoCorteFilter(e.target.value)}
                                             className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-[#E0E800]/50"
                                         />
                                     </div>
-                                    {searchTerm && (
-                                        <button onClick={() => setSearchTerm('')} className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:text-red-500 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
+                                    {planoCorteFilter && (
+                                        <button onClick={() => setPlanoCorteFilter('')} className="p-2.5 rounded-lg border border-gray-200 text-gray-500 hover:text-red-500 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
                                             <X size={16} />
                                         </button>
                                     )}
@@ -1069,6 +1111,16 @@ export default function ApontamentoProducaoPage() {
                                     Limpar
                                 </button>
                             )}
+
+                            {/* Search Button */}
+                            <button
+                                onClick={handleSearch}
+                                disabled={loading}
+                                className="flex items-center gap-2 px-5 py-2 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 rounded-lg shadow-sm transition-colors ml-auto"
+                            >
+                                {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+                                Pesquisar
+                            </button>
                         </div>
                     </motion.div>
                 )}
@@ -1087,9 +1139,20 @@ export default function ApontamentoProducaoPage() {
             )}
 
             {/* Content Container */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 flex flex-col min-h-[400px]">
+                
+                {/* Empty State Inicial */}
+                {!loading && !hasSearched && itens.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                        <Search size={48} className="mb-4 text-gray-300" />
+                        <h3 className="text-lg font-bold text-gray-500">Pronto para buscar</h3>
+                        <p className="text-sm mt-2">Preencha pelo menos 2 filtros acima e clique em "Pesquisar" para exibir os apontamentos.</p>
+                    </div>
+                )}
+                
+                {/* Loader */}
                 {/* Primary Table Header - Movido para dentro do container com sticky */}
-                {!loading && itens.length > 0 && setorAtivo !== 'mapa' && (
+                {!loading && hasSearched && itens.length > 0 && setorAtivo !== 'mapa' && (
                     <div className="bg-gray-100 px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-black text-gray-500 uppercase sticky top-0 z-20 border-b border-gray-200 shadow-sm min-w-max">
                         <span className="w-5 shrink-0"></span>
                         <span className="w-6 shrink-0 text-center">PDF</span>
@@ -1560,6 +1623,32 @@ export default function ApontamentoProducaoPage() {
                                 </div>
                             </div>
                         ))}
+                    </div>
+                )}
+
+                {/* Paginação Controls */}
+                {!loading && totalPages > 1 && (
+                    <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-t border-gray-200 mt-auto rounded-b-xl">
+                        <div className="text-xs text-gray-500 font-medium">
+                            Mostrando página <span className="font-bold text-gray-700">{page}</span> de <span className="font-bold text-gray-700">{totalPages}</span>
+                            <span className="ml-2 text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200">Total: {totalItems} itens</span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => { setPage(p => Math.max(1, p - 1)); }}
+                                disabled={page === 1}
+                                className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Anterior
+                            </button>
+                            <button
+                                onClick={() => { setPage(p => Math.min(totalPages, p + 1)); }}
+                                disabled={page === totalPages}
+                                className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                            >
+                                Próxima
+                            </button>
+                        </div>
                     </div>
                 )}
 

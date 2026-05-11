@@ -5,6 +5,7 @@ const LS_FILTRO = 'sinco_planoCorteFiltroDC';
 const LS_MAX_REG = 'sinco_maxRegistros';
 const LS_PROCESSOS = 'sinco_processosVisiveis';
 const LS_RESTRINGIR = 'sinco_restringirApontamento';
+const LS_POWER_BUILD = 'sinco_mostrarPowerBuild';
 
 interface AppConfig {
     // Da API (regras de negócio persistidas no banco)
@@ -13,6 +14,7 @@ interface AppConfig {
     // Do localStorage (preferências situacionais do usuário)
     planoCorteFiltroDC: 'corte' | 'chaparia';
     maxRegistros: number;
+    mostrarPowerBuild: boolean;
     loaded: boolean;
 }
 
@@ -25,6 +27,7 @@ const defaultConfig: AppConfig = {
     restringirApontamento: false,
     planoCorteFiltroDC: 'corte',
     maxRegistros: 500,
+    mostrarPowerBuild: false,
     loaded: false,
 };;
 
@@ -42,6 +45,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
         const filtro = localStorage.getItem(LS_FILTRO);
         const maxReg = parseInt(localStorage.getItem(LS_MAX_REG) || '500') || 500;
         const planoCorteFiltroDC: 'corte' | 'chaparia' = filtro === 'chaparia' ? 'chaparia' : 'corte';
+        const mostrarPowerBuild = localStorage.getItem(LS_POWER_BUILD) === 'Sim';
 
         // 2. Regras de negócio: busca da API com fallback para localStorage
         fetch('/api/config')
@@ -71,6 +75,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
                         restringirApontamento: cfg.RestringirApontamentoSemSaldoAnterior === 'Sim',
                         planoCorteFiltroDC,
                         maxRegistros: maxReg,
+                        mostrarPowerBuild,
                         loaded: true,
                     });
                 } else {
@@ -79,6 +84,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
                         restringirApontamento,
                         planoCorteFiltroDC,
                         maxRegistros: maxReg,
+                        mostrarPowerBuild,
                         loaded: true
                     });
                 }
@@ -98,6 +104,7 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
                     restringirApontamento,
                     planoCorteFiltroDC,
                     maxRegistros: maxReg,
+                    mostrarPowerBuild,
                     loaded: true,
                 });
             });
@@ -128,6 +135,7 @@ export function saveLocalPrefs(prefs: {
     maxRegistros?: number;
     processosVisiveis?: string[];
     restringirApontamento?: string;
+    mostrarPowerBuild?: string;
 }) {
     if (prefs.planoCorteFiltroDC !== undefined) {
         localStorage.setItem(LS_FILTRO, prefs.planoCorteFiltroDC);
@@ -140,6 +148,9 @@ export function saveLocalPrefs(prefs: {
     }
     if (prefs.restringirApontamento !== undefined) {
         localStorage.setItem(LS_RESTRINGIR, prefs.restringirApontamento);
+    }
+    if (prefs.mostrarPowerBuild !== undefined) {
+        localStorage.setItem(LS_POWER_BUILD, prefs.mostrarPowerBuild);
     }
 }
 

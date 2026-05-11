@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Save, AlertTriangle, ShieldCheck, RefreshCcw, Server, Users, Plus, GitCompare, ArrowRight, CheckCircle, Code, LogOut, XCircle, Building2 } from 'lucide-react';
+import { Database, Save, AlertTriangle, ShieldCheck, RefreshCcw, Server, Users, Plus, GitCompare, ArrowRight, CheckCircle, Code, LogOut, XCircle } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
-import MatrizAdmin from './MatrizAdmin';
 
 interface SuperadminPageProps {
-    defaultTab?: 'config' | 'tenants' | 'schema' | 'users' | 'matrizes';
+    defaultTab?: 'config' | 'tenants' | 'schema' | 'users';
 }
 
-export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPageProps) {
+export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageProps) {
     const { addToast } = useToast();
     const [isAuthenticated, setIsAuthenticated] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState<'config' | 'tenants' | 'schema' | 'users' | 'matrizes'>(defaultTab);
+    const [activeTab, setActiveTab] = useState<'config' | 'tenants' | 'schema' | 'users'>(defaultTab);
 
     // Auth State
     const [username, setUsername] = useState('');
@@ -40,7 +39,27 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
     const [users, setUsers] = useState<any[]>([]);
 
     useEffect(() => {
-        const token = localStorage.getItem('superadmin_token');
+        let token = localStorage.getItem('superadmin_token');
+        
+        // Se não tiver o token do painel, verifica se o login principal já foi como superadmin
+        if (!token) {
+            const sincoUserRaw = localStorage.getItem('sinco_user');
+            if (sincoUserRaw) {
+                try {
+                    const sincoUser = JSON.parse(sincoUserRaw);
+                    if (sincoUser.isSuperadmin || sincoUser.superadmin === 'S') {
+                        const mainToken = localStorage.getItem('sinco_token');
+                        if (mainToken) {
+                            token = mainToken;
+                            localStorage.setItem('superadmin_token', token);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao verificar sessão principal', e);
+                }
+            }
+        }
+
         if (token) {
             checkAuth(token);
         }
@@ -153,7 +172,7 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
     };
 
     // --- TENANT MANAGEMENT HANDLERS ---
-    const handleAddTenant = async () => { /* ... existing ... */
+    const handleAddTenant = async () => {
         const token = localStorage.getItem('superadmin_token');
         if (!token) return;
         setLoading(true);
@@ -181,7 +200,7 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
         }
     };
 
-    const handleSyncUsers = async (dbId: number) => { /* ... existing ... */
+    const handleSyncUsers = async (dbId: number) => {
         const token = localStorage.getItem('superadmin_token');
         if (!token) return;
         setLoading(true);
@@ -198,6 +217,30 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
             }
         } catch (error) {
             addToast({ type: 'error', message: 'Erro ao sincronizar usuários' });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleSyncAllUsers = async () => {
+        const token = localStorage.getItem('superadmin_token');
+        if (!token) return;
+        if (!confirm('Deseja iniciar a sincronização global de todos os clientes? Isso pode levar alguns segundos.')) return;
+        
+        setLoading(true);
+        try {
+            const res = await fetch(`/api/admin/sync-all`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast({ type: 'success', message: data.message });
+            } else {
+                addToast({ type: 'error', message: data.message });
+            }
+        } catch (error) {
+            addToast({ type: 'error', message: 'Erro ao sincronizar todos os usuários' });
         } finally {
             setLoading(false);
         }
@@ -332,7 +375,7 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
     };
 
     // --- DB CONFIG HANDLERS ---
-    const handleTestConnection = async () => { /* ... existing ... */
+    const handleTestConnection = async () => {
         const token = localStorage.getItem('superadmin_token');
         if (!token) return;
         setLoading(true);
@@ -348,7 +391,7 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
         } catch (error) { addToast({ type: 'error', message: 'Erro ao testar conexão' }); } finally { setLoading(false); }
     };
 
-    const handleSaveConfig = async () => { /* ... existing ... */
+    const handleSaveConfig = async () => {
         const token = localStorage.getItem('superadmin_token');
         if (!token) return;
         if (!confirm('Tem certeza? Isso irá alterar a conexão do banco de dados e aplicar as novas configurações.')) return;
@@ -441,9 +484,6 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
 
             {/* Tabs */}
             <div className="flex space-x-1 bg-gray-100 p-1 rounded-xl overflow-x-auto">
-                <button onClick={() => setActiveTab('matrizes')} className={`flex-1 min-w-[150px] py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'matrizes' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
-                    <div className="flex items-center justify-center gap-2"><Building2 size={16} /> Matrizes</div>
-                </button>
                 <button onClick={() => setActiveTab('tenants')} className={`flex-1 min-w-[150px] py-2.5 text-sm font-medium rounded-lg transition-all ${activeTab === 'tenants' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
                     <div className="flex items-center justify-center gap-2"><Server size={16} /> Gestão de Bancos</div>
                 </button>
@@ -457,12 +497,6 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
                     <div className="flex items-center justify-center gap-2"><Database size={16} /> ConfigLocal (Fallback)</div>
                 </button>
             </div>
-
-            {activeTab === 'matrizes' && (
-                <div className="animate-fade-in bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <MatrizAdmin />
-                </div>
-            )}
 
             {activeTab === 'tenants' && (
                 <div className="space-y-6 animate-fade-in">
@@ -479,6 +513,19 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
                             <button onClick={handleAddTenant} disabled={loading} className="bg-blue-600 text-white p-2 rounded hover:bg-blue-700 flex items-center justify-center gap-2 md:col-span-3 lg:col-span-1"><Save size={16} /> Cadastrar</button>
                         </div>
                     </div>
+                    
+                    {/* Bulk Actions */}
+                    <div className="flex justify-end mb-4">
+                        <button 
+                            onClick={handleSyncAllUsers} 
+                            disabled={loading} 
+                            className="bg-purple-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-purple-700 flex items-center gap-2 shadow-sm transition-colors"
+                        >
+                            {loading ? <RefreshCcw className="animate-spin" size={18} /> : <RefreshCcw size={18} />}
+                            {loading ? 'Sincronizando...' : 'Sincronizar Todos os Clientes'}
+                        </button>
+                    </div>
+
                     {/* Tenant List */}
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {tenants.map(tenant => (
@@ -496,6 +543,7 @@ export default function SuperadminPage({ defaultTab = 'matrizes' }: SuperadminPa
                                 )}
                                 <div className="space-y-2 mt-4">
                                     <button onClick={() => handleAccessTenant(tenant)} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors font-medium shadow-sm"><ArrowRight size={16} /> Acessar Banco</button>
+                                    <button onClick={() => handleToggleTenantStatus(tenant)} disabled={loading} className={`w-full py-2 ${tenant.ativo ? 'bg-red-50 hover:bg-red-100 text-red-600 border border-red-200' : 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'} rounded-lg flex items-center justify-center gap-2 transition-colors font-medium`}><ShieldCheck size={16} /> {tenant.ativo ? 'Desativar Acesso' : 'Ativar Acesso'}</button>
                                     <button onClick={() => handleSyncUsers(tenant.id)} disabled={loading} className="w-full py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg border border-gray-200 flex items-center justify-center gap-2 transition-colors"><Users size={16} /> {loading ? 'Sincronizando...' : 'Sincronizar Usuários'}</button>
                                 </div>
                             </motion.div>

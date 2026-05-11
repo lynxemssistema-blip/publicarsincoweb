@@ -67,6 +67,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         localStorage.removeItem('sinco_user');
         localStorage.removeItem('sinco_token');
         localStorage.removeItem('superadmin_token');
+        localStorage.removeItem('original_superadmin');
+        window.location.href = '/';
     };
 
     return (

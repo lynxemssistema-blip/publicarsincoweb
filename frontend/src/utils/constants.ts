@@ -35,6 +35,17 @@ export const defaultMenuItems: MenuItem[] = [
             { id: 'producao-plano-corte', icon: 'Factory', label: 'Produção Plano de Corte', href: '/producao-plano-corte' },
         ]
     },
+    {
+        id: 'power-build',
+        icon: 'Zap',
+        label: 'Power Build',
+        children: [
+            { id: 'leitura-dados', icon: 'FilePlus', label: 'Leitura de Dados', href: '/powerbuild-import' },
+            { id: 'lista-planilhas', icon: 'FileSpreadsheet', label: 'Lista Itens da Planilha', href: '/powerbuild-list' },
+            { id: 'revisao-itens', icon: 'RefreshCw', label: 'Lista Revisão de Itens', href: '/powerbuild-revision' },
+            { id: 'visualizacao-aglutinacao', icon: 'Grid', label: 'Visualização Aglutinação', href: '/powerbuild-agglutination' },
+        ]
+    },
     { id: 'projetos', icon: 'FolderKanban', label: 'Projetos', href: '/projetos' },
     { id: 'relatorios', icon: 'FileText', label: 'Relatórios', href: '/relatorios' },
     {

@@ -1439,7 +1439,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 app.get('/api/romaneio-retorno/items', async (req, res) => {
     const { romaneio, projeto, tag, numDoc, mostrarConcluidos } = req.query;
     try {
-        let sql = `SELECT * FROM viewromaneioitem WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
+        let sql = `SELECT * FROM viewromaneioitem WHERE 1=1`;
         const params = [];
 
         if (romaneio) {
@@ -1636,7 +1636,7 @@ async function authenticateCentralUser(login, password) {
                     c.nome_cliente, c.db_host, c.db_user, c.db_pass, c.db_name, c.db_port 
              FROM usuarios_central u
              LEFT JOIN conexoes_bancos c ON u.id_conexao_banco = c.id
-             WHERE u.login = ? AND u.senha = ? AND (c.ativo = 1 OR c.id IS NULL)`,
+             WHERE u.login = ? AND u.senha = ? AND (c.ativo = 1 OR c.id IS NULL) AND (u.ativo = 1 OR u.ativo IS NULL)`,
             [login, password]
         );
 
@@ -1813,17 +1813,35 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
 // --- CENTRAL MANAGEMENT (Superadmin) ---
 
-// Mock Auth Middleware (TODO: Implement JWT)
+// Real Superadmin Auth Middleware
 const authenticateAdmin = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-        return next();
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Missing Token`);
+        return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
-    console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Missing/Invalid Token`);
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if (decoded.isSuperadmin === true) {
+            req.adminUser = decoded;
+            return next();
+        } else {
+            console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Not a Superadmin`);
+            return res.status(403).json({ success: false, message: 'Forbidden: Acesso restrito ao Superadmin' });
+        }
+    } catch (err) {
+        console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Invalid Token`);
+        return res.status(401).json({ success: false, message: 'Sessão de Superadmin inválida ou expirada' });
+    }
 };
 
-// Admin Login
+// Admin Check Auth Route for Frontend
+app.get('/api/admin/check-auth', authenticateAdmin, (req, res) => {
+    res.json({ success: true, message: 'Sessão válida', user: req.adminUser });
+});
+
 // Admin Login
 app.post('/api/admin/login', async (req, res) => {
     console.log('[ADMIN AUTH] Raw Body:', req.body);
@@ -1935,13 +1953,38 @@ app.post('/api/admin/databases', authenticateAdmin, async (req, res) => {
     }
 });
 
+// Toggle Tenant Database Status (Ativo/Inativo)
+app.put('/api/admin/databases/:id/toggle', authenticateAdmin, async (req, res) => {
+    let connection;
+    try {
+        const dbId = req.params.id;
+        connection = await mysql.createConnection(CENTRAL_DB_CONFIG);
+        
+        // Obter o status atual
+        const [rows] = await connection.execute('SELECT ativo FROM conexoes_bancos WHERE id = ?', [dbId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Banco de dados não encontrado' });
+        }
+        
+        const currentStatus = rows[0].ativo;
+        const newStatus = currentStatus ? 0 : 1; // Toggle boolean
+        
+        await connection.execute('UPDATE conexoes_bancos SET ativo = ? WHERE id = ?', [newStatus, dbId]);
+        res.json({ success: true, message: `Banco de dados ${newStatus ? 'Ativado' : 'Desativado'} com sucesso`, ativo: newStatus });
+    } catch (error) {
+        console.error('Error toggling database:', error);
+        res.status(500).json({ success: false, message: 'Erro ao alterar status do banco: ' + error.message });
+    } finally {
+        if (connection) await connection.end();
+    }
+});
+
 app.post('/api/admin/sync-users/:dbId', authenticateAdmin, async (req, res) => {
     const dbId = req.params.dbId;
     let centralConn;
     let tenantConn;
 
     try {
-        // 1. Get Tenant Config
         centralConn = await mysql.createConnection(CENTRAL_DB_CONFIG);
         const [dbRows] = await centralConn.execute('SELECT * FROM conexoes_bancos WHERE id = ?', [dbId]);
 
@@ -1950,7 +1993,6 @@ app.post('/api/admin/sync-users/:dbId', authenticateAdmin, async (req, res) => {
         }
         const dbConfig = dbRows[0];
 
-        // 2. Connect to Tenant DB
         tenantConn = await mysql.createConnection({
             host: dbConfig.db_host,
             user: dbConfig.db_user,
@@ -1959,45 +2001,123 @@ app.post('/api/admin/sync-users/:dbId', authenticateAdmin, async (req, res) => {
             port: dbConfig.db_port
         });
 
-        // 3. Fetch Users
         const [users] = await tenantConn.execute('SELECT * FROM usuario');
 
-        // 4. Sync to Central
         let syncedCount = 0;
+        let updatedCount = 0;
+        
         for (const user of users) {
-            // Check if exists
+            let isAtivo = 1;
+            if (user.D_E_L_E_T_E && user.D_E_L_E_T_E.trim() !== '') isAtivo = 0;
+            if (user.status && user.status.toString().toLowerCase() === 'inativo') isAtivo = 0;
+            if (user.status && user.status.toString() === '0') isAtivo = 0;
+
             const [existing] = await centralConn.execute(
-                'SELECT id FROM usuarios_central WHERE login = ?',
-                [user.Login]
+                'SELECT id FROM usuarios_central WHERE login = ? AND id_conexao_banco = ?',
+                [user.Login, dbId]
             );
 
             if (existing.length === 0) {
                 await centralConn.execute(
-                    `INSERT INTO usuarios_central (login, senha, id_conexao_banco, id_usuario_origem) 
-                     VALUES (?, ?, ?, ?)`,
-                    [user.Login, user.Senha, dbId, user.idUsuario]
+                    `INSERT INTO usuarios_central (login, senha, id_conexao_banco, id_usuario_origem, ativo) 
+                     VALUES (?, ?, ?, ?, ?)`,
+                    [user.Login, user.Senha, dbId, user.idUsuario, isAtivo]
                 );
                 syncedCount++;
             } else {
-                // Update link if needed
                 await centralConn.execute(
-                    `UPDATE usuarios_central SET senha = ?, id_conexao_banco = ?, id_usuario_origem = ? 
+                    `UPDATE usuarios_central SET senha = ?, id_conexao_banco = ?, id_usuario_origem = ?, ativo = ? 
                      WHERE id = ?`,
-                    [user.Senha, dbId, user.idUsuario, existing[0].id]
+                    [user.Senha, dbId, user.idUsuario, isAtivo, existing[0].id]
                 );
+                updatedCount++;
             }
         }
 
-        res.json({ success: true, message: `SincronizaÃ¯Â¿Â½Ã¯Â¿Â½o concluÃ¯Â¿Â½da. ${syncedCount} novos usuÃ¯Â¿Â½rios importados.` });
+        res.json({ success: true, message: `Sincronização concluída. ${syncedCount} criados, ${updatedCount} atualizados.` });
 
     } catch (error) {
         console.error('Sync Error:', error);
-        res.status(500).json({ success: false, message: 'Erro na sincronizaÃ¯Â¿Â½Ã¯Â¿Â½o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro na sincronização: ' + error.message });
     } finally {
         if (centralConn) await centralConn.end();
         if (tenantConn) await tenantConn.end();
     }
 });
+
+// Sincronizar TODOS os clientes
+app.post('/api/admin/sync-all', authenticateAdmin, async (req, res) => {
+    let centralConn;
+    try {
+        centralConn = await mysql.createConnection(CENTRAL_DB_CONFIG);
+        const [dbRows] = await centralConn.execute('SELECT * FROM conexoes_bancos WHERE ativo = 1');
+        
+        let totalCreated = 0;
+        let totalUpdated = 0;
+        let errors = [];
+
+        for (const dbConfig of dbRows) {
+            let tenantConn;
+            try {
+                tenantConn = await mysql.createConnection({
+                    host: dbConfig.db_host,
+                    user: dbConfig.db_user,
+                    password: dbConfig.db_pass,
+                    database: dbConfig.db_name,
+                    port: dbConfig.db_port || 3306
+                });
+
+                const [users] = await tenantConn.execute('SELECT * FROM usuario');
+
+                for (const user of users) {
+                    let isAtivo = 1;
+                    if (user.D_E_L_E_T_E && user.D_E_L_E_T_E.trim() !== '') isAtivo = 0;
+                    if (user.status && user.status.toString().toLowerCase() === 'inativo') isAtivo = 0;
+                    if (user.status && user.status.toString() === '0') isAtivo = 0;
+
+                    const [existing] = await centralConn.execute(
+                        'SELECT id FROM usuarios_central WHERE login = ? AND id_conexao_banco = ?',
+                        [user.Login, dbConfig.id]
+                    );
+
+                    if (existing.length === 0) {
+                        await centralConn.execute(
+                            `INSERT INTO usuarios_central (login, senha, id_conexao_banco, id_usuario_origem, ativo) 
+                             VALUES (?, ?, ?, ?, ?)`,
+                            [user.Login, user.Senha, dbConfig.id, user.idUsuario, isAtivo]
+                        );
+                        totalCreated++;
+                    } else {
+                        await centralConn.execute(
+                            `UPDATE usuarios_central SET senha = ?, id_conexao_banco = ?, id_usuario_origem = ?, ativo = ? 
+                             WHERE id = ?`,
+                            [user.Senha, dbConfig.id, user.idUsuario, isAtivo, existing[0].id]
+                        );
+                        totalUpdated++;
+                    }
+                }
+            } catch (err) {
+                console.error(`Error syncing db ${dbConfig.db_name}:`, err.message);
+                errors.push({ db: dbConfig.db_name, error: err.message });
+            } finally {
+                if (tenantConn) await tenantConn.end();
+            }
+        }
+
+        res.json({ 
+            success: true, 
+            message: `Sincronização Global Concluída. ${totalCreated} criados, ${totalUpdated} atualizados. Erros: ${errors.length}`,
+            details: { created: totalCreated, updated: totalUpdated, errors }
+        });
+
+    } catch (error) {
+        console.error('Global Sync Error:', error);
+        res.status(500).json({ success: false, message: 'Erro na sincronização global: ' + error.message });
+    } finally {
+        if (centralConn) await centralConn.end();
+    }
+});
+
 
 // List Central Users
 app.get('/api/admin/users', authenticateAdmin, async (req, res) => {
@@ -2050,19 +2170,10 @@ app.put('/api/admin/users/:id', authenticateAdmin, async (req, res) => {
             params.push(userId);
 
             await connection.execute(sql, params);
-
-            // Sync to Central DB (async)
-            if (userRows.length > 0) {
-                syncUserToCentral(userRows[0]).catch(err => {
-                    console.error('[SYNC] Failed to sync updated user to central:', err);
-                });
-            }
-            // Logic restored to match original flow before accidental insert
-            res.json({ success: true, message: 'UsuÃ¯Â¿Â½rio atualizado com sucesso' });
-
+            res.json({ success: true, message: 'Usuário atualizado com sucesso' });
+        } else {
+            res.status(400).json({ success: false, message: 'Nenhum campo para atualizar' });
         }
-
-        res.json({ success: true, message: 'UsuÃ¯Â¿Â½rio atualizado com sucesso' });
     } catch (error) {
         console.error('Update User Error:', error);
         res.status(500).json({ success: false, message: 'Error updating user: ' + error.message });
@@ -2072,6 +2183,44 @@ app.put('/api/admin/users/:id', authenticateAdmin, async (req, res) => {
 });
 
 // --- HELPER: Sync Single User to Central DB ---
+async function checkGlobalLoginUnique(login, senha, currentDbHost, currentDbName, currentIdUsuarioOrigem = null) {
+    let centralConn;
+    try {
+        centralConn = await mysql.createConnection(CENTRAL_DB_CONFIG);
+        
+        // Find our tenant DB ID
+        const [dbRows] = await centralConn.execute(
+            'SELECT id FROM conexoes_bancos WHERE db_host = ? AND db_name = ?',
+            [currentDbHost, currentDbName]
+        );
+        let currentDbId = dbRows.length > 0 ? dbRows[0].id : null;
+
+        // Check if login AND senha exact match exists
+        const [existing] = await centralConn.execute(
+            'SELECT id_conexao_banco, id_usuario_origem FROM usuarios_central WHERE login = ? AND senha = ?',
+            [login, senha]
+        );
+
+        if (existing.length === 0) return true; // Login is free globally
+
+        const userCentral = existing[0];
+        
+        // If it belongs to US (same DB) and is the SAME user (updating themselves), it's fine
+        if (currentDbId && userCentral.id_conexao_banco === currentDbId && 
+            currentIdUsuarioOrigem && userCentral.id_usuario_origem === currentIdUsuarioOrigem) {
+            return true;
+        }
+
+        // Otherwise, login is already taken by another tenant or another user
+        return false;
+    } catch (error) {
+        console.error('[SYNC] Error checking global login:', error);
+        throw error;
+    } finally {
+        if (centralConn) await centralConn.end();
+    }
+}
+
 async function syncUserToCentral(userData) {
     let centralConn;
     try {
@@ -2098,29 +2247,36 @@ async function syncUserToCentral(userData) {
 
         const idConexaoBanco = dbRows[0].id;
 
-        // Check if user already exists in central
+        let isAtivo = 1;
+        if (userData.D_E_L_E_T_E && userData.D_E_L_E_T_E.trim() !== '') isAtivo = 0;
+        if (userData.status && userData.status.toString().toLowerCase() === 'inativo') isAtivo = 0;
+        if (userData.status && userData.status.toString() === '0') isAtivo = 0;
+        // Se forceInactive foi passado diretamente:
+        if (userData.forceInactive) isAtivo = 0;
+
+        // Check if user already exists in central for this tenant
         const [existingUser] = await centralConn.execute(
-            'SELECT id FROM usuarios_central WHERE login = ?',
-            [userData.Login]
+            'SELECT id FROM usuarios_central WHERE login = ? AND id_conexao_banco = ?',
+            [userData.Login, idConexaoBanco]
         );
 
         if (existingUser.length > 0) {
             // Update existing
             await centralConn.execute(
                 `UPDATE usuarios_central 
-                 SET senha = ?, id_conexao_banco = ?, id_usuario_origem = ?, updated_at = NOW()
+                 SET senha = ?, id_conexao_banco = ?, id_usuario_origem = ?, ativo = ?, updated_at = NOW()
                  WHERE id = ?`,
-                [userData.Senha, idConexaoBanco, userData.idUsuario, existingUser[0].id]
+                [userData.Senha, idConexaoBanco, userData.idUsuario, isAtivo, existingUser[0].id]
             );
-            console.log(`[SYNC] Updated user in central: ${userData.Login}`);
+            console.log(`[SYNC] Updated user in central: ${userData.Login} (ativo: ${isAtivo})`);
         } else {
             // Insert new
             await centralConn.execute(
-                `INSERT INTO usuarios_central (login, senha, id_conexao_banco, id_usuario_origem)
-                 VALUES (?, ?, ?, ?)`,
-                [userData.Login, userData.Senha, idConexaoBanco, userData.idUsuario]
+                `INSERT INTO usuarios_central (login, senha, id_conexao_banco, id_usuario_origem, ativo)
+                 VALUES (?, ?, ?, ?, ?)`,
+                [userData.Login, userData.Senha, idConexaoBanco, userData.idUsuario, isAtivo]
             );
-            console.log(`[SYNC] Inserted new user to central: ${userData.Login}`);
+            console.log(`[SYNC] Inserted new user to central: ${userData.Login} (ativo: ${isAtivo})`);
         }
 
         return { success: true };
@@ -2200,6 +2356,12 @@ app.post('/api/usuario', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nome de Login já Cadastrado, favor informar outro Login!' });
         }
 
+        const currentConfig = pool.getConfig();
+        const isGlobalUnique = await checkGlobalLoginUnique(Login.trim(), Senha, currentConfig.host, currentConfig.database);
+        if (!isGlobalUnique) {
+            return res.status(400).json({ success: false, message: 'Este login e senha já estão sendo usados. Escolha outro usuário ou mude a senha.' });
+        }
+
         const now = getCurrentDateTimeBR();
         const [result] = await pool.execute(
             `INSERT INTO usuario (
@@ -2250,6 +2412,22 @@ app.put('/api/usuario/:id', async (req, res) => {
     }
 
     try {
+        const currentConfig = pool.getConfig();
+
+        // Obter senha real caso a enviada seja placeholder ou vazia
+        let senhaFinal = Senha;
+        if (!Senha || Senha.trim() === '' || Senha === '••••••••') {
+            const [userRows] = await pool.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
+            if (userRows.length > 0) {
+                senhaFinal = userRows[0].Senha;
+            }
+        }
+
+        const isGlobalUnique = await checkGlobalLoginUnique(Login.trim(), senhaFinal, currentConfig.host, currentConfig.database, id);
+        if (!isGlobalUnique) {
+            return res.status(400).json({ success: false, message: 'Este login e senha já estão sendo usados. Escolha outro usuário ou mude a senha.' });
+        }
+
         let sql = `UPDATE usuario SET
             NomeCompleto = ?, Login = ?, TipoUsuario = ?,
             Setor = ?, email = ?, Descricao = ?, Sigla = ?,
@@ -2305,6 +2483,17 @@ app.delete('/api/usuario/:id', async (req, res) => {
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
+
+        // Sync delete to Central DB (async)
+        const [userRows] = await pool.execute(
+            'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [req.params.id]
+        );
+        if (userRows.length > 0) {
+            syncUserToCentral({ ...userRows[0], forceInactive: true }).catch(err => {
+                console.error('[SYNC] Failed to sync deleted user to central:', err);
+            });
+        }
+
         res.json({ success: true, message: 'Usuário excluído com sucesso' });
     } catch (error) {
         console.error('Error deleting usuario:', error);
@@ -3194,13 +3383,19 @@ app.get('/api/projeto', async (req, res) => {
         const {
             dataInicio, dataFim, projeto, descProjeto, descEmpresa,
             previsaoInicio, previsaoFim, criacaoInicio, criacaoFim,
-            finalizado
+            finalizado, liberado
         } = req.query;
 
         let queryParams = [];
 
         // Filtro base: excluir deletados
         let whereClause = "WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')";
+
+        // Filtro de Liberado (S/N)
+        if (liberado) {
+            whereClause += " AND LIBERADO = ?";
+            queryParams.push(liberado);
+        }
 
         // Filtro de finalizado:
         //   undefined  → param não enviado → padrão: apenas não finalizados
@@ -6205,7 +6400,10 @@ async function inicializarPrimeiroSetor(conn, id) {
 
 // GET: Mapa da ProduÃ¯Â¿Â½Ã¯Â¿Â½o - visÃ¯Â¿Â½o geral de todos os processos
 app.get('/api/apontamento/mapa/producao', async (req, res) => {
-    const { projeto, tag, os, item, search, status } = req.query;
+    const { projeto, tag, os, item, search, status, page = 1, limit = 500 } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 500;
+    const offsetNum = (pageNum - 1) * limitNum;
 
     try {
         let whereClause = `
@@ -6241,18 +6439,9 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             params.push(item);
         }
 
-        if (search) {
-            whereClause += ` AND (
-                osi.CodMatFabricante LIKE ? OR 
-                osi.DescResumo LIKE ? OR 
-                osi.MaterialSW LIKE ? OR 
-                osi.Espessura LIKE ? OR
-                CAST(os.IdOrdemServico AS CHAR) LIKE ? OR
-                CAST(osi.IdOrdemServicoItem AS CHAR) LIKE ? OR
-                os.DescEmpresa LIKE ?
-            )`;
-            const searchPattern = `%${search}%`;
-            params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+        if (req.query.planoCorte) {
+            whereClause += ' AND osi.IdPlanodecorte LIKE ?';
+            params.push(`%${req.query.planoCorte}%`);
         }
 
         // Filter by cliente
@@ -6270,6 +6459,14 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
                 (NULLIF(TRIM(osi.txtPintura), '') = '1' AND (osi.PinturaTotalExecutado IS NULL OR osi.PinturaTotalExecutado < osi.QtdeTotal))
             )`;
         }
+
+        const [countResult] = await pool.execute(`
+            SELECT COUNT(*) as total
+            FROM ordemservicoitem osi
+            INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+            WHERE ${whereClause}
+        `, params);
+        const total = countResult[0].total;
 
         const [rows] = await pool.execute(`
             SELECT 
@@ -6328,9 +6525,19 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
             ORDER BY os.IdOrdemServico DESC, osi.IdOrdemServicoItem
+            LIMIT ${limitNum} OFFSET ${offsetNum}
         `, params);
 
-        res.json({ success: true, data: rows });
+        res.json({ 
+            success: true, 
+            data: rows,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
     } catch (error) {
         console.error('Error fetching mapa producao:', error);
         res.status(500).json({ success: false, message: 'Erro ao carregar mapa de produção', error: error.message });
@@ -6349,7 +6556,10 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         });
     }
 
-    const { projeto, tag, os, item, search, status } = req.query;
+    const { projeto, tag, os, item, search, status, page = 1, limit = 500 } = req.query;
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 500;
+    const offsetNum = (pageNum - 1) * limitNum;
 
     try {
         // D_E_L_E_T_E = '*' means deleted, Liberado_engenharia = 'S' required
@@ -6370,17 +6580,9 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         }
 
         // Expanded search across multiple columns
-        if (search) {
-            whereClause += ` AND(
-            osi.CodMatFabricante LIKE ? OR 
-                osi.DescResumo LIKE ? OR 
-                osi.MaterialSW LIKE ? OR 
-                osi.Espessura LIKE ? OR
-                CAST(os.IdOrdemServico AS CHAR) LIKE ? OR
-                CAST(osi.IdOrdemServicoItem AS CHAR) LIKE ?
-            )`;
-            const searchPattern = `% ${search} % `;
-            params.push(searchPattern, searchPattern, searchPattern, searchPattern, searchPattern, searchPattern);
+        if (req.query.planoCorte) {
+            whereClause += ' AND osi.IdPlanodecorte LIKE ?';
+            params.push(`%${req.query.planoCorte}%`);
         }
 
         if (status === 'pendente') {
@@ -6406,6 +6608,14 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             whereClause += ' AND os.DescEmpresa = ?';
             params.push(req.query.cliente);
         }
+
+        const [countResult] = await pool.execute(`
+            SELECT COUNT(*) as total
+            FROM ordemservicoitem osi
+            INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+            WHERE ${whereClause}
+        `, params);
+        const total = countResult[0].total;
 
         const [rows] = await pool.execute(`
             SELECT 
@@ -6455,10 +6665,20 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             ) history ON history.IdOrdemServicoItem = osi.IdOrdemServicoItem
             WHERE ${whereClause}
             ORDER BY os.IdOrdemServico DESC, osi.IdOrdemServicoItem
-            LIMIT 300
+            LIMIT ${limitNum} OFFSET ${offsetNum}
     `, [setor, ...params]);
 
-        res.json({ success: true, data: rows, setor });
+        res.json({ 
+            success: true, 
+            data: rows, 
+            setor,
+            pagination: {
+                total,
+                page: pageNum,
+                limit: limitNum,
+                totalPages: Math.ceil(total / limitNum)
+            }
+        });
     } catch (error) {
         console.error('Error fetching apontamento:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar itens para apontamento' });
@@ -11200,16 +11420,26 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
 }
 
 
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+// Static: landing page assets (root)
+app.use(express.static(path.join(__dirname, '../')));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 app.use('/css', express.static(path.join(__dirname, '../public/css')));
 app.use('/img', express.static(path.join(__dirname, '../public/img')));
+// Static: React app assets (assets/, etc.)
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
-app.get('/login', (req, res) => {
-    res.sendFile(path.join(__dirname, '../login_inicial.html'));
+// Root = landing page (HTML puro, sem Node.js)
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../index.html'));
 });
 
-app.get(/.*/, (req, res) => {
+// Legacy login redirect
+app.get('/login', (req, res) => {
+    res.redirect('/#acesso');
+});
+
+// React SPA — todas as rotas internas
+app.get(/^\/(dashboard|app|admin|projetos|tags|os|romaneio|producao|material|apontamento|pendencia|tarefa|blockset|powerbuild|relatorio|configuracao|superadmin).*/, (req, res) => {
     res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
