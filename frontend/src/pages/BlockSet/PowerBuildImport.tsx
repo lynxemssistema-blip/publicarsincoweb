@@ -203,46 +203,46 @@ const PowerBuildImport: React.FC = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0B1120] text-gray-200 p-4 md:p-8 font-sans">
-            <div className="max-w-4xl mx-auto space-y-8">
-                
-                {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <span className="bg-blue-500/20 text-blue-400 p-2.5 rounded-xl border border-blue-500/30">
-                                <FilePlus className="w-8 h-8" />
-                            </span>
-                            Leitura de Dados (Power Build)
-                        </h1>
-                        <p className="text-gray-400 mt-2">
-                            Importe planilhas BlockSet (data) ou PixEasy (bom) para o sistema.
-                        </p>
+        <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-gray-50 p-6 font-sans">
+            
+            {/* Header Section */}
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                        <FilePlus size={24} />
                     </div>
+                    <div>
+                        <h1 className="text-2xl font-black text-[#567469] tracking-tight">Leitura de Dados (Power Build)</h1>
+                        <p className="text-sm text-gray-500 font-medium">Importe planilhas BlockSet (data) ou PixEasy (bom) para o sistema.</p>
+                    </div>
+                </div>
 
+                <div className="flex flex-wrap gap-2 items-center">
                     {user?.dbName === 'lynxlocal' && (
                         <button 
                             onClick={handleTruncate}
-                            className="flex items-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 rounded-lg transition-all text-sm font-bold"
+                            className="flex items-center gap-2 px-4 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-all text-sm font-bold shadow-sm"
                         >
                             <Trash2 className="w-4 h-4" />
                             Limpar Base (Truncate)
                         </button>
                     )}
                 </div>
+            </div>
 
-                {initializing && (
-                    <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl flex items-center gap-3 text-blue-400">
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        <span className="text-sm font-medium">Verificando estrutura do banco de dados...</span>
-                    </div>
-                )}
+            <div className="flex-1 overflow-auto custom-scrollbar">
+                <div className="max-w-4xl mx-auto space-y-6 pb-8">
+                    {initializing && (
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center gap-3 text-blue-600">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            <span className="text-sm font-medium">Verificando estrutura do banco de dados...</span>
+                        </div>
+                    )}
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Main Form Card */}
-                    <div className="lg:col-span-2 space-y-6">
-                        <form onSubmit={handleSubmit} className="bg-[#111827] rounded-3xl border border-gray-800 p-8 shadow-2xl space-y-6 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 to-cyan-400"></div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                        {/* Main Form Card */}
+                        <div className="lg:col-span-2 space-y-6">
+                            <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-gray-200 p-8 shadow-sm space-y-6 relative overflow-hidden">
 
                             {/* Step 1: Context Selection */}
                             <div className="space-y-4">
@@ -256,7 +256,7 @@ const PowerBuildImport: React.FC = () => {
                                         <select 
                                             value={selectedProjeto}
                                             onChange={e => setSelectedProjeto(e.target.value)}
-                                            className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm"
+                                            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800"
                                         >
                                             <option value="">Selecione o Projeto</option>
                                             {Array.isArray(projetos) && projetos.map(p => (
@@ -270,7 +270,7 @@ const PowerBuildImport: React.FC = () => {
                                             value={selectedTag}
                                             onChange={e => setSelectedTag(e.target.value)}
                                             disabled={!selectedProjeto}
-                                            className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm disabled:opacity-50"
+                                            className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800 disabled:opacity-50"
                                         >
                                             <option value="">Selecione a Tag</option>
                                             {Array.isArray(tags) && tags.map(t => (
@@ -287,24 +287,24 @@ const PowerBuildImport: React.FC = () => {
                                     <Settings2 className="w-4 h-4" />
                                     2. Opções de Importação
                                 </div>
-                                <div className="bg-[#0B1120] p-4 rounded-2xl border border-gray-800 space-y-4">
+                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
                                     <div className="flex items-center justify-between">
                                         <div className="space-y-0.5">
-                                            <p className="text-sm font-bold text-white">Modo de Inclusão</p>
+                                            <p className="text-sm font-bold text-gray-800">Modo de Inclusão</p>
                                             <p className="text-[10px] text-gray-500">Defina se esta planilha é uma nova importação ou revisão.</p>
                                         </div>
-                                        <div className="flex bg-[#1F2937] p-1 rounded-lg">
+                                        <div className="flex bg-gray-200 p-1 rounded-lg">
                                             <button 
                                                 type="button"
                                                 onClick={() => setIsRevision(false)}
-                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${!isRevision ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${!isRevision ? 'bg-white text-blue-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
                                             >
                                                 Nova (Rev 0)
                                             </button>
                                             <button 
                                                 type="button"
                                                 onClick={() => setIsRevision(true)}
-                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isRevision ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                                className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${isRevision ? 'bg-white text-blue-600 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-700'}`}
                                             >
                                                 Revisão
                                             </button>
@@ -312,10 +312,10 @@ const PowerBuildImport: React.FC = () => {
                                     </div>
 
                                     {isRevision && (
-                                        <div className="animate-fade-in space-y-2 pt-2 border-t border-gray-800">
+                                        <div className="animate-fade-in space-y-2 pt-2 border-t border-gray-200">
                                             <label className="text-[10px] font-bold text-gray-500 uppercase">Vincular à Planilha Mestre</label>
                                             {masterPlanilhas.length === 0 ? (
-                                                <div className="text-xs text-amber-500 flex items-center gap-2 bg-amber-500/10 p-2 rounded-lg">
+                                                <div className="text-xs text-amber-600 flex items-center gap-2 bg-amber-50 p-2 rounded-lg border border-amber-200">
                                                     <AlertTriangle className="w-4 h-4" />
                                                     Nenhuma planilha anterior encontrada para este Projeto/Tag.
                                                 </div>
@@ -323,7 +323,7 @@ const PowerBuildImport: React.FC = () => {
                                                 <select 
                                                     value={selectedMaster}
                                                     onChange={e => setSelectedMaster(e.target.value)}
-                                                    className="w-full bg-[#111827] border border-gray-700 rounded-lg px-3 py-2 focus:border-blue-500 outline-none transition-all text-xs"
+                                                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 focus:border-blue-500 outline-none transition-all text-sm text-gray-800"
                                                 >
                                                     <option value="">Selecione o arquivo mestre...</option>
                                                     {masterPlanilhas.map(p => <option key={p.NomeArquivo} value={p.NomeArquivo}>{p.NomeArquivo}</option>)}
@@ -336,7 +336,7 @@ const PowerBuildImport: React.FC = () => {
 
                             {/* Step 3: File Selection */}
                             <div className="space-y-4">
-                                <div className="flex items-center gap-2 text-indigo-400 font-bold text-xs uppercase tracking-widest">
+                                <div className="flex items-center gap-2 text-indigo-500 font-bold text-xs uppercase tracking-widest">
                                     <Upload className="w-4 h-4" />
                                     3. Selecionar Arquivo
                                 </div>
@@ -347,12 +347,12 @@ const PowerBuildImport: React.FC = () => {
                                         onChange={handleFileChange}
                                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
                                     />
-                                    <div className={`border-2 border-dashed rounded-3xl p-8 flex flex-col items-center justify-center gap-4 transition-all ${file ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-gray-700 bg-gray-800/20 group-hover:border-blue-500/50 group-hover:bg-blue-500/5'}`}>
-                                        <div className={`p-4 rounded-2xl ${file ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                                    <div className={`border-2 border-dashed rounded-2xl p-8 flex flex-col items-center justify-center gap-4 transition-all ${file ? 'border-emerald-500 bg-emerald-50' : 'border-gray-300 bg-gray-50 group-hover:border-blue-400 group-hover:bg-blue-50'}`}>
+                                        <div className={`p-4 rounded-2xl ${file ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                                             <FileSpreadsheet className="w-10 h-10" />
                                         </div>
                                         <div className="text-center">
-                                            <p className={`font-bold ${file ? 'text-emerald-400' : 'text-white'}`}>
+                                            <p className={`font-bold ${file ? 'text-emerald-600' : 'text-gray-700'}`}>
                                                 {file ? file.name : 'Clique ou arraste a planilha Excel'}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-1">Formato suportado: .xlsx, .xls</p>
@@ -383,50 +383,51 @@ const PowerBuildImport: React.FC = () => {
 
                     {/* Info Column */}
                     <div className="space-y-6">
-                        <div className="bg-[#111827] rounded-3xl border border-gray-800 p-6 shadow-xl space-y-4">
-                            <h2 className="text-white font-bold flex items-center gap-2">
+                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-4">
+                            <h2 className="text-gray-800 font-bold flex items-center gap-2">
                                 <AlertTriangle className="w-5 h-5 text-amber-500" />
                                 Importante
                             </h2>
                             <ul className="space-y-4">
                                 <li className="flex gap-3">
                                     <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0"></div>
-                                    <p className="text-xs text-gray-400 leading-relaxed">
-                                        <strong className="text-gray-200">Aba "data":</strong> O sistema buscará automaticamente por esta aba para importar dados do tipo <strong className="text-blue-400">BlockSet</strong>.
+                                    <p className="text-xs text-gray-600 leading-relaxed">
+                                        <strong className="text-gray-800">Aba "data":</strong> O sistema buscará automaticamente por esta aba para importar dados do tipo <strong className="text-blue-600">BlockSet</strong>.
                                     </p>
                                 </li>
                                 <li className="flex gap-3">
-                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0"></div>
-                                    <p className="text-xs text-gray-400 leading-relaxed">
-                                        <strong className="text-gray-200">Aba "bom":</strong> Use esta aba para importar listas de materiais do tipo <strong className="text-cyan-400">PixEasy</strong>.
+                                    <div className="w-1.5 h-1.5 bg-cyan-500 rounded-full mt-1.5 shrink-0"></div>
+                                    <p className="text-xs text-gray-600 leading-relaxed">
+                                        <strong className="text-gray-800">Aba "bom":</strong> Use esta aba para importar listas de materiais do tipo <strong className="text-cyan-600">PixEasy</strong>.
                                     </p>
                                 </li>
                                 <li className="flex gap-3">
-                                    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mt-1.5 shrink-0"></div>
-                                    <p className="text-xs text-gray-400 leading-relaxed">
+                                    <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full mt-1.5 shrink-0"></div>
+                                    <p className="text-xs text-gray-600 leading-relaxed">
                                         O sistema valida automaticamente as colunas obrigatórias antes de salvar os dados no banco.
                                     </p>
                                 </li>
                             </ul>
                         </div>
 
-                        <div className="bg-blue-600/10 rounded-3xl border border-blue-600/20 p-6 shadow-xl">
-                            <h2 className="text-white font-bold mb-4">Resumo da Revisão</h2>
+                        <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6 shadow-sm">
+                            <h2 className="text-blue-900 font-bold mb-4">Resumo da Revisão</h2>
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-400">Próxima Revisão:</span>
-                                    <span className="text-blue-400 font-bold bg-blue-400/10 px-2 py-0.5 rounded">
+                                    <span className="text-blue-700">Próxima Revisão:</span>
+                                    <span className="text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded border border-blue-200">
                                         {isRevision ? 'Auto-calculado' : 'Rev 0 (Inicial)'}
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between text-xs">
-                                    <span className="text-gray-400">Vínculo:</span>
-                                    <span className="text-gray-300 font-medium truncate ml-4" title={selectedMaster || 'Nenhum'}>
+                                    <span className="text-blue-700">Vínculo:</span>
+                                    <span className="text-blue-800 font-bold truncate ml-4" title={selectedMaster || 'Nenhum'}>
                                         {selectedMaster || 'Nenhum'}
                                     </span>
                                 </div>
                             </div>
                         </div>
+                    </div>
                     </div>
                 </div>
             </div>

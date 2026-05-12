@@ -15,6 +15,7 @@ interface Projeto {
     IdProjeto?: number;
     Projeto: string;
     DescProjeto?: string;
+    DescEmpresa?: string;
     ClienteProjeto?: string;
     Responsavel?: string;
     DataPrevisao?: string;
@@ -846,7 +847,7 @@ export default function ProjetoPage() {
                                                 <span className="text-xs text-gray-400 font-mono">{projeto.IdProjeto}</span>
                                                 <span className="text-sm font-medium text-gray-900 truncate">{projeto.Projeto}</span>
                                             </div>
-                                            <div className="text-xs text-gray-500 truncate">{projeto.ClienteProjeto || 'Sem cliente'}</div>
+                                            <div className="text-xs text-gray-500 truncate">{(projeto.DescEmpresa && !projeto.DescEmpresa.toLowerCase().includes('sem cliente') && projeto.DescEmpresa !== 'SEM CLIENTE DEFINIDO') ? projeto.DescEmpresa : (projeto.ClienteProjeto || 'Sem cliente')}</div>
                                         </div>
 
                                         {/* Data Previsão */}

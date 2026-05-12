@@ -385,8 +385,9 @@ function AppContent() {
       case 'pendencia-romaneio':
         return <PendenciaRomaneioPage onNavigate={handleNavigate} idRomaneioItem={selectedRncItem} />;
       case 'config-sistema':
-        if (!user?.role || user.role !== 'admin') {
-          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado - Apenas Administradores</div>;
+        const isMasterOrSuper = user?.isSuperadmin || user?.login?.toLowerCase() === 'superadmin' || user?.login?.toLowerCase() === 'admin';
+        if (!isMasterOrSuper) {
+          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado - Apenas o usuário Admin ou Superadmin pode acessar.</div>;
         }
         return <ConfiguracaoSistemaPage />;
       case 'superadmin':

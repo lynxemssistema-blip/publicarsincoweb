@@ -295,7 +295,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                 {/* Floating Decorative Blur */}
                 <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[30%] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
-                <div className="p-4 md:p-8 w-full max-w-7xl mx-auto relative z-10">
+                <div className="p-4 md:p-8 w-full max-w-7xl mx-auto relative">
                     {/* Header Desktop (Breadcrumb/Title) */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
                         <div className="flex items-start gap-4">
@@ -312,22 +312,22 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                             </div>
                         </div>
 
-                        <div className="hidden md:flex items-center gap-4">
+                        <div className="flex items-center gap-4 w-full sm:w-auto justify-between sm:justify-end mt-4 sm:mt-0">
                             {/* Help Button */}
                             <button 
                                 onClick={() => setShowHelp(true)} 
-                                className="group flex items-center gap-2 px-4 py-2 bg-card border border-border hover:border-primary/50 rounded-md transition-all shadow-sm"
+                                className="group flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-all shadow-md"
                                 title="Precisa de ajuda?"
                             >
-                                <div className="bg-primary/10 text-primary rounded-md p-1 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                                    <HelpCircle size={14} strokeWidth={2} />
+                                <div className="bg-white/20 text-white rounded-md p-1 transition-colors">
+                                    <HelpCircle size={14} strokeWidth={2.5} />
                                 </div>
-                                <span className="text-sm font-bold text-foreground/80 group-hover:text-primary transition-colors">Ajuda</span>
+                                <span className="text-sm font-bold text-white tracking-wide">HELP</span>
                             </button>
 
                             {/* User Profile Glass Pill */}
                             <div className="flex items-center gap-3 pl-4 pr-2 py-1.5 bg-card border border-border rounded-md shadow-sm transition-shadow cursor-pointer hover:border-primary/50">
-                                <div className="flex flex-col items-end text-right">
+                                <div className="flex flex-col items-end text-right hidden sm:flex">
                                     <span className="text-sm font-bold leading-tight text-foreground">{user?.nome || 'Usuário'}</span>
                                     {user?.clientName && (
                                         <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
@@ -343,7 +343,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                     </div>
 
                     {/* Dashboard/Page Content Slot */}
-                    <div className="animate-fade-in-up">
+                    <div>
                         {children}
                     </div>
                 </div>

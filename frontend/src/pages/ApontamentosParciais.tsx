@@ -279,8 +279,8 @@ export default function ApontamentosParciaisPage() {
                                         </div>
                                     </td>
                                     <td className="px-4 py-2 text-center">
-                                        <span className="inline-block min-w-[40px] text-center font-black text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded">
-                                            +{item.QtdeProduzida}
+                                        <span className="inline-block min-w-[60px] text-center font-black text-amber-700 bg-amber-100 border border-amber-200 px-2 py-1 rounded">
+                                            {item.QtdeProduzida} / {item.QtdeTotal}
                                         </span>
                                     </td>
                                     <td className="px-4 py-2 text-center">

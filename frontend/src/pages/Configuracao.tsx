@@ -4,6 +4,7 @@ import { iconMap } from '../utils/iconMap';
 import type { MenuItem } from '../utils/iconMap';
 import { useToast } from '../contexts/ToastContext';
 import { useAppConfig, saveLocalPrefs } from '../contexts/AppConfigContext';
+import { useAuth } from '../contexts/AuthContext';
 import { defaultMenuItems } from '../utils/constants';
 
 const API_BASE = '/api';
@@ -11,6 +12,7 @@ const API_BASE = '/api';
 export default function ConfiguracaoPage() {
     const { addToast } = useToast();
     const { refetchConfig } = useAppConfig();
+    const { user: globalUser } = useAuth();
     const [isAdmin, setIsAdmin] = useState(false);
     const [login, setLogin] = useState('');
     const [senha, setSenha] = useState('');
@@ -35,13 +37,27 @@ export default function ConfiguracaoPage() {
     const [loadingDbs, setLoadingDbs] = useState(false);
 
     useEffect(() => {
-        const storedAdmin = localStorage.getItem('adminUser');
-        if (storedAdmin) {
+        // Se o usuário global já for o 'Admin' (ou superadmin), desbloqueia automaticamente
+        if (globalUser && (globalUser.login?.toLowerCase() === 'admin' || globalUser.isSuperadmin)) {
             setIsAdmin(true);
             fetchConfig();
             fetchMenu();
+            return;
         }
-    }, []);
+
+        const storedAdmin = localStorage.getItem('adminUser');
+        if (storedAdmin) {
+            try {
+                const parsed = JSON.parse(storedAdmin);
+                if (parsed.login?.toLowerCase() === 'admin' || parsed.isSuperadmin) {
+                    setIsAdmin(true);
+                    fetchConfig();
+                    fetchMenu();
+                    return;
+                }
+            } catch (e) {}
+        }
+    }, [globalUser]);
 
     const fetchConfig = () => {
         fetch(`${API_BASE}/config`)
@@ -122,20 +138,17 @@ export default function ConfiguracaoPage() {
                 body: JSON.stringify({ login, senha })
             });
             const data = await res.json();
-            if (data.success && data.user.role === 'admin') {
+            
+            // Restringir acesso APENAS para o usuário de login 'Admin'
+            if (data.success && data.user.login?.toLowerCase() === 'admin') {
                 setIsAdmin(true);
                 localStorage.setItem('adminUser', JSON.stringify(data.user));
-
-                // Also update main user context if needed, but this is admin area specific usually?
-                // Actually, let's update main context too to be safe
-                // But wait, this page is just for config. 
-                // However, for superadmin, we want global switch.
 
                 fetchConfig();
                 fetchMenu();
                 addToast({ type: 'success', title: 'Bem-vindo', message: 'Login realizado com sucesso' });
             } else {
-                addToast({ type: 'error', title: 'Acesso Negado', message: 'Apenas administradores podem acessar.' });
+                addToast({ type: 'error', title: 'Acesso Negado', message: 'Apenas o usuário master Admin pode acessar e modificar as configurações.' });
             }
         } catch (err) {
             addToast({ type: 'error', title: 'Erro', message: 'Erro de conexão' });

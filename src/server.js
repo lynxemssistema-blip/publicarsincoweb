@@ -3770,7 +3770,9 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
         // Get projects with aggregated sector totals from their tags + RNC count
         const [rows] = await queryPool.execute(`
             SELECT
-                p.IdProjeto, p.Projeto, p.DescProjeto, p.DataPrevisao, p.DataCriacao,
+                p.IdProjeto, p.Projeto, p.DescProjeto, 
+                CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa,
+                p.DataPrevisao, p.DataCriacao,
                 TRIM(p.Finalizado) as Finalizado, p.liberado, p.StatusProj, p.DescStatus,
 
                 /* -- Tags / Pecas nativos da tabela Projetos -- */
@@ -3874,7 +3876,8 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
 // GET tags for a project in production overview
 app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute(`
             SELECT
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
                 QtdeOS, QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS, QtdeTotalPecas,
@@ -3911,7 +3914,8 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
             return res.status(400).json({ success: false, message: 'Todos os campos sÃƒÂ£o obrigatÃƒÂ³rios: Projetista, InÃƒÂ­cio e Fim.' });
         }
 
-        const [result] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [result] = await queryPool.execute(`
             UPDATE tags 
             SET ProjetistaPlanejado = ?, 
                 PlanejadoInicioEngenharia = ?, 
@@ -3936,7 +3940,8 @@ app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
         const { id } = req.params;
         const { observacao } = req.body;
 
-        const [result] = await pool.execute(
+        const queryPool = req.tenantDbPool || pool;
+        const [result] = await queryPool.execute(
             "UPDATE projetos SET Observacao = ? WHERE IdProjeto = ?",
             [observacao || '', id]
         );
@@ -3958,7 +3963,8 @@ app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
         const { idTag } = req.params;
         const { observacao } = req.body;
 
-        const [result] = await pool.execute(
+        const queryPool = req.tenantDbPool || pool;
+        const [result] = await queryPool.execute(
             "UPDATE tags SET Observacao = ? WHERE IdTag = ?",
             [observacao || '', idTag]
         );
@@ -3984,7 +3990,8 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
         }
 
         // Fetch current tag to calculate balance
-        const [tagRows] = await pool.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
+        const queryPool = req.tenantDbPool || pool;
+        const [tagRows] = await queryPool.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
         if (tagRows.length === 0) {
             return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
         }
@@ -3998,7 +4005,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 
         const saldo = qtdeTag - liberada;
 
-        const [result] = await pool.execute(`
+        const [result] = await queryPool.execute(`
             UPDATE tags 
             SET QtdeLiberada = ?, 
                 SaldoTag = ?
@@ -4022,9 +4029,10 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         }
 
         const dataLocal = new Date().toLocaleDateString('pt-BR');
+        const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -4032,7 +4040,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -4040,7 +4048,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE idProjeto = ? AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -4050,7 +4058,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         } else {
             if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag ÃƒÂ© obrigatÃƒÂ³rio para finalizar apenas uma.' });
             
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -4058,7 +4066,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -4066,7 +4074,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await pool.execute(`
+            await queryPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -6517,7 +6525,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
                 os.Tag,
                 os.IdTag,
                 os.DescTag,
-                os.DescEmpresa as Cliente,
+                CASE WHEN TRIM(COALESCE(os.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE os.DescEmpresa END as Cliente,
                 osi.ProdutoPrincipal as IsProdutoPrincipal,
                 (SELECT DescResumo FROM ordemservicoitem WHERE IdOrdemServico = osi.IdOrdemServico AND ProdutoPrincipal = 'sim' LIMIT 1) as NomeProdutoPrincipal
             FROM ordemservicoitem osi
@@ -6644,7 +6652,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             os.Tag,
             os.IdTag,
             os.DescTag,
-            os.DescEmpresa as Cliente,
+            CASE WHEN TRIM(COALESCE(os.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN (SELECT ClienteProjeto FROM projetos WHERE IdProjeto = os.IdProjeto LIMIT 1) ELSE os.DescEmpresa END as Cliente,
             osi.txtcorte as txtCorte,
             osi.txtdobra as txtDobra,
             osi.txtsolda as txtSolda,
@@ -6877,7 +6885,8 @@ WHERE osi.IdOrdemServicoItem = ?
 // GET: Listar apontamentos parciais
 app.get('/api/apontamentos-parciais', async (req, res) => {
     try {
-        const [rows] = await pool.query(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.query(`
             SELECT 
                 c.IdOrdemServicoItemControle,
                 c.IdOrdemServicoItem,
@@ -6902,6 +6911,10 @@ app.get('/api/apontamentos-parciais', async (req, res) => {
         `);
         res.json({ success: true, parciais: rows });
     } catch (error) {
+        if (error.code === 'ER_BAD_FIELD_ERROR' && error.sqlMessage && error.sqlMessage.includes('TipoApontamento')) {
+            console.warn('[API Apontamentos Parciais] Base de dados legada não possui TipoApontamento, retornando array vazio.');
+            return res.json({ success: true, parciais: [] });
+        }
         console.error('[API Apontamentos Parciais] Erro ao buscar parciais:', error);
         res.status(500).json({ success: false, message: 'Erro no servidor' });
     }
@@ -6910,7 +6923,8 @@ app.get('/api/apontamentos-parciais', async (req, res) => {
 // DELETE: Excluir apontamento parcial
 app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
     const { id } = req.params;
-    const conn = await pool.getConnection();
+    const queryPool = req.tenantDbPool || pool;
+    const conn = await queryPool.getConnection();
     try {
         await conn.beginTransaction();
         

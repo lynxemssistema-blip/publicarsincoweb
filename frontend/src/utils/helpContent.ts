@@ -5,31 +5,43 @@ export interface HelpContent {
 
 export const helpContents: Record<string, HelpContent> = {
     'dashboard': {
-        title: 'Dashboard Inicial',
-        description: 'Esta é a página principal do SincoWeb. Aqui você encontrará um resumo executivo e atalhos rápidos para as funcionalidades mais importantes do sistema.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é dar a você um resumo rápido de tudo o que está acontecendo no sistema. É um painel de controle onde você vê atalhos fáceis e os números mais importantes da fábrica logo de cara.'
     },
     'ordens-servico': {
-        title: 'Ordens de Serviço',
-        description: 'Nesta tela você gerencia suas O.S.\n\n- Use o botão superior para "Criar Nova OS"\n- Utilize a lupa para visualizar os itens.\n- O botão de cópia permite "Clonar" a O.S para outra tag ou projeto.\n- Utilize os filtros no painel superior para refinar a listagem.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é organizar o que precisa ser fabricado. É aqui que você cria e gerencia as Ordens de Serviço (O.S.), dizendo para o chão de fábrica exatamente o que deve ser feito e para quando.'
     },
     'projetos': {
-        title: 'Gestão de Projetos',
-        description: 'Aqui você cadastra e acompanha os projetos em vigência.\n\n- Adicione, edite e finalize projetos.\n- Você pode adicionar novas Tags aos projetos utilizando o botão "Nova Tag".\n- O status de liberação pode ser acompanhado através dos ícones à direita.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é cadastrar os grandes projetos ou obras da empresa. Ela serve para que você possa agrupar várias Ordens de Serviço debaixo de um mesmo cliente ou nome de projeto, mantendo tudo bem organizado.'
     },
     'apontamento': {
-        title: 'Apontamento de Produção',
-        description: 'Módulo voltado para registro em tempo real das etapas produtivas (Corte, Dobra, Solda, Pintura, Montagem).\n\n- Utilize leitura de código de barras ou pesquise pelos itens e OS.\n- Somente após um setor ser concluído que o item avança para a próxima etapa em seu fluxo Push produtivo.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é registrar o que está sendo feito na fábrica, em tempo real. O operador usa essa tela para avisar o sistema: "acabei de cortar esta peça" ou "terminei de soldar isso", fazendo a fila de trabalho andar.'
+    },
+    'apontamentos-parciais': {
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é rastrear peças que não foram produzidas em sua totalidade, mas sim em partes (quantidades parciais) em determinado setor da fábrica.'
     },
     'acompanhamento-geral': {
-        title: 'Acompanhamento Geral de Produção',
-        description: 'Módulo de relatório completo sobre o chão de fábrica.\n\n- Apresenta métricas visuais em formato Gantt e listas detalhadas sobre atrasos e progressos baseados no peso (KG).\n- Utilize os potentes filtros na esquerda para agrupar as informações por O.S, Tag ou Familia de materiais.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é mostrar se a produção está atrasada ou adiantada. Ela usa gráficos visuais fáceis de entender para que a gerência veja onde a fábrica está engarrafada e o que já foi finalizado.'
     },
     'visao-geral-producao': {
-        title: 'Visão Geral da Produção',
-        description: 'Resumo em grade (dashboard técnico) da performance departamental do chão de fábrica.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é guiar os líderes operacionais no dia a dia. Ela mostra a fila de trabalho exata de cada setor para hoje, ajudando a distribuir as tarefas para a equipe.'
+    },
+    'romaneio-envio': {
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é controlar tudo o que sai pelo portão da fábrica. Se você vai entregar peças para o cliente ou mandar para um serviço de terceiros (como galvanização), é aqui que você gera o documento oficial de saída.'
+    },
+    'blockset': {
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é importar listas de materiais (projetos) feitas pela engenharia no Excel. O sistema lê o arquivo, entende o que precisa ser fabricado e cria as Ordens de Serviço sem você precisar digitar peça por peça.'
     },
     'default': {
-        title: 'Ajuda do Sistema',
-        description: 'Neste momento não há uma dica detalhada exclusiva para esta tela. Em caso de dúvidas sobre a operação específica, entre em contato com o administrador do sistema.'
+        title: 'Sobre esta Tela',
+        description: 'O objetivo dessa tela é ajudar você a cadastrar, pesquisar ou organizar as informações específicas desta área do sistema. Use os botões em tela para adicionar novos dados ou as barras de pesquisa para encontrar algo na lista.'
     }
 };

@@ -574,3 +574,47 @@ exports.processItems = async (req, res) => {
         connection.release();
     }
 };
+
+exports.getAgglutinationSummary = async (req, res) => {
+    const { idProjeto, idTag, nomePlanilha, revisao, codMatFilter } = req.body;
+    try {
+        let filter = "";
+        const params = [];
+
+        if (idProjeto) { filter += " AND tbl.IdProjeto = ?"; params.push(idProjeto); }
+        if (idTag) { filter += " AND tbl.IdTag = ?"; params.push(idTag); }
+        if (nomePlanilha) { filter += " AND tbl.NomePlanilha = ?"; params.push(nomePlanilha); }
+        if (revisao !== undefined && revisao !== -1) { filter += " AND tbl.Revisao = ?"; params.push(revisao); }
+        if (codMatFilter) { filter += " AND tbl.CodMatFabricante LIKE ?"; params.push(`%${codMatFilter}%`); }
+
+        // AglutinacaoBlockSet columns: IdAglutinacao, CodMatFabricante, PD_qty, Part_total_qty, DataAglutinacao, IdProjeto, IdTag, NomeProjeto, NomeTag, NomePlanilha, Revisao
+        // AglutinacaoPixeasy columns: IdAglutinacao, CodMatFabricante, UG_SBU_Quantity, Reference_quantity, DataAglutinacao, IdProjeto, IdTag, NomeProjeto, NomeTag, NomePlanilha, Revisao
+        const query = `
+            SELECT 
+                tbl.CodMatFabricante, 
+                SUM(tbl.QtdeUnitaria) as QtdeUnitaria, 
+                SUM(tbl.QtdeTotal) as QtdeTotal, 
+                MAX(tbl.DataAglutinacao) as DataAglutinacao,
+                tbl.Revisao, 
+                MAX(tbl.IdProjeto) as IdProjeto, 
+                MAX(tbl.IdTag) as IdTag, 
+                MAX(tbl.NomeProjeto) as NomeProjeto, 
+                MAX(tbl.NomeTag) as NomeTag, 
+                MAX(tbl.NomePlanilha) as NomePlanilha 
+            FROM (
+                SELECT CodMatFabricante, PD_qty as QtdeUnitaria, Part_total_qty as QtdeTotal, DataAglutinacao, IdProjeto, IdTag, NomeProjeto, NomeTag, NomePlanilha, Revisao FROM AglutinacaoBlockSet 
+                UNION ALL 
+                SELECT CodMatFabricante, UG_SBU_Quantity as QtdeUnitaria, Reference_quantity as QtdeTotal, DataAglutinacao, IdProjeto, IdTag, NomeProjeto, NomeTag, NomePlanilha, Revisao FROM AglutinacaoPixeasy 
+            ) AS tbl 
+            WHERE 1=1 ${filter}
+            GROUP BY tbl.CodMatFabricante, tbl.Revisao
+            ORDER BY tbl.Revisao DESC, tbl.CodMatFabricante ASC
+        `;
+
+        const [rows] = await db.query(query, params);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Erro ao buscar resumo da aglutinação:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar dados.' });
+    }
+};

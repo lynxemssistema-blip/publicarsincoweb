@@ -161,6 +161,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
                 setIsAuthenticated(true);
                 addToast({ type: 'success', message: 'Login realizado com sucesso' });
                 fetchTenants(data.token);
+                fetchUsers(data.token);
             } else {
                 addToast({ type: 'error', message: data.message || 'Credenciais inválidas no banco de dados' });
             }
@@ -212,6 +213,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
             const data = await res.json();
             if (data.success) {
                 addToast({ type: 'success', message: data.message });
+                fetchUsers(token);
             } else {
                 addToast({ type: 'error', message: data.message });
             }
@@ -236,6 +238,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
             const data = await res.json();
             if (data.success) {
                 addToast({ type: 'success', message: data.message });
+                fetchUsers(token);
             } else {
                 addToast({ type: 'error', message: data.message });
             }

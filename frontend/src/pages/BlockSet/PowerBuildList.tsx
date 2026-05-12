@@ -254,42 +254,43 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
     };
 
     return (
-        <div className="min-h-screen bg-[#0B1120] text-gray-200 p-4 md:p-8 font-sans">
-            <div className="max-w-7xl mx-auto space-y-6">
-                
-                {/* Header */}
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
-                    <div>
-                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
-                            <span className="bg-blue-500/20 text-blue-400 p-2.5 rounded-xl border border-blue-500/30">
-                                <FileSpreadsheet className="w-8 h-8" />
-                            </span>
-                            Lista Itens da Planilha
-                        </h1>
-                        <p className="text-gray-400 mt-2">
-                            Visualize, aglutine e inclua itens importados em Ordens de Serviço.
-                        </p>
+        <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-gray-50 p-6 font-sans">
+            
+            {/* Header */}
+            <div className="flex flex-wrap items-center justify-between gap-6 mb-6 shrink-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600">
+                        <FileSpreadsheet size={24} />
                     </div>
-                    <div className="flex gap-3">
-                        <button 
-                            onClick={() => onNavigate('powerbuild-import')}
-                            className="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium border border-gray-700 transition-all flex items-center gap-2"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            Nova Importação
-                        </button>
+                    <div>
+                        <h1 className="text-2xl font-black text-[#567469] tracking-tight">Lista Itens da Planilha</h1>
+                        <p className="text-sm text-gray-500 font-medium">Visualize, aglutine e inclua itens importados em Ordens de Serviço.</p>
                     </div>
                 </div>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={() => onNavigate('powerbuild-import')}
+                        className="bg-white hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-bold border border-gray-300 transition-all flex items-center gap-2 shadow-sm"
+                    >
+                        <RefreshCw className="w-4 h-4" />
+                        Nova Importação
+                    </button>
+                </div>
+            </div>
+
+            <div className="flex-1 overflow-auto custom-scrollbar">
+                <div className="max-w-7xl mx-auto space-y-6 pb-8">
 
                 {/* Filters Section */}
-                <div className="bg-[#111827] rounded-2xl border border-gray-800 p-6 shadow-xl space-y-6">
+                {/* Filters Section */}
+                <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                         <div className="space-y-2">
                             <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Projeto</label>
                             <select 
                                 value={selectedProjeto}
                                 onChange={e => { setSelectedProjeto(e.target.value); setSelectedTag(''); }}
-                                className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800"
                             >
                                 <option value="">Selecione o Projeto</option>
                                 {projetos.map(p => <option key={p.IdProjeto} value={p.IdProjeto}>{p.Projeto}</option>)}
@@ -301,7 +302,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                                 value={selectedTag}
                                 onChange={e => setSelectedTag(e.target.value)}
                                 disabled={!selectedProjeto}
-                                className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm disabled:opacity-50"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800 disabled:opacity-50"
                             >
                                 <option value="">Selecione a Tag</option>
                                 {tags.map(t => <option key={t.IdTag} value={t.IdTag}>{t.NomeTag}</option>)}
@@ -313,7 +314,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                                 value={selectedPlanilha}
                                 onChange={e => setSelectedPlanilha(e.target.value)}
                                 disabled={!selectedTag}
-                                className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm disabled:opacity-50"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800 disabled:opacity-50"
                             >
                                 <option value="">Selecione a Planilha</option>
                                 {planilhas.map(p => <option key={p} value={p}>{p}</option>)}
@@ -325,7 +326,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                                 value={selectedRevisao}
                                 onChange={e => setSelectedRevisao(e.target.value)}
                                 disabled={!selectedPlanilha}
-                                className="w-full bg-[#0B1120] border border-gray-700 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm disabled:opacity-50"
+                                className="w-full bg-gray-50 border border-gray-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800 disabled:opacity-50"
                             >
                                 <option value="-1">Todas</option>
                                 {revisoes.map(r => <option key={r} value={r}>Revisão {r}</option>)}
@@ -343,7 +344,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                                     placeholder="Ex: 1SVR405622R0000"
                                     value={codMatFilter}
                                     onChange={e => setCodMatFilter(e.target.value)}
-                                    className="w-full bg-[#0B1120] border border-gray-700 rounded-xl py-2.5 pl-10 pr-4 focus:border-blue-500 outline-none transition-all text-sm"
+                                    className="w-full bg-gray-50 border border-gray-300 rounded-xl py-2.5 pl-10 pr-4 focus:border-blue-500 outline-none transition-all text-sm text-gray-800"
                                 />
                             </div>
                         </div>
@@ -351,14 +352,14 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                             <button 
                                 onClick={handleSearch}
                                 disabled={loading || !selectedPlanilha}
-                                className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-blue-900/20"
+                                className="flex-1 md:flex-none bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                             >
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
                                 Pesquisar
                             </button>
                             <button 
                                 onClick={handleClear}
-                                className="bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2.5 rounded-xl font-medium border border-gray-700 transition-all flex items-center justify-center gap-2"
+                                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2.5 rounded-xl font-medium border border-gray-300 transition-all flex items-center justify-center gap-2 shadow-sm"
                             >
                                 <Trash2 className="w-4 h-4" />
                                 Limpar
@@ -369,38 +370,51 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
 
                 {/* Processing Controls (Visible after search) */}
                 {items.length > 0 && (
-                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 flex flex-col md:flex-row items-center justify-between gap-6">
                         <div className="flex flex-col md:flex-row items-center gap-6 w-full md:w-auto">
                             <div className="space-y-2 w-full md:w-80">
-                                <label className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">OS de Destino</label>
+                                <label className="text-[10px] font-bold text-blue-800 uppercase tracking-wider">OS de Destino</label>
                                 <select 
                                     value={selectedOS}
                                     onChange={e => setSelectedOS(e.target.value)}
-                                    className="w-full bg-[#0B1120] border border-blue-500/30 rounded-xl px-4 py-2.5 focus:border-blue-400 outline-none transition-all text-sm text-white"
+                                    className="w-full bg-white border border-blue-300 rounded-xl px-4 py-2.5 focus:border-blue-500 outline-none transition-all text-sm text-gray-800 shadow-sm"
                                 >
                                     <option value="">Selecione a OS Destino</option>
                                     {osDestinoList.map(os => <option key={os.IdOrdemServico} value={os.IdOrdemServico}>{os.DescricaoOS}</option>)}
                                 </select>
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex flex-wrap gap-3">
                                 <button 
                                     onClick={() => handleToggleSelectAll(true)}
-                                    className="text-xs font-bold text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                                    className="text-xs font-bold text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1"
                                 >
                                     <CheckSquare className="w-4 h-4" /> Marcar Todos
                                 </button>
                                 <button 
                                     onClick={() => handleToggleSelectAll(false)}
-                                    className="text-xs font-bold text-gray-400 hover:text-white transition-colors flex items-center gap-1"
+                                    className="text-xs font-bold text-gray-600 hover:text-blue-600 transition-colors flex items-center gap-1"
                                 >
                                     <Square className="w-4 h-4" /> Desmarcar Todos
+                                </button>
+                                <div className="w-px h-6 bg-gray-300 mx-1 hidden sm:block"></div>
+                                <button
+                                    onClick={() => {
+                                        localStorage.setItem('agglutination_filter_projeto', selectedProjeto);
+                                        localStorage.setItem('agglutination_filter_tag', selectedTag);
+                                        localStorage.setItem('agglutination_filter_planilha', selectedPlanilha);
+                                        onNavigate('powerbuild-agglutination');
+                                    }}
+                                    className="text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
+                                >
+                                    <FileText className="w-3.5 h-3.5 text-gray-500" />
+                                    Resumo Fabricação
                                 </button>
                             </div>
                         </div>
                         <button 
                             onClick={handleSave}
                             disabled={processing || !selectedOS}
-                            className="w-full md:w-auto bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg shadow-green-900/20 active:scale-95"
+                            className="w-full md:w-auto bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white px-8 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-95"
                         >
                             {processing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Save className="w-5 h-5" />}
                             Processar e Salvar na OS
@@ -409,31 +423,31 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                 )}
 
                 {/* Grid */}
-                <div className="bg-[#111827] rounded-2xl border border-gray-800 shadow-xl overflow-hidden">
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
                         <table className="w-full text-left border-collapse">
                             <thead className="sticky top-0 z-10">
-                                <tr className="bg-[#1F2937] border-b border-gray-700">
+                                <tr className="bg-gray-100 border-b border-gray-300">
                                     <th className="py-4 px-6 w-12">
                                         <div className="flex items-center justify-center">
                                             <Filter className="w-4 h-4 text-gray-500" />
                                         </div>
                                     </th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300">Cod. Mat. Fabricante</th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300 text-center">Única</th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300 text-center">Total</th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300 text-center">Rev</th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300">OS Associada</th>
-                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-300">Descrição OS</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700">Cod. Mat. Fabricante</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700 text-center">Única</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700 text-center">Total</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700 text-center">Rev</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700">OS Associada</th>
+                                    <th className="py-4 px-6 text-xs uppercase tracking-wider font-semibold text-gray-700">Descrição OS</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-800">
+                            <tbody className="divide-y divide-gray-100">
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={7} className="py-20 text-center">
-                                            <div className="flex flex-col items-center gap-4 text-gray-500">
+                                        <td colSpan={7} className="py-20 text-center bg-gray-50">
+                                            <div className="flex flex-col items-center gap-4 text-gray-400">
                                                 <LayoutGrid className="w-12 h-12 opacity-20" />
-                                                <p>Realize uma busca para visualizar os itens.</p>
+                                                <p className="font-medium text-gray-500">Realize uma busca para visualizar os itens.</p>
                                             </div>
                                         </td>
                                     </tr>
@@ -441,42 +455,42 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                                     items.map((item) => (
                                         <tr 
                                             key={item.IdDado} 
-                                            className={`group transition-colors ${item.selected ? 'bg-blue-500/10' : 'hover:bg-[#1F2937]/50'}`}
+                                            className={`group transition-colors ${item.selected ? 'bg-blue-50/50' : 'hover:bg-gray-50'}`}
                                             onClick={() => handleToggleItem(item.IdDado)}
                                         >
-                                            <td className="py-3 px-6 text-center">
+                                            <td className="py-3 px-6 text-center cursor-pointer">
                                                 <div className="flex items-center justify-center">
                                                     {item.selected ? (
-                                                        <CheckSquare className="w-5 h-5 text-blue-500" />
+                                                        <CheckSquare className="w-5 h-5 text-blue-600" />
                                                     ) : (
-                                                        <Square className="w-5 h-5 text-gray-700 group-hover:text-gray-500" />
+                                                        <Square className="w-5 h-5 text-gray-400 group-hover:text-gray-600" />
                                                     )}
                                                 </div>
                                             </td>
                                             <td className="py-3 px-6">
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm font-mono font-bold text-white tracking-wider">{item.Part_Reference}</span>
+                                                    <span className="text-sm font-mono font-bold text-gray-800 tracking-wider">{item.Part_Reference}</span>
                                                     <span className="text-[10px] text-gray-500 font-medium">{item.TabelaOrigem}</span>
                                                 </div>
                                             </td>
-                                            <td className="py-3 px-6 text-center font-medium text-sm">{item.PD_qty}</td>
-                                            <td className="py-3 px-6 text-center font-bold text-sm text-blue-400">{item.Part_total_qty}</td>
+                                            <td className="py-3 px-6 text-center font-medium text-sm text-gray-700">{item.PD_qty}</td>
+                                            <td className="py-3 px-6 text-center font-bold text-sm text-blue-600">{item.Part_total_qty}</td>
                                             <td className="py-3 px-6 text-center">
-                                                <span className="text-[10px] font-bold bg-gray-800 text-gray-400 px-2 py-0.5 rounded border border-gray-700">
+                                                <span className="text-[10px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-300">
                                                     R{item.Revisao}
                                                 </span>
                                             </td>
                                             <td className="py-3 px-6">
                                                 {item.IdOrdemServico > 0 ? (
-                                                    <span className="text-sm font-bold text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                                                    <span className="text-sm font-bold text-green-700 bg-green-100 border border-green-200 px-2 py-1 rounded">
                                                         {item.IdOrdemServico}
                                                     </span>
                                                 ) : (
-                                                    <span className="text-xs text-gray-600 italic">Nenhuma</span>
+                                                    <span className="text-xs text-gray-400 italic">Nenhuma</span>
                                                 )}
                                             </td>
                                             <td className="py-3 px-6">
-                                                <span className="text-xs text-gray-400 truncate max-w-[200px] inline-block" title={item.DescricaoOS}>
+                                                <span className="text-xs text-gray-600 truncate max-w-[200px] inline-block" title={item.DescricaoOS}>
                                                     {item.DescricaoOS || '-'}
                                                 </span>
                                             </td>
@@ -492,8 +506,8 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                 {items.length > 0 && (
                     <div className="flex items-center justify-between text-sm text-gray-500 px-2">
                         <div className="flex gap-4">
-                            <span>Total de Itens: <strong className="text-white">{items.length}</strong></span>
-                            <span>Selecionados: <strong className="text-blue-400">{items.filter(i => i.selected).length}</strong></span>
+                            <span>Total de Itens: <strong className="text-gray-800">{items.length}</strong></span>
+                            <span>Selecionados: <strong className="text-blue-600">{items.filter(i => i.selected).length}</strong></span>
                         </div>
                         <div className="flex items-center gap-2 italic">
                             <AlertCircle className="w-4 h-4 text-blue-500" />
@@ -501,6 +515,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                         </div>
                     </div>
                 )}
+            </div>
             </div>
         </div>
     );

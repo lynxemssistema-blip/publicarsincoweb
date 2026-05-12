@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 import { Search, Filter, X, CalendarDays, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList } from 'lucide-react';
 
 const API_BASE = '/api';
 
 // ─── Interfaces ───
-interface Projeto { IdProjeto: number; Projeto: string; DescProjeto: string; DataPrevisao: string; DataCriacao: string; Finalizado: string; liberado: string; QtdeTags: number; QtdeTagsExecutadas: number; PercentualTags: number; QtdePecasTags: number; QtdePecasExecutadas: number; PercentualPecas: number; qtdetotalpecas: number; TotalRnc: number; qtdernc: number; qtderncPendente: number; qtderncFinalizada: number; ExecCorte: number; TotalCorte: number; ExecDobra: number; TotalDobra: number; ExecSolda: number; TotalSolda: number; ExecPintura: number; TotalPintura: number; ExecMontagem: number; TotalMontagem: number; QtdeOS: number; }
+interface Projeto { IdProjeto: number; Projeto: string; DescProjeto: string; DescEmpresa?: string; DataPrevisao: string; DataCriacao: string; Finalizado: string; liberado: string; QtdeTags: number; QtdeTagsExecutadas: number; PercentualTags: number; QtdePecasTags: number; QtdePecasExecutadas: number; PercentualPecas: number; qtdetotalpecas: number; TotalRnc: number; qtdernc: number; qtderncPendente: number; qtderncFinalizada: number; ExecCorte: number; TotalCorte: number; ExecDobra: number; TotalDobra: number; ExecSolda: number; TotalSolda: number; ExecPintura: number; TotalPintura: number; ExecMontagem: number; TotalMontagem: number; QtdeOS: number; }
 interface Tag { IdTag: number; Tag: string; DescTag: string; DataEntrada: string; DataPrevisao: string; QtdeTag: string; QtdeLiberada: string; SaldoTag: string; ValorTag: string; StatusTag: string; QtdeOS: string; qtdetotal: string; Finalizado: string; qtdernc: number; 
     PlanejadoInicioCorte: string; PlanejadoFinalCorte: string; RealizadoInicioCorte: string; RealizadoFinalCorte: string; CorteTotalExecutado: string; CorteTotalExecutar: string; CortePercentual: string; 
     PlanejadoInicioDobra: string; PlanejadoFinalDobra: string; RealizadoInicioDobra: string; RealizadoFinalDobra: string; DobraTotalExecutado: string; DobraTotalExecutar: string; DobraPercentual: string; 
@@ -243,7 +244,14 @@ export default function VisaoGeralProducaoPage() {
         setLoad(true); setError(null);
         try {
             const qs = new URLSearchParams();
-            if (sf) qs.set('status', sf);
+            if (sf === 'finalizados') {
+                qs.set('finalizados', '1');
+            } else if (sf === 'liberados') {
+                qs.set('liberados', '1');
+            } else if (sf === 'todos') {
+                qs.set('finalizados', '1');
+                qs.set('liberados', '1');
+            }
 
             const { fProjPrevIni: pi, fProjPrevFim: pf, fProjCriacaoIni: ci, fProjCriacaoFim: cf } = dateFiltersRef.current;
             if (pi) qs.set('previsaoInicio', isoToBr(pi));
@@ -573,6 +581,13 @@ export default function VisaoGeralProducaoPage() {
     };
 
     const filteredProj = projetos.filter(p => !fProj || String(p.IdProjeto).includes(fProj) || p.Projeto?.toLowerCase().includes(fProj.toLowerCase()) || p.DescProjeto?.toLowerCase().includes(fProj.toLowerCase()));
+    
+    const groupedProjs = filteredProj.reduce((acc, p) => {
+        const client = p.DescEmpresa?.trim() || 'SEM CLIENTE DEFINIDO';
+        if (!acc[client]) acc[client] = [];
+        acc[client].push(p);
+        return acc;
+    }, {} as Record<string, Projeto[]>);
     const filteredTags = tags.filter(t => {
         if (fTag && !t.Tag?.toLowerCase().includes(fTag.toLowerCase()) && !t.DescTag?.toLowerCase().includes(fTag.toLowerCase())) return false;
         const tEntrada = t.DataEntrada ? brToIso(t.DataEntrada) : '';
@@ -720,8 +735,14 @@ export default function VisaoGeralProducaoPage() {
                                             <th className="px-3 py-3 text-center">Ações</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-slate-100">
-                                        {filteredProj.map((p, idx) => {
+                                    {Object.entries(groupedProjs).sort(([a], [b]) => a.localeCompare(b)).map(([client, projs]) => (
+                                        <tbody key={client} className="divide-y divide-slate-100">
+                                            <tr>
+                                                <td colSpan={7} className="bg-slate-100 px-4 py-2 text-xs font-bold text-slate-700 uppercase tracking-widest border-t border-b border-slate-200">
+                                                    {client} <span className="text-[10px] ml-2 text-slate-500 font-normal normal-case">({projs.length} projetos)</span>
+                                                </td>
+                                            </tr>
+                                            {projs.map((p, idx) => {
                                             const isFin = p.Finalizado?.trim() === 'C'; 
                                             const isLib = p.liberado?.trim() === 'S';
                                             return (
@@ -815,12 +836,19 @@ export default function VisaoGeralProducaoPage() {
                                                 </tr>
                                             );
                                         })}
-                                    </tbody>
+                                        </tbody>
+                                    ))}
                                 </table>
                             </div>
                         ) : (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6">
-                                {filteredProj.map(p => {
+                            <div className="flex flex-col gap-6">
+                                {Object.entries(groupedProjs).sort(([a], [b]) => a.localeCompare(b)).map(([client, projs]) => (
+                                    <div key={client} className="flex flex-col gap-4">
+                                        <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest border-b border-slate-200 pb-2">
+                                            {client} <span className="text-xs ml-2 text-slate-500 font-normal normal-case">({projs.length} projetos)</span>
+                                        </h3>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-6">
+                                            {projs.map(p => {
                                     const isFin = p.Finalizado?.trim() === 'C'; 
                                     const isLib = p.liberado?.trim() === 'S';
 
@@ -934,7 +962,10 @@ export default function VisaoGeralProducaoPage() {
                                             </div>
                                         </div>
                                     )
-                                })}
+                                            })}
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </div>
@@ -960,7 +991,9 @@ export default function VisaoGeralProducaoPage() {
             )}
 
             {/* ══ MODAL DE COMPLETO DE TAGS DA SEGUNDA TELA ══ */}
-            {showDetailsModal && selProj && (
+            {createPortal(
+                <>
+                {showDetailsModal && selProj && (
                 <div className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center sm:p-4">
                     <div className="bg-white w-full max-w-[100vw] sm:max-w-[95vw] h-full sm:h-[95vh] sm:rounded-2xl shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
                         
@@ -1878,6 +1911,9 @@ export default function VisaoGeralProducaoPage() {
                         </div>
                     </div>
                 </div>
+            )}
+            </>,
+            document.body
             )}
         </div>
     );
