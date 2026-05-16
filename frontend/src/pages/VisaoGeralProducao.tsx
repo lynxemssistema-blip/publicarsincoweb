@@ -661,7 +661,7 @@ export default function VisaoGeralProducaoPage() {
     const filteredRncs = rncs.filter(r => showFinalizedRncs || r.Estatus !== 'FINALIZADO');
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#f4f7f9] overflow-hidden font-sans">
+        <div className="flex flex-col flex-1 min-h-0 bg-[#f4f7f9] overflow-hidden font-sans h-full flex flex-col min-h-0">
             {!fromGlobal ? (
                 <>
                     {/* Top Bar */}

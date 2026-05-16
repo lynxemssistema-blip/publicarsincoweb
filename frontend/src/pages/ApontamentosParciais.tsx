@@ -170,14 +170,14 @@ export default function ApontamentosParciaisPage() {
     });
 
     return (
-        <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-gray-50 p-6">
+        <div className="flex flex-col h-[calc(100vh-80px)] overflow-hidden bg-gray-50 p-6 h-full flex flex-col min-h-0">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                 <div className="flex items-center gap-3">
                     <div className="w-12 h-12 bg-amber-100 rounded-lg flex items-center justify-center text-amber-600">
                         <AlertTriangle size={24} />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-black text-[#567469] tracking-tight">Apontamentos Parciais</h1>
+                        
                         <p className="text-sm text-gray-500 font-medium">Controle de peças apontadas parcialmente</p>
                     </div>
                 </div>

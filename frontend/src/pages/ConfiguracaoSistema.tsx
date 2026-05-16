@@ -173,7 +173,7 @@ export default function ConfiguracaoSistemaPage() {
     };
 
     return (
-        <div className="p-6 max-w-[1800px] mx-auto animate-fade-in pb-20">
+        <div className="p-6 max-w-[1800px] mx-auto animate-fade-in pb-20 h-full flex flex-col min-h-0">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
                 <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ export default function ConfiguracaoSistemaPage() {
                         <Database size={24} className="text-[#E0E800]" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-[#32423D]">Configuração do Sistema</h1>
+                        
                         <p className="text-gray-500 text-sm">Gerenciamento de parâmetros e configurações</p>
                     </div>
                 </div>
@@ -253,7 +253,7 @@ export default function ConfiguracaoSistemaPage() {
 
             {/* List */}
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto flex-1">
                     <table className="w-full">
                         <thead className="bg-gray-50/50 border-b border-gray-100">
                             <tr>

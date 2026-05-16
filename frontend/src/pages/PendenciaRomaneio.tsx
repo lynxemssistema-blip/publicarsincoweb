@@ -329,7 +329,7 @@ export default function PendenciaRomaneioPage({ onNavigate, idRomaneioItem }: Pe
 
     if (loading) {
         return (
-            <div className="flex flex-col items-center justify-center p-20 text-gray-400 gap-4">
+        <div className="flex flex-col items-center justify-center p-20 text-gray-400 gap-4 h-full flex flex-col min-h-0">
                 <Loader2 size={40} className="animate-spin" />
                 <p>Carregando informações da pendência...</p>
             </div>

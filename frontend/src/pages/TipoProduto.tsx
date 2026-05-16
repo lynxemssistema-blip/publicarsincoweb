@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, X, Boxes, Save, Loader2, RefreshCw } from 'lucide-react';
@@ -151,7 +152,7 @@ export default function TipoProdutoPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col min-h-0">
             {/* Error Alert */}
             {error && (
                 <motion.div
@@ -166,7 +167,7 @@ export default function TipoProdutoPage() {
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-[#32423D]">Tipos de Produto</h1>
+                    
                     <p className="text-gray-500 text-sm">Gerencie os tipos de produto para KPI</p>
                 </div>
                 <div className="flex gap-2">
@@ -211,14 +212,14 @@ export default function TipoProdutoPage() {
             </div>
 
             {/* Data Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">
                 {loading ? (
                     <div className="p-12 flex flex-col items-center justify-center gap-3 text-gray-400">
                         <Loader2 size={32} className="animate-spin" />
                         <p className="text-sm">Carregando dados...</p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto flex-1">
                         <table className="w-full">
                             <thead>
                                 <tr className="bg-gray-50 border-b border-gray-100">
@@ -372,16 +373,8 @@ export default function TipoProdutoPage() {
                                     />
                                 </div>
 
-                                <div className="flex justify-end gap-3 pt-4 border-t">
-                                    <button
-                                        type="button"
-                                        onClick={resetForm}
-                                        className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-                                        disabled={saving}
-                                    >
-                                        Cancelar
-                                    </button>
-                                    <motion.button
+                                {document.getElementById('page-actions-portal') ? createPortal(
+                <motion.button
                                         type="submit"
                                         whileHover={{ scale: 1.02 }}
                                         whileTap={{ scale: 0.98 }}
@@ -390,8 +383,9 @@ export default function TipoProdutoPage() {
                                     >
                                         {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                         {isEditing ? 'Atualizar' : 'Salvar'}
-                                    </motion.button>
-                                </div>
+                                    </motion.button>,
+                document.getElementById('page-actions-portal')
+            ) : null}
                             </form>
                         </motion.div>
                     </motion.div>

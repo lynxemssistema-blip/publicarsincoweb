@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Plus, Search, Edit2, Trash2, X, FolderKanban, Save,
@@ -628,7 +629,7 @@ export default function ProjetoPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col min-h-0">
             {/* Error Alert */}
             {error && (
                 <motion.div
@@ -643,7 +644,7 @@ export default function ProjetoPage() {
             {/* Page Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold text-[#32423D]">Projetos e Tags</h1>
+                    
                     <p className="text-gray-500 text-sm">Clique em um projeto para expandir e ver suas tags</p>
                 </div>
                 <div className="flex gap-2">
@@ -797,7 +798,7 @@ export default function ProjetoPage() {
             </div>
 
             {/* Tree View */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">
                 {loading ? (
                     <div className="p-12 flex flex-col items-center justify-center gap-3 text-gray-400">
                         <Loader2 size={32} className="animate-spin" />
@@ -1607,13 +1608,13 @@ export default function ProjetoPage() {
                                         <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
                                         <textarea name="DescTag" value={tagFormData.DescTag || ''} onChange={handleTagInputChange} rows={3} className={inputOptional} />
                                     </div>
-                                    <div className="flex justify-end gap-3 pt-4 border-t">
-                                        <button type="button" onClick={resetTagForm} className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-50" disabled={saving}>Cancelar</button>
-                                        <motion.button type="submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium disabled:opacity-50" disabled={saving}>
+                                    {document.getElementById('page-actions-portal') ? createPortal(
+                <motion.button type="submit" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium disabled:opacity-50" disabled={saving}>
                                             {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                                             {isEditingTag ? 'Atualizar' : 'Salvar'}
-                                        </motion.button>
-                                    </div>
+                                        </motion.button>,
+                document.getElementById('page-actions-portal')
+            ) : null}
                                 </form>
                             </motion.div>
                         </motion.div>

@@ -24,9 +24,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
     const [isDark, setIsDark] = useState(false);
     const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
     const [sidebarSearch, setSidebarSearch] = useState('');
-    const [showHelp, setShowHelp] = useState(false);
 
-    const currentHelp = helpContents[activePageId] || helpContents['default'];
     // Ref para o scroll container do sidebar desktop
     const sidebarScrollRef = useRef<HTMLDivElement>(null);
 
@@ -207,6 +205,23 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                 )}
             </div>
 
+            {/* User Profile in Sidebar */}
+            <div className={cn("px-4 py-3 border-t border-border flex items-center transition-all duration-200", isCollapsed ? "justify-center" : "gap-3")}>
+                <div className="w-8 h-8 rounded-md bg-secondary text-foreground flex shrink-0 items-center justify-center font-bold">
+                    <UserIcon size={16} strokeWidth={2} />
+                </div>
+                {!isCollapsed && (
+                    <div className="flex flex-col overflow-hidden text-left">
+                        <span className="text-sm font-bold leading-tight text-foreground truncate">{user?.nome || 'Usuário'}</span>
+                        {user?.clientName && (
+                            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider truncate">
+                                {user.clientName} {user.dbName ? `(${user.dbName})` : ''}
+                            </span>
+                        )}
+                    </div>
+                )}
+            </div>
+
             <div className={cn("p-4 border-t border-border space-y-2", isCollapsed && "flex flex-col items-center px-1")}>
                 <button
                     onClick={toggleTheme}
@@ -289,15 +304,15 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
 
             {/* Main Content Area */}
             <main className={cn(
-                "pt-16 md:pt-0 h-full w-full overflow-auto custom-scrollbar transition-all duration-400 ease-in-out bg-background relative",
+                "pt-16 md:pt-0 h-full w-full flex flex-col transition-all duration-400 ease-in-out bg-background relative",
                 isSidebarCollapsed ? "md:ml-20" : "md:ml-72"
             )}>
                 {/* Floating Decorative Blur */}
                 <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[30%] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
-                <div className="p-3 md:p-4 w-full max-w-full mx-auto relative">
+                <div className="p-3 md:p-4 w-full h-full flex flex-col max-w-full mx-auto relative z-10 overflow-hidden">
                     {/* Header Desktop (Breadcrumb/Title) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 shrink-0">
                         <div className="flex items-start gap-3">
                             <button 
                                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
@@ -311,81 +326,15 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                                 <p className="text-muted-foreground text-xs mt-0 font-medium">Plataforma de Gerenciamento Especializado</p>
                             </div>
                         </div>
-
-                        <div className="flex items-center gap-3 w-full sm:w-auto justify-between sm:justify-end mt-2 sm:mt-0">
-                            {/* Help Button */}
-                            <button 
-                                onClick={() => setShowHelp(true)} 
-                                className="group flex items-center gap-1.5 px-3 py-1.5 bg-[#32423D] hover:bg-[#32423D]/80 text-white rounded-md transition-all shadow-md"
-                                title="Precisa de ajuda?"
-                            >
-                                <div className="bg-white/20 text-white rounded-md p-1 transition-colors">
-                                    <HelpCircle size={14} strokeWidth={2.5} />
-                                </div>
-                                <span className="text-sm font-bold text-white tracking-wide">HELP</span>
-                            </button>
-
-                            {/* User Profile Glass Pill */}
-                            <div className="flex items-center gap-3 pl-4 pr-2 py-1.5 bg-card border border-border rounded-md shadow-sm transition-shadow cursor-pointer hover:border-primary/50">
-                                <div className="flex flex-col items-end text-right hidden sm:flex">
-                                    <span className="text-sm font-bold leading-tight text-foreground">{user?.nome || 'Usuário'}</span>
-                                    {user?.clientName && (
-                                        <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
-                                            {user.clientName} {user.dbName ? `(${user.dbName})` : ''}
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="w-8 h-8 rounded-md bg-secondary text-foreground flex items-center justify-center font-bold">
-                                    <UserIcon size={16} strokeWidth={2} />
-                                </div>
-                            </div>
-                        </div>
+                        <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden"></div>
                     </div>
 
                     {/* Dashboard/Page Content Slot */}
-                    <div>
+                    <div className="flex-1 flex flex-col min-h-0 h-full w-full relative">
                         {children}
                     </div>
                 </div>
             </main>
-
-            {/* Global Help Modal (Glassmorphism) */}
-            <AnimatePresence>
-                {showHelp && (
-                    <div className="fixed inset-0 bg-primary/40 z-50 flex items-center justify-center backdrop-blur-sm">
-                        <motion.div 
-                            initial={{ opacity: 0, scale: 0.95, y: 20 }} 
-                            animate={{ opacity: 1, scale: 1, y: 0 }} 
-                            exit={{ opacity: 0, scale: 0.95, y: 20 }} 
-                            transition={{ type: "spring", damping: 25, stiffness: 300 }}
-                            className="bg-card rounded-md shadow-2xl border border-border p-6 max-w-lg w-[calc(100%-2rem)] m-4"
-                        >
-                            <div className="flex items-center justify-between border-b border-border pb-4 mb-4">
-                                <h2 className="text-xl font-bold text-foreground flex items-center gap-3">
-                                    <div className="bg-primary/10 p-2 rounded-md text-primary">
-                                        <HelpCircle size={24} /> 
-                                    </div>
-                                    {currentHelp.title}
-                                </h2>
-                                <button onClick={() => setShowHelp(false)} className="text-foreground/40 hover:text-foreground p-2 rounded-md transition-colors hover:bg-secondary">
-                                    <X size={20} className="stroke-[2]" />
-                                </button>
-                            </div>
-                            <div className="text-muted-foreground leading-relaxed whitespace-pre-line text-sm font-medium">
-                                {currentHelp.description}
-                            </div>
-                            <div className="mt-8 flex justify-end">
-                                <button 
-                                    onClick={() => setShowHelp(false)} 
-                                    className="px-6 py-2.5 bg-primary text-primary-foreground hover:bg-primary/90 rounded-md font-bold transition-all active:scale-95 shadow-sm"
-                                >
-                                    Entendido
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
         </div>
     );
 }

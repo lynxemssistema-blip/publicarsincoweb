@@ -285,7 +285,7 @@ export default function TarefasPage() {
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 xl:p-6 overflow-auto custom-scrollbar">
+        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 xl:p-6 overflow-auto custom-scrollbar h-full flex flex-col min-h-0">
             
             {fromGlobal && (
                 <div className="mb-4">

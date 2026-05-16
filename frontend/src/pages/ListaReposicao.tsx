@@ -243,12 +243,8 @@ export default function ListaReposicaoPage() {
     }, [items, filProjeto, filTag, filEspessura, filDescResumo, filDescDetal, filCodMat, filIdOS, filIdItem, filSetorReposicao, exibirConcluidos]);
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 relative">
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-4 shrink-0">
-                <Box className="text-orange-500" size={28} />
-                Lista Peças de Reposição
-                <span className="text-xs ml-4 px-2 py-1 bg-slate-200 text-slate-600 rounded-lg">Items DB: {items.length} | Filtrados: {filteredItems.length}</span>
-            </h1>
+        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 relative h-full flex flex-col min-h-0">
+            <div className="flex items-center gap-2 mb-4 shrink-0 text-sm"><span className="px-2 py-1 bg-slate-200 text-slate-600 rounded-lg font-medium">Contadores DB: {items.length} | Filtrados: {filteredItems.length}</span></div>
 
             {/* Header Filtros */}
             <div className="bg-white p-3 rounded-xl border border-slate-200 mb-4 shrink-0 shadow-sm flex flex-col gap-3">

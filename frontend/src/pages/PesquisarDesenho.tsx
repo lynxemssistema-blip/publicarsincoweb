@@ -137,7 +137,7 @@ export default function PesquisarDesenho() {
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300">
+        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col min-h-0">
             {/* Header / Filtros */}
             <div className="bg-white p-3 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 mb-2 shrink-0">
                 <div className="flex justify-between items-center mb-2">

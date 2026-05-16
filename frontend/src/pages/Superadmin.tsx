@@ -413,11 +413,11 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
 
     if (!isAuthenticated) {
         return (
-            <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="flex items-center justify-center min-h-[60vh] h-full flex flex-col min-h-0">
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md p-8 bg-white rounded-2xl shadow-xl border border-gray-100">
                     <div className="flex flex-col items-center mb-6">
                         <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mb-4 text-red-600"><ShieldCheck size={32} /></div>
-                        <h1 className="text-2xl font-bold text-gray-800">Acesso Superadmin</h1>
+                        
                         <p className="text-gray-500 text-sm">Área restrita para gerenciamento do sistema</p>
                     </div>
                     <form onSubmit={handleLogin} className="space-y-4">
@@ -463,10 +463,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
                 <div className="absolute top-0 right-0 p-32 bg-white/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
                 <div className="relative z-10 flex justify-between items-center">
                     <div>
-                        <h1 className="text-3xl font-bold flex items-center gap-3">
-                            <ShieldCheck className="text-red-500" size={32} />
-                            Painel Superadmin
-                        </h1>
+                        
                         <p className="text-gray-400 mt-2">Gerenciamento Multi-Tenant e Configurações</p>
                     </div>
                     <button
@@ -560,7 +557,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
                 activeTab === 'users' && (
                     <div className="space-y-6 animate-fade-in bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                         <h3 className="text-lg font-semibold mb-4 text-gray-800">Usuários Globais (Centralizados)</h3>
-                        <div className="overflow-x-auto">
+                        <div className="overflow-auto flex-1">
                             <table className="w-full text-sm text-left text-gray-500">
                                 <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                                     <tr>

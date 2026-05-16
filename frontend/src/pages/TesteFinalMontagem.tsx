@@ -145,7 +145,7 @@ function LancarModal({ item, onClose, onSuccess }: LancarModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm h-full flex flex-col min-h-0">
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden">
 
                 {/* Header */}
@@ -327,7 +327,7 @@ export default function TesteFinalMontagemPage() {
                             <PackageCheck size={22} />
                         </div>
                         <div>
-                            <h1 className="text-lg font-black text-slate-800 leading-none tracking-tight">Teste Final — Montagem</h1>
+                            
                             <p className="text-[11px] text-slate-500 mt-0.5">Itens aptos para montagem e envio</p>
                         </div>
                     </div>

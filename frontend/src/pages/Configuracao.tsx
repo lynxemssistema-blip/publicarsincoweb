@@ -519,7 +519,7 @@ export default function ConfiguracaoPage() {
                         <Settings2 size={24} className="text-[#E0E800]" />
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-[#32423D]">Configuração do Sistema</h1>
+                        
                         <p className="text-gray-500 text-sm">Gerencie o sistema</p>
                     </div>
                 </div>

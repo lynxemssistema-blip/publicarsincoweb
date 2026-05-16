@@ -102,7 +102,7 @@ export default function CameraPage() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col min-h-0">
             <canvas ref={canvasRef} className="hidden" />
 
             {/* Main Menu Mode */}

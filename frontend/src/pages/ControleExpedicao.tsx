@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Loader2, X, ChevronDown, ChevronUp, PackageCheck, Box, FileText, FileCode2, RefreshCw, ArrowLeft } from 'lucide-react';
 
 const API_BASE = '/api';
@@ -299,7 +300,7 @@ export default function ControleExpedicaoPage() {
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300">
+        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 h-full flex flex-col min-h-0">
             {/* Cabeçalho de Filtros */}
             <div className="bg-white p-3 rounded-xl shadow-[0_2px_10px_-3px_rgba(6,81,237,0.1)] border border-slate-200 mb-2 shrink-0">
                 <div className="flex justify-between items-center mb-2">
@@ -338,13 +339,12 @@ export default function ControleExpedicaoPage() {
                         <input title="Data Previsão Final" type="date" value={filDataPrevisaoFim} onChange={e => setFilDataPrevisaoFim(e.target.value)} className="w-full text-[11px] py-1 bg-transparent focus:outline-none" />
                     </div>
 
-                    <div className="flex items-center justify-end">
-                        {hasFilters && (
-                            <button onClick={limparFiltros} className="px-3 py-1 flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 rounded text-[10px] font-bold hover:bg-red-100 transition-colors" title="Limpar Filtros">
+                    {document.getElementById('page-actions-portal') ? createPortal(
+                <button onClick={limparFiltros} className="px-3 py-1 flex items-center gap-1 bg-red-50 text-red-600 border border-red-200 rounded text-[10px] font-bold hover:bg-red-100 transition-colors" title="Limpar Filtros">
                                 <X size={14} /> LIMPAR
-                            </button>
-                        )}
-                    </div>
+                            </button>,
+                document.getElementById('page-actions-portal')
+            ) : null}
                 </div>
             </div>
 
@@ -465,7 +465,7 @@ export default function ControleExpedicaoPage() {
                                                             ) : secItems.length === 0 ? (
                                                                 <div className="p-3 text-slate-400 text-xs">Nenhum detalhe associado.</div>
                                                             ) : (
-                                                                <div className="overflow-x-auto">
+                                                                <div className="overflow-auto flex-1">
                                                                     <table className="w-full text-left text-[11px] whitespace-nowrap">
                                                                         <thead className="bg-[#fcfdfd] text-slate-500 border-b border-slate-200">
                                                                             <tr>

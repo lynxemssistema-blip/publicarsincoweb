@@ -154,14 +154,11 @@ export default function VisaoGeralPendenciasPage() {
     };
 
     return (
-        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 xl:p-6 overflow-auto custom-scrollbar">
+        <div className="flex flex-col flex-1 min-h-0 bg-[#fafbfc] animate-in fade-in zoom-in-95 duration-300 p-4 xl:p-6 overflow-auto custom-scrollbar h-full flex flex-col min-h-0">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <ListChecks className="text-[#32423D]" size={28} />
-                        Visão Geral de Pendências
-                    </h1>
+                    
                     <p className="text-slate-500 text-sm mt-1">Exibição unificada de todas as pendências e tarefas do sistema.</p>
                 </div>
                 

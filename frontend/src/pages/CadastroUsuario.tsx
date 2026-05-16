@@ -107,7 +107,7 @@ export default function CadastroUsuarioPage() {
     // Acesso restrito a administradores
     if (!user || (user.role !== 'admin' && !user.isSuperadmin)) {
         return (
-            <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4">
+        <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 h-full flex flex-col min-h-0">
                 <div className="p-4 bg-red-100 rounded-full text-red-600"><Lock size={40} /></div>
                 <h2 className="text-xl font-black text-red-700">Acesso Negado</h2>
                 <p className="text-sm text-slate-500 text-center max-w-xs">
@@ -350,7 +350,7 @@ export default function CadastroUsuarioPage() {
                 <div className="flex items-center gap-3">
                     <div className="p-2 bg-indigo-600 text-white rounded-lg shadow-sm"><Users size={20} /></div>
                     <div>
-                        <h1 className="text-sm font-black text-slate-800 tracking-tight leading-none">Cadastro de Usuários</h1>
+                        
                         <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest mt-0.5">Gerenciamento de Usuários</p>
                     </div>
                 </div>

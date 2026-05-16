@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -156,7 +157,7 @@ export default function OrdemServicoPage() {
 }
 
 function OrdemServicoContent() {
-    const { token } = useAuth();
+    const { token, user } = useAuth();
     // Data state
     const [ordens, setOrdens] = useState<OrdemServico[]>([]);
     const [expandedOrdens, setExpandedOrdens] = useState<Set<number>>(new Set());
@@ -478,7 +479,7 @@ function OrdemServicoContent() {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [projetoFilter, tagFilter, searchTerm, searchMode, mostrarTodos]);
+    }, [projetoFilter, tagFilter, searchTerm, searchMode, mostrarTodos, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataLiberacaoInicio, dataLiberacaoFim]);
 
     // Search items by document code
     const searchItems = useCallback(async (term: string) => {
@@ -1186,7 +1187,7 @@ function OrdemServicoContent() {
                     novoIdTag: cloneTagId,
                     novaDescricao: cloneDescricao,
                     novoFator: cloneFator,
-                    usuarioNome: localStorage.getItem('user_name') || 'Usuario Web'
+                    usuarioNome: user?.nome || 'Sistema Web'
                 })
             });
 
@@ -1214,7 +1215,7 @@ function OrdemServicoContent() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-4">
                 {/* Voltar and Actions Bar */}
                 <div className="px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-100 bg-gray-50 gap-4">
-                    <button onClick={() => setSelectedOSId(null)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm">
+                    <button onClick={() => setSelectedOSId(null)} className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-primary border border-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm">
                         <ArrowLeft size={16} />
                         Voltar para Lista
                     </button>
@@ -1410,7 +1411,13 @@ function OrdemServicoContent() {
                                         <div className="space-y-1 text-xs">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Peso Total:</span>
-                                                <span className="text-gray-600">{os.PesoTotal ? `${os.PesoTotal} kg` : '-'}</span>
+                                                <span className="text-gray-600 font-semibold">
+                                                {(() => {
+                                                    const pesoCalculado = itens.reduce((acc, item) => acc + (parseFloat(String(item.Peso || 0)) || 0), 0);
+                                                    const pesoFinal = pesoCalculado > 0 ? pesoCalculado : parseFloat(String(os.PesoTotal || 0));
+                                                    return pesoFinal > 0 ? `${pesoFinal.toFixed(2)} kg` : '-';
+                                                })()}
+                                                </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Área Pintura:</span>
@@ -1543,6 +1550,9 @@ function OrdemServicoContent() {
                                             {visibleSetores.includes('solda') && <span className="w-16 hidden lg:block text-center">Solda</span>}
                                             {visibleSetores.includes('pintura') && <span className="w-16 hidden lg:block text-center">Pintura</span>}
                                             {visibleSetores.includes('montagem') && <span className="w-16 hidden lg:block text-center">Mont.</span>}
+                                             {/* Spacers p/ alinhar botões RNC e Excluir */}
+                                             <span className="w-8 shrink-0"></span>
+                                             <span className="w-8 shrink-0 mr-2"></span>
                                         </div>
 
                                         {itens.map((item) => (
@@ -1741,8 +1751,17 @@ function OrdemServicoContent() {
                             <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">OS {os.IdOrdemServico}</span>
                             <span className="text-sm font-medium text-gray-900 truncate">{os.Tag || '-'}</span>
                         </div>
-                        <div className="text-xs text-gray-500 truncate">
-                            {os.Projeto} • {os.DescTag || 'Sem descrição'}
+                        <div className="text-xs text-gray-500 truncate flex items-center gap-2">
+                            <span className="truncate">{os.Projeto} • {os.DescTag || 'Sem descrição'}</span>
+                            {os.DataPrevisao && (
+                                <>
+                                    <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                                    <span className="flex items-center gap-1 text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded font-medium" title="Data de Previsão">
+                                        <Calendar size={10} />
+                                        Prev: {formatDateBR(os.DataPrevisao)}
+                                    </span>
+                                </>
+                            )}
                         </div>
                     </div>
 
@@ -1767,19 +1786,7 @@ function OrdemServicoContent() {
                         {os.OrdemServicoFinalizado === 'C' ? 'Finalizado' : 'Em Andamento'}
                     </span>
 
-                    {/* Badge de Total de Itens - Sempre Visível */}
-                    <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-accent/20 text-primary" title="Total de Itens">
-                        <Box size={12} />
-                        {Number(os.QtdeTotalItensCalc ?? os.QtdeTotalItens) || 0}
-                    </span>
-
-                    <button
-                        onClick={(e) => { e.stopPropagation(); toggleOS(os.IdOrdemServico); }}
-                        className="p-2 rounded-lg text-gray-400 hover:text-primary hover:bg-accent/20 transition-colors"
-                        title="Ver Detalhes"
-                    >
-                        <Eye size={16} />
-                    </button>
+                    
 
                     {os.EnderecoOrdemServico && (
                         <button
@@ -1847,51 +1854,30 @@ function OrdemServicoContent() {
                 </motion.div>
             )}
 
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h1 className="text-2xl font-bold text-primary">Ordens de Serviço</h1>
-                    <p className="text-gray-500 text-sm">
-                        {pagination ? `${ordens.length} de ${pagination.total} ordens` : 'Carregando...'}
-                    </p>
-                </div>
+            {document.getElementById('page-actions-portal') ? createPortal(
                 <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => fetchOrdens(1)}
-                    className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                    className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
                     disabled={loading}
                 >
                     <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
                     Atualizar
-                </motion.button>
-            </div>
+                </motion.button>,
+                document.getElementById('page-actions-portal')
+            ) : null}
 
             {/* Filters Bar */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
                 <div className="flex flex-wrap items-center gap-3">
-                    {/* Search Mode Toggle */}
-                    <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-                        <button
-                            onClick={() => { setSearchMode('os'); setItemSearchResults([]); }}
-                            className={`px-3 py-2 text-xs font-medium transition-colors ${searchMode === 'os' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                        >
-                            Buscar OS
-                        </button>
-                        <button
-                            onClick={() => setSearchMode('item')}
-                            className={`px-3 py-2 text-xs font-medium transition-colors ${searchMode === 'item' ? 'bg-primary text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                        >
-                            Buscar Documento
-                        </button>
-                    </div>
-
                     {/* Search Input */}
                     <div className="relative flex-1 min-w-[200px] flex items-center gap-2">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
                                 type="text"
-                                placeholder={searchMode === 'os' ? "Buscar OS, projeto, tag..." : "Buscar código desenho..."}
+                                placeholder="Buscar Ordem de Serviço..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
@@ -1901,7 +1887,7 @@ function OrdemServicoContent() {
                             )}
                         </div>
                         {searchTerm && (
-                            <button onClick={() => setSearchTerm('')} className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-red-500 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
+                            <button onClick={() => { setSearchTerm(''); setTimeout(() => fetchOrdens(1), 100); }} className="p-2.5 rounded-xl border border-gray-200 text-gray-500 hover:text-red-500 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
                                 <X size={20} />
                             </button>
                         )}
@@ -1919,7 +1905,7 @@ function OrdemServicoContent() {
                         />
                         {projetoFilter && (
                             <button
-                                onClick={() => { setProjetoFilter(''); setTagFilter(''); }}
+                                onClick={() => { setProjetoFilter(''); setTagFilter(''); setTimeout(() => fetchOrdens(1), 100); }}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-400 transition-colors"
                                 title="Limpar projeto"
                             >
@@ -1940,7 +1926,7 @@ function OrdemServicoContent() {
                         />
                         {tagFilter && (
                             <button
-                                onClick={() => setTagFilter('')}
+                                onClick={() => { setTagFilter(''); setTimeout(() => fetchOrdens(1), 100); }}
                                 className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-300 hover:text-red-400 transition-colors"
                                 title="Limpar tag"
                             >
@@ -1985,7 +1971,7 @@ function OrdemServicoContent() {
                             <span className="text-[9px] text-gray-300 mx-0.5">-</span>
                             <input type="date" value={dataCriacaoFim} onChange={(e) => setDataCriacaoFim(e.target.value)} className="bg-transparent border-none p-0 text-[10px] text-gray-600 focus:ring-0 w-24" />
                             {(dataCriacaoInicio || dataCriacaoFim) && (
-                                <button onClick={() => { setDataCriacaoInicio(''); setDataCriacaoFim(''); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
+                                <button onClick={() => { setDataCriacaoInicio(''); setDataCriacaoFim(''); setTimeout(() => fetchOrdens(1), 100); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
                             )}
                         </div>
 
@@ -1997,7 +1983,7 @@ function OrdemServicoContent() {
                             <span className="text-[9px] text-gray-300 mx-0.5">-</span>
                             <input type="date" value={dataPrevisaoFim} onChange={(e) => setDataPrevisaoFim(e.target.value)} className="bg-transparent border-none p-0 text-[10px] text-gray-600 focus:ring-0 w-24" />
                             {(dataPrevisaoInicio || dataPrevisaoFim) && (
-                                <button onClick={() => { setDataPrevisaoInicio(''); setDataPrevisaoFim(''); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
+                                <button onClick={() => { setDataPrevisaoInicio(''); setDataPrevisaoFim(''); setTimeout(() => fetchOrdens(1), 100); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
                             )}
                         </div>
 
@@ -2009,7 +1995,7 @@ function OrdemServicoContent() {
                             <span className="text-[9px] text-gray-300 mx-0.5">-</span>
                             <input type="date" value={dataLiberacaoFim} onChange={(e) => setDataLiberacaoFim(e.target.value)} className="bg-transparent border-none p-0 text-[10px] text-gray-600 focus:ring-0 w-24" />
                             {(dataLiberacaoInicio || dataLiberacaoFim) && (
-                                <button onClick={() => { setDataLiberacaoInicio(''); setDataLiberacaoFim(''); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
+                                <button onClick={() => { setDataLiberacaoInicio(''); setDataLiberacaoFim(''); setTimeout(() => fetchOrdens(1), 100); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
                             )}
                         </div>
                     </div>

@@ -268,7 +268,7 @@ function PainelItensPlano({ plano, onFechar, aglutinado, setAglutinado, onGerarR
     };
 
     return (
-        <div className="flex flex-col bg-white rounded-xl shadow border border-indigo-200 overflow-hidden" style={{ minHeight: 220, maxHeight: 360 }}>
+        <div className="flex flex-col bg-white rounded-xl shadow border border-indigo-200 overflow-hidden h-full flex flex-col min-h-0" style={{ minHeight: 220, maxHeight: 360 }}>
             <div className="shrink-0 bg-indigo-50 border-b border-indigo-200 px-3 py-1.5 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="h-6 w-6 bg-indigo-600 text-white rounded flex items-center justify-center shrink-0"><Database size={12} /></div>
@@ -2126,7 +2126,7 @@ export default function MontagemPlanoCortePage() {
                     <div className="flex items-center gap-3">
                         <div className="h-10 w-10 bg-blue-100 text-[#32423D] rounded-xl flex items-center justify-center shadow-sm shrink-0"><Scissors size={22} /></div>
                         <div>
-                            <h1 className="text-lg font-black text-slate-800 leading-none tracking-tight">Montagem Plano de Corte</h1>
+                            
                             <p className="text-[11px] text-slate-500 mt-0.5">Selecione itens de OS e inclua no plano de corte</p>
                         </div>
                     </div>

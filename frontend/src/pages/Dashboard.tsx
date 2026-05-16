@@ -49,7 +49,7 @@ function AnimatedCounter({ value, isPercent = false }: { value: number, isPercen
 
 function SkeletonCard() {
     return (
-        <div className="p-6 rounded-2xl bg-card border border-border shadow-sm flex flex-col gap-4 relative overflow-hidden skeleton-shimmer">
+        <div className="p-6 rounded-2xl bg-card border border-border shadow-sm flex flex-col gap-4 relative overflow-hidden skeleton-shimmer h-full flex flex-col min-h-0">
             <div className="flex justify-between items-start">
                 <div className="w-12 h-12 rounded-xl bg-secondary/80"></div>
                 <div className="w-16 h-6 rounded-full bg-secondary/80"></div>

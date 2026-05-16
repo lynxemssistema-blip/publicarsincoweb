@@ -225,7 +225,7 @@ function GanttChart({ data, mode }: GanttChartProps) {
 
     if (allDates.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <div className="flex flex-col items-center justify-center py-20 text-slate-400 h-full flex flex-col min-h-0">
                 <GanttChartSquare size={48} className="mb-4 opacity-20" />
                 <p className="text-sm font-medium">Sem datas planejadas ou realizadas para exibir o Gantt</p>
                 <p className="text-xs mt-1 opacity-70">Cadastre datas nas OS & Tags para visualizar o cronograma</p>

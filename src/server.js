@@ -29,6 +29,16 @@ const formatBR = (date = new Date(), includeTime = false) => {
     return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
 };
 
+// Helper global: retorna o NomeCompleto do usuário autenticado via JWT context
+const getCtxNomeCompleto = (fallback = 'Sistema') => {
+    try {
+        const store = db.asyncLocalStorage.getStore();
+        if (store && store.user && store.user.nomeCompleto) return store.user.nomeCompleto;
+        if (store && store.user && store.user.login) return store.user.login;
+    } catch(e) {}
+    return fallback;
+};
+
 const NULLIF_TRIM = (val) => {
     if (val === null || val === undefined) return '';
     const s = String(val).trim();
@@ -1699,6 +1709,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                             id: user.idUsuario,
                             login: login,
                             role: role,
+                            nomeCompleto: user.NomeCompleto,
                             dbName: centralAuth.tenantConfig.database,
                             isSuperadmin: centralAuth.isSuperadmin
                         }, JWT_SECRET, { expiresIn: '12h' });
@@ -2926,7 +2937,7 @@ app.post('/api/medida', async (req, res) => {
         const now = getCurrentDateTimeBR();
         const [result] = await pool.execute(
             'INSERT INTO medida (TipoMedida, DescMedida, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
-            [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, now, 'Sistema']
+            [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, now, getCtxNomeCompleto()]
         );
         res.json({ success: true, message: 'Unidade de medida cadastrada com sucesso', id: result.insertId });
     } catch (error) {
@@ -3039,7 +3050,7 @@ app.post('/api/familia', async (req, res) => {
         const now = getCurrentDateTimeBR();
         const [result] = await pool.execute(
             'INSERT INTO familia (DescFamilia, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?)',
-            [DescFamilia.trim(), IdEmpresa || null, now, 'Sistema']
+            [DescFamilia.trim(), IdEmpresa || null, now, getCtxNomeCompleto()]
         );
         res.json({ success: true, message: 'FamÃ¯Â¿Â½lia cadastrada com sucesso', id: result.insertId });
     } catch (error) {
@@ -3152,7 +3163,7 @@ app.post('/api/acabamento', async (req, res) => {
         const now = getCurrentDateTimeBR();
         const [result] = await pool.execute(
             'INSERT INTO acabamento (DescAcabamento, Status, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
-            [DescAcabamento.trim(), 'A', IdEmpresa || null, now, 'Sistema']
+            [DescAcabamento.trim(), 'A', IdEmpresa || null, now, getCtxNomeCompleto()]
         );
         res.json({ success: true, message: 'Acabamento cadastrado com sucesso', id: result.insertId });
     } catch (error) {
@@ -4982,7 +4993,7 @@ app.post('/api/tipoproduto', async (req, res) => {
         const now = getCurrentDateTimeBR();
         const [result] = await pool.execute(
             'INSERT INTO tipoproduto (TipoProduto, Unidade, Descricao, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
-            [TipoProduto.trim(), Unidade || null, Descricao || null, now, 'Sistema']
+            [TipoProduto.trim(), Unidade || null, Descricao || null, now, getCtxNomeCompleto()]
         );
         res.json({ success: true, message: 'Tipo cadastrado com sucesso', id: result.insertId });
     } catch (error) {
@@ -5265,10 +5276,12 @@ app.get('/api/ordemservico', async (req, res) => {
         const addDateFilter = (field, start, end) => {
             if (start && end) {
                 whereClause += ` AND (
-                    (${field} BETWEEN ? AND ?) OR 
-                    (STR_TO_DATE(${field}, '%d/%m/%Y') BETWEEN ? AND ?)
+                    COALESCE(
+                        STR_TO_DATE(LEFT(${field}, 10), '%d/%m/%Y'),
+                        STR_TO_DATE(LEFT(${field}, 10), '%Y-%m-%d')
+                    ) BETWEEN ? AND ?
                 )`;
-                params.push(`${start} 00:00:00`, `${end} 23:59:59`, start, end);
+                params.push(start, end);
             }
         };
 
@@ -5626,7 +5639,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
         if (!novoIdProjeto || !novoIdTag) return res.status(400).json({ success: false, message: 'Projeto e Tag de destino sÃƒÂ£o obrigatÃƒÂ³rios' });
         
         const fator = isNaN(parseInt(novoFator)) || parseInt(novoFator) <= 0 ? 1 : parseInt(novoFator);
-        const criador = usuarioNome || 'Sistema Web';
+        const criador = getCtxNomeCompleto() !== 'Sistema' ? getCtxNomeCompleto() : (usuarioNome || 'Sistema Web');
 
         // 1. Obter a O.S Original
         const [origOS] = await connection.query('SELECT * FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
@@ -6168,6 +6181,156 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
     }
 });
 
+// ---------------------------------------------------------
+// ROTA: Alterar Fator com cascata completa OS → Tag → Projeto
+// Atualiza QtdeTotal de cada item = qtdeUnit × novoFator
+// Atualiza TotalExecutar do PRIMEIRO setor ativo de cada item = novoQtde
+// Zera TotalExecutar dos demais setores
+// recalcularQuantidadesTotais propaga somas para OS, Tag e Projeto
+// ---------------------------------------------------------
+app.post('/api/ordemservico/alterar-fator-cascata', tenantMiddleware, async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const { IdOrdemServico, NovoFator } = req.body;
+
+        const novoFator = parseFloat(NovoFator);
+        if (isNaN(novoFator) || novoFator <= 0) {
+            return res.status(400).json({ success: false, message: 'Fator inválido. Deve ser um número maior que zero.' });
+        }
+
+        // Busca OS (fator anterior)
+        const [osRows] = await connection.query(
+            'SELECT IdOrdemServico, Fator, IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != \'*\')',
+            [IdOrdemServico]
+        );
+        if (osRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
+        }
+        const os = osRows[0];
+        const fatorAnterior = parseFloat(os.Fator) || 1;
+
+        // Busca itens ativos com todos os campos necessários
+        const [itemRows] = await connection.query(
+            `SELECT IdOrdemServicoItem, QtdeTotal, AreaPintura, Peso,
+                    txtCorte, txtDobra, txtSolda, txtPintura, TxtMontagem
+             FROM ordemservicoitem
+             WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [IdOrdemServico]
+        );
+        if (itemRows.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nenhum item encontrado para esta Ordem de Serviço.' });
+        }
+
+        // Mapeamento de setores em ordem de prioridade
+        const setorOrdem = [
+            { flag: 'txtCorte',    campoExecutar: 'CorteTotalExecutar'    },
+            { flag: 'txtDobra',    campoExecutar: 'DobraTotalExecutar'    },
+            { flag: 'txtSolda',    campoExecutar: 'SoldaTotalExecutar'    },
+            { flag: 'txtPintura',  campoExecutar: 'PinturaTotalExecutar'  },
+            { flag: 'TxtMontagem', campoExecutar: 'MontagemTotalExecutar' },
+        ];
+
+        await connection.beginTransaction();
+        try {
+            let somaTotal = 0;
+
+            for (const item of itemRows) {
+                const qtdeAtual = parseFloat(item.QtdeTotal) || 0;
+                const areaAtual = parseFloat(item.AreaPintura) || 0;
+                const pesoAtual = parseFloat(item.Peso) || 0;
+
+                // Reverte para qtde unitária (sem fator anterior) e aplica novo fator
+                const qtdeUnit = fatorAnterior > 0 ? qtdeAtual / fatorAnterior : qtdeAtual;
+                const areaUnit = fatorAnterior > 0 ? areaAtual / fatorAnterior : areaAtual;
+                const pesoUnit = fatorAnterior > 0 ? pesoAtual / fatorAnterior : pesoAtual;
+
+                const novaQtde = Math.round(qtdeUnit * novoFator * 1000) / 1000;
+                const novaArea = Math.round(areaUnit * novoFator * 1000) / 1000;
+                const novoPeso = Math.round(pesoUnit * novoFator * 1000) / 1000;
+
+                somaTotal += novaQtde;
+
+                // Identifica o PRIMEIRO setor ativo do item
+                const primeiroSetor = setorOrdem.find(s => String(item[s.flag]).trim() === '1');
+
+                // Monta o SET dinâmico para TotalExecutar dos setores
+                // O primeiro setor ativo recebe novaQtde; os demais recebem 0
+                const setCampos = setorOrdem.map(s =>
+                    `\`${s.campoExecutar}\` = ${primeiroSetor && s.campoExecutar === primeiroSetor.campoExecutar ? novaQtde : 0}`
+                ).join(', ');
+
+                await connection.query(
+                    `UPDATE ordemservicoitem
+                     SET QtdeTotal = ?, AreaPintura = ?, Peso = ?, Fator = ?, ${setCampos}
+                     WHERE IdOrdemServicoItem = ?`,
+                    [novaQtde, novaArea, novoPeso, novoFator, item.IdOrdemServicoItem]
+                );
+            }
+
+            // Atualiza Fator na OS (QtdeTotalItens virá do recalcularQuantidadesTotais)
+            await connection.query(
+                'UPDATE ordemservico SET Fator = ? WHERE IdOrdemServico = ?',
+                [novoFator, IdOrdemServico]
+            );
+
+            await connection.commit();
+
+            console.log(`[alterar-fator-cascata] OS ${IdOrdemServico}: fator ${fatorAnterior}→${novoFator}, somaTotal=${somaTotal}, ${itemRows.length} itens atualizados`);
+        } catch (txErr) {
+            await connection.rollback();
+            throw txErr;
+        }
+
+        // Recalcula cascata completa: QtdeTotalItens, setores, percentuais → OS → Tag → Projeto
+        await recalcularQuantidadesTotais(IdOrdemServico, connection);
+
+        return res.json({
+            success: true,
+            message: `Fator atualizado de ${fatorAnterior} para ${novoFator}. Quantidades recalculadas em cascata (OS → Tag → Projeto).`,
+            FatorAnterior: fatorAnterior,
+            NovoFator: novoFator
+        });
+
+    } catch (e) {
+        console.error('[alterar-fator-cascata] Erro:', e);
+        res.status(500).json({ success: false, message: e.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// ---------------------------------------------------------
+// ROTA: Consultar Fator Multiplicador de uma OS no banco
+// ---------------------------------------------------------
+app.get('/api/ordemservico/:id/fator', tenantMiddleware, async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        const { id } = req.params;
+        const [rows] = await connection.query(
+            'SELECT IdOrdemServico, Descricao, Fator, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != \'*\')',
+            [id]
+        );
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
+        }
+        const os = rows[0];
+        return res.json({
+            success: true,
+            IdOrdemServico: os.IdOrdemServico,
+            Descricao: os.Descricao || '',
+            Fator: os.Fator ?? 0,
+            Liberado_Engenharia: os.Liberado_Engenharia
+        });
+    } catch (e) {
+        console.error('[GET fator] Erro:', e);
+        res.status(500).json({ success: false, message: e.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.post('/api/ordemservico/liberar', async (req, res) => {
     const { IdOrdemServico, IdTag, IdProjeto, Fator, EnderecoOrdemServico, TipoLiberacao } = req.body;
     let connection;
@@ -6326,7 +6489,74 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
         }
 
         await connection.commit();
-        res.json({ success: true, message: 'Ordem de serviÃƒÂ§o liberada com sucesso.' });
+
+        // 6. Aplicar Fator Multiplicador nos itens e inicializar TotalExecutar do primeiro setor
+        //    QtdeTotal_item = qtdeUnit × Fator; TotalExecutar(primeiroSetor) = QtdeTotal_item
+        try {
+            const fator = parseFloat(Fator) || 1;
+
+            // Mapeamento de setores em ordem de prioridade
+            const setorOrdem = [
+                { flag: 'txtCorte',    campoExecutar: 'CorteTotalExecutar'    },
+                { flag: 'txtDobra',    campoExecutar: 'DobraTotalExecutar'    },
+                { flag: 'txtSolda',    campoExecutar: 'SoldaTotalExecutar'    },
+                { flag: 'txtPintura',  campoExecutar: 'PinturaTotalExecutar'  },
+                { flag: 'TxtMontagem', campoExecutar: 'MontagemTotalExecutar' },
+            ];
+
+            const [itensParaFator] = await connection.execute(
+                `SELECT IdOrdemServicoItem, QtdeTotal, AreaPintura, Peso,
+                        txtCorte, txtDobra, txtSolda, txtPintura, TxtMontagem, Fator as FatorAtual
+                 FROM ordemservicoitem
+                 WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [IdOrdemServico]
+            );
+
+            for (const item of itensParaFator) {
+                const fatorAtual  = parseFloat(item.FatorAtual) || 1;
+                const qtdeAtual   = parseFloat(item.QtdeTotal)   || 0;
+                const areaAtual   = parseFloat(item.AreaPintura) || 0;
+                const pesoAtual   = parseFloat(item.Peso)        || 0;
+
+                // Reverte para unitário e aplica novo fator
+                const qtdeUnit = fatorAtual > 0 ? qtdeAtual / fatorAtual : qtdeAtual;
+                const areaUnit = fatorAtual > 0 ? areaAtual / fatorAtual : areaAtual;
+                const pesoUnit = fatorAtual > 0 ? pesoAtual / fatorAtual : pesoAtual;
+
+                const novaQtde = Math.round(qtdeUnit * fator * 1000) / 1000;
+                const novaArea = Math.round(areaUnit * fator * 1000) / 1000;
+                const novoPeso = Math.round(pesoUnit * fator * 1000) / 1000;
+
+                // Primeiro setor ativo → recebe novaQtde; demais → 0
+                const primeiroSetor = setorOrdem.find(s => String(item[s.flag]).trim() === '1');
+                const setCampos = setorOrdem.map(s =>
+                    `\`${s.campoExecutar}\` = ${primeiroSetor && s.campoExecutar === primeiroSetor.campoExecutar ? novaQtde : 0}`
+                ).join(', ');
+
+                await connection.execute(
+                    `UPDATE ordemservicoitem
+                     SET QtdeTotal = ?, AreaPintura = ?, Peso = ?, Fator = ?, ${setCampos}
+                     WHERE IdOrdemServicoItem = ?`,
+                    [novaQtde, novaArea, novoPeso, fator, item.IdOrdemServicoItem]
+                );
+            }
+
+            // Atualiza Fator na OS
+            await connection.execute(
+                `UPDATE ordemservico SET Fator = ? WHERE IdOrdemServico = ?`,
+                [fator, IdOrdemServico]
+            );
+
+            // Recalcula cascata: OS (QtdeTotalItens, TotalExecutar setores) → Tag → Projeto
+            await recalcularQuantidadesTotais(IdOrdemServico, connection);
+
+            console.log(`[liberar] OS ${IdOrdemServico}: Fator=${fator}, ${itensParaFator.length} itens processados, cascata recalculada.`);
+        } catch (fatorErr) {
+            console.error('[liberar] Erro ao aplicar fator/recalcular:', fatorErr.message);
+            // Não aborta — a liberação já foi commitada com sucesso
+        }
+
+        res.json({ success: true, message: 'Ordem de serviço liberada com sucesso.' });
 
     } catch (err) {
         if (connection) await connection.rollback();
@@ -6422,6 +6652,133 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
     }
 });
 
+app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
+    try {
+        const osId = req.params.id;
+        const search = req.query.search || '';
+        
+        const [osItems] = await pool.execute(
+            `SELECT CodMatFabricante FROM ordemservicoitem WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [osId]
+        );
+        const codigosInOS = osItems.map(i => i.CodMatFabricante).filter(Boolean);
+
+        let sql = `
+            SELECT 
+                MAX(IdOrdemServicoItem) as IdOrdemServicoItem,
+                CodMatFabricante,
+                MAX(DescResumo) as DescResumo,
+                MAX(DescDetal) as DescDetal,
+                MAX(Peso) as Peso,
+                MAX(Espessura) as Espessura,
+                MAX(MaterialSW) as MaterialSW,
+                MAX(Unidade) as Unidade,
+                MAX(Projeto) as Projeto,
+                MAX(Tag) as Tag
+            FROM ordemservicoitem 
+            WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+              AND CodMatFabricante IS NOT NULL 
+              AND CodMatFabricante != ''
+        `;
+        const params = [];
+
+        if (codigosInOS.length > 0) {
+            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'?').join(',')}) `;
+            params.push(...codigosInOS);
+        }
+
+        if (search) {
+            sql += ` AND (CodMatFabricante LIKE ? OR DescResumo LIKE ? OR Projeto LIKE ? OR Tag LIKE ?) `;
+            const s = `%${search}%`;
+            params.push(s, s, s, s);
+        }
+
+        sql += ` GROUP BY CodMatFabricante ORDER BY MAX(IdOrdemServicoItem) DESC LIMIT 100 `;
+
+        const [rows] = await pool.execute(sql, params);
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: 'Erro ao buscar itens disponíveis.' });
+    }
+});
+
+app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
+    let conn = null;
+    try {
+        const osId = req.params.id;
+        const { itensSelecionados } = req.body;
+        
+        if (!itensSelecionados || !itensSelecionados.length) {
+            return res.status(400).json({ success: false, message: 'Nenhum item selecionado.' });
+        }
+
+        conn = await pool.getConnection();
+        await conn.beginTransaction();
+
+        const [osRows] = await conn.execute(`SELECT Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
+        if (osRows.length === 0) throw new Error('OS não encontrada');
+        if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
+            throw new Error('OS já liberada, não pode incluir itens');
+        }
+
+        let adicionados = 0;
+        
+        for (const idItem of itensSelecionados) {
+            const [itemRows] = await conn.execute(`SELECT * FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`, [idItem]);
+            if (itemRows.length === 0) continue;
+            
+            const original = itemRows[0];
+            
+            const [existRows] = await conn.execute(
+                `SELECT IdOrdemServicoItem FROM ordemservicoitem WHERE IdOrdemServico = ? AND CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [osId, original.CodMatFabricante]
+            );
+            if (existRows.length > 0) continue; 
+
+            const colsToCopy = [
+                'IdProjeto', 'Projeto', 'IdTag', 'Tag', 'DescTag', 'IdMaterial', 'DescResumo', 'DescDetal', 'Autor',
+                'Palavrachave', 'Notas', 'Espessura', 'AreaPintura', 'NumeroDobras', 'Peso', 'Unidade', 'UnidadeSW', 'ValorSW',
+                'Altura', 'Largura', 'CodMatFabricante', 'EnderecoArquivo', 'MaterialSW', 'QtdeTotal', 'Fator', 'qtde',
+                'txtSoldagem', 'txtTipoDesenho', 'txtCorte', 'txtDobra', 'txtSolda', 'txtPintura', 'TxtMontagem',
+                'Comprimentocaixadelimitadora', 'Larguracaixadelimitadora', 'Espessuracaixadelimitadora',
+                'AreaPinturaUnitario', 'PesoUnitario', 'txtItemEstoque', 'ProdutoPrincipal', 'IdEmpresa', 'DescEmpresa', 'NumeroOpOmie'
+            ];
+            
+            const cols = colsToCopy.filter(c => original[c] !== undefined);
+            const vals = cols.map(c => original[c]);
+            
+            const sqlInsert = `
+                INSERT INTO ordemservicoitem (
+                    IdOrdemServico, UsuarioCriacao, CriadoPor, DataCriacao, 
+                    Liberado_Engenharia,
+                    ${cols.join(', ')}
+                ) VALUES (
+                    ?, 'Sistema', 'Sistema', NOW(),
+                    'N',
+                    ${cols.map(()=>'?').join(', ')}
+                )
+            `;
+            
+            const [insertRes] = await conn.execute(sqlInsert, [osId, ...vals]);
+            await inicializarPrimeiroSetor(conn, insertRes.insertId);
+            
+            adicionados++;
+        }
+
+        await recalcularQuantidadesTotais(osId, conn);
+
+        await conn.commit();
+        res.json({ success: true, message: `${adicionados} itens incluídos com sucesso!`, adicionados });
+    } catch (e) {
+        if (conn) await conn.rollback();
+        console.error(e);
+        res.status(500).json({ success: false, message: e.message || 'Erro ao incluir itens' });
+    } finally {
+        if (conn) conn.release();
+    }
+});
+
 // --- Apontamento de ProduÃ¯Â¿Â½Ã¯Â¿Â½o ---
 
 // Mapeamento de setores para colunas
@@ -6498,19 +6855,22 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
         `;
         const params = [];
 
+        // Filtro Projeto: busca por descrição do projeto (LIKE)
         if (projeto) {
-            whereClause += ' AND os.Projeto = ?';
-            params.push(projeto);
+            whereClause += ' AND p.DescProjeto LIKE ?';
+            params.push(`%${projeto}%`);
         }
 
+        // Filtro Tag: busca por descrição da tag (LIKE)
         if (tag) {
-            whereClause += ' AND os.Tag = ?';
-            params.push(tag);
+            whereClause += ' AND (os.DescTag LIKE ? OR os.Tag LIKE ?)';
+            params.push(`%${tag}%`, `%${tag}%`);
         }
 
+        // Filtro Ordem de Serviço: busca por descrição da OS (LIKE)
         if (os) {
-            whereClause += ' AND os.IdOrdemServico = ?';
-            params.push(os);
+            whereClause += ' AND os.Descricao LIKE ?';
+            params.push(`%${os}%`);
         }
 
         if (item) {
@@ -6523,10 +6883,10 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             params.push(`%${req.query.planoCorte}%`);
         }
 
-        // Filter by cliente
+        // Filtro Cliente: busca por descrição (LIKE)
         if (req.query.cliente) {
-            whereClause += ' AND os.DescEmpresa = ?';
-            params.push(req.query.cliente);
+            whereClause += ' AND (os.DescEmpresa LIKE ? OR p.ClienteProjeto LIKE ?)';
+            params.push(`%${req.query.cliente}%`, `%${req.query.cliente}%`);
         }
 
         // Filter by overall status
@@ -6543,6 +6903,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             SELECT COUNT(*) as total
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
         `, params);
         const total = countResult[0].total;
@@ -6648,9 +7009,10 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             AND(os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`;
         const params = [];
 
+        // Filtro Projeto: busca por descrição do projeto (LIKE)
         if (projeto) {
-            whereClause += ' AND os.Projeto = ?';
-            params.push(projeto);
+            whereClause += ' AND p.DescProjeto LIKE ?';
+            params.push(`%${projeto}%`);
         }
 
         if (item) {
@@ -6658,7 +7020,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             params.push(item);
         }
 
-        // Expanded search across multiple columns
+        // Plano de Corte
         if (req.query.planoCorte) {
             whereClause += ' AND osi.IdPlanodecorte LIKE ?';
             params.push(`%${req.query.planoCorte}%`);
@@ -6670,28 +7032,29 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             whereClause += ` AND osi.${setorConfig.status} = 'C'`;
         }
 
-        // Filter by Tag
+        // Filtro Tag: busca por descrição da tag (LIKE)
         if (req.query.tag) {
-            whereClause += ' AND os.Tag = ?';
-            params.push(req.query.tag);
+            whereClause += ' AND (os.DescTag LIKE ? OR os.Tag LIKE ?)';
+            params.push(`%${req.query.tag}%`, `%${req.query.tag}%`);
         }
 
-        // Filter by OS number
+        // Filtro Ordem de Serviço: busca por descrição da OS (LIKE)
         if (req.query.os) {
-            whereClause += ' AND os.IdOrdemServico = ?';
-            params.push(req.query.os);
+            whereClause += ' AND os.Descricao LIKE ?';
+            params.push(`%${req.query.os}%`);
         }
 
-        // Filter by Cliente
+        // Filtro Cliente: busca por descrição (LIKE)
         if (req.query.cliente) {
-            whereClause += ' AND os.DescEmpresa = ?';
-            params.push(req.query.cliente);
+            whereClause += ' AND (os.DescEmpresa LIKE ? OR p.ClienteProjeto LIKE ?)';
+            params.push(`%${req.query.cliente}%`, `%${req.query.cliente}%`);
         }
 
         const [countResult] = await pool.execute(`
             SELECT COUNT(*) as total
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
         `, params);
         const total = countResult[0].total;
@@ -8610,7 +8973,7 @@ app.post('/api/rnc', async (req, res) => {
                 // Insert new task type
                 await connection.execute(
                     "INSERT INTO tipotarefa (TipoTarefa, DataCriacao, CriadoPor) VALUES (?, ?, ?)",
-                    [data.tipoTarefa, nowFormatted, data.usuario || 'Sistema']
+                    [data.tipoTarefa, nowFormatted, data.usuario || getCtxNomeCompleto()]
                 );
             }
 
@@ -10917,7 +11280,7 @@ app.post('/api/plano-corte/incluir-itens', async (req, res) => {
         await connection.beginTransaction();
 
         const { itens } = req.body; // array de IdOrdemServicoItem
-        const criadoPor = req.session?.user?.nome || req.session?.user?.login || 'Sistema';
+        const criadoPor = getCtxNomeCompleto();
         const dataCad   = new Date().toLocaleDateString('pt-BR');
 
         if (!itens || itens.length === 0) {
@@ -11382,24 +11745,40 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
             SET 
                 QtdeTotalItens = (SELECT COALESCE(SUM(oi.QtdeTotal), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
-                -- Pecas Executadas: minimo entre setores ativos (quando todos ativos concluem aquela qtde)
+                -- Pecas Executadas: minimo entre setores ativos.
+                -- IMPORTANTE: 999999999 é sentinela para "setor inativo" no LEAST.
+                -- Se LEAST retorna >= 999999999 significa que nenhum setor executou ainda → 0.
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
                             WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSoldagem,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtMedicao,'')!='1' AND IFNULL(oi.txtAcabamento,'')!='1' AND IFNULL(oi.txtAprovacao,'')!='1' AND IFNULL(oi.txtIsometrico,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
                             THEN oi.QtdeTotal
-                            ELSE LEAST(
-                                COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtSoldagem, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtMedicao, '')='1' THEN oi.MEDICAOTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtAcabamento, '')='1' THEN oi.ACABAMENTOTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtAprovacao, '')='1' THEN oi.APROVAÇÃOTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtIsometrico, '')='1' THEN oi.ISOMETRICOTotalExecutado ELSE 999999999 END, 999999999),
-                                COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.ENGENHARIATotalExecutado ELSE 999999999 END, 999999999)
-                            )
+                            ELSE
+                                CASE WHEN LEAST(
+                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtSoldagem, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtMedicao, '')='1' THEN oi.MEDICAOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtAcabamento, '')='1' THEN oi.ACABAMENTOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtAprovacao, '')='1' THEN oi.APROVAÇÃOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtIsometrico, '')='1' THEN oi.ISOMETRICOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.ENGENHARIATotalExecutado ELSE 999999999 END, 999999999)
+                                ) >= 999999999 THEN 0
+                                ELSE LEAST(
+                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtSoldagem, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtMedicao, '')='1' THEN oi.MEDICAOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtAcabamento, '')='1' THEN oi.ACABAMENTOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtAprovacao, '')='1' THEN oi.APROVAÇÃOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtIsometrico, '')='1' THEN oi.ISOMETRICOTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.ENGENHARIATotalExecutado ELSE 999999999 END, 999999999)
+                                )
+                                END
                         END
                     ), 0)
                     FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')

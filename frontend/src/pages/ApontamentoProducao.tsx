@@ -879,7 +879,7 @@ export default function ApontamentoProducaoPage() {
     const setorInfo = setores.find(s => s.id === setorAtivo) || setores[0];
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 h-full flex flex-col min-h-0">
             {!fromGlobal ? (
                 <>
             {/* Header */}
@@ -895,10 +895,7 @@ export default function ApontamentoProducaoPage() {
                                 <ArrowLeft size={20} />
                             </button>
                         )}
-                        <h1 className="text-2xl font-bold text-[#32423D] flex items-center gap-2">
-                            Apontamento de Produção
-                            <span className="bg-[#E0E800]/40 text-[#32423D] text-[9px] px-1.5 py-0.5 rounded font-mono uppercase tracking-tighter">PATCH 1.4</span>
-                        </h1>
+                        <div className="mb-2"><span className="bg-[#E0E800]/40 text-[#32423D] text-[9px] px-1.5 py-0.5 rounded font-mono uppercase tracking-tighter">PATCH 1.4</span></div>
                     </div>
                     <p className="text-gray-500 text-sm mt-1">Registre a produção por setor</p>
                 </div>

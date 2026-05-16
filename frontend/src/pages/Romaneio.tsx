@@ -592,7 +592,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
 
     if (view === 'list') {
         return (
-            <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col min-h-0">
                 {/* Header & Main Actions */}
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                     <div className="flex items-center gap-4">
@@ -606,10 +606,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                             </button>
                         )}
                         <div>
-                            <h1 className="text-2xl font-bold text-gray-800 tracking-tight flex items-center gap-2">
-                                <Truck className="text-[#32423D]" />
-                                Romaneios
-                            </h1>
+                            
                             <p className="text-gray-500 mt-1">Selecione um romaneio abaixo para habilitar as ações.</p>
                         </div>
                     </div>
@@ -673,7 +670,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                         )}
                     </div>
 
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto flex-1">
                         <table className="w-full">
                             <thead className="bg-gray-50 text-gray-500 text-sm font-medium uppercase tracking-wider">
                                 <tr>
@@ -1273,7 +1270,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
             <div className="space-y-6 w-full max-w-[1920px] mx-auto">
                 {/* Print Header - Hidden on screen */}
                 <div className="hidden print:block mb-8 text-center border-b-2 border-gray-800 pb-4">
-                    <h1 className="text-3xl font-bold uppercase">Romaneio de Entrega</h1>
+                    
                     <p className="text-sm">Controle de Saída de Materiais</p>
                 </div>
 
@@ -1371,7 +1368,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                     </div>
 
                     {/* Items Table */}
-                    <div className="overflow-x-auto">
+                    <div className="overflow-auto flex-1">
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-[#32423D] text-white text-[10px] uppercase tracking-widest font-bold">
@@ -1454,9 +1451,7 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                         <ArrowLeft size={24} />
                     </button>
                     <div>
-                        <h1 className="text-2xl font-bold text-[#32423D]">
-                            {view === 'create' ? 'Criar Novo Romaneio' : 'Editar Romaneio'}
-                        </h1>
+                        
                         <p className="text-gray-500 text-sm">Preencha os dados do romaneio.</p>
                     </div>
                 </div>

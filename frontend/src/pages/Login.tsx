@@ -45,7 +45,7 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background font-sans overflow-hidden">
+        <div className="min-h-screen grid grid-cols-1 lg:grid-cols-2 bg-background font-sans overflow-hidden h-full flex flex-col min-h-0">
             {/* Esquerda: Hero / Branding */}
             <div className="relative hidden lg:flex flex-col justify-between p-12 bg-primary overflow-hidden">
                 {/* Elementos Decorativos de Fundo */}

@@ -128,7 +128,7 @@ export default function MatrizAdmin() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 h-full flex flex-col min-h-0">
             <div className="flex justify-between items-center">
                 <div>
                     <h2 className="text-2xl font-bold text-foreground">Gestão de Matrizes</h2>
@@ -196,7 +196,7 @@ export default function MatrizAdmin() {
 
             {/* Table Section */}
             <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-                <div className="overflow-x-auto">
+                <div className="overflow-auto flex-1">
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-muted/50 border-b border-border text-sm">
