@@ -6756,7 +6756,23 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
             ];
             
             const cols = colsToCopy.filter(c => original[c] !== undefined);
-            const vals = cols.map(c => original[c]);
+            const vals = cols.map(c => {
+                if (c === 'Peso') {
+                    const qtdeTotal = Number(original.QtdeTotal) || 0;
+                    const fator = Number(original.Fator) || 1;
+                    const fatorMultiplier = fator <= 0 ? 1 : fator;
+                    const pesoUnit = Number(original.PesoUnitario) || 0;
+                    return pesoUnit * qtdeTotal * fatorMultiplier;
+                }
+                if (c === 'AreaPintura') {
+                    const qtdeTotal = Number(original.QtdeTotal) || 0;
+                    const fator = Number(original.Fator) || 1;
+                    const fatorMultiplier = fator <= 0 ? 1 : fator;
+                    const areaUnit = Number(original.AreaPinturaUnitario) || 0;
+                    return areaUnit * qtdeTotal * fatorMultiplier;
+                }
+                return original[c];
+            });
             
             const sqlInsert = `
                 INSERT INTO ordemservicoitem (
