@@ -2662,72 +2662,68 @@ function OrdemServicoContent() {
                                         <tbody>
                                             {itensDisponiveis.map(item => {
                                                 const sel = itensSelecionados.has(item.IdOrdemServicoItem);
+                                                const semEsp = !item.Espessura || String(item.Espessura).trim() === '';
+                                                const semMat = !item.MaterialSW || String(item.MaterialSW).trim() === '';
+                                                const invalido = semEsp || semMat;
                                                 return (
-                                                    {(() => {
-                                                        const semEsp = !item.Espessura || String(item.Espessura).trim() === '';
-                                                        const semMat = !item.MaterialSW || String(item.MaterialSW).trim() === '';
-                                                        const invalido = semEsp || semMat;
-                                                        return (
-                                                        <tr
-                                                            key={item.IdOrdemServicoItem}
-                                                            onClick={() => {
-                                                                if (invalido) return; // bloqueia seleção de itens inválidos
-                                                                setItensSelecionados(prev => {
-                                                                    const n = new Set(prev);
-                                                                    sel ? n.delete(item.IdOrdemServicoItem) : n.add(item.IdOrdemServicoItem);
-                                                                    return n;
-                                                                });
-                                                            }}
-                                                            title={invalido ? 'Item bloqueado: ' + (semEsp ? 'Espessura ' : '') + (semMat ? 'MaterialSW ' : '') + 'não preenchido(s)' : ''}
-                                                            className={'border-b border-gray-100 transition-colors ' + (invalido ? 'bg-amber-50 opacity-80 cursor-not-allowed' : sel ? 'bg-teal-50 hover:bg-teal-100/70 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer')}
-                                                        >
-                                                            <td className="px-4 py-2 text-center">
-                                                                {invalido ? (
-                                                                    <AlertTriangle size={14} className="text-amber-500 mx-auto" />
-                                                                ) : (
-                                                                    <input
-                                                                        type="checkbox"
-                                                                        checked={sel}
-                                                                        readOnly
-                                                                        className="w-4 h-4 accent-teal-600 cursor-pointer"
-                                                                    />
-                                                                )}
-                                                            </td>
-                                                            <td className="px-3 py-2">
-                                                                <span className={'font-bold px-2 py-0.5 rounded text-[11px] ' + (invalido ? 'text-amber-700 bg-amber-100' : 'text-primary bg-primary/10')}>
-                                                                    {item.CodMatFabricante || '-'}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-gray-700 max-w-xs">
-                                                                <div className="truncate" title={item.DescDetal || item.DescResumo}>
-                                                                    {item.DescResumo || '-'}
-                                                                </div>
-                                                                {item.DescDetal && item.DescDetal !== item.DescResumo && (
-                                                                    <div className="text-gray-400 truncate text-[10px]">{item.DescDetal}</div>
-                                                                )}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-gray-500 hidden md:table-cell">
-                                                                <div className="font-medium">{item.Projeto || '-'}</div>
-                                                                {item.Tag && <div className="text-[10px] text-gray-400">{item.Tag}</div>}
-                                                            </td>
-                                                            <td className="px-3 py-2 text-center hidden lg:table-cell">
-                                                                {semEsp
-                                                                    ? <span className="text-amber-600 font-semibold text-[11px]">⚠ Ausente</span>
-                                                                    : <span className="text-gray-600">{item.Espessura}</span>
-                                                                }
-                                                            </td>
-                                                            <td className="px-3 py-2 text-center hidden lg:table-cell">
-                                                                {semMat
-                                                                    ? <span className="text-amber-600 font-semibold text-[11px]">⚠ Ausente</span>
-                                                                    : <span className="text-gray-600">{item.MaterialSW}</span>
-                                                                }
-                                                            </td>
-                                                            <td className="px-3 py-2 text-center text-gray-600 font-medium">
-                                                                {item.Peso ? item.Peso : '-'}
-                                                            </td>
-                                                        </tr>
-                                                        );
-                                                    })()}
+                                                    <tr
+                                                        key={item.IdOrdemServicoItem}
+                                                        onClick={() => {
+                                                            if (invalido) return; // bloqueia seleção de itens inválidos
+                                                            setItensSelecionados(prev => {
+                                                                const n = new Set(prev);
+                                                                sel ? n.delete(item.IdOrdemServicoItem) : n.add(item.IdOrdemServicoItem);
+                                                                return n;
+                                                            });
+                                                        }}
+                                                        title={invalido ? 'Item bloqueado: ' + (semEsp ? 'Espessura ' : '') + (semMat ? 'MaterialSW ' : '') + 'não preenchido(s)' : ''}
+                                                        className={'border-b border-gray-100 transition-colors ' + (invalido ? 'bg-amber-50 opacity-80 cursor-not-allowed' : sel ? 'bg-teal-50 hover:bg-teal-100/70 cursor-pointer' : 'hover:bg-gray-50 cursor-pointer')}
+                                                    >
+                                                        <td className="px-4 py-2 text-center">
+                                                            {invalido ? (
+                                                                <AlertTriangle size={14} className="text-amber-500 mx-auto" />
+                                                            ) : (
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={sel}
+                                                                    readOnly
+                                                                    className="w-4 h-4 accent-teal-600 cursor-pointer"
+                                                                />
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2">
+                                                            <span className={'font-bold px-2 py-0.5 rounded text-[11px] ' + (invalido ? 'text-amber-700 bg-amber-100' : 'text-primary bg-primary/10')}>
+                                                                {item.CodMatFabricante || '-'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-700 max-w-xs">
+                                                            <div className="truncate" title={item.DescDetal || item.DescResumo}>
+                                                                {item.DescResumo || '-'}
+                                                            </div>
+                                                            {item.DescDetal && item.DescDetal !== item.DescResumo && (
+                                                                <div className="text-gray-400 truncate text-[10px]">{item.DescDetal}</div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-gray-500 hidden md:table-cell">
+                                                            <div className="font-medium">{item.Projeto || '-'}</div>
+                                                            {item.Tag && <div className="text-[10px] text-gray-400">{item.Tag}</div>}
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center hidden lg:table-cell">
+                                                            {semEsp
+                                                                ? <span className="text-amber-600 font-semibold text-[11px]">⚠ Ausente</span>
+                                                                : <span className="text-gray-600">{item.Espessura}</span>
+                                                            }
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center hidden lg:table-cell">
+                                                            {semMat
+                                                                ? <span className="text-amber-600 font-semibold text-[11px]">⚠ Ausente</span>
+                                                                : <span className="text-gray-600">{item.MaterialSW}</span>
+                                                            }
+                                                        </td>
+                                                        <td className="px-3 py-2 text-center text-gray-600 font-medium">
+                                                            {item.Peso ? item.Peso : '-'}
+                                                        </td>
+                                                    </tr>
                                                 );
                                             })}
                                         </tbody>
