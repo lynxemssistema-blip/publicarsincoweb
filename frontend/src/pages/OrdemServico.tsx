@@ -850,6 +850,42 @@ function OrdemServicoContent() {
         }
     };
 
+    const handleAlterarFatorItem = async (item: OrdemServicoItem, osId: number) => {
+        const novoFator = window.prompt(`Informe o novo Fator para o item ${item.CodMatFabricante || ''}:`, item.Fator?.toString() || '1');
+        if (!novoFator) return;
+
+        const fatorNum = parseFloat(novoFator.replace(',', '.'));
+        if (isNaN(fatorNum) || fatorNum <= 0) {
+            addToast({ type: 'error', title: 'Atenção', message: 'O valor informado não é um número válido maior que zero.' });
+            return;
+        }
+
+        setLiberandoOS(osId);
+        try {
+            const token = localStorage.getItem('sinco_token');
+            const res = await fetch(`${API_BASE}/ordemservicoitem/alterar-fator`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ 
+                    IdOrdemServicoItem: item.IdOrdemServicoItem,
+                    Fator: fatorNum
+                })
+            });
+            const json = await res.json();
+            if (json.success) {
+                addToast({ type: 'success', title: 'Fator do Item Alterado', message: 'Fator, pesos e áreas atualizados com sucesso.' });
+                await fetchItens(osId);
+                await fetchOrdens(1);
+            } else {
+                addToast({ type: 'error', title: 'Erro', message: json.message || 'Falha ao alterar fator do item.' });
+            }
+        } catch (e: any) {
+            addToast({ type: 'error', title: 'Erro', message: 'Falha de comunicação com o servidor.' });
+        } finally {
+            setLiberandoOS(null);
+        }
+    };
+
     const handleExcluirOS = async (os: OrdemServico) => {
         const confirmDelete = window.confirm(`Deseja Excluir/Cancelar a Ordem de Serviço: ${os.IdOrdemServico}?`);
         if (!confirmDelete) return;
@@ -1814,9 +1850,22 @@ function OrdemServicoContent() {
                                                     {item.DescResumo || '-'}
                                                 </span>
 
-                                                <span className="w-12 text-xs font-semibold text-accent text-center bg-accent/10 rounded my-auto py-0.5" title="Fator">
-                                                    {item.Fator !== undefined ? item.Fator : '1'}
-                                                </span>
+                                                {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleAlterarFatorItem(item, os.IdOrdemServico);
+                                                        }}
+                                                        className="w-12 text-xs font-semibold text-accent hover:text-white text-center bg-accent/10 hover:bg-accent rounded my-auto py-0.5 border border-accent/20 cursor-pointer transition-all"
+                                                        title="Clique para alterar o Fator do Item"
+                                                    >
+                                                        {item.Fator !== undefined ? item.Fator : '1'}
+                                                    </button>
+                                                ) : (
+                                                    <span className="w-12 text-xs font-semibold text-gray-500 text-center bg-gray-100 rounded my-auto py-0.5" title="Fator (Bloqueado)">
+                                                        {item.Fator !== undefined ? item.Fator : '1'}
+                                                    </span>
+                                                )}
                                                 <span className="w-12 text-xs text-gray-600 text-center">{item.QtdeTotal || '-'}</span>
                                                 <span className="w-14 text-xs text-gray-600 text-center">{item.Peso ? `${item.Peso}kg` : '-'}</span>
                                                 {visibleSetores.includes('corte') && <div className="hidden lg:flex w-16 justify-center"><ProgressBar value={item.CortePercentual} label="Corte" /></div>}

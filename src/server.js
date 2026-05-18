@@ -9796,6 +9796,67 @@ app.get('/api/download', (req, res) => {
 });
 
 // --- ÃƒÂcone 5: Excluir linha OS ---
+app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
+    let connection = null;
+    try {
+        const { IdOrdemServicoItem, Fator } = req.body;
+        if (!IdOrdemServicoItem || Fator === undefined) {
+            return res.status(400).json({ success: false, message: 'Dados inválidos.' });
+        }
+
+        const fatorNum = parseFloat(Fator);
+        if (isNaN(fatorNum) || fatorNum <= 0) {
+            return res.status(400).json({ success: false, message: 'Fator deve ser um número maior que zero.' });
+        }
+
+        connection = await (req.tenantDbPool || pool).getConnection();
+
+        // 1. Obter informações do item atual
+        const [rows] = await connection.execute(
+            `SELECT IdOrdemServico, PesoUnitario, AreaPinturaUnitario, QtdeTotal, Liberado_Engenharia 
+             FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`,
+            [IdOrdemServicoItem]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Item não encontrado.' });
+        }
+
+        const item = rows[0];
+
+        // Regra de segurança: não pode alterar se a OS já estiver liberada
+        if (item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') {
+            return res.status(400).json({ success: false, message: 'O item não pode ter o fator alterado pois a O.S. já foi liberada!' });
+        }
+
+        // 2. Calcular os novos valores
+        const qtdeTotal = Number(item.QtdeTotal) || 0;
+        const pesoUnit = Number(item.PesoUnitario) || 0;
+        const areaUnit = Number(item.AreaPinturaUnitario) || 0;
+
+        const novoPeso = pesoUnit * qtdeTotal * fatorNum;
+        const novaArea = areaUnit * qtdeTotal * fatorNum;
+
+        // 3. Atualizar o item
+        await connection.execute(
+            `UPDATE ordemservicoitem 
+             SET Fator = ?, Peso = ?, AreaPintura = ? 
+             WHERE IdOrdemServicoItem = ?`,
+            [fatorNum, novoPeso, novaArea, IdOrdemServicoItem]
+        );
+
+        // 4. Executar efeito cascata
+        await recalcularQuantidadesTotais(item.IdOrdemServico, connection);
+
+        res.json({ success: true, message: 'Fator do item alterado e totais recalculados com sucesso!' });
+    } catch (err) {
+        console.error('Erro ao alterar fator do item:', err);
+        res.status(500).json({ success: false, message: err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.delete('/api/ordemservicoitem/:id', async (req, res) => {
     let connection = null;
     try {
