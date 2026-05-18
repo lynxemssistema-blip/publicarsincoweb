@@ -6746,6 +6746,31 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
                 throw new Error('Item "' + (original.CodMatFabricante || original.IdOrdemServicoItem) + '" não possui ' + campos.join(' e ') + ' preenchido(s). Verifique o cadastro do material antes de incluir na OS.');
             } 
 
+            // Validar e carregar peso/área unitários com fallback da tabela material
+            let pesoUnit = Number(original.PesoUnitario) || 0;
+            if (pesoUnit === 0) {
+                pesoUnit = Number(original.Peso) || 0;
+            }
+            let areaUnit = Number(original.AreaPinturaUnitario) || 0;
+            if (areaUnit === 0) {
+                areaUnit = Number(original.AreaPintura) || 0;
+            }
+
+            if (pesoUnit === 0 || areaUnit === 0) {
+                const [matRows] = await conn.execute(
+                    `SELECT Peso, AreaPintura FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                    [original.CodMatFabricante]
+                );
+                if (matRows.length > 0) {
+                    if (pesoUnit === 0 && matRows[0].Peso) {
+                        pesoUnit = Number(matRows[0].Peso) || 0;
+                    }
+                    if (areaUnit === 0 && matRows[0].AreaPintura) {
+                        areaUnit = Number(matRows[0].AreaPintura) || 0;
+                    }
+                }
+            }
+
             const colsToCopy = [
                 'IdProjeto', 'Projeto', 'IdTag', 'Tag', 'DescTag', 'IdMaterial', 'DescResumo', 'DescDetal', 'Autor',
                 'Palavrachave', 'Notas', 'Espessura', 'AreaPintura', 'NumeroDobras', 'Peso', 'Unidade', 'UnidadeSW', 'ValorSW',
@@ -6757,18 +6782,22 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
             
             const cols = colsToCopy.filter(c => original[c] !== undefined);
             const vals = cols.map(c => {
+                if (c === 'PesoUnitario') {
+                    return pesoUnit;
+                }
+                if (c === 'AreaPinturaUnitario') {
+                    return areaUnit;
+                }
                 if (c === 'Peso') {
                     const qtdeTotal = Number(original.QtdeTotal) || 0;
                     const fator = Number(original.Fator) || 1;
                     const fatorMultiplier = fator <= 0 ? 1 : fator;
-                    const pesoUnit = Number(original.PesoUnitario) || 0;
                     return pesoUnit * qtdeTotal * fatorMultiplier;
                 }
                 if (c === 'AreaPintura') {
                     const qtdeTotal = Number(original.QtdeTotal) || 0;
                     const fator = Number(original.Fator) || 1;
                     const fatorMultiplier = fator <= 0 ? 1 : fator;
-                    const areaUnit = Number(original.AreaPinturaUnitario) || 0;
                     return areaUnit * qtdeTotal * fatorMultiplier;
                 }
                 return original[c];

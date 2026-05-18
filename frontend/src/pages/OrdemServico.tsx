@@ -1374,17 +1374,6 @@ function OrdemServicoContent() {
                                 </button>
                             )}
 
-                            {/* Botão Excluir Itens — apenas se não liberada */}
-                            {os.Liberado_Engenharia !== 'S' && os.OrdemServicoFinalizado !== 'C' && (
-                                <button
-                                    onClick={() => handleAbrirModalExcluirItens(os)}
-                                    disabled={liberandoOS === os.IdOrdemServico}
-                                    className="p-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors shadow-sm disabled:opacity-50"
-                                    title="Excluir Itens da Ordem de Serviço"
-                                >
-                                    <Trash2 size={18} />
-                                </button>
-                            )}
 
                             <button 
                                 onClick={() => handleAtualizarArquivos(os)}
