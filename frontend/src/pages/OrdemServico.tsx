@@ -184,6 +184,10 @@ function OrdemServicoContent() {
     const [searchItensDisp, setSearchItensDisp] = useState('');
     const [itensSelecionados, setItensSelecionados] = useState<Set<number>>(new Set());
     const [salvandoItens, setSalvandoItens] = useState(false);
+    // Modal dedicado: Excluir Itens da OS
+    const [showModalExcluirItens, setShowModalExcluirItens] = useState<OrdemServico | null>(null);
+    const [excluirItemChecks, setExcluirItemChecks] = useState<Set<number>>(new Set());
+    const [excluindoItens, setExcluindoItens] = useState(false);
     // Seleção de itens da OS aberta (para excluir em lote)
     const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
     const [deletandoSelecionados, setDeletandoSelecionados] = useState(false);
@@ -340,6 +344,55 @@ function OrdemServicoContent() {
         } catch (err: any) {
             addToast({ type: 'error', title: 'Erro', message: err.message });
         }
+    };
+
+    // ── Modal Excluir Itens ──────────────────────────────────────────────────
+    const handleAbrirModalExcluirItens = (os: OrdemServico) => {
+        const itensOS = ordensItens[os.IdOrdemServico] || [];
+        if (itensOS.length === 0) fetchItens(os.IdOrdemServico);
+        setExcluirItemChecks(new Set());
+        setShowModalExcluirItens(os);
+    };
+
+    const toggleExcluirCheck = (itemId: number) => {
+        setExcluirItemChecks(prev => {
+            const next = new Set(prev);
+            if (next.has(itemId)) next.delete(itemId); else next.add(itemId);
+            return next;
+        });
+    };
+
+    const toggleTodosExcluir = (itens: OrdemServicoItem[]) => {
+        setExcluirItemChecks(prev => prev.size === itens.length ? new Set() : new Set(itens.map(i => i.IdOrdemServicoItem)));
+    };
+
+    const handleConfirmarExclusaoItens = async () => {
+        if (!showModalExcluirItens || excluirItemChecks.size === 0) return;
+        const os = showModalExcluirItens;
+        const ids = Array.from(excluirItemChecks);
+        if (!window.confirm('Confirma a exclusão de ' + ids.length + ' item(s) da OS ' + os.IdOrdemServico + '? Esta ação não pode ser desfeita.')) return;
+        setExcluindoItens(true);
+        let sucesso = 0; let falhas = 0;
+        for (const itemId of ids) {
+            try {
+                const res = await fetch(API_BASE + '/ordemservicoitem/' + itemId, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    sucesso++;
+                    setOrdensItens(prev => ({ ...prev, [os.IdOrdemServico]: (prev[os.IdOrdemServico] || []).filter(i => i.IdOrdemServicoItem !== itemId) }));
+                } else { falhas++; addToast({ type: 'error', title: 'Item ' + itemId, message: data.message }); }
+            } catch { falhas++; addToast({ type: 'error', title: 'Erro de conexão', message: 'Falha ao excluir item ' + itemId }); }
+        }
+        setExcluindoItens(false);
+        setExcluirItemChecks(new Set());
+        if (sucesso > 0) {
+            addToast({ type: falhas > 0 ? 'warning' : 'success', title: 'Exclusão concluída', message: sucesso + ' item(s) excluído(s) com cascata.' + (falhas > 0 ? ' ' + falhas + ' falha(s).' : '') });
+            fetchOrdens(1);
+        }
+        if (falhas === 0) setShowModalExcluirItens(null);
     };
 
     // Toggle item selection
@@ -1282,6 +1335,18 @@ function OrdemServicoContent() {
                                     title="Incluir Itens na Ordem de Serviço"
                                 >
                                     <PackagePlus size={18} />
+                                </button>
+                            )}
+
+                            {/* Botão Excluir Itens — apenas se não liberada */}
+                            {os.Liberado_Engenharia !== 'S' && os.OrdemServicoFinalizado !== 'C' && (
+                                <button
+                                    onClick={() => handleAbrirModalExcluirItens(os)}
+                                    disabled={liberandoOS === os.IdOrdemServico}
+                                    className="p-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors shadow-sm disabled:opacity-50"
+                                    title="Excluir Itens da Ordem de Serviço"
+                                >
+                                    <Trash2 size={18} />
                                 </button>
                             )}
 
@@ -2366,6 +2431,133 @@ function OrdemServicoContent() {
                         </motion.div>
                     </div>
                 )}
+            </AnimatePresence>
+
+            {/* Modal Excluir Itens da OS */}
+            <AnimatePresence>
+                {showModalExcluirItens && (() => {
+                    const os = showModalExcluirItens;
+                    const itensOS = ordensItens[os.IdOrdemServico] || [];
+                    const isLoadingOS = loadingItens.has(os.IdOrdemServico);
+                    const todosChecados = itensOS.length > 0 && excluirItemChecks.size === itensOS.length;
+                    const totalSel = itensOS.filter(i => excluirItemChecks.has(i.IdOrdemServicoItem));
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                            onClick={(e) => e.target === e.currentTarget && !excluindoItens && setShowModalExcluirItens(null)}
+                        >
+                            <motion.div
+                                initial={{ opacity: 0, y: -20, scale: 0.95 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                                className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden border border-red-100 flex flex-col max-h-[85vh]"
+                            >
+                                {/* Header */}
+                                <div className="flex items-center justify-between px-5 py-4 border-b border-red-100 bg-red-50 shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-lg bg-red-100 text-red-600 flex items-center justify-center"><Trash2 size={20} /></div>
+                                        <div>
+                                            <h2 className="text-base font-bold text-red-700">Excluir Itens — OS {os.IdOrdemServico}</h2>
+                                            <p className="text-xs text-red-500 mt-0.5">{os.Projeto} / {os.Tag} · Selecione os itens a excluir</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => !excluindoItens && setShowModalExcluirItens(null)} disabled={excluindoItens}
+                                        className="p-2 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"><X size={18} /></button>
+                                </div>
+                                {/* Toolbar */}
+                                <div className="flex items-center justify-between px-5 py-2.5 bg-gray-50 border-b border-gray-100 shrink-0">
+                                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                                        <input type="checkbox" checked={todosChecados} onChange={() => toggleTodosExcluir(itensOS)}
+                                            disabled={isLoadingOS || excluindoItens} className="w-4 h-4 accent-red-500" />
+                                        <span className="text-xs text-gray-500 font-medium">
+                                            {excluirItemChecks.size > 0
+                                                ? <span className="text-red-600 font-bold">{excluirItemChecks.size} selecionado(s)</span>
+                                                : itensOS.length + ' item(s) no total'
+                                            }
+                                        </span>
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => !excluindoItens && setShowModalExcluirItens(null)} disabled={excluindoItens}
+                                            className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors">
+                                            Cancelar
+                                        </button>
+                                        <button onClick={handleConfirmarExclusaoItens}
+                                            disabled={excluirItemChecks.size === 0 || excluindoItens}
+                                            className="px-4 py-1.5 text-xs font-bold text-white bg-red-500 rounded-lg hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shadow">
+                                            {excluindoItens ? <><Loader2 size={13} className="animate-spin" /> Excluindo...</> : <><Trash2 size={13} /> Excluir ({excluirItemChecks.size})</>}
+                                        </button>
+                                    </div>
+                                </div>
+                                {/* Lista */}
+                                <div className="overflow-y-auto flex-1">
+                                    {isLoadingOS ? (
+                                        <div className="flex flex-col items-center justify-center py-16 gap-3 text-gray-400">
+                                            <Loader2 size={28} className="animate-spin" /><p className="text-sm">Carregando itens...</p>
+                                        </div>
+                                    ) : itensOS.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center py-16 gap-2 text-gray-400">
+                                            <Box size={32} strokeWidth={1.5} /><p className="text-sm">Nenhum item encontrado</p>
+                                        </div>
+                                    ) : (
+                                        <table className="w-full text-sm border-collapse">
+                                            <thead className="bg-gray-50 border-b border-gray-100 sticky top-0 z-10">
+                                                <tr>
+                                                    <th className="w-10 px-3 py-2.5"></th>
+                                                    <th className="px-3 py-2.5 text-left text-xs text-gray-400 font-semibold uppercase">Código</th>
+                                                    <th className="px-3 py-2.5 text-left text-xs text-gray-400 font-semibold uppercase">Descrição</th>
+                                                    <th className="px-3 py-2.5 text-center text-xs text-gray-400 font-semibold uppercase">Qtde</th>
+                                                    <th className="px-3 py-2.5 text-center text-xs text-gray-400 font-semibold uppercase">Peso (kg)</th>
+                                                    <th className="px-3 py-2.5 text-center text-xs text-gray-400 font-semibold uppercase">Área (m²)</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-50">
+                                                {itensOS.map((item) => {
+                                                    const checked = excluirItemChecks.has(item.IdOrdemServicoItem);
+                                                    const areaItem = (item as any).AreaPintura;
+                                                    return (
+                                                        <tr key={item.IdOrdemServicoItem}
+                                                            onClick={() => !excluindoItens && toggleExcluirCheck(item.IdOrdemServicoItem)}
+                                                            className={'cursor-pointer transition-all border-l-4 ' + (checked ? 'bg-red-50 border-l-red-400' : 'hover:bg-gray-50 border-l-transparent')}>
+                                                            <td className="px-3 py-2.5 text-center">
+                                                                <input type="checkbox" checked={checked}
+                                                                    onChange={() => toggleExcluirCheck(item.IdOrdemServicoItem)}
+                                                                    onClick={(e) => e.stopPropagation()}
+                                                                    disabled={excluindoItens} className="w-4 h-4 accent-red-500 cursor-pointer" />
+                                                            </td>
+                                                            <td className="px-3 py-2.5">
+                                                                <span className="font-bold text-xs text-primary bg-accent/20 px-2 py-0.5 rounded">{item.CodMatFabricante || '-'}</span>
+                                                                {item.ProdutoPrincipal === 'SIM' && <Star size={10} className="inline ml-1 text-yellow-500 fill-yellow-400" />}
+                                                            </td>
+                                                            <td className="px-3 py-2.5 text-xs text-gray-700 max-w-xs truncate" title={item.DescDetal || item.DescResumo || ''}>{item.DescResumo || '-'}</td>
+                                                            <td className="px-3 py-2.5 text-center text-xs font-semibold text-gray-700">{item.QtdeTotal ?? '-'}</td>
+                                                            <td className="px-3 py-2.5 text-center text-xs text-gray-600">{item.Peso ? Number(item.Peso).toFixed(2) : '-'}</td>
+                                                            <td className="px-3 py-2.5 text-center text-xs text-gray-600">{areaItem ? Number(areaItem).toFixed(2) : '-'}</td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                            <tfoot className="bg-gray-50 border-t-2 border-gray-200 sticky bottom-0">
+                                                <tr>
+                                                    <td colSpan={3} className="px-4 py-2 text-xs text-gray-500 font-semibold">Total ({itensOS.length})</td>
+                                                    <td className="px-3 py-2 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number(i.QtdeTotal) || 0), 0)}</td>
+                                                    <td className="px-3 py-2 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number(i.Peso) || 0), 0).toFixed(2)}</td>
+                                                    <td className="px-3 py-2 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number((i as any).AreaPintura) || 0), 0).toFixed(2)}</td>
+                                                </tr>
+                                                {excluirItemChecks.size > 0 && (
+                                                    <tr className="bg-red-50 border-t border-red-200">
+                                                        <td colSpan={3} className="px-4 py-2 text-xs text-red-600 font-bold">Selecionados ({totalSel.length})</td>
+                                                        <td className="px-3 py-2 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number(i.QtdeTotal) || 0), 0)}</td>
+                                                        <td className="px-3 py-2 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number(i.Peso) || 0), 0).toFixed(2)} kg</td>
+                                                        <td className="px-3 py-2 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number((i as any).AreaPintura) || 0), 0).toFixed(2)} m²</td>
+                                                    </tr>
+                                                )}
+                                            </tfoot>
+                                        </table>
+                                    )}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    );
+                })()}
             </AnimatePresence>
 
             {/* ─── Modal Incluir Itens na OS ─────────────────────────────── */}
