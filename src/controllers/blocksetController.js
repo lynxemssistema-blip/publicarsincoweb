@@ -435,6 +435,13 @@ exports.processItems = async (req, res) => {
         return res.status(400).json({ success: false, message: 'Dados insuficientes para processamento.' });
     }
 
+    // Detectar banco ativo (tenant) via AsyncLocalStorage
+    const store = db.asyncLocalStorage ? db.asyncLocalStorage.getStore() : null;
+    const dbAtivo = (store && store.dbName) ? store.dbName : null;
+
+    // Caminho base para amceletrica (Blokset NAS)
+    const AMCELETRICA_BASE_PATH = '\\\\192.168.231.4\\nas_server\\BKP_Completo_NAS\\F\\PRODUTOS D\\D\\PRODUTOS\\11-030- BLOKSET 2023\\BLOKSET DESENHOS 3D';
+
     const connection = await db.getConnection();
     try {
         await connection.beginTransaction();
@@ -493,7 +500,7 @@ exports.processItems = async (req, res) => {
             }
 
             // CHECK MATERIAL
-            const [matRows] = await connection.query("SELECT IdMaterial, DescResumo, DescDetal, Unidade FROM material WHERE CodMatFabricante = ? LIMIT 1", [item.Part_Reference]);
+            const [matRows] = await connection.query("SELECT IdMaterial, DescResumo, DescDetal, Unidade, txtTipoDesenho FROM material WHERE CodMatFabricante = ? LIMIT 1", [item.Part_Reference]);
             
             if (matRows.length === 0) {
                 missingMaterials.push(item.Part_Reference);
@@ -510,17 +517,26 @@ exports.processItems = async (req, res) => {
                 const typeDesc = isDelta ? `Delta: ${processQty}` : "Total";
                 const descDetalhada = `${idOSDestino} [Rev ${item.Revisao} - ${typeDesc}]`;
 
+                // Montar EnderecoArquivo conforme banco ativo
+                let enderecoArquivo = 'IMPORTADO DA PLANILHA';
+                if (dbAtivo === 'amceletrica') {
+                    const cod    = (item.Part_Reference || '').trim();
+                    const tipo   = (mat.txtTipoDesenho || '').trim().toUpperCase();
+                    const sufixo = tipo === 'CONJUNTO' ? '.SLDASM' : '.SLDPRT';
+                    if (cod) enderecoArquivo = `${AMCELETRICA_BASE_PATH}\\${cod}${sufixo}`;
+                }
+
                 // INSERT INTO ordemservicoitem
                 await connection.query(`
                     INSERT INTO ordemservicoitem (
                         IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag, 
                         IdMaterial, CodMatFabricante, DescResumo, DescDetal, qtde, QtdeTotal, Unidade, 
                         DtCad, UsuarioCriacao, Liberado_Engenharia, EnderecoArquivo, Data_Liberacao_Engenharia
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 'S', 'IMPORTADO DA PLANILHA', NOW())
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, 'S', ?, NOW())
                 `, [
                     idOSDestino, osInfo.IdProjeto, osInfo.Projeto, osInfo.IdTag, osInfo.Tag, osInfo.DescTag,
                     mat.IdMaterial, item.Part_Reference, mat.DescResumo, mat.DescDetal, processPdQty, processQty, mat.Unidade,
-                    usuario
+                    usuario, enderecoArquivo
                 ]);
 
                 // UPDATE SOURCE TABLES

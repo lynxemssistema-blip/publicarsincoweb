@@ -12387,3 +12387,85 @@ app.get('/api/manutencao/inspecionar-item', async (req, res) => {
         res.status(500).json({ success: false, message: e.message });
     }
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ROTA MANUTENÇÃO: Update EnderecoArquivo por OS e banco (sem tenant middleware)
+// Acesso: chave interna 'SincoMasterKey2026!' + POST /api/manutencao/update-endereco-arquivo
+// ══════════════════════════════════════════════════════════════════════════════
+app.post('/api/manutencao/update-endereco-arquivo', async (req, res) => {
+    const MANUT_KEY = 'SincoMasterKey2026!';
+    const { chave, dbName, osId, basePath } = req.body;
+
+    if (chave !== MANUT_KEY) {
+        return res.status(403).json({ success: false, message: 'Chave inválida.' });
+    }
+    if (!dbName || !osId || !basePath) {
+        return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios: dbName, osId, basePath.' });
+    }
+
+    let conn = null;
+    try {
+        // Buscar credenciais do tenant no banco central
+        const [rows] = await pool.executeOnDefault(
+            'SELECT * FROM conexoes_bancos WHERE db_name = ? AND ativo = 1 LIMIT 1',
+            [dbName]
+        );
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: `Banco '${dbName}' não encontrado no registro.` });
+        }
+        const cfg = rows[0];
+
+        // Criar conexão direta com o banco do tenant (mysql2 nativo)
+        const mysql2 = require('mysql2/promise');
+        conn = await mysql2.createConnection({
+            host    : cfg.db_host,
+            user    : cfg.db_user,
+            password: cfg.db_pass,
+            database: cfg.db_name,
+            port    : cfg.db_port || 3306,
+            charset : 'utf8mb4'
+        });
+
+        // Buscar todos os itens ativos da OS informada
+        const [itens] = await conn.execute(
+            `SELECT IdOrdemServicoItem, CodMatFabricante, txtTipoDesenho, EnderecoArquivo
+             FROM ordemservicoitem
+             WHERE IdOrdemServico = ?
+               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E != '*')`,
+            [osId]
+        );
+
+        if (itens.length === 0) {
+            return res.json({ success: false, message: `Nenhum item encontrado para OS ${osId} em ${dbName}.` });
+        }
+
+        let atualizados = 0;
+        let ignorados   = 0;
+        const detalhes  = [];
+
+        for (const item of itens) {
+            const cod = (item.CodMatFabricante || '').trim();
+            if (!cod) { ignorados++; detalhes.push({ id: item.IdOrdemServicoItem, status: 'IGNORADO', motivo: 'CodMatFabricante vazio' }); continue; }
+
+            const tipo   = (item.txtTipoDesenho || '').trim().toUpperCase();
+            const sufixo = tipo === 'CONJUNTO' ? '.SLDASM' : '.SLDPRT';
+            const novoEnd = `${basePath}\\${cod}${sufixo}`;
+
+            await conn.execute(
+                `UPDATE ordemservicoitem SET EnderecoArquivo = ? WHERE IdOrdemServicoItem = ?`,
+                [novoEnd, item.IdOrdemServicoItem]
+            );
+            atualizados++;
+            detalhes.push({ id: item.IdOrdemServicoItem, cod, tipo, sufixo, enderecoGerado: novoEnd, status: 'OK' });
+        }
+
+        console.log(`[MANUTENCAO] update-endereco-arquivo | DB: ${dbName} | OS: ${osId} | Atualizados: ${atualizados} | Ignorados: ${ignorados}`);
+        res.json({ success: true, message: `${atualizados} itens atualizados. ${ignorados} ignorados.`, atualizados, ignorados, detalhes });
+
+    } catch (e) {
+        console.error('[MANUTENCAO] Erro:', e.message);
+        res.status(500).json({ success: false, message: e.message });
+    } finally {
+        if (conn) await conn.end();
+    }
+});
