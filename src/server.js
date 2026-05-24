@@ -4689,23 +4689,23 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
 
             await pool.executeOnDefault(
                 `UPDATE tags 
-                 SET ${fields.pi} = CASE WHEN IFNULL(${fields.pi}, '') = '' AND ? != '' THEN ? ELSE ${fields.pi} END,
-                     ${fields.pf} = CASE WHEN IFNULL(${fields.pf}, '') = '' AND ? != '' THEN ? ELSE ${fields.pf} END
-                 WHERE ProjetoId = ?`,
+                 SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
+                     ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
+                 WHERE IdProjeto = ?`,
                 [valIni, valIni, valFim, valFim, id]
             );
             await pool.executeOnDefault(
                 `UPDATE ordemservico 
-                 SET ${fields.pi} = CASE WHEN IFNULL(${fields.pi}, '') = '' AND ? != '' THEN ? ELSE ${fields.pi} END,
-                     ${fields.pf} = CASE WHEN IFNULL(${fields.pf}, '') = '' AND ? != '' THEN ? ELSE ${fields.pf} END
+                 SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
+                     ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ?`,
                 [valIni, valIni, valFim, valFim, id]
             );
             await pool.executeOnDefault(
                 `UPDATE ordemservicoitem 
-                 SET ${fields.pi} = CASE WHEN IFNULL(${fields.pi}, '') = '' AND ? != '' THEN ? ELSE ${fields.pi} END,
-                     ${fields.pf} = CASE WHEN IFNULL(${fields.pf}, '') = '' AND ? != '' THEN ? ELSE ${fields.pf} END
-                 WHERE idProjeto = ?`,
+                 SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
+                     ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
+                 WHERE IdProjeto = ?`,
                 [valIni, valIni, valFim, valFim, id]
             );
         }

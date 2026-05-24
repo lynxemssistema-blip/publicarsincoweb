@@ -1506,7 +1506,7 @@ export default function VisaoGeralProducaoPage() {
 
                         <div className="bg-amber-50 border-b border-amber-200 p-4 shrink-0">
                             <p className="text-xs text-amber-800 font-medium leading-relaxed flex items-center gap-2">
-                                <ShieldAlert size={16} /> Esta ação aplicará as datas nos setores preenchidos para <strong>TODAS as TAGS</strong> deste projeto que ainda não possuem planejamento.
+                                <ShieldAlert size={16} /> Esta ação aplicará as datas nos setores preenchidos para <strong>TODAS as TAGS</strong> deste projeto. Todas as tags serão atualizadas com as novas datas.
                             </p>
                         </div>
 

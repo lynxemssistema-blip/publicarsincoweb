@@ -42098,3 +42098,380 @@
 21/05/2026 19:08:23: [DB] [lynxlocal] ⚠️  SLOW QUERY (212ms | rows:1): SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'
 21/05/2026 19:08:25: [DB] [lynxlocal] ⚠️  SLOW QUERY (202ms | rows:1): SELECT COUNT(*) as total FROM ordemservicoitem osi INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto WHERE osi.txtCorte = '1' AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*') AND osi.Liberado_engenhar
 21/05/2026 19:08:26: [DB] [lynxlocal] ⚠️  SLOW QUERY (270ms | rows:6): SELECT osi.IdOrdemServicoItem, osi.IdOrdemServico, osi.CodMatFabricante, osi.DescResumo, osi.DescDetal, osi.QtdeTotal, osi.Peso, osi.EnderecoArquivo, osi.EnderecoArquivoItemOrdemServico, osi.IdPlanodecorte as PlanoCorte, osi.MaterialSW, osi.Espessura, CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE
+24/05/2026 16:50:44: [Tenant] Middleware JWT Error Details: {
+24/05/2026 16:50:44:   name: 'TokenExpiredError',
+24/05/2026 16:50:44:   message: 'jwt expired',
+24/05/2026 16:50:44:   tokenHeader: 'eyJhbGciOiJIUzI1NiIs...'
+24/05/2026 16:50:44: }
+24/05/2026 16:50:44: [Tenant] Middleware JWT Error Details: {
+24/05/2026 16:50:44:   name: 'TokenExpiredError',
+24/05/2026 16:50:44:   message: 'jwt expired',
+24/05/2026 16:50:44:   tokenHeader: 'eyJhbGciOiJIUzI1NiIs...'
+24/05/2026 16:50:44: }
+24/05/2026 16:50:44: [TenantMiddleware] No token provided for /config/menu?limit=100
+24/05/2026 16:50:45: [TenantMiddleware] No token provided for /dashboard/stats?limit=100
+24/05/2026 16:50:45: [TenantMiddleware] No token provided for /dashboard/stats?limit=100
+24/05/2026 16:50:57: [DB] [lynxlocal] ⚠️  SLOW QUERY (281ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+24/05/2026 16:50:57: [DB] [lynxlocal] ⚠️  SLOW QUERY (491ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+24/05/2026 16:50:58: [DB] [lynxlocal] ⚠️  SLOW QUERY (221ms | rows:1): SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'
+24/05/2026 16:51:05: [DB] [lynxlocal] ⚠️  SLOW QUERY (1645ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+24/05/2026 16:51:11: [DB] [lynxlocal] ⚠️  SLOW QUERY (2061ms | rows:7): SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto
+24/05/2026 16:51:18: [DB] 🔴 ERROR: read ECONNRESET
+24/05/2026 16:51:18: Error: read ECONNRESET
+24/05/2026 16:51:18:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:18:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:3877:40
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:18:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:18:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:18:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:18:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:18:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:18:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:18:   code: 'ECONNRESET',
+24/05/2026 16:51:18:   errno: -4077,
+24/05/2026 16:51:18:   sql: undefined,
+24/05/2026 16:51:18:   sqlState: undefined,
+24/05/2026 16:51:18:   sqlMessage: undefined
+24/05/2026 16:51:18: }
+24/05/2026 16:51:18: Error fetching visao-geral projetos: Error: read ECONNRESET
+24/05/2026 16:51:18:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:18:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:3877:40
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:18:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:18:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:18:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:18:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:18:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:18:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:18:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:18:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:18:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:18:   code: 'ECONNRESET',
+24/05/2026 16:51:18:   errno: -4077,
+24/05/2026 16:51:18:   sql: undefined,
+24/05/2026 16:51:18:   sqlState: undefined,
+24/05/2026 16:51:18:   sqlMessage: undefined
+24/05/2026 16:51:18: }
+24/05/2026 16:51:26: [DB] 🔴 ERROR: read ECONNRESET
+24/05/2026 16:51:26: Error: read ECONNRESET
+24/05/2026 16:51:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:4207:35
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:26:   code: 'ECONNRESET',
+24/05/2026 16:51:26:   errno: -4077,
+24/05/2026 16:51:26:   sql: undefined,
+24/05/2026 16:51:26:   sqlState: undefined,
+24/05/2026 16:51:26:   sqlMessage: undefined
+24/05/2026 16:51:26: }
+24/05/2026 16:51:26: Error fetching visao-geral-engenharia tags: Error: read ECONNRESET
+24/05/2026 16:51:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:4207:35
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:26:   code: 'ECONNRESET',
+24/05/2026 16:51:26:   errno: -4077,
+24/05/2026 16:51:26:   sql: undefined,
+24/05/2026 16:51:26:   sqlState: undefined,
+24/05/2026 16:51:26:   sqlMessage: undefined
+24/05/2026 16:51:26: }
+24/05/2026 16:51:26: [DB] 🔴 ERROR: connect ETIMEDOUT
+24/05/2026 16:51:26: Error: connect ETIMEDOUT
+24/05/2026 16:51:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8513:35
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:26:   code: 'ETIMEDOUT',
+24/05/2026 16:51:26:   errno: undefined,
+24/05/2026 16:51:26:   sql: undefined,
+24/05/2026 16:51:26:   sqlState: undefined,
+24/05/2026 16:51:26:   sqlMessage: undefined
+24/05/2026 16:51:26: }
+24/05/2026 16:51:26: Error fetching tipos tarefa: Error: connect ETIMEDOUT
+24/05/2026 16:51:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:51:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8513:35
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:51:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:51:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:51:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:51:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:51:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:51:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:51:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:51:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:51:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:51:26:   code: 'ETIMEDOUT',
+24/05/2026 16:51:26:   errno: undefined,
+24/05/2026 16:51:26:   sql: undefined,
+24/05/2026 16:51:26:   sqlState: undefined,
+24/05/2026 16:51:26:   sqlMessage: undefined
+24/05/2026 16:51:26: }
+24/05/2026 16:51:30: [DB] [lynxlocal] ⚠️  SLOW QUERY (3038ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+24/05/2026 16:51:30: [DB] [lynxlocal] ⚠️  SLOW QUERY (718ms | rows:1): SELECT RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC, MaxRegistros, MenuStructure FROM configuracaosistema LIMIT 1
+24/05/2026 16:51:32: [DB] [lynxlocal] ⚠️  SLOW QUERY (1753ms | rows:1): SELECT RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC, MaxRegistros, MenuStructure FROM configuracaosistema LIMIT 1
+24/05/2026 16:52:27: [DB] [lynxlocal] ⚠️  SLOW QUERY (235ms | rows:82): SELECT p.IdProjeto, p.Projeto, p.DescProjeto, CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa, p.DataPrevisao, p.DataCriacao, TRIM(p.Finalizado) as Finalizado, p.liberado, p.StatusProj, p.Des
+24/05/2026 16:52:38: [DB] [lynxlocal] ⚠️  SLOW QUERY (425ms | rows:4): SELECT IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag, QtdeOS, QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS, QtdeTotalPecas, qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngen
+24/05/2026 16:56:13: [DB] [lynxlocal] ⚠️  SLOW QUERY (3984ms | rows:40): SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC
+24/05/2026 16:56:24: [DB] 🔴 ERROR: connect ETIMEDOUT
+24/05/2026 16:56:24: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8502:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:24: Error fetching usuarios: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8502:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:24: [DB] 🔴 ERROR: connect ETIMEDOUT
+24/05/2026 16:56:24: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8491:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:24: Error fetching setores: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:8491:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:24: [DB] 🔴 ERROR: connect ETIMEDOUT
+24/05/2026 16:56:24: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:24: Error fetching espessuras: Error: connect ETIMEDOUT
+24/05/2026 16:56:24:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:24:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:24:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:24:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:24:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:24:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:24:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:24:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:24:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:24:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:24:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:24:   code: 'ETIMEDOUT',
+24/05/2026 16:56:24:   errno: undefined,
+24/05/2026 16:56:24:   sql: undefined,
+24/05/2026 16:56:24:   sqlState: undefined,
+24/05/2026 16:56:24:   sqlMessage: undefined
+24/05/2026 16:56:24: }
+24/05/2026 16:56:26: [DB] 🔴 ERROR: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 16:56:26: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 16:56:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:26:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 16:56:26:   errno: 1146,
+24/05/2026 16:56:26:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 16:56:26:   sqlState: '42S02',
+24/05/2026 16:56:26:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 16:56:26: }
+24/05/2026 16:56:26: Error fetching espessuras: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 16:56:26:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 16:56:26:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:26:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:26:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:26:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:26:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:26:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:26:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:26:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:26:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:26:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:26:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 16:56:26:   errno: 1146,
+24/05/2026 16:56:26:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 16:56:26:   sqlState: '42S02',
+24/05/2026 16:56:26:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 16:56:26: }
+24/05/2026 16:56:26: [DB] [lynxlocal] ⚠️  SLOW QUERY (2541ms | rows:12): SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor
+24/05/2026 16:56:27: Erro /api/apontamento/planejamento/diario: Error: connect ETIMEDOUT
+24/05/2026 16:56:27:     at PromisePool.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:36:22)
+24/05/2026 16:56:27:     at Object.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:121:15)
+24/05/2026 16:56:27:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:7323:35
+24/05/2026 16:56:27:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:27:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 16:56:27:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 16:56:27:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 16:56:27:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:27:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 16:56:27:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 16:56:27:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 16:56:27:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 16:56:27:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 16:56:27:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 16:56:27:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 16:56:27:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 16:56:27:   code: 'ETIMEDOUT',
+24/05/2026 16:56:27:   errno: undefined,
+24/05/2026 16:56:27:   sql: undefined,
+24/05/2026 16:56:27:   sqlState: undefined,
+24/05/2026 16:56:27:   sqlMessage: undefined
+24/05/2026 16:56:27: }
