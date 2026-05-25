@@ -12435,6 +12435,190 @@ app.listen(PORT, '0.0.0.0', async () => {
         console.error('Failed to connect to database on startup:', err.message);
     }
 });
+
+// ============================================================================
+// ACOMPANHAMENTO DE ETAPAS (Visão Geral de Projetos / Etapas)
+// ============================================================================
+app.get('/api/acompanhamento-etapas', async (req, res) => {
+    let connection = null;
+    try {
+        const tenantPool = req.tenantDbPool || pool;
+        connection = await tenantPool.getConnection();
+
+        // Filtros (Opcionais)
+        const {
+            projeto, cliente, estadoOrigem, 
+            dataPrevisaoInicio, dataPrevisaoFim, 
+            dataFinalInicio, dataFinalFim,
+            dataPlanejamentoInicio, dataPlanejamentoFim,
+            dataRealizadoInicio, dataRealizadoFim
+        } = req.query;
+
+        let whereClause = "(p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')";
+        const params = [];
+
+        if (projeto) {
+            whereClause += " AND p.Projeto LIKE ?";
+            params.push('%' + projeto + '%');
+        }
+        if (cliente) {
+            whereClause += " AND p.DescEmpresa LIKE ?";
+            params.push('%' + cliente + '%');
+        }
+        if (estadoOrigem) {
+            whereClause += " AND p.Estado = ?";
+            params.push(estadoOrigem);
+        }
+        
+        // Filtros de Datas
+        // DataPrevisao
+        if (dataPrevisaoInicio && dataPrevisaoFim) {
+            whereClause += " AND STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')";
+            params.push(dataPrevisaoInicio, dataPrevisaoFim);
+        }
+        // DataFinal (usaremos DataTermino)
+        if (dataFinalInicio && dataFinalFim) {
+            whereClause += " AND STR_TO_DATE(p.DataTermino, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')";
+            params.push(dataFinalInicio, dataFinalFim);
+        }
+
+        // Para os filtros de Data de Planejamento e Data de Realizado, 
+        // procuraremos nas tags. Usaremos INNER JOIN ou EXISTS.
+        if (dataPlanejamentoInicio && dataPlanejamentoFim) {
+            whereClause += ` AND EXISTS (
+                SELECT 1 FROM tags t2 
+                WHERE t2.IdProjeto = p.IdProjeto 
+                AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
+                AND (
+                    STR_TO_DATE(t2.PlanejadoInicioMedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.PlanejadoInicioIsometrico, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.PlanejadoInicioEngenharia, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.PlanejadoInicioAprovacao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.PlanejadoInicioAcabamento, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.PlanejadoInicioExpedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                )
+            )`;
+            for(let i=0; i<6; i++) {
+                params.push(dataPlanejamentoInicio, dataPlanejamentoFim);
+            }
+        }
+
+        if (dataRealizadoInicio && dataRealizadoFim) {
+            whereClause += ` AND EXISTS (
+                SELECT 1 FROM tags t2 
+                WHERE t2.IdProjeto = p.IdProjeto 
+                AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
+                AND (
+                    STR_TO_DATE(t2.RealizadoFinalMedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.RealizadoFinalIsometrico, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.RealizadoFinalEngenharia, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.RealizadoFinalAprovacao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.RealizadoFinalAcabamento, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    OR STR_TO_DATE(t2.realizadoFinalExpedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                )
+            )`;
+            for(let i=0; i<6; i++) {
+                params.push(dataRealizadoInicio, dataRealizadoFim);
+            }
+        }
+
+        const query = `
+            SELECT 
+                p.IdProjeto, 
+                p.Projeto, 
+                p.DataPrevisao,
+                p.DataTermino as DataFinal,
+                p.DescEmpresa as Cliente,
+                p.Estado as EstadoOrigem,
+                p.StatusProj as StatusProj,
+                COUNT(t.IdTag) as TotalTags,
+                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,
+                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
+                
+                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,
+                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,
+                
+                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,
+                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,
+                
+                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,
+                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,
+                
+                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,
+                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,
+                
+                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,
+                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao
+            FROM projetos p
+            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
+            WHERE ${whereClause}
+            GROUP BY p.IdProjeto
+            ORDER BY p.IdProjeto DESC
+        `;
+
+        const [rows] = await connection.query(query, params);
+        res.json({ success: true, data: rows });
+
+    } catch (err) {
+        console.error('Erro em /api/acompanhamento-etapas:', err);
+        res.status(500).json({ success: false, message: 'Erro ao buscar dados: ' + err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// Bulk Update das datas de etapas (Planejamento e Realizado)
+app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const tenantPool = req.tenantDbPool || pool;
+        connection = await tenantPool.getConnection();
+
+        const data = req.body; // Campos contendo as datas
+
+        // Lista de campos que podemos atualizar na tabela TAGS
+        const camposPermitidos = [
+            'PlanejadoInicioMedicao', 'PlanejadoFinalMedicao', 'RealizadoInicioMedicao', 'RealizadoFinalMedicao',
+            'PlanejadoInicioIsometrico', 'PlanejadoFinalIsometrico', 'RealizadoInicioIsometrico', 'RealizadoFinalIsometrico',
+            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia', 'RealizadoInicioEngenharia', 'RealizadoFinalEngenharia',
+            'PlanejadoInicioAprovacao', 'PlanejadoFinalAprovacao', 'RealizadoInicioAprovacao', 'RealizadoFinalAprovacao',
+            'PlanejadoInicioAcabamento', 'PlanejadoFinalAcabamento', 'RealizadoInicioAcabamento', 'RealizadoFinalAcabamento',
+            'PlanejadoInicioExpedicao', 'PlanejadoFinalExpedicao', 'RealizadoInicioExpedicao', 'realizadoFinalExpedicao'
+        ];
+
+        let updates = [];
+        let params = [];
+
+        Object.keys(data).forEach(key => {
+            if (camposPermitidos.includes(key)) {
+                updates.push(`${key} = ?`);
+                params.push(data[key]);
+            }
+        });
+
+        if (updates.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nenhum campo válido para atualizar.' });
+        }
+
+        params.push(id); // Para o WHERE IdProjeto = ?
+
+        // Atualizamos todas as tags do projeto
+        const [result] = await connection.execute(
+            `UPDATE tags SET ${updates.join(', ')} WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            params
+        );
+
+        res.json({ success: true, message: `Datas atualizadas em ${result.affectedRows} tags do projeto.` });
+
+    } catch (err) {
+        console.error('Erro em bulk-update de acompanhamento-etapas:', err);
+        res.status(500).json({ success: false, message: 'Erro ao atualizar datas: ' + err.message });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 // ─── ENDPOINT DE MANUTENCAO: Recalcula QtdeTags para todos os projetos ────
 // Chame via: GET /api/manutencao/fix-qtdetags?key=sinco-manut-2026
 // REMOVER APOS EXECUTAR UMA VEZ.

@@ -43087,3 +43087,891 @@
 24/05/2026 16:56:40: [API] GET /api/acompanhamento/projeto/10/tags?t=1779652600779&limit=100
 24/05/2026 16:56:40: [API]    QUERY: {"t":"1779652600779","limit":"100"}
 24/05/2026 16:56:40: [API] 200 (75ms)
+24/05/2026 17:02:18: [dotenv@17.2.3] injecting env (12) from .env -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+24/05/2026 17:02:18: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+24/05/2026 17:02:19: [dotenv@17.2.3] injecting env (0) from .env -- tip: 🔄 add secrets lifecycle management: https://dotenvx.com/ops
+24/05/2026 17:02:19: Server running on port 3000 and listening on all interfaces(0.0.0.0)
+24/05/2026 17:02:21: Connected to MySQL database
+24/05/2026 17:04:25: 
+24/05/2026 17:04:25: [API] GET /api/acompanhamento/projeto/14/tags?t=1779653065713&limit=100
+24/05/2026 17:04:25: [API]    QUERY: {"t":"1779653065713","limit":"100"}
+24/05/2026 17:04:26: [API] 200 (630ms)
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/usuarios?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/espessuras?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/setores?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/materiais?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: [API] 304 (135ms)
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/usuarios?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: [API] 304 (71ms)
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/usuarios?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: [API] 304 (55ms)
+24/05/2026 17:05:08: 
+24/05/2026 17:05:08: [API] GET /api/config/usuarios?limit=100
+24/05/2026 17:05:08: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:08: [API] 304 (28ms)
+24/05/2026 17:05:09: [API] 500 (1180ms)
+24/05/2026 17:05:09: 
+24/05/2026 17:05:09: [API] GET /api/config/espessuras?limit=100
+24/05/2026 17:05:09: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:09: [API] 304 (1197ms)
+24/05/2026 17:05:09: [API] 500 (25ms)
+24/05/2026 17:05:09: [API] 304 (1203ms)
+24/05/2026 17:05:09: 
+24/05/2026 17:05:09: [API] GET /api/config/materiais?limit=100
+24/05/2026 17:05:09: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:09: 
+24/05/2026 17:05:09: [API] GET /api/config/setores?limit=100
+24/05/2026 17:05:09: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:09: [API] 304 (44ms)
+24/05/2026 17:05:09: [API] 304 (48ms)
+24/05/2026 17:05:09: 
+24/05/2026 17:05:09: [API] GET /api/config/setores?limit=100
+24/05/2026 17:05:09: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:09: [API] 304 (25ms)
+24/05/2026 17:05:09: 
+24/05/2026 17:05:09: [API] GET /api/config/setores?limit=100
+24/05/2026 17:05:09: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:05:09: [API] 304 (29ms)
+24/05/2026 17:05:10: 
+24/05/2026 17:05:10: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-05-24&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:10: [API]    QUERY: {"planInicioDe":"2026-05-24","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:10: [API] 304 (69ms)
+24/05/2026 17:05:10: 
+24/05/2026 17:05:10: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-05-24&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:10: [API]    QUERY: {"planInicioDe":"2026-05-24","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:10: [API] 304 (59ms)
+24/05/2026 17:05:14: 
+24/05/2026 17:05:14: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-05-24&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:14: [API]    QUERY: {"planInicioDe":"2026-05-24","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:14: [API] 304 (50ms)
+24/05/2026 17:05:36: 
+24/05/2026 17:05:36: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-05-01&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:36: [API]    QUERY: {"planInicioDe":"2026-05-01","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:36: [API] 200 (55ms)
+24/05/2026 17:05:36: 
+24/05/2026 17:05:36: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-05-24&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:36: [API]    QUERY: {"planInicioDe":"2026-05-24","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:36: [API] 304 (88ms)
+24/05/2026 17:05:51: 
+24/05/2026 17:05:51: [API] GET /api/apontamento/planejamento/diario?planInicioDe=2026-04-01&planInicioAte=2026-05-24&planFimDe=&planFimAte=&setor=todos&os=&limit=100
+24/05/2026 17:05:51: [API]    QUERY: {"planInicioDe":"2026-04-01","planInicioAte":"2026-05-24","planFimDe":"","planFimAte":"","setor":"todos","os":"","limit":"100"}
+24/05/2026 17:05:51: [API] 200 (68ms)
+24/05/2026 17:07:07: 
+24/05/2026 17:07:07: [API] GET /api/config?limit=100
+24/05/2026 17:07:07: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:07:07: [API] 401 (1ms)
+24/05/2026 17:07:07: 
+24/05/2026 17:07:07: [API] GET /api/config?limit=100
+24/05/2026 17:07:07: [API]    QUERY: {"limit":"100"}
+24/05/2026 17:07:07: [API] 401 (0ms)
+25/05/2026 08:08:59: [dotenv@17.2.3] injecting env (12) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+25/05/2026 08:08:59: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+25/05/2026 08:08:59: [dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+25/05/2026 08:08:59: Server running on port 3000 and listening on all interfaces(0.0.0.0)
+25/05/2026 08:09:01: Connected to MySQL database
+25/05/2026 08:17:22: [dotenv@17.2.3] injecting env (12) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+25/05/2026 08:17:22: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+25/05/2026 08:17:22: [dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+25/05/2026 08:17:22: Server running on port 3000 and listening on all interfaces(0.0.0.0)
+25/05/2026 08:17:25: Connected to MySQL database
+25/05/2026 08:18:34: 
+25/05/2026 08:18:34: [API] GET /api/config?limit=100
+25/05/2026 08:18:34: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:34: [API] 401 (6ms)
+25/05/2026 08:18:34: 
+25/05/2026 08:18:34: [API] GET /api/config?limit=100
+25/05/2026 08:18:34: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:34: [API] 401 (1ms)
+25/05/2026 08:18:45: 
+25/05/2026 08:18:45: [API] POST /api/login
+25/05/2026 08:18:45: [API]    BODY: {"login":"superadmin","senha":"SincoMaster2026!"}
+25/05/2026 08:18:45: [AUTH] Attempting central login for user: superadmin
+25/05/2026 08:18:47: [AUTH] Central user found. Switching to tenant DB: lynxlocal
+25/05/2026 08:18:47: [DB] Pool already exists for lynxlocal. Re-using.
+25/05/2026 08:18:47: [API] 200 (2015ms)
+25/05/2026 08:18:47: 
+25/05/2026 08:18:47: [API] GET /api/config/menu?limit=100
+25/05/2026 08:18:47: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:47: [API] 304 (52ms)
+25/05/2026 08:18:47: 
+25/05/2026 08:18:47: [API] GET /api/config?limit=100
+25/05/2026 08:18:47: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: 
+25/05/2026 08:18:48: [API] GET /api/config/menu?limit=100
+25/05/2026 08:18:48: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: [API] 304 (167ms)
+25/05/2026 08:18:48: 
+25/05/2026 08:18:48: [API] GET /api/config?limit=100
+25/05/2026 08:18:48: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: [API] 304 (86ms)
+25/05/2026 08:18:48: [API] 304 (358ms)
+25/05/2026 08:18:48: 
+25/05/2026 08:18:48: [API] GET /api/config/menu?limit=100
+25/05/2026 08:18:48: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: [API] 304 (24ms)
+25/05/2026 08:18:48: 
+25/05/2026 08:18:48: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:18:48: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: [API] 304 (53ms)
+25/05/2026 08:18:48: 
+25/05/2026 08:18:48: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:18:48: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:18:48: [API] 304 (27ms)
+25/05/2026 08:25:36: 
+25/05/2026 08:25:36: [API] GET /api/config?limit=100
+25/05/2026 08:25:36: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:36: 
+25/05/2026 08:25:36: [API] GET /api/config?limit=100
+25/05/2026 08:25:36: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:36: 
+25/05/2026 08:25:36: [API] GET /api/config/menu?limit=100
+25/05/2026 08:25:36: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:37: 
+25/05/2026 08:25:37: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:25:37: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:38: [API] 304 (992ms)
+25/05/2026 08:25:38: 
+25/05/2026 08:25:38: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:25:38: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:38: [API] 304 (25ms)
+25/05/2026 08:25:38: [API] 200 (1765ms)
+25/05/2026 08:25:38: [API] 200 (1958ms)
+25/05/2026 08:25:38: [API] 200 (1889ms)
+25/05/2026 08:25:38: 
+25/05/2026 08:25:38: [API] GET /api/config/menu?limit=100
+25/05/2026 08:25:38: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:25:38: [API] 304 (52ms)
+25/05/2026 08:27:42: 
+25/05/2026 08:27:42: [API] GET /api/config?limit=100
+25/05/2026 08:27:42: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:27:42: 
+25/05/2026 08:27:42: [API] GET /api/config/menu?limit=100
+25/05/2026 08:27:42: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:27:43: [API] 304 (1601ms)
+25/05/2026 08:27:43: 
+25/05/2026 08:27:43: [API] GET /api/config/menu?limit=100
+25/05/2026 08:27:43: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:27:44: [API] 304 (1629ms)
+25/05/2026 08:27:44: [API] 304 (23ms)
+25/05/2026 08:27:44: 
+25/05/2026 08:27:44: [API] GET /api/config?limit=100
+25/05/2026 08:27:44: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:27:44: [API] 304 (88ms)
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config/menu?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config/menu?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:31:59: 
+25/05/2026 08:31:59: [API] GET /api/config?limit=100
+25/05/2026 08:31:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:02: [API] 200 (3126ms)
+25/05/2026 08:32:02: [API] 200 (3168ms)
+25/05/2026 08:32:02: 
+25/05/2026 08:32:02: [API] GET /api/config/menu?limit=100
+25/05/2026 08:32:02: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:02: 
+25/05/2026 08:32:02: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:32:02: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:02: [API] 200 (3144ms)
+25/05/2026 08:32:02: [API] 200 (27ms)
+25/05/2026 08:32:02: [API] 304 (46ms)
+25/05/2026 08:32:02: 
+25/05/2026 08:32:02: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:32:02: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:02: [API] 304 (26ms)
+25/05/2026 08:32:02: [API] 200 (3217ms)
+25/05/2026 08:32:02: [API] 200 (3305ms)
+25/05/2026 08:32:02: [API] 200 (3302ms)
+25/05/2026 08:32:02: 
+25/05/2026 08:32:02: [API] GET /api/config/menu?limit=100
+25/05/2026 08:32:02: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:02: [API] 304 (48ms)
+25/05/2026 08:32:28: 
+25/05/2026 08:32:28: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:32:28: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:28: [API] 304 (54ms)
+25/05/2026 08:32:28: 
+25/05/2026 08:32:28: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 08:32:28: [API]    QUERY: {"limit":"100"}
+25/05/2026 08:32:28: [API] 304 (24ms)
+25/05/2026 15:44:05: 
+25/05/2026 15:44:05: [API] GET /api/config?limit=100
+25/05/2026 15:44:06: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:06: 
+25/05/2026 15:44:06: [API] GET /api/config/menu?limit=100
+25/05/2026 15:44:06: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:07: 
+25/05/2026 15:44:07: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 15:44:07: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:08: [API] 304 (868ms)
+25/05/2026 15:44:08: 
+25/05/2026 15:44:08: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 15:44:08: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:08: [API] 304 (1986ms)
+25/05/2026 15:44:08: [API] 304 (2082ms)
+25/05/2026 15:44:08: [API] 304 (33ms)
+25/05/2026 15:44:08: 
+25/05/2026 15:44:08: [API] GET /api/config?limit=100
+25/05/2026 15:44:08: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:08: 
+25/05/2026 15:44:08: [API] GET /api/config/menu?limit=100
+25/05/2026 15:44:08: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:08: [API] 304 (56ms)
+25/05/2026 15:44:08: [API] 304 (185ms)
+25/05/2026 15:44:11: 
+25/05/2026 15:44:11: [API] GET /api/config?limit=100
+25/05/2026 15:44:11: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:11: 
+25/05/2026 15:44:11: [API] GET /api/config?limit=100
+25/05/2026 15:44:11: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:11: 
+25/05/2026 15:44:11: [API] GET /api/config/menu?limit=100
+25/05/2026 15:44:11: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:12: [API] 200 (134ms)
+25/05/2026 15:44:12: [API] 200 (134ms)
+25/05/2026 15:44:12: [API] 200 (101ms)
+25/05/2026 15:44:12: 
+25/05/2026 15:44:12: [API] GET /api/config/menu?limit=100
+25/05/2026 15:44:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:12: [API] 304 (62ms)
+25/05/2026 15:44:12: 
+25/05/2026 15:44:12: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 15:44:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:12: [API] 304 (24ms)
+25/05/2026 15:44:12: 
+25/05/2026 15:44:12: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 15:44:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:12: [API] 304 (23ms)
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/setores?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/materiais?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/espessuras?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: [API] 304 (176ms)
+25/05/2026 15:44:53: [API] 304 (176ms)
+25/05/2026 15:44:53: [API] 304 (182ms)
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/setores?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/materiais?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: [API] 304 (28ms)
+25/05/2026 15:44:53: [API] 304 (51ms)
+25/05/2026 15:44:53: [API] 304 (55ms)
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/setores?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: [API] 304 (24ms)
+25/05/2026 15:44:53: [API] 304 (25ms)
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/setores?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: 
+25/05/2026 15:44:53: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:44:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:53: [API] 304 (22ms)
+25/05/2026 15:44:53: [API] 304 (23ms)
+25/05/2026 15:44:55: [API] 500 (2334ms)
+25/05/2026 15:44:55: 
+25/05/2026 15:44:55: [API] GET /api/config/espessuras?limit=100
+25/05/2026 15:44:55: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:44:55: [API] 500 (22ms)
+25/05/2026 15:45:00: 
+25/05/2026 15:45:00: [API] GET /api/config?limit=100
+25/05/2026 15:45:00: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:00: 
+25/05/2026 15:45:00: [API] GET /api/config/menu?limit=100
+25/05/2026 15:45:00: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:00: [API] 304 (55ms)
+25/05/2026 15:45:00: 
+25/05/2026 15:45:00: [API] GET /api/config/menu?limit=100
+25/05/2026 15:45:00: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:00: [API] 304 (31ms)
+25/05/2026 15:45:00: [API] 304 (175ms)
+25/05/2026 15:45:00: 
+25/05/2026 15:45:00: [API] GET /api/config?limit=100
+25/05/2026 15:45:00: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:00: [API] 304 (61ms)
+25/05/2026 15:45:17: 
+25/05/2026 15:45:17: [API] GET /api/acabamento?limit=100
+25/05/2026 15:45:17: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:17: [API] 200 (75ms)
+25/05/2026 15:45:17: 
+25/05/2026 15:45:17: [API] GET /api/acabamento?limit=100
+25/05/2026 15:45:17: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:17: [API] 304 (23ms)
+25/05/2026 15:45:23: 
+25/05/2026 15:45:23: [API] GET /api/acabamento/7?limit=100
+25/05/2026 15:45:23: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:23: [API] 304 (55ms)
+25/05/2026 15:45:49: 
+25/05/2026 15:45:49: [API] GET /api/acabamento/7?limit=100
+25/05/2026 15:45:49: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:45:49: [API] 304 (37ms)
+25/05/2026 15:46:25: 
+25/05/2026 15:46:25: [API] GET /api/familia?limit=100
+25/05/2026 15:46:25: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:46:25: [API] 304 (191ms)
+25/05/2026 15:46:25: 
+25/05/2026 15:46:25: [API] GET /api/familia?limit=100
+25/05/2026 15:46:25: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:46:25: [API] 304 (73ms)
+25/05/2026 15:46:27: 
+25/05/2026 15:46:27: [API] GET /api/familia/20?limit=100
+25/05/2026 15:46:27: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:46:28: [API] 200 (46ms)
+25/05/2026 15:48:59: 
+25/05/2026 15:48:59: [API] GET /api/familia/20?limit=100
+25/05/2026 15:48:59: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:49:00: [API] 304 (1597ms)
+25/05/2026 15:56:52: 
+25/05/2026 15:56:52: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:56:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:52: 
+25/05/2026 15:56:52: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 15:56:52: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 15:56:52: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 15:56:54: [API] 304 (1420ms)
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/config/usuarios?limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:54: [API] 304 (24ms)
+25/05/2026 15:56:54: [API] 304 (131ms)
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/config?limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:54: [API] 304 (27ms)
+25/05/2026 15:56:54: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 15:56:54: [API] 304 (1633ms)
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 15:56:54: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 15:56:54: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 15:56:54: [API] 304 (50ms)
+25/05/2026 15:56:54: [API] 304 (171ms)
+25/05/2026 15:56:54: 
+25/05/2026 15:56:54: [API] GET /api/config?limit=100
+25/05/2026 15:56:54: [API]    QUERY: {"limit":"100"}
+25/05/2026 15:56:54: [API] 304 (51ms)
+25/05/2026 15:57:08: 
+25/05/2026 15:57:08: [API] GET /api/acompanhamento/projeto/65/tags?t=1779735428698&limit=100
+25/05/2026 15:57:08: [API]    QUERY: {"t":"1779735428698","limit":"100"}
+25/05/2026 15:57:08: [API] 200 (56ms)
+25/05/2026 16:08:27: 
+25/05/2026 16:08:27: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:08:27: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:08:29: [API] 200 (2168ms)
+25/05/2026 16:08:29: 
+25/05/2026 16:08:29: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:08:29: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:08:29: [API] 304 (90ms)
+25/05/2026 16:14:39: 
+25/05/2026 16:14:39: [API] GET /api/medida/options?limit=100
+25/05/2026 16:14:39: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:39: 
+25/05/2026 16:14:39: [API] GET /api/tipoproduto?limit=100
+25/05/2026 16:14:39: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:40: [API] 200 (1439ms)
+25/05/2026 16:14:40: 
+25/05/2026 16:14:40: [API] GET /api/medida/options?limit=100
+25/05/2026 16:14:40: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:40: [API] 304 (22ms)
+25/05/2026 16:14:40: [API] 200 (1482ms)
+25/05/2026 16:14:40: 
+25/05/2026 16:14:40: [API] GET /api/tipoproduto?limit=100
+25/05/2026 16:14:40: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:40: [API] 304 (25ms)
+25/05/2026 16:14:45: 
+25/05/2026 16:14:45: [API] GET /api/config/usuarios?limit=100
+25/05/2026 16:14:45: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:45: 
+25/05/2026 16:14:45: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 16:14:45: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 16:14:45: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 16:14:45: [API] 304 (87ms)
+25/05/2026 16:14:45: 
+25/05/2026 16:14:45: [API] GET /api/config/usuarios?limit=100
+25/05/2026 16:14:45: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:45: 
+25/05/2026 16:14:45: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 16:14:45: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:46: [API] 304 (140ms)
+25/05/2026 16:14:46: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 16:14:46: [API] 304 (249ms)
+25/05/2026 16:14:46: 
+25/05/2026 16:14:46: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 16:14:46: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 16:14:46: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 16:14:46: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 16:14:46: [API] 304 (60ms)
+25/05/2026 16:14:47: [API] 304 (1588ms)
+25/05/2026 16:14:47: 
+25/05/2026 16:14:47: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 16:14:47: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:47: 
+25/05/2026 16:14:47: [API] GET /api/config?limit=100
+25/05/2026 16:14:47: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:47: [API] 304 (26ms)
+25/05/2026 16:14:47: [API] 304 (103ms)
+25/05/2026 16:14:47: 
+25/05/2026 16:14:47: [API] GET /api/config?limit=100
+25/05/2026 16:14:47: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:14:47: [API] 304 (55ms)
+25/05/2026 16:15:43: 
+25/05/2026 16:15:43: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:15:43: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:15:44: [API] 304 (366ms)
+25/05/2026 16:15:44: 
+25/05/2026 16:15:44: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:15:44: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:15:44: [API] 304 (99ms)
+25/05/2026 16:16:50: 
+25/05/2026 16:16:50: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:16:50: [API]    BODY: {"idTags":[452],"setor":"Aprovacao","usuario":"Sistema","planejadoFinal":"25/05/2026"}
+25/05/2026 16:16:50: [API] 200 (69ms)
+25/05/2026 16:16:53: 
+25/05/2026 16:16:53: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:16:53: [API]    BODY: {"idTags":[452],"setor":"Aprovacao","usuario":"Sistema","planejadoInicio":"25/05/2026"}
+25/05/2026 16:16:53: [API] 200 (46ms)
+25/05/2026 16:17:51: 
+25/05/2026 16:17:51: [API] GET /api/config?limit=100
+25/05/2026 16:17:51: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:51: 
+25/05/2026 16:17:51: [API] GET /api/config?limit=100
+25/05/2026 16:17:51: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:51: 
+25/05/2026 16:17:51: [API] GET /api/config/menu?limit=100
+25/05/2026 16:17:51: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/config?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/config?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/config/menu?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: [API] 200 (95ms)
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: 
+25/05/2026 16:17:52: [API] GET /api/config/menu?limit=100
+25/05/2026 16:17:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:52: [API] 200 (201ms)
+25/05/2026 16:17:53: [API] 200 (813ms)
+25/05/2026 16:17:53: 
+25/05/2026 16:17:53: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 16:17:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:53: [API] 200 (684ms)
+25/05/2026 16:17:53: [API] 200 (873ms)
+25/05/2026 16:17:53: [API] 304 (58ms)
+25/05/2026 16:17:53: 
+25/05/2026 16:17:53: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 16:17:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:17:53: [API] 304 (23ms)
+25/05/2026 16:17:53: [API] 200 (854ms)
+25/05/2026 16:19:53: 
+25/05/2026 16:19:53: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:19:53: [API]    BODY: {"idTags":[448],"setor":"Aprovacao","usuario":"Sistema","planejadoInicio":"25/05/2026"}
+25/05/2026 16:19:54: [API] 200 (1196ms)
+25/05/2026 16:19:55: 
+25/05/2026 16:19:55: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:19:55: [API]    BODY: {"idTags":[448],"setor":"Aprovacao","usuario":"Sistema","planejadoFinal":"25/05/2026"}
+25/05/2026 16:19:55: [API] 200 (55ms)
+25/05/2026 16:20:51: 
+25/05/2026 16:20:51: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:20:51: [API]    BODY: {"idTags":[448],"setor":"Aprovacao","usuario":"Sistema","planejadoInicio":"18/05/2026"}
+25/05/2026 16:20:51: [API] 200 (23ms)
+25/05/2026 16:21:55: 
+25/05/2026 16:21:55: [API] PUT /api/visao-geral-engenharia/tags/lote
+25/05/2026 16:21:55: [API]    BODY: {"idTags":[448,449],"setor":"Aprovacao","planejadoInicio":"18/05/2026","planejadoFinal":"26/05/2026","usuario":"Sistema"}
+25/05/2026 16:21:55: [API] 200 (49ms)
+25/05/2026 16:21:55: 
+25/05/2026 16:21:55: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:21:55: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:21:55: [API] 200 (174ms)
+25/05/2026 16:27:03: 
+25/05/2026 16:27:03: [API] GET /api/config/usuarios?limit=100
+25/05/2026 16:27:03: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:03: 
+25/05/2026 16:27:03: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 16:27:03: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 16:27:03: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 16:27:04: [API] 304 (1382ms)
+25/05/2026 16:27:04: 
+25/05/2026 16:27:04: [API] GET /api/config/usuarios?limit=100
+25/05/2026 16:27:04: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:04: 
+25/05/2026 16:27:04: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 16:27:04: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:04: [API] 304 (41ms)
+25/05/2026 16:27:04: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 16:27:04: [API] 304 (1482ms)
+25/05/2026 16:27:04: 
+25/05/2026 16:27:04: [API] GET /api/acompanhamento/projetos?finalizados=1&liberados=1&limit=100
+25/05/2026 16:27:04: [API]    QUERY: {"finalizados":"1","liberados":"1","limit":"100"}
+25/05/2026 16:27:04: [API] Projetos - status: default(ativos) | where: COALESCE(p.D_E_L_E_T_E,'') = ''
+25/05/2026 16:27:04: [API] 304 (135ms)
+25/05/2026 16:27:04: 
+25/05/2026 16:27:04: [API] GET /api/config/tipostarefa?limit=100
+25/05/2026 16:27:04: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:04: [VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: undefined. Rows found: 82
+25/05/2026 16:27:04: [API] 304 (52ms)
+25/05/2026 16:27:04: [API] 304 (22ms)
+25/05/2026 16:27:05: 
+25/05/2026 16:27:05: [API] GET /api/config?limit=100
+25/05/2026 16:27:05: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:05: [API] 304 (187ms)
+25/05/2026 16:27:05: 
+25/05/2026 16:27:05: [API] GET /api/config?limit=100
+25/05/2026 16:27:05: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:27:05: [API] 304 (44ms)
+25/05/2026 16:29:24: 
+25/05/2026 16:29:24: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:29:24: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:29:25: [API] 304 (1160ms)
+25/05/2026 16:29:25: 
+25/05/2026 16:29:25: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:29:25: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:29:25: [API] 304 (82ms)
+25/05/2026 16:31:52: 
+25/05/2026 16:31:52: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:31:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:31:53: [API] 304 (1408ms)
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/config?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/config/menu?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: [API] 304 (514ms)
+25/05/2026 16:36:21: [API] 304 (627ms)
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/config?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: [API] 304 (472ms)
+25/05/2026 16:36:21: [API] 304 (61ms)
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: 
+25/05/2026 16:36:21: [API] GET /api/config/menu?limit=100
+25/05/2026 16:36:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:21: [API] 304 (44ms)
+25/05/2026 16:36:21: [API] 304 (146ms)
+25/05/2026 16:36:22: 
+25/05/2026 16:36:22: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 16:36:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:22: [API] 304 (65ms)
+25/05/2026 16:36:22: 
+25/05/2026 16:36:22: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 16:36:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 16:36:22: [API] 304 (23ms)
+25/05/2026 19:15:22: 
+25/05/2026 19:15:22: [API] GET /api/config?limit=100
+25/05/2026 19:15:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:22: 
+25/05/2026 19:15:22: [API] GET /api/config/menu?limit=100
+25/05/2026 19:15:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:23: 
+25/05/2026 19:15:23: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 19:15:23: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:23: [API] 304 (195ms)
+25/05/2026 19:15:23: 
+25/05/2026 19:15:23: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 19:15:23: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:23: [API] 304 (1025ms)
+25/05/2026 19:15:23: [API] 304 (1189ms)
+25/05/2026 19:15:23: [API] 304 (82ms)
+25/05/2026 19:15:23: 
+25/05/2026 19:15:23: [API] GET /api/config?limit=100
+25/05/2026 19:15:23: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:23: 
+25/05/2026 19:15:23: [API] GET /api/config/menu?limit=100
+25/05/2026 19:15:23: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:23: [API] 304 (48ms)
+25/05/2026 19:15:24: [API] 304 (178ms)
+25/05/2026 19:15:26: 
+25/05/2026 19:15:26: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 19:15:26: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:26: [API] 304 (184ms)
+25/05/2026 19:15:26: 
+25/05/2026 19:15:26: [API] GET /api/visao-geral-engenharia/tags?limit=100
+25/05/2026 19:15:26: [API]    QUERY: {"limit":"100"}
+25/05/2026 19:15:26: [API] 304 (92ms)
+25/05/2026 20:07:36: [dotenv@17.2.3] injecting env (12) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+25/05/2026 20:07:36: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+25/05/2026 20:07:37: [dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+25/05/2026 20:07:37: Server running on port 3000 and listening on all interfaces(0.0.0.0)
+25/05/2026 20:07:39: Connected to MySQL database
+25/05/2026 20:33:57: 
+25/05/2026 20:33:57: [API] GET /api/config?limit=100
+25/05/2026 20:33:57: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:33:57: [API] 401 (46ms)
+25/05/2026 20:33:57: 
+25/05/2026 20:33:57: [API] GET /api/config?limit=100
+25/05/2026 20:33:57: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:33:57: [API] 401 (1ms)
+25/05/2026 20:33:57: 
+25/05/2026 20:33:57: [API] GET /api/config/menu?limit=100
+25/05/2026 20:33:57: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:33:57: [API] 401 (1ms)
+25/05/2026 20:33:57: 
+25/05/2026 20:33:57: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:33:57: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:33:57: [API] 401 (0ms)
+25/05/2026 20:33:57: 
+25/05/2026 20:33:57: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:33:57: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:33:57: [API] 401 (1ms)
+25/05/2026 20:34:08: 
+25/05/2026 20:34:08: [API] POST /api/login
+25/05/2026 20:34:08: [API]    BODY: {"login":"superadmin","senha":"SincoMaster2026!"}
+25/05/2026 20:34:08: [AUTH] Attempting central login for user: superadmin
+25/05/2026 20:34:11: [AUTH] Central user found. Switching to tenant DB: lynxlocal
+25/05/2026 20:34:11: [DB] Pool already exists for lynxlocal. Re-using.
+25/05/2026 20:34:11: [API] 200 (2954ms)
+25/05/2026 20:34:11: 
+25/05/2026 20:34:11: [API] GET /api/config/menu?limit=100
+25/05/2026 20:34:11: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/config?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/config/menu?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: [API] 200 (182ms)
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/config?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: [API] 304 (73ms)
+25/05/2026 20:34:12: [API] 200 (328ms)
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/config/menu?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: [API] 304 (24ms)
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: [API] 304 (49ms)
+25/05/2026 20:34:12: 
+25/05/2026 20:34:12: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:34:12: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:34:12: [API] 304 (25ms)
+25/05/2026 20:36:30: 
+25/05/2026 20:36:30: [API] GET /api/config?limit=500
+25/05/2026 20:36:30: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:36:30: [API] 401 (1ms)
+25/05/2026 20:36:30: 
+25/05/2026 20:36:30: [API] GET /api/config?limit=500
+25/05/2026 20:36:30: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:36:30: [API] 401 (0ms)
+25/05/2026 20:37:24: 
+25/05/2026 20:37:24: [API] GET /api/config?limit=500
+25/05/2026 20:37:24: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:24: [API] 401 (2ms)
+25/05/2026 20:37:24: 
+25/05/2026 20:37:24: [API] GET /api/config?limit=500
+25/05/2026 20:37:24: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:24: [API] 401 (1ms)
+25/05/2026 20:37:25: 
+25/05/2026 20:37:25: [API] POST /api/login
+25/05/2026 20:37:25: [API]    BODY: {"login":"admin","senha":"lynx@2024"}
+25/05/2026 20:37:25: [AUTH] Attempting central login for user: admin
+25/05/2026 20:37:25: [AUTH] Falling back to local DB auth
+25/05/2026 20:37:25: [API] 401 (456ms)
+25/05/2026 20:37:27: 
+25/05/2026 20:37:27: [API] GET /api/config?limit=500
+25/05/2026 20:37:27: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:27: [API] 401 (1ms)
+25/05/2026 20:37:27: 
+25/05/2026 20:37:27: [API] GET /api/config?limit=500
+25/05/2026 20:37:27: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:27: [API] 401 (1ms)
+25/05/2026 20:37:43: 
+25/05/2026 20:37:43: [API] GET /api/config?limit=500
+25/05/2026 20:37:43: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:43: [API] 401 (1ms)
+25/05/2026 20:37:43: 
+25/05/2026 20:37:43: [API] GET /api/config?limit=500
+25/05/2026 20:37:43: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:43: [API] 401 (0ms)
+25/05/2026 20:37:58: 
+25/05/2026 20:37:58: [API] GET /api/config?limit=500
+25/05/2026 20:37:58: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:58: [API] 401 (1ms)
+25/05/2026 20:37:58: 
+25/05/2026 20:37:58: [API] GET /api/config?limit=500
+25/05/2026 20:37:58: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:37:58: [API] 401 (1ms)
+25/05/2026 20:38:17: 
+25/05/2026 20:38:17: [API] GET /api/config?limit=500
+25/05/2026 20:38:17: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:38:17: [API] 401 (2ms)
+25/05/2026 20:38:17: 
+25/05/2026 20:38:17: [API] GET /api/config?limit=500
+25/05/2026 20:38:17: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:38:17: [API] 401 (0ms)
+25/05/2026 20:39:02: 
+25/05/2026 20:39:02: [API] GET /api/config?limit=500
+25/05/2026 20:39:02: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:39:02: [API] 401 (1ms)
+25/05/2026 20:39:02: 
+25/05/2026 20:39:02: [API] GET /api/config?limit=500
+25/05/2026 20:39:02: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:39:02: [API] 401 (0ms)
+25/05/2026 20:39:03: 
+25/05/2026 20:39:03: [API] POST /api/login
+25/05/2026 20:39:03: [API]    BODY: {"login":"admin","senha":"lynx@2024"}
+25/05/2026 20:39:03: [AUTH] Attempting central login for user: admin
+25/05/2026 20:39:05: 
+25/05/2026 20:39:05: [API] GET /api/config?limit=500
+25/05/2026 20:39:05: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:39:05: [API] 401 (1ms)
+25/05/2026 20:39:05: 
+25/05/2026 20:39:05: [API] GET /api/config?limit=500
+25/05/2026 20:39:05: [API]    QUERY: {"limit":"500"}
+25/05/2026 20:39:05: [API] 401 (1ms)
+25/05/2026 20:39:05: [AUTH] Falling back to local DB auth
+25/05/2026 20:39:28: 
+25/05/2026 20:39:28: [API] GET /api/acompanhamento-etapas
+25/05/2026 20:39:28: [API] 401 (1ms)
+25/05/2026 20:40:21: 
+25/05/2026 20:40:21: [API] GET /api/config?limit=100
+25/05/2026 20:40:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:21: 
+25/05/2026 20:40:21: [API] GET /api/config/menu?limit=100
+25/05/2026 20:40:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:21: [API] 304 (96ms)
+25/05/2026 20:40:21: 
+25/05/2026 20:40:21: [API] GET /api/config?limit=100
+25/05/2026 20:40:21: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:21: [API] 304 (71ms)
+25/05/2026 20:40:22: [API] 304 (880ms)
+25/05/2026 20:40:22: 
+25/05/2026 20:40:22: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:22: [API] 304 (84ms)
+25/05/2026 20:40:22: 
+25/05/2026 20:40:22: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:22: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:22: [API] 304 (28ms)
+25/05/2026 20:40:31: 
+25/05/2026 20:40:31: [API] GET /api/config?limit=100
+25/05/2026 20:40:31: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:31: 
+25/05/2026 20:40:31: [API] GET /api/config/menu?limit=100
+25/05/2026 20:40:31: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:31: 
+25/05/2026 20:40:31: [API] GET /api/acompanhamento-etapas?limit=100
+25/05/2026 20:40:31: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:31: [API] 304 (43ms)
+25/05/2026 20:40:31: [API] 304 (96ms)
+25/05/2026 20:40:31: 
+25/05/2026 20:40:31: [API] GET /api/config?limit=100
+25/05/2026 20:40:31: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:31: 
+25/05/2026 20:40:31: [API] GET /api/config/menu?limit=100
+25/05/2026 20:40:31: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:31: [API] 304 (27ms)
+25/05/2026 20:40:31: [API] 304 (56ms)
+25/05/2026 20:40:32: 
+25/05/2026 20:40:32: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:32: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:32: [API] 304 (28ms)
+25/05/2026 20:40:32: 
+25/05/2026 20:40:32: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:32: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:32: [API] 500 (1005ms)
+25/05/2026 20:40:32: [API] 304 (27ms)
+25/05/2026 20:40:32: 
+25/05/2026 20:40:32: [API] GET /api/acompanhamento-etapas?limit=100
+25/05/2026 20:40:32: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:32: [API] 500 (27ms)
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/config?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/config?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/config/menu?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: [API] 200 (74ms)
+25/05/2026 20:40:52: [API] 200 (50ms)
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/acompanhamento-etapas?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/acompanhamento-etapas?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: [API] 500 (33ms)
+25/05/2026 20:40:52: [API] 500 (34ms)
+25/05/2026 20:40:52: 
+25/05/2026 20:40:52: [API] GET /api/config/menu?limit=100
+25/05/2026 20:40:52: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:52: [API] 200 (198ms)
+25/05/2026 20:40:52: [API] 200 (59ms)
+25/05/2026 20:40:53: 
+25/05/2026 20:40:53: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:53: [API] 304 (24ms)
+25/05/2026 20:40:53: 
+25/05/2026 20:40:53: [API] GET /api/dashboard/stats?limit=100
+25/05/2026 20:40:53: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:40:53: [API] 304 (22ms)
+25/05/2026 20:41:14: 
+25/05/2026 20:41:14: [API] GET /api/acompanhamento-etapas?limit=100
+25/05/2026 20:41:14: [API]    QUERY: {"limit":"100"}
+25/05/2026 20:41:14: [API] 500 (27ms)

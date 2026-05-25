@@ -3,6 +3,7 @@ import type { MenuItem } from './iconMap';
 export const defaultMenuItems: MenuItem[] = [
     { id: 'acabamento', icon: 'Paintbrush', label: 'Acabamento', href: '/acabamento' },
     { id: 'acompanhamento-geral', icon: 'MonitorPlay', label: 'Acompanhamento Geral', href: '/acompanhamento-geral' },
+    { id: 'acompanhamento-etapas', icon: 'Briefcase', label: 'Acompanhamento Etapas', href: '/acompanhamento-etapas' },
     { id: 'apontamento', icon: 'Factory', label: 'Apontamento Produção', href: '/apontamento' },
     { id: 'apontamentos-parciais', icon: 'PieChart', label: 'Apontamentos Parciais', href: '/apontamentos-parciais' },
     {

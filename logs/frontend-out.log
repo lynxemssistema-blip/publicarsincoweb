@@ -1534,3 +1534,78 @@
 21/05/2026 18:57:37: [2m18:57:37[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ApontamentoProducao.tsx, /src/index.css[22m
 21/05/2026 18:58:05: [2m18:58:05[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
 21/05/2026 19:03:33: [2m19:03:33[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ApontamentoProducao.tsx, /src/index.css[22m
+24/05/2026 16:50:09: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+24/05/2026 16:50:12: 
+24/05/2026 16:50:12:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m582[22m[2m[0m ms[22m
+24/05/2026 16:50:12: 
+24/05/2026 16:50:12:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+24/05/2026 16:50:12:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+24/05/2026 16:50:50: 
+24/05/2026 16:50:50: PWA v1.2.0
+24/05/2026 16:50:50: mode      generateSW
+24/05/2026 16:50:50: precache  2 entries (0.12 KiB)
+24/05/2026 16:50:50: files generated
+24/05/2026 16:50:50:   dev-dist/sw.js
+24/05/2026 16:50:50:   dev-dist/workbox-5a5d9309.js
+24/05/2026 17:01:22: [2m17:01:22[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+25/05/2026 08:08:58: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+25/05/2026 08:09:01: 
+25/05/2026 08:09:01:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m749[22m[2m[0m ms[22m
+25/05/2026 08:09:01: 
+25/05/2026 08:09:01:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+25/05/2026 08:09:01:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+25/05/2026 08:18:37: 
+25/05/2026 08:18:37: PWA v1.2.0
+25/05/2026 08:18:37: mode      generateSW
+25/05/2026 08:18:37: precache  2 entries (0.12 KiB)
+25/05/2026 08:18:37: files generated
+25/05/2026 08:18:37:   dev-dist/sw.js
+25/05/2026 08:18:37:   dev-dist/workbox-5a5d9309.js
+25/05/2026 08:22:21: [2m08:22:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/AppLayout.tsx, /src/index.css[22m
+25/05/2026 08:22:32: [2m08:22:32[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/layout/AppLayout.tsx, /src/index.css[22m
+25/05/2026 08:30:11: [2m08:30:11[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m
+25/05/2026 08:30:34: [2m08:30:34[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m
+25/05/2026 08:30:47: [2m08:30:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Dashboard.tsx, /src/index.css[22m
+25/05/2026 08:30:58: [2m08:30:58[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/Configuracao.tsx, /src/index.css[22m
+25/05/2026 15:52:23: [2m15:52:23[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Familia.tsx, /src/index.css[22m
+25/05/2026 16:30:10: [2m16:30:10[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Familia.tsx, /src/index.css[22m
+25/05/2026 16:31:51: [2m16:31:51[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralEngenharia.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Acabamento.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Acabamento.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/AcompanhamentoGeral.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ApontamentoProducao.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CadastroUsuario.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Familia.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Material.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/OrdemServico.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/PessoaJuridica.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ProducaoPlanoCorte.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Projeto.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Romaneio.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Superadmin.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Tarefas.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TipoProduto.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/UnidadeMedida.tsx, /src/index.css[22m
+25/05/2026 16:33:21: [2m16:33:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+25/05/2026 16:33:41: [2m16:33:41[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CadastroUsuario.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ApontamentoProducao.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/CadastroUsuario.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ListaReposicao.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Material.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/OrdemServico.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/ProducaoPlanoCorte.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/RomaneioRetorno.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Superadmin.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/TipoProduto.tsx, /src/index.css[22m
+25/05/2026 16:34:14: [2m16:34:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/UnidadeMedida.tsx, /src/index.css[22m
+25/05/2026 16:36:20: [2m16:36:20[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/Projeto.tsx, /src/index.css[22m
+25/05/2026 20:00:31: [2m20:00:31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/index.css[22m
+25/05/2026 20:00:41: [2m20:00:41[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/App.tsx, /src/pages/Configuracao.tsx, /src/index.css[22m
+25/05/2026 20:11:31: [2m20:11:31[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/App.tsx[22m
+25/05/2026 20:11:39: [2m20:11:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/App.tsx[22m
+25/05/2026 20:11:47: [2m20:11:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/App.tsx[22m
+25/05/2026 20:30:24: [2m20:30:24[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/AcompanhamentoEtapas.tsx[22m
+25/05/2026 20:40:20: [2m20:40:20[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/AcompanhamentoEtapas.tsx[22m
+25/05/2026 20:40:30: [2m20:40:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css, /src/pages/AcompanhamentoEtapas.tsx[22m

@@ -42475,3 +42475,485 @@
 24/05/2026 16:56:27:   sqlState: undefined,
 24/05/2026 16:56:27:   sqlMessage: undefined
 24/05/2026 16:56:27: }
+24/05/2026 17:04:26: [DB] [lynxlocal] ⚠️  SLOW QUERY (606ms | rows:4): SELECT IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag, QtdeOS, QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS, QtdeTotalPecas, qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngen
+24/05/2026 17:05:09: [DB] 🔴 ERROR: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 17:05:09:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 17:05:09:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 17:05:09:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 17:05:09:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 17:05:09:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 17:05:09:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 17:05:09:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 17:05:09:   errno: 1146,
+24/05/2026 17:05:09:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 17:05:09:   sqlState: '42S02',
+24/05/2026 17:05:09:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 17:05:09: }
+24/05/2026 17:05:09: Error fetching espessuras: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 17:05:09:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 17:05:09:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 17:05:09:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 17:05:09:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 17:05:09:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 17:05:09:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 17:05:09:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 17:05:09:   errno: 1146,
+24/05/2026 17:05:09:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 17:05:09:   sqlState: '42S02',
+24/05/2026 17:05:09:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 17:05:09: }
+24/05/2026 17:05:09: [DB] [lynxlocal] ⚠️  SLOW QUERY (1194ms | rows:40): SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC
+24/05/2026 17:05:09: [DB] 🔴 ERROR: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 17:05:09:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 17:05:09:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 17:05:09:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 17:05:09:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 17:05:09:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 17:05:09:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 17:05:09:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 17:05:09:   errno: 1146,
+24/05/2026 17:05:09:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 17:05:09:   sqlState: '42S02',
+24/05/2026 17:05:09:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 17:05:09: }
+24/05/2026 17:05:09: Error fetching espessuras: Error: Table 'lynxlocal.espessura' doesn't exist
+24/05/2026 17:05:09:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+24/05/2026 17:05:09:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+24/05/2026 17:05:09:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+24/05/2026 17:05:09:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+24/05/2026 17:05:09:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+24/05/2026 17:05:09:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+24/05/2026 17:05:09:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+24/05/2026 17:05:09:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+24/05/2026 17:05:09:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+24/05/2026 17:05:09:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+24/05/2026 17:05:09:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+24/05/2026 17:05:09:   code: 'ER_NO_SUCH_TABLE',
+24/05/2026 17:05:09:   errno: 1146,
+24/05/2026 17:05:09:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+24/05/2026 17:05:09:   sqlState: '42S02',
+24/05/2026 17:05:09:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+24/05/2026 17:05:09: }
+24/05/2026 17:05:09: [DB] [lynxlocal] ⚠️  SLOW QUERY (1202ms | rows:12): SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor
+24/05/2026 17:07:07: [TenantMiddleware] No token provided for /config?limit=100
+24/05/2026 17:07:07: [TenantMiddleware] No token provided for /config?limit=100
+25/05/2026 08:18:34: [TenantMiddleware] No token provided for /config?limit=100
+25/05/2026 08:18:34: [TenantMiddleware] No token provided for /config?limit=100
+25/05/2026 08:18:48: [DB] [lynxlocal] ⚠️  SLOW QUERY (358ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 08:25:38: [DB] [lynxlocal] ⚠️  SLOW QUERY (1793ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:25:38: [DB] [lynxlocal] ⚠️  SLOW QUERY (990ms | rows:1): SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'
+25/05/2026 08:25:38: [DB] [lynxlocal] ⚠️  SLOW QUERY (1808ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:25:38: [DB] [lynxlocal] ⚠️  SLOW QUERY (1750ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 08:27:43: [DB] [lynxlocal] ⚠️  SLOW QUERY (1566ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:27:43: [DB] [lynxlocal] ⚠️  SLOW QUERY (1600ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3185ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3099ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3182ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3095ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3122ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 08:32:02: [DB] [lynxlocal] ⚠️  SLOW QUERY (3164ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 15:44:08: [DB] [lynxlocal] ⚠️  SLOW QUERY (1978ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 15:44:08: [DB] [lynxlocal] ⚠️  SLOW QUERY (860ms | rows:1): SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'
+25/05/2026 15:44:08: [DB] [lynxlocal] ⚠️  SLOW QUERY (1976ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 15:44:55: [DB] 🔴 ERROR: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55: Error: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+25/05/2026 15:44:55:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+25/05/2026 15:44:55:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+25/05/2026 15:44:55:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+25/05/2026 15:44:55:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+25/05/2026 15:44:55:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+25/05/2026 15:44:55:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+25/05/2026 15:44:55:   code: 'ER_NO_SUCH_TABLE',
+25/05/2026 15:44:55:   errno: 1146,
+25/05/2026 15:44:55:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+25/05/2026 15:44:55:   sqlState: '42S02',
+25/05/2026 15:44:55:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+25/05/2026 15:44:55: }
+25/05/2026 15:44:55: Error fetching espessuras: Error: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+25/05/2026 15:44:55:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+25/05/2026 15:44:55:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+25/05/2026 15:44:55:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+25/05/2026 15:44:55:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+25/05/2026 15:44:55:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+25/05/2026 15:44:55:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+25/05/2026 15:44:55:   code: 'ER_NO_SUCH_TABLE',
+25/05/2026 15:44:55:   errno: 1146,
+25/05/2026 15:44:55:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+25/05/2026 15:44:55:   sqlState: '42S02',
+25/05/2026 15:44:55:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+25/05/2026 15:44:55: }
+25/05/2026 15:44:55: [DB] 🔴 ERROR: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55: Error: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+25/05/2026 15:44:55:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+25/05/2026 15:44:55:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+25/05/2026 15:44:55:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+25/05/2026 15:44:55:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+25/05/2026 15:44:55:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+25/05/2026 15:44:55:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+25/05/2026 15:44:55:   code: 'ER_NO_SUCH_TABLE',
+25/05/2026 15:44:55:   errno: 1146,
+25/05/2026 15:44:55:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+25/05/2026 15:44:55:   sqlState: '42S02',
+25/05/2026 15:44:55:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+25/05/2026 15:44:55: }
+25/05/2026 15:44:55: Error fetching espessuras: Error: Table 'lynxlocal.espessura' doesn't exist
+25/05/2026 15:44:55:     at PromisePool.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\pool.js:54:22)
+25/05/2026 15:44:55:     at Object.execute (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\config\db.js:90:31)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:9220:35
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:157:13)
+25/05/2026 15:44:55:     at Route.dispatch (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\route.js:117:3)
+25/05/2026 15:44:55:     at handle (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:435:11)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:295:15
+25/05/2026 15:44:55:     at processParams (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:582:12)
+25/05/2026 15:44:55:     at next (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:291:5)
+25/05/2026 15:44:55:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:72:13
+25/05/2026 15:44:55:     at AsyncLocalStorage.run (node:internal/async_local_storage/async_context_frame:63:14)
+25/05/2026 15:44:55:     at tenantMiddleware (C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\middleware\tenant.js:71:30)
+25/05/2026 15:44:55:     at Layer.handleRequest (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\lib\layer.js:152:17)
+25/05/2026 15:44:55:     at trimPrefix (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\router\index.js:342:13) {
+25/05/2026 15:44:55:   code: 'ER_NO_SUCH_TABLE',
+25/05/2026 15:44:55:   errno: 1146,
+25/05/2026 15:44:55:   sql: 'SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC',
+25/05/2026 15:44:55:   sqlState: '42S02',
+25/05/2026 15:44:55:   sqlMessage: "Table 'lynxlocal.espessura' doesn't exist"
+25/05/2026 15:44:55: }
+25/05/2026 15:49:00: [DB] [lynxlocal] ⚠️  SLOW QUERY (1596ms | rows:1): SELECT * FROM familia WHERE IdFamilia = ?
+25/05/2026 15:56:54: [DB] [lynxlocal] ⚠️  SLOW QUERY (1415ms | rows:7): SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto
+25/05/2026 15:56:54: [DB] [lynxlocal] ⚠️  SLOW QUERY (1618ms | rows:82): SELECT p.IdProjeto, p.Projeto, p.DescProjeto, CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa, p.DataPrevisao, p.DataCriacao, TRIM(p.Finalizado) as Finalizado, p.liberado, p.StatusProj, p.Des
+25/05/2026 16:08:29: [DB] [lynxlocal] ⚠️  SLOW QUERY (2085ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 16:14:40: [DB] [lynxlocal] ⚠️  SLOW QUERY (1435ms | rows:9): SELECT TipoMedida as id, CONCAT(TipoMedida, ' - ', COALESCE(DescMedida, '')) as label FROM medida WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoMedida
+25/05/2026 16:14:40: [DB] [lynxlocal] ⚠️  SLOW QUERY (1478ms | rows:3): SELECT IdTipoProduto, TipoProduto, Unidade, Descricao, DataCriacao FROM tipoproduto WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoProduto
+25/05/2026 16:14:46: [DB] [lynxlocal] ⚠️  SLOW QUERY (246ms | rows:82): SELECT p.IdProjeto, p.Projeto, p.DescProjeto, CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa, p.DataPrevisao, p.DataCriacao, TRIM(p.Finalizado) as Finalizado, p.liberado, p.StatusProj, p.Des
+25/05/2026 16:14:47: [DB] [lynxlocal] ⚠️  SLOW QUERY (1587ms | rows:2): SELECT IdTipoTarefa, TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoTarefa
+25/05/2026 16:15:44: [DB] [lynxlocal] ⚠️  SLOW QUERY (363ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (1203ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (822ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (1160ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (812ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (682ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 16:17:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (847ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 16:19:54: [DB] [lynxlocal] ⚠️  SLOW QUERY (1195ms | rows:1): UPDATE tags SET PlanejadoInicioAprovacao = ?, UsuarioPlanejadoInicioAprovacao = ? WHERE IdTag IN (?)
+25/05/2026 16:27:04: [DB] [lynxlocal] ⚠️  SLOW QUERY (1380ms | rows:7): SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto
+25/05/2026 16:27:04: [DB] [lynxlocal] ⚠️  SLOW QUERY (1479ms | rows:82): SELECT p.IdProjeto, p.Projeto, p.DescProjeto, CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa, p.DataPrevisao, p.DataCriacao, TRIM(p.Finalizado) as Finalizado, p.liberado, p.StatusProj, p.Des
+25/05/2026 16:29:25: [DB] [lynxlocal] ⚠️  SLOW QUERY (1158ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 16:31:53: [DB] [lynxlocal] ⚠️  SLOW QUERY (1404ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 16:36:21: [DB] [lynxlocal] ⚠️  SLOW QUERY (556ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 16:36:21: [DB] [lynxlocal] ⚠️  SLOW QUERY (513ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 16:36:21: [DB] [lynxlocal] ⚠️  SLOW QUERY (469ms | rows:449): SELECT IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico, PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao, PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, Realizado
+25/05/2026 19:15:23: [DB] [lynxlocal] ⚠️  SLOW QUERY (1016ms | rows:18): SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'configuracaosistema'
+25/05/2026 19:15:23: [DB] [lynxlocal] ⚠️  SLOW QUERY (1017ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 20:33:57: [Tenant] Middleware JWT Error Details: {
+25/05/2026 20:33:57:   name: 'TokenExpiredError',
+25/05/2026 20:33:57:   message: 'jwt expired',
+25/05/2026 20:33:57:   tokenHeader: 'eyJhbGciOiJIUzI1NiIs...'
+25/05/2026 20:33:57: }
+25/05/2026 20:33:57: [Tenant] Middleware JWT Error Details: {
+25/05/2026 20:33:57:   name: 'TokenExpiredError',
+25/05/2026 20:33:57:   message: 'jwt expired',
+25/05/2026 20:33:57:   tokenHeader: 'eyJhbGciOiJIUzI1NiIs...'
+25/05/2026 20:33:57: }
+25/05/2026 20:33:57: [Tenant] Middleware JWT Error Details: {
+25/05/2026 20:33:57:   name: 'TokenExpiredError',
+25/05/2026 20:33:57:   message: 'jwt expired',
+25/05/2026 20:33:57:   tokenHeader: 'eyJhbGciOiJIUzI1NiIs...'
+25/05/2026 20:33:57: }
+25/05/2026 20:33:57: [TenantMiddleware] No token provided for /dashboard/stats?limit=100
+25/05/2026 20:33:57: [TenantMiddleware] No token provided for /dashboard/stats?limit=100
+25/05/2026 20:34:12: [DB] [lynxlocal] ⚠️  SLOW QUERY (325ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 20:36:30: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:36:30: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:24: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:24: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:27: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:27: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:43: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:43: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:58: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:37:58: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:38:17: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:38:17: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:39:02: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:39:02: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:39:05: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:39:05: [TenantMiddleware] No token provided for /config?limit=500
+25/05/2026 20:39:28: [TenantMiddleware] No token provided for /acompanhamento-etapas
+25/05/2026 20:40:22: [DB] [lynxlocal] ⚠️  SLOW QUERY (877ms | rows:1): SELECT MenuStructure FROM configuracaosistema LIMIT 1
+25/05/2026 20:40:32: Erro em /api/acompanhamento-etapas: Error: Unknown column 'p.Status' in 'field list'
+25/05/2026 20:40:32:     at PromisePoolConnection.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\connection.js:29:22)
+25/05/2026 20:40:32:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:12559:41
+25/05/2026 20:40:32:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+25/05/2026 20:40:32:   code: 'ER_BAD_FIELD_ERROR',
+25/05/2026 20:40:32:   errno: 1054,
+25/05/2026 20:40:32:   sql: '\n' +
+25/05/2026 20:40:32:     '            SELECT \n' +
+25/05/2026 20:40:32:     '                p.IdProjeto, \n' +
+25/05/2026 20:40:32:     '                p.Projeto, \n' +
+25/05/2026 20:40:32:     '                p.DataPrevisao,\n' +
+25/05/2026 20:40:32:     '                p.DataTermino as DataFinal,\n' +
+25/05/2026 20:40:32:     '                p.DescEmpresa as Cliente,\n' +
+25/05/2026 20:40:32:     '                p.Estado as EstadoOrigem,\n' +
+25/05/2026 20:40:32:     '                p.Status as StatusProj,\n' +
+25/05/2026 20:40:32:     '                COUNT(t.IdTag) as TotalTags,\n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao\n" +
+25/05/2026 20:40:32:     '            FROM projetos p\n' +
+25/05/2026 20:40:32:     "            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:32:     "            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:32:     '            GROUP BY p.IdProjeto\n' +
+25/05/2026 20:40:32:     '            ORDER BY p.IdProjeto DESC\n' +
+25/05/2026 20:40:32:     '        ',
+25/05/2026 20:40:32:   sqlState: '42S22',
+25/05/2026 20:40:32:   sqlMessage: "Unknown column 'p.Status' in 'field list'"
+25/05/2026 20:40:32: }
+25/05/2026 20:40:32: Erro em /api/acompanhamento-etapas: Error: Unknown column 'p.Status' in 'field list'
+25/05/2026 20:40:32:     at PromisePoolConnection.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\connection.js:29:22)
+25/05/2026 20:40:32:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:12559:41
+25/05/2026 20:40:32:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+25/05/2026 20:40:32:   code: 'ER_BAD_FIELD_ERROR',
+25/05/2026 20:40:32:   errno: 1054,
+25/05/2026 20:40:32:   sql: '\n' +
+25/05/2026 20:40:32:     '            SELECT \n' +
+25/05/2026 20:40:32:     '                p.IdProjeto, \n' +
+25/05/2026 20:40:32:     '                p.Projeto, \n' +
+25/05/2026 20:40:32:     '                p.DataPrevisao,\n' +
+25/05/2026 20:40:32:     '                p.DataTermino as DataFinal,\n' +
+25/05/2026 20:40:32:     '                p.DescEmpresa as Cliente,\n' +
+25/05/2026 20:40:32:     '                p.Estado as EstadoOrigem,\n' +
+25/05/2026 20:40:32:     '                p.Status as StatusProj,\n' +
+25/05/2026 20:40:32:     '                COUNT(t.IdTag) as TotalTags,\n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,\n" +
+25/05/2026 20:40:32:     '                \n' +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,\n" +
+25/05/2026 20:40:32:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao\n" +
+25/05/2026 20:40:32:     '            FROM projetos p\n' +
+25/05/2026 20:40:32:     "            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:32:     "            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:32:     '            GROUP BY p.IdProjeto\n' +
+25/05/2026 20:40:32:     '            ORDER BY p.IdProjeto DESC\n' +
+25/05/2026 20:40:32:     '        ',
+25/05/2026 20:40:32:   sqlState: '42S22',
+25/05/2026 20:40:32:   sqlMessage: "Unknown column 'p.Status' in 'field list'"
+25/05/2026 20:40:32: }
+25/05/2026 20:40:52: Erro em /api/acompanhamento-etapas: Error: Unknown column 'p.Status' in 'field list'
+25/05/2026 20:40:52:     at PromisePoolConnection.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\connection.js:29:22)
+25/05/2026 20:40:52:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:12559:41
+25/05/2026 20:40:52:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+25/05/2026 20:40:52:   code: 'ER_BAD_FIELD_ERROR',
+25/05/2026 20:40:52:   errno: 1054,
+25/05/2026 20:40:52:   sql: '\n' +
+25/05/2026 20:40:52:     '            SELECT \n' +
+25/05/2026 20:40:52:     '                p.IdProjeto, \n' +
+25/05/2026 20:40:52:     '                p.Projeto, \n' +
+25/05/2026 20:40:52:     '                p.DataPrevisao,\n' +
+25/05/2026 20:40:52:     '                p.DataTermino as DataFinal,\n' +
+25/05/2026 20:40:52:     '                p.DescEmpresa as Cliente,\n' +
+25/05/2026 20:40:52:     '                p.Estado as EstadoOrigem,\n' +
+25/05/2026 20:40:52:     '                p.Status as StatusProj,\n' +
+25/05/2026 20:40:52:     '                COUNT(t.IdTag) as TotalTags,\n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao\n" +
+25/05/2026 20:40:52:     '            FROM projetos p\n' +
+25/05/2026 20:40:52:     "            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:52:     "            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:52:     '            GROUP BY p.IdProjeto\n' +
+25/05/2026 20:40:52:     '            ORDER BY p.IdProjeto DESC\n' +
+25/05/2026 20:40:52:     '        ',
+25/05/2026 20:40:52:   sqlState: '42S22',
+25/05/2026 20:40:52:   sqlMessage: "Unknown column 'p.Status' in 'field list'"
+25/05/2026 20:40:52: }
+25/05/2026 20:40:52: Erro em /api/acompanhamento-etapas: Error: Unknown column 'p.Status' in 'field list'
+25/05/2026 20:40:52:     at PromisePoolConnection.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\connection.js:29:22)
+25/05/2026 20:40:52:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:12559:41
+25/05/2026 20:40:52:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+25/05/2026 20:40:52:   code: 'ER_BAD_FIELD_ERROR',
+25/05/2026 20:40:52:   errno: 1054,
+25/05/2026 20:40:52:   sql: '\n' +
+25/05/2026 20:40:52:     '            SELECT \n' +
+25/05/2026 20:40:52:     '                p.IdProjeto, \n' +
+25/05/2026 20:40:52:     '                p.Projeto, \n' +
+25/05/2026 20:40:52:     '                p.DataPrevisao,\n' +
+25/05/2026 20:40:52:     '                p.DataTermino as DataFinal,\n' +
+25/05/2026 20:40:52:     '                p.DescEmpresa as Cliente,\n' +
+25/05/2026 20:40:52:     '                p.Estado as EstadoOrigem,\n' +
+25/05/2026 20:40:52:     '                p.Status as StatusProj,\n' +
+25/05/2026 20:40:52:     '                COUNT(t.IdTag) as TotalTags,\n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,\n" +
+25/05/2026 20:40:52:     '                \n' +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,\n" +
+25/05/2026 20:40:52:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao\n" +
+25/05/2026 20:40:52:     '            FROM projetos p\n' +
+25/05/2026 20:40:52:     "            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:52:     "            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:40:52:     '            GROUP BY p.IdProjeto\n' +
+25/05/2026 20:40:52:     '            ORDER BY p.IdProjeto DESC\n' +
+25/05/2026 20:40:52:     '        ',
+25/05/2026 20:40:52:   sqlState: '42S22',
+25/05/2026 20:40:52:   sqlMessage: "Unknown column 'p.Status' in 'field list'"
+25/05/2026 20:40:52: }
+25/05/2026 20:41:14: Erro em /api/acompanhamento-etapas: Error: Unknown column 'p.Status' in 'field list'
+25/05/2026 20:41:14:     at PromisePoolConnection.query (C:\SincoWeb\SINCO-WEB\SINCO-WEB\node_modules\mysql2\lib\promise\connection.js:29:22)
+25/05/2026 20:41:14:     at C:\SincoWeb\SINCO-WEB\SINCO-WEB\src\server.js:12559:41
+25/05/2026 20:41:14:     at process.processTicksAndRejections (node:internal/process/task_queues:103:5) {
+25/05/2026 20:41:14:   code: 'ER_BAD_FIELD_ERROR',
+25/05/2026 20:41:14:   errno: 1054,
+25/05/2026 20:41:14:   sql: '\n' +
+25/05/2026 20:41:14:     '            SELECT \n' +
+25/05/2026 20:41:14:     '                p.IdProjeto, \n' +
+25/05/2026 20:41:14:     '                p.Projeto, \n' +
+25/05/2026 20:41:14:     '                p.DataPrevisao,\n' +
+25/05/2026 20:41:14:     '                p.DataTermino as DataFinal,\n' +
+25/05/2026 20:41:14:     '                p.DescEmpresa as Cliente,\n' +
+25/05/2026 20:41:14:     '                p.Estado as EstadoOrigem,\n' +
+25/05/2026 20:41:14:     '                p.Status as StatusProj,\n' +
+25/05/2026 20:41:14:     '                COUNT(t.IdTag) as TotalTags,\n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,\n" +
+25/05/2026 20:41:14:     '                \n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,\n" +
+25/05/2026 20:41:14:     '                \n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,\n" +
+25/05/2026 20:41:14:     '                \n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,\n" +
+25/05/2026 20:41:14:     '                \n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,\n" +
+25/05/2026 20:41:14:     '                \n' +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,\n" +
+25/05/2026 20:41:14:     "                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao\n" +
+25/05/2026 20:41:14:     '            FROM projetos p\n' +
+25/05/2026 20:41:14:     "            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:41:14:     "            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '')\n" +
+25/05/2026 20:41:14:     '            GROUP BY p.IdProjeto\n' +
+25/05/2026 20:41:14:     '            ORDER BY p.IdProjeto DESC\n' +
+25/05/2026 20:41:14:     '        ',
+25/05/2026 20:41:14:   sqlState: '42S22',
+25/05/2026 20:41:14:   sqlMessage: "Unknown column 'p.Status' in 'field list'"
+25/05/2026 20:41:14: }

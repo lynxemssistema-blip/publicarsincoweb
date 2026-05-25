@@ -29,6 +29,7 @@ import PendenciaRomaneioPage from './pages/PendenciaRomaneio';
 import RomaneioRetornoPage from './pages/RomaneioRetorno';
 import VisaoGeralProducaoPage from './pages/VisaoGeralProducao';
 import AcompanhamentoGeralPage from './pages/AcompanhamentoGeral';
+import AcompanhamentoEtapasPage from './pages/AcompanhamentoEtapas';
 import VisaoGeralEngenhariaPage from './pages/VisaoGeralEngenharia';
 import ControleExpedicaoPage from './pages/ControleExpedicao';
 import PesquisarDesenhoPage from './pages/PesquisarDesenho';
@@ -100,6 +101,19 @@ function AppContent() {
                 savedMenu = [...savedMenu.slice(0, vgIdx + 1), agItem, ...savedMenu.slice(vgIdx + 1)];
               } else {
                 savedMenu = [...savedMenu, agItem];
+              }
+            }
+          }
+
+          // Force add 'acompanhamento-etapas' if missing
+          if (!savedMenu.find(item => item.id === 'acompanhamento-etapas')) {
+            const aeItem = defaultMenuItems.find(item => item.id === 'acompanhamento-etapas');
+            if (aeItem) {
+              const agIdx = savedMenu.findIndex(item => item.id === 'acompanhamento-geral');
+              if (agIdx >= 0) {
+                savedMenu = [...savedMenu.slice(0, agIdx + 1), aeItem, ...savedMenu.slice(agIdx + 1)];
+              } else {
+                savedMenu = [...savedMenu, aeItem];
               }
             }
           }
@@ -341,6 +355,8 @@ function AppContent() {
         return <ApontamentosParciaisPage />;
       case 'acompanhamento-geral':
         return <AcompanhamentoGeralPage />;
+      case 'acompanhamento-etapas':
+        return <AcompanhamentoEtapasPage />;
       case 'visao-geral-producao':
         return <VisaoGeralProducaoPage />;
       case 'visao-geral-engenharia':
