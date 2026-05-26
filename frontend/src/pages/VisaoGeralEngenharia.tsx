@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, Loader, Edit3, Save, X, CalendarDays, Maximize2, Minimize2 } from 'lucide-react';
+import { Search, Loader, Edit3, Save, X, CalendarDays, Maximize2, Minimize2, ChevronDown, ChevronRight, Flag } from 'lucide-react';
 
 const API_BASE = '/api';
 
@@ -11,6 +11,7 @@ interface TagData {
     DescEmpresa: string;
     TipoProduto: string;
     DataPrevisao: string;
+    DataTermino: string;
     ProjetistaPlanejado: string;
     CaminhoIsometrico: string;
 
@@ -102,6 +103,8 @@ export default function VisaoGeralEngenharia() {
 
     const [activeSectors, setActiveSectors] = useState<Set<SectorType>>(new Set());
     const [isExpanded, setIsExpanded] = useState(false);
+    // Acordeão: qual projeto está expandido (exibe linha-resumo de datas)
+    const [expandedProjeto, setExpandedProjeto] = useState<string | null>(null);
     
     // Filters — individual
     const [fProjeto, setFProjeto] = useState('');
@@ -151,7 +154,7 @@ export default function VisaoGeralEngenharia() {
         return br;
     };
 
-    const getUser = () => { try { const u = JSON.parse(localStorage.getItem('sinco_user') || '{}'); return u.username || u.name || 'Sistema'; } catch { return 'Sistema'; } };
+    const getUser = () => { try { const u = JSON.parse(localStorage.getItem('sinco_user') || '{}'); return u.nome || u.NomeCompleto || u.username || 'Sistema'; } catch { return 'Sistema'; } };
 
     const toggleSelect = (id: number) => {
         const next = new Set(selectedIds);
@@ -340,7 +343,7 @@ export default function VisaoGeralEngenharia() {
                 {/* Title bar */}
                 <div className="flex items-center justify-between">
                     <div className="font-bold text-gray-800 text-sm">
-                        Visão Geral Engenharia
+                        Visão Engenharia
                         <span className="ml-2 text-gray-500 font-normal text-xs">({filteredTags.length} de {tags.length} tags)</span>
                     </div>
                     {(fProjeto || fEmpresa || fTag || fDescTag || fProjetista || fTipo || fPrevIni || fPrevFim) && (
@@ -543,7 +546,8 @@ export default function VisaoGeralEngenharia() {
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 min-w-[60px]">Tag</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 min-w-[150px]">Descrição Tag</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300">Produto</th>
-                            <th className="px-2 py-1.5 border-r border-b border-gray-300">Previsão</th>
+                            <th className="px-2 py-1.5 border-r border-b border-gray-300">Previsão Tag</th>
+                            <th className="px-2 py-1.5 border-r border-b border-gray-300 text-red-700">Data Final Proj.</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300">Projetista</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 w-24">Des. Isométrico</th>
                             
@@ -575,79 +579,182 @@ export default function VisaoGeralEngenharia() {
                         )}
                     </thead>
                     <tbody className="divide-y divide-gray-200">
-                        {filteredTags.map((t, idx) => (
-                            <tr key={t.IdTag} className={`hover:bg-[#E0E800]/10 transition-colors ${selectedIds.has(t.IdTag) ? 'bg-[#E0E800]/20' : idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}`}>
-                                <td className="px-2 py-1 border-r border-gray-200 text-center">
-                                    <input type="checkbox" checked={selectedIds.has(t.IdTag)} onChange={() => toggleSelect(t.IdTag)} className="w-3 h-3 cursor-pointer" />
-                                </td>
-                                <td className="px-2 py-1 border-r border-gray-200">{t.Projeto}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[150px]" title={t.DescEmpresa}>{t.DescEmpresa}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 font-bold">{t.Tag}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[250px]" title={t.DescTag}>{t.DescTag}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[100px]" title={t.TipoProduto}>{t.TipoProduto}</td>
-                                <td className="px-2 py-1 border-r border-gray-200">{t.DataPrevisao}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 max-w-[120px] overflow-hidden text-ellipsis text-[#32423D] font-semibold" title={t.ProjetistaPlanejado}>{t.ProjetistaPlanejado}</td>
-                                <td className="px-2 py-1 border-r border-gray-200 text-center text-xs">
-                                    {t.CaminhoIsometrico ? (
-                                        <div className="flex items-center gap-2 justify-center">
-                                            <a href={t.CaminhoIsometrico} target="_blank" rel="noreferrer" className="text-[#32423D] hover:text-[#32423D]/70 hover:underline flex-1 truncate font-medium" title={t.CaminhoIsometrico}>Baixar PDF</a>
-                                            <button onClick={() => confirmClearIso(t.IdTag, t.Tag)} className="text-red-500 hover:text-red-700 bg-red-50 px-1 rounded border border-red-200" title="Remover Associação">✖</button>
-                                        </div>
-                                    ) : (
-                                        <label className="cursor-pointer text-[#32423D] hover:text-[#32423D]/70 flex items-center justify-center gap-1 font-medium bg-[#E0E800]/20 px-1 py-0.5 rounded border border-[#E0E800]/50">
-                                            <Edit3 size={12} /> Associar
-                                            <input type="file" accept=".pdf" className="hidden" onChange={(e) => handleUploadIso(e, t.IdTag, t.Tag)} />
-                                        </label>
-                                    )}
-                                </td>
+                        {filteredTags.map((t, idx) => {
+                            // Última tag deste projeto no conjunto filtrado?
+                            const isLastOfProject = idx === filteredTags.length - 1 || filteredTags[idx + 1].Projeto !== t.Projeto;
+                            const projetoTagsFiltered = filteredTags.filter(x => x.Projeto === t.Projeto);
+                            const isExpProj = expandedProjeto === t.Projeto;
 
-                                {/* Dynamic Sector Columns Body */}
-                                {Array.from(activeSectors).map(s => {
-                                    const pi = (t as any)[`PlanejadoInicio${s}`];
-                                    const pf = (t as any)[`PlanejadoFinal${s}`];
-                                    const ri = (t as any)[`RealizadoInicio${s}`];
-                                    const rf = (t as any)[`RealizadoFinal${s}`];
-                                    return (
-                                        <React.Fragment key={`${t.IdTag}-${s}`}>
-                                            <td className="px-0.5 py-1 border-r border-gray-200 text-center">
-                                                <input 
-                                                    type="date" 
-                                                    value={brToIso(pi)} 
-                                                    onChange={e => handleInlineDateChange(t.IdTag, s, 'PlanejadoInicio', e.target.value)}
-                                                    className="w-[110px] text-[11px] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#32423D]/40 rounded px-1 text-gray-700"
-                                                />
+                            // Calcula min/max de datas por setor para a linha-resumo
+                            const calcRange = (field: string) => {
+                                const vals = projetoTagsFiltered
+                                    .map(x => (x as any)[field])
+                                    .filter(Boolean)
+                                    .map((v: string) => {
+                                        const p = v.split('/');
+                                        return p.length === 3 ? new Date(`${p[2]}-${p[1]}-${p[0]}`) : null;
+                                    })
+                                    .filter(Boolean) as Date[];
+                                if (!vals.length) return { min: '—', max: '—' };
+                                const min = new Date(Math.min(...vals.map(d => d.getTime())));
+                                const max = new Date(Math.max(...vals.map(d => d.getTime())));
+                                const fmt = (d: Date) => d.toLocaleDateString('pt-BR');
+                                return { min: fmt(min), max: fmt(max) };
+                            };
+
+                            return (
+                                <React.Fragment key={t.IdTag}>
+                                    <tr className={`hover:bg-[#E0E800]/10 transition-colors ${selectedIds.has(t.IdTag) ? 'bg-[#E0E800]/20' : idx % 2 === 0 ? 'bg-white' : 'bg-[#fafbfc]'}`}>
+                                        <td className="px-2 py-1 border-r border-gray-200 text-center">
+                                            <input type="checkbox" checked={selectedIds.has(t.IdTag)} onChange={() => toggleSelect(t.IdTag)} className="w-3 h-3 cursor-pointer" />
+                                        </td>
+                                        <td
+                                            className="px-2 py-1 border-r border-gray-200 cursor-pointer select-none group"
+                                            onClick={() => setExpandedProjeto(isExpProj ? null : t.Projeto)}
+                                            title={isExpProj ? 'Ocultar datas do projeto' : 'Exibir datas do projeto'}
+                                        >
+                                            <span className="flex items-center gap-1">
+                                                {isExpProj
+                                                    ? <ChevronDown size={11} className="text-[#32423D] shrink-0" />
+                                                    : <ChevronRight size={11} className="text-gray-400 group-hover:text-[#32423D] shrink-0" />}
+                                                <span className="font-semibold">{t.Projeto}</span>
+                                            </span>
+                                        </td>
+                                        <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[150px]" title={t.DescEmpresa}>{t.DescEmpresa}</td>
+                                        <td className="px-2 py-1 border-r border-gray-200 font-bold">{t.Tag}</td>
+                                        <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[250px]" title={t.DescTag}>{t.DescTag}</td>
+                                        <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[100px]" title={t.TipoProduto}>{t.TipoProduto}</td>
+                                        <td className="px-2 py-1 border-r border-gray-200">{t.DataPrevisao}</td>
+                                        <td className="px-1 py-1 border-r border-gray-200">
+                                            {t.DataTermino ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-400 text-amber-800 font-bold text-[11px] whitespace-nowrap">
+                                                    <Flag size={9} className="shrink-0" />
+                                                    {t.DataTermino}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300 text-[11px] pl-1">—</span>
+                                            )}
+                                        </td>
+                                        <td className="px-2 py-1 border-r border-gray-200 max-w-[120px] overflow-hidden text-ellipsis text-[#32423D] font-semibold" title={t.ProjetistaPlanejado}>{t.ProjetistaPlanejado}</td>
+                                        <td className="px-2 py-1 border-r border-gray-200 text-center text-xs">
+                                            {t.CaminhoIsometrico ? (
+                                                <div className="flex items-center gap-2 justify-center">
+                                                    <a href={t.CaminhoIsometrico} target="_blank" rel="noreferrer" className="text-[#32423D] hover:text-[#32423D]/70 hover:underline flex-1 truncate font-medium" title={t.CaminhoIsometrico}>Baixar PDF</a>
+                                                    <button onClick={() => confirmClearIso(t.IdTag, t.Tag)} className="text-red-500 hover:text-red-700 bg-red-50 px-1 rounded border border-red-200" title="Remover Associação">✖</button>
+                                                </div>
+                                            ) : (
+                                                <label className="cursor-pointer text-[#32423D] hover:text-[#32423D]/70 flex items-center justify-center gap-1 font-medium bg-[#E0E800]/20 px-1 py-0.5 rounded border border-[#E0E800]/50">
+                                                    <Edit3 size={12} /> Associar
+                                                    <input type="file" accept=".pdf" className="hidden" onChange={(e) => handleUploadIso(e, t.IdTag, t.Tag)} />
+                                                </label>
+                                            )}
+                                        </td>
+
+                                        {/* Dynamic Sector Columns Body */}
+                                        {Array.from(activeSectors).map(s => {
+                                            const pi = (t as any)[`PlanejadoInicio${s}`];
+                                            const pf = (t as any)[`PlanejadoFinal${s}`];
+                                            const ri = (t as any)[`RealizadoInicio${s}`];
+                                            const rf = (t as any)[`RealizadoFinal${s}`];
+                                            return (
+                                                <React.Fragment key={`${t.IdTag}-${s}`}>
+                                                    {/* Plan. Início - azul */}
+                                                    <td className="px-0.5 py-0.5 border-r border-gray-200 text-center">
+                                                        <input
+                                                            type="date"
+                                                            value={brToIso(pi)}
+                                                            onChange={e => handleInlineDateChange(t.IdTag, s, 'PlanejadoInicio', e.target.value)}
+                                                            className={`w-[110px] text-[11px] font-bold rounded px-1 py-0.5 border outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer ${
+                                                                pi ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
+                                                            }`}
+                                                        />
+                                                    </td>
+                                                    {/* Plan. Final - azul */}
+                                                    <td className="px-0.5 py-0.5 border-r border-gray-200 text-center">
+                                                        <input
+                                                            type="date"
+                                                            value={brToIso(pf)}
+                                                            onChange={e => handleInlineDateChange(t.IdTag, s, 'PlanejadoFinal', e.target.value)}
+                                                            className={`w-[110px] text-[11px] font-bold rounded px-1 py-0.5 border outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer ${
+                                                                pf ? 'bg-blue-100 border-blue-400 text-blue-800' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
+                                                            }`}
+                                                        />
+                                                    </td>
+                                                    {/* Real. Início - verde */}
+                                                    <td className="px-0.5 py-0.5 border-r border-gray-200 text-center">
+                                                        <input
+                                                            type="date"
+                                                            value={brToIso(ri)}
+                                                            onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoInicio', e.target.value)}
+                                                            className={`w-[110px] text-[11px] font-black rounded px-1 py-0.5 border outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer ${
+                                                                ri ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
+                                                            }`}
+                                                        />
+                                                    </td>
+                                                    {/* Real. Final - verde */}
+                                                    <td className="px-0.5 py-0.5 border-r border-gray-200 text-center">
+                                                        <input
+                                                            type="date"
+                                                            value={brToIso(rf)}
+                                                            onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoFinal', e.target.value)}
+                                                            className={`w-[110px] text-[11px] font-black rounded px-1 py-0.5 border outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer ${
+                                                                rf ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
+                                                            }`}
+                                                        />
+                                                    </td>
+                                                </React.Fragment>
+                                            );
+                                        })}
+                                    </tr>
+
+                                    {/* Linha-resumo de datas do projeto (acordeão) */}
+                                    {isLastOfProject && isExpProj && (
+                                        <tr className="bg-[#32423D]/8 border-t-2 border-[#32423D]/30">
+                                            <td colSpan={2} className="px-3 py-2 bg-[#32423D] text-white text-[10px] font-black uppercase tracking-wider whitespace-nowrap">
+                                                📅 Resumo Datas — {t.Projeto}
                                             </td>
-                                            <td className="px-0.5 py-1 border-r border-gray-200 text-center">
-                                                <input 
-                                                    type="date" 
-                                                    value={brToIso(pf)} 
-                                                    onChange={e => handleInlineDateChange(t.IdTag, s, 'PlanejadoFinal', e.target.value)}
-                                                    className="w-[110px] text-[11px] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#32423D]/40 rounded px-1 text-gray-700"
-                                                />
+                                            <td colSpan={8} className="px-2 py-2 bg-[#32423D]/5">
+                                                <div className="flex flex-wrap gap-3">
+                                                    {SECTORS.map(s => {
+                                                        const ini = calcRange(`PlanejadoInicio${s}`);
+                                                        const fim = calcRange(`PlanejadoFinal${s}`);
+                                                        const rIni = calcRange(`RealizadoInicio${s}`);
+                                                        const rFim = calcRange(`RealizadoFinal${s}`);
+                                                        const colors = getSectorColors(s);
+                                                        return (
+                                                            <div key={s} className={`flex flex-col gap-0.5 px-2 py-1 rounded border text-[10px] min-w-[120px] ${colors.head}`}>
+                                                                <div className="font-black text-[11px] mb-0.5 uppercase">{s}</div>
+                                                                <div className="flex justify-between gap-2">
+                                                                    <span className="text-[9px] font-bold opacity-70">Plan. Ini:</span>
+                                                                    <span className="font-semibold">{ini.min}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-2">
+                                                                    <span className="text-[9px] font-bold opacity-70">Plan. Fim:</span>
+                                                                    <span className="font-semibold">{fim.max}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-2">
+                                                                    <span className="text-[9px] font-bold opacity-70">Real. Ini:</span>
+                                                                    <span className="font-bold">{rIni.min}</span>
+                                                                </div>
+                                                                <div className="flex justify-between gap-2">
+                                                                    <span className="text-[9px] font-bold opacity-70">Real. Fim:</span>
+                                                                    <span className="font-bold">{rFim.max}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
                                             </td>
-                                            <td className="px-0.5 py-1 border-r border-gray-200 text-center">
-                                                <input 
-                                                    type="date" 
-                                                    value={brToIso(ri)} 
-                                                    onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoInicio', e.target.value)}
-                                                    className="w-[110px] text-[11px] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#32423D]/40 rounded px-1 text-gray-700 font-bold"
-                                                />
-                                            </td>
-                                            <td className="px-0.5 py-1 border-r border-gray-200 text-center">
-                                                <input 
-                                                    type="date" 
-                                                    value={brToIso(rf)} 
-                                                    onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoFinal', e.target.value)}
-                                                    className="w-[110px] text-[11px] bg-transparent border-none outline-none focus:ring-1 focus:ring-[#32423D]/40 rounded px-1 text-gray-700 font-bold"
-                                                />
-                                            </td>
-                                        </React.Fragment>
-                                    );
-                                })}
-                            </tr>
-                        ))}
+                                            {activeSectors.size > 0 && (
+                                                <td colSpan={activeSectors.size * 4} className="bg-[#32423D]/5" />
+                                            )}
+                                        </tr>
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
                         {filteredTags.length === 0 && !loading && (
-                            <tr><td colSpan={9 + (activeSectors.size * 4)} className="p-4 text-center text-gray-500">Nenhuma tag encontrada.</td></tr>
+                            <tr><td colSpan={10 + (activeSectors.size * 4)} className="p-4 text-center text-gray-500">Nenhuma tag encontrada.</td></tr>
                         )}
                     </tbody>
                 </table>

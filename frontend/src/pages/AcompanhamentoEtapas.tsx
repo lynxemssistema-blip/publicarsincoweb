@@ -5,6 +5,27 @@ import {
     ChevronDown, ChevronUp, AlertCircle, CheckCircle, Maximize2, Minimize2
 } from 'lucide-react';
 
+// Helper: lê NomeCompleto do usuário logado
+// O servidor armazena NomeCompleto da tabela usuario no campo "nome" do sinco_user
+const getUsuarioLogado = (): string => {
+    try {
+        const u = JSON.parse(localStorage.getItem('sinco_user') || '{}');
+        return u.nome || u.NomeCompleto || u.nomecompleto || u.nome_completo || u.username || 'Sistema';
+    } catch { return 'Sistema'; }
+};
+
+// Converte datas ISO (YYYY-MM-DD) ou já em BR (DD/MM/YYYY) para exibição DD/MM/AAAA
+const fmtBR = (d?: string | null): string | null => {
+    if (!d || !d.trim()) return null;
+    const s = d.trim();
+    if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s.substring(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+        const [y, m, dd] = s.substring(0, 10).split('-');
+        return `${dd}/${m}/${y}`;
+    }
+    return s;
+};
+
 interface EtapasRow {
     IdProjeto: number;
     Projeto: string;
@@ -13,6 +34,7 @@ interface EtapasRow {
     Cliente: string;
     EstadoOrigem: string;
     StatusProj: string;
+    liberado: string | null;
     TotalTags: number;
     FaltaMedicao: number;
     OkMedicao: number;
@@ -67,16 +89,11 @@ export default function AcompanhamentoEtapas() {
     const [selectedTagIds, setSelectedTagIds] = useState<Set<number>>(new Set());
     const [loadingTags, setLoadingTags] = useState(false);
 
-    // Linhas mostrando datas
-    const [viewDatesRows, setViewDatesRows] = useState<Set<number>>(new Set());
+    // Linha mostrando datas — acordeão exclusivo (só 1 projeto por vez)
+    const [viewDatesRow, setViewDatesRow] = useState<number | null>(null);
 
     const toggleDatesView = (idProjeto: number) => {
-        setViewDatesRows(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(idProjeto)) newSet.delete(idProjeto);
-            else newSet.add(idProjeto);
-            return newSet;
-        });
+        setViewDatesRow(prev => prev === idProjeto ? null : idProjeto);
     };
 
     const updateObservacao = async (idProjeto: number, novaObs: string) => {
@@ -115,7 +132,21 @@ export default function AcompanhamentoEtapas() {
     }, []);
 
     const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value }));
+        setFilters(prev => ({ ...prev, [e.target.name]: e.target.value.toUpperCase() }));
+    };
+
+    const clearFilter = (name: string) => {
+        setFilters(prev => ({ ...prev, [name]: '' }));
+    };
+
+    const clearAllFilters = () => {
+        setFilters({
+            projeto: '', cliente: '', estadoOrigem: '',
+            dataPrevisaoInicio: '', dataPrevisaoFim: '',
+            dataFinalInicio: '', dataFinalFim: '',
+            dataPlanejamentoInicio: '', dataPlanejamentoFim: '',
+            dataRealizadoInicio: '', dataRealizadoFim: ''
+        });
     };
 
     const handleSearch = (e: React.FormEvent) => {
@@ -179,11 +210,7 @@ export default function AcompanhamentoEtapas() {
                 return;
             }
 
-            let usuarioLogado = 'Sistema';
-            try {
-                const u = JSON.parse(localStorage.getItem('sinco_user') || '{}');
-                usuarioLogado = u.username || u.name || u.NomeCompleto || 'Sistema';
-            } catch (e) {}
+            const usuarioLogado = getUsuarioLogado();
 
             const response = await fetch(`/api/acompanhamento-etapas/projeto/${selectedProjeto.IdProjeto}/bulk-update`, {
                 method: 'PUT',
@@ -208,7 +235,10 @@ export default function AcompanhamentoEtapas() {
     };
 
     // Helper para gerar os campos do modal
-    const renderFormRow = (titulo: string, sulfixo: string) => (
+    const renderFormRow = (titulo: string, sulfixo: string) => {
+        const planIni = editForm[`PlanejadoInicio${sulfixo}`] || '';
+        const realDisabled = !planIni; // bloqueia Realizado se Plan. Início vazio
+        return (
         <div className="grid grid-cols-5 gap-2 items-center mb-2 border-b border-gray-100 pb-2">
             <div className="font-semibold text-gray-700 text-xs uppercase">{titulo}</div>
             <div className="col-span-2 grid grid-cols-2 gap-2 border-r border-gray-200 pr-2">
@@ -222,20 +252,27 @@ export default function AcompanhamentoEtapas() {
                 </div>
             </div>
             <div className="col-span-2 grid grid-cols-2 gap-2 pl-2">
-                <div>
-                    <label className="text-[10px] text-gray-500">Real. Início</label>
-                    <input type="date" name={`RealizadoInicio${sulfixo}`} value={editForm[`RealizadoInicio${sulfixo}`] || ''} onChange={handleEditChange} className="w-full text-xs p-1 border rounded" />
+                <div title={realDisabled ? 'Preencha Plan. Início antes de informar data Realizado' : ''}>
+                    <label className={`text-[10px] ${realDisabled ? 'text-red-400' : 'text-gray-500'}`}>Real. Início {realDisabled && <span className="font-bold">⚠</span>}</label>
+                    <input type="date" name={`RealizadoInicio${sulfixo}`} value={editForm[`RealizadoInicio${sulfixo}`] || ''} onChange={handleEditChange}
+                        disabled={realDisabled}
+                        className={`w-full text-xs p-1 border rounded ${realDisabled ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50' : ''}`} />
                 </div>
-                <div>
-                    <label className="text-[10px] text-gray-500">Real. Fim</label>
-                    <input type="date" name={sulfixo === 'Expedicao' ? 'realizadoFinalExpedicao' : `RealizadoFinal${sulfixo}`} value={editForm[sulfixo === 'Expedicao' ? 'realizadoFinalExpedicao' : `RealizadoFinal${sulfixo}`] || ''} onChange={handleEditChange} className="w-full text-xs p-1 border rounded" />
+                <div title={realDisabled ? 'Preencha Plan. Início antes de informar data Realizado' : ''}>
+                    <label className={`text-[10px] ${realDisabled ? 'text-red-400' : 'text-gray-500'}`}>Real. Fim {realDisabled && <span className="font-bold">⚠</span>}</label>
+                    <input type="date" name={sulfixo === 'Expedicao' ? 'realizadoFinalExpedicao' : `RealizadoFinal${sulfixo}`}
+                        value={editForm[sulfixo === 'Expedicao' ? 'realizadoFinalExpedicao' : `RealizadoFinal${sulfixo}`] || ''}
+                        onChange={handleEditChange}
+                        disabled={realDisabled}
+                        className={`w-full text-xs p-1 border rounded ${realDisabled ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50' : ''}`} />
                 </div>
             </div>
         </div>
-    );
+        );
+    };
 
     return (
-        <div className={`flex flex-col bg-gray-50 transition-all duration-300 ${isExpanded ? 'fixed inset-0 z-50 overflow-hidden' : 'h-[calc(100vh-4rem)]'}`}>
+        <div className={`flex flex-col bg-gray-50 transition-all duration-300 ${isExpanded ? 'fixed inset-0 z-50 overflow-hidden' : 'h-full'}`}>
                 
                 {/* HEADER & FILTERS */}
                 <div className={`bg-white shadow-sm transition-all duration-300 ${!showFilters ? 'p-2 border-b border-gray-200' : 'p-4 border-b border-gray-200'}`}>
@@ -251,54 +288,94 @@ export default function AcompanhamentoEtapas() {
                     </div>
 
                     <form onSubmit={handleSearch} className={`bg-gray-50 p-3 rounded-md border border-gray-100 ${!showFilters ? 'hidden' : 'block'}`}>
+                            {/* Campos Textuais */}
                             <div className="grid grid-cols-1 md:grid-cols-4 xl:grid-cols-6 gap-3 mb-3">
-                                {/* Campos Textuais */}
                                 <div>
                                     <label className="block text-[10px] uppercase font-semibold text-gray-500 mb-1">Projeto (Doc)</label>
-                                    <input type="text" name="projeto" value={filters.projeto} onChange={handleFilterChange} className="w-full text-xs p-1.5 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none" />
+                                    <div className="relative flex items-center">
+                                        <input type="text" name="projeto" value={filters.projeto} onChange={handleFilterChange} className="w-full text-xs p-1.5 pr-6 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none uppercase" />
+                                        {filters.projeto && <button type="button" onClick={() => clearFilter('projeto')} className="absolute right-1 text-gray-400 hover:text-red-500"><X size={12}/></button>}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] uppercase font-semibold text-gray-500 mb-1">Cliente / Obra</label>
-                                    <input type="text" name="cliente" value={filters.cliente} onChange={handleFilterChange} className="w-full text-xs p-1.5 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none" />
+                                    <div className="relative flex items-center">
+                                        <input type="text" name="cliente" value={filters.cliente} onChange={handleFilterChange} className="w-full text-xs p-1.5 pr-6 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none uppercase" />
+                                        {filters.cliente && <button type="button" onClick={() => clearFilter('cliente')} className="absolute right-1 text-gray-400 hover:text-red-500"><X size={12}/></button>}
+                                    </div>
                                 </div>
                                 <div>
                                     <label className="block text-[10px] uppercase font-semibold text-gray-500 mb-1">Estado Origem</label>
-                                    <input type="text" name="estadoOrigem" value={filters.estadoOrigem} onChange={handleFilterChange} className="w-full text-xs p-1.5 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none" />
+                                    <div className="relative flex items-center">
+                                        <input type="text" name="estadoOrigem" value={filters.estadoOrigem} onChange={handleFilterChange} className="w-full text-xs p-1.5 pr-6 border rounded focus:border-[#03624C] focus:ring-1 focus:ring-[#03624C] outline-none uppercase" />
+                                        {filters.estadoOrigem && <button type="button" onClick={() => clearFilter('estadoOrigem')} className="absolute right-1 text-gray-400 hover:text-red-500"><X size={12}/></button>}
+                                    </div>
                                 </div>
                             </div>
 
                             {/* Filtros de Data */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                {/* Data Previsão */}
                                 <div className="border border-gray-200 p-2 rounded bg-white">
                                     <label className="block text-[10px] uppercase font-semibold text-[#03624C] mb-1 flex items-center gap-1"><Calendar size={10}/> Data Previsão</label>
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="Início" name="dataPrevisaoInicio" value={filters.dataPrevisaoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
-                                        <input type="text" placeholder="Fim" name="dataPrevisaoFim" value={filters.dataPrevisaoFim} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
+                                    <div className="flex gap-1">
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Início" name="dataPrevisaoInicio" value={filters.dataPrevisaoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataPrevisaoInicio && <button type="button" onClick={() => clearFilter('dataPrevisaoInicio')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Fim" name="dataPrevisaoFim" value={filters.dataPrevisaoFim} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataPrevisaoFim && <button type="button" onClick={() => clearFilter('dataPrevisaoFim')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
                                     </div>
                                 </div>
+                                {/* Data Final */}
                                 <div className="border border-gray-200 p-2 rounded bg-white">
                                     <label className="block text-[10px] uppercase font-semibold text-[#03624C] mb-1 flex items-center gap-1"><Calendar size={10}/> Data Final</label>
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="Início" name="dataFinalInicio" value={filters.dataFinalInicio} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
-                                        <input type="text" placeholder="Fim" name="dataFinalFim" value={filters.dataFinalFim} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
+                                    <div className="flex gap-1">
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Início" name="dataFinalInicio" value={filters.dataFinalInicio} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataFinalInicio && <button type="button" onClick={() => clearFilter('dataFinalInicio')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Fim" name="dataFinalFim" value={filters.dataFinalFim} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataFinalFim && <button type="button" onClick={() => clearFilter('dataFinalFim')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
                                     </div>
                                 </div>
+                                {/* Data Planejamento */}
                                 <div className="border border-gray-200 p-2 rounded bg-white">
                                     <label className="block text-[10px] uppercase font-semibold text-[#03624C] mb-1 flex items-center gap-1"><Calendar size={10}/> Data Planejamento</label>
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="Início" name="dataPlanejamentoInicio" value={filters.dataPlanejamentoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
-                                        <input type="text" placeholder="Fim" name="dataPlanejamentoFim" value={filters.dataPlanejamentoFim} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
+                                    <div className="flex gap-1">
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Início" name="dataPlanejamentoInicio" value={filters.dataPlanejamentoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataPlanejamentoInicio && <button type="button" onClick={() => clearFilter('dataPlanejamentoInicio')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Fim" name="dataPlanejamentoFim" value={filters.dataPlanejamentoFim} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataPlanejamentoFim && <button type="button" onClick={() => clearFilter('dataPlanejamentoFim')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
                                     </div>
                                 </div>
+                                {/* Data Realizado */}
                                 <div className="border border-gray-200 p-2 rounded bg-white">
                                     <label className="block text-[10px] uppercase font-semibold text-[#03624C] mb-1 flex items-center gap-1"><Calendar size={10}/> Data Realizado</label>
-                                    <div className="flex gap-2">
-                                        <input type="text" placeholder="Início" name="dataRealizadoInicio" value={filters.dataRealizadoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
-                                        <input type="text" placeholder="Fim" name="dataRealizadoFim" value={filters.dataRealizadoFim} onChange={handleFilterChange} className="w-full text-xs p-1 border rounded outline-none" />
+                                    <div className="flex gap-1">
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Início" name="dataRealizadoInicio" value={filters.dataRealizadoInicio} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataRealizadoInicio && <button type="button" onClick={() => clearFilter('dataRealizadoInicio')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
+                                        <div className="relative flex-1">
+                                            <input type="text" placeholder="Fim" name="dataRealizadoFim" value={filters.dataRealizadoFim} onChange={handleFilterChange} className="w-full text-xs p-1 pr-5 border rounded outline-none" />
+                                            {filters.dataRealizadoFim && <button type="button" onClick={() => clearFilter('dataRealizadoFim')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500"><X size={10}/></button>}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div className="mt-3 flex justify-end">
+                            <div className="mt-3 flex justify-between items-center">
+                                <button type="button" onClick={clearAllFilters} className="text-xs text-gray-500 hover:text-red-500 flex items-center gap-1 border border-gray-300 px-3 py-1.5 rounded hover:border-red-300 transition-colors">
+                                    <X size={12}/> Limpar Todos
+                                </button>
                                 <button type="submit" className="bg-[#03624C] hover:bg-[#024a3a] text-white px-4 py-1.5 rounded-md text-sm font-medium shadow-sm flex items-center gap-2 transition-colors">
                                     <Search size={16} /> Filtrar
                                 </button>
@@ -307,19 +384,19 @@ export default function AcompanhamentoEtapas() {
                 </div>
 
                 {/* GRID SECTION */}
-                <div className="flex-1 overflow-hidden p-4 relative flex flex-col">
+                <div className="flex-1 p-4 relative flex flex-col min-h-0">
                     {loading ? (
                         <div className="absolute inset-0 flex items-center justify-center bg-white/50 z-50">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#03624C]"></div>
                         </div>
                     ) : (
-                        <div className="bg-white shadow-sm border border-gray-200 rounded-md overflow-auto flex-1 relative">
+                        <div className="scrollable-table bg-white shadow-sm border border-gray-200 rounded-md relative">
                             <table className="w-full text-left border-collapse min-w-[1200px]">
                                 <thead className="sticky top-0 z-40 bg-gray-100 shadow-sm">
                                     {/* CABEÇALHO PRINCIPAL */}
                                     <tr className="bg-gray-100 text-gray-700 text-[10px] uppercase tracking-wider border-b-2 border-gray-300">
                                         <th rowSpan={2} className="p-2 border-r border-gray-300 sticky left-0 bg-gray-100 z-50 w-[80px]">Doc/Proj</th>
-                                        <th rowSpan={2} className="p-2 border-r border-gray-300 sticky left-[80px] bg-gray-100 z-50 max-w-[200px]">Obra/Cliente</th>
+                                        <th rowSpan={2} className="p-2 sticky left-[80px] bg-gray-100 z-50 max-w-[200px]" style={{boxShadow: '2px 0 0 0 #9ca3af'}}>Obra/Cliente</th>
                                         <th rowSpan={2} className="p-2 border-r border-gray-300 text-center">Região</th>
                                         <th rowSpan={2} className="p-2 border-r border-gray-300 text-center min-w-[150px]">Observação</th>
                                         <th rowSpan={2} className="p-2 border-r border-gray-300 text-center">Status</th>
@@ -337,8 +414,8 @@ export default function AcompanhamentoEtapas() {
                                     <tr className="text-[10px] uppercase text-gray-600 border-b border-gray-300">
                                         {Array.from({length: 6}).map((_, i) => (
                                             <React.Fragment key={i}>
-                                                <th className="p-1.5 text-center border-r border-gray-200 bg-red-50 text-red-700 font-bold min-w-[70px]">Falta <span className="text-gray-400 font-normal">/ Plan.</span></th>
-                                                <th className="p-1.5 text-center border-r-2 border-gray-400 bg-green-50 text-green-700 font-bold min-w-[70px]">Ok <span className="text-gray-400 font-normal">/ Real.</span></th>
+                                                <th className="p-1.5 text-center border-r border-gray-200 bg-red-50 text-red-700 font-bold min-w-[70px]">Falta</th>
+                                                <th className="p-1.5 text-center border-r-2 border-gray-400 bg-green-50 text-green-700 font-bold min-w-[70px]">Ok</th>
                                             </React.Fragment>
                                         ))}
                                     </tr>
@@ -350,12 +427,20 @@ export default function AcompanhamentoEtapas() {
                                         </tr>
                                     ) : (
                                         data.map(row => {
-                                            const showDates = viewDatesRows.has(row.IdProjeto);
+                                            const showDates = viewDatesRow === row.IdProjeto;
+                                            const isLiberado = row.liberado?.toUpperCase() === 'S';
+                                            // Desabilitar botão calendario se não há nenhuma data
+                                            const hasDates = !!(row.PlanMedicao || row.RealMedicao ||
+                                                row.PlanIsometrico || row.RealIsometrico ||
+                                                row.PlanEngenharia || row.RealEngenharia ||
+                                                row.PlanAprovacao  || row.RealAprovacao  ||
+                                                row.PlanAcabamento || row.RealAcabamento ||
+                                                row.PlanExpedicao  || row.RealExpedicao);
                                             return (
                                             <React.Fragment key={row.IdProjeto}>
                                             <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors group">
                                                 <td className="p-2 border-r border-gray-200 sticky left-0 z-10 bg-white group-hover:bg-gray-50 font-medium text-[#03624C]">{row.Projeto || row.IdProjeto}</td>
-                                                <td className="p-2 border-r border-gray-200 sticky left-[80px] z-10 bg-white group-hover:bg-gray-50 truncate max-w-[200px]" title={row.Cliente}>{row.Cliente}</td>
+                                                <td className="p-2 sticky left-[80px] z-10 bg-white group-hover:bg-gray-50 truncate max-w-[200px]" style={{boxShadow: '2px 0 0 0 #9ca3af'}} title={row.Cliente}>{row.Cliente}</td>
                                                 <td className="p-2 border-r border-gray-200 text-center">{row.EstadoOrigem}</td>
                                                 <td className="p-2 border-r border-gray-200 text-center">
                                                     <input 
@@ -367,9 +452,15 @@ export default function AcompanhamentoEtapas() {
                                                     />
                                                 </td>
                                                 <td className="p-2 border-r border-gray-200 text-center">
-                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${row.StatusProj?.toUpperCase() === 'CONCLUIDO' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}>
-                                                        {row.StatusProj}
-                                                    </span>
+                                                    {isLiberado ? (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-500 text-emerald-800 text-[10px] font-bold">
+                                                            ✔ Liberado
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-400 text-amber-800 text-[10px] font-bold">
+                                                            ⏳ Pendente
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="p-2 border-r-4 border-gray-400 text-center whitespace-nowrap">{row.DataFinal}</td>
                                                 
@@ -399,7 +490,18 @@ export default function AcompanhamentoEtapas() {
 
                                                 {/* AÇÕES */}
                                                 <td className="p-2 border-l border-gray-200 text-center sticky right-0 z-10 bg-white group-hover:bg-gray-50 flex items-center justify-center gap-1 h-full min-h-[40px]">
-                                                    <button onClick={() => toggleDatesView(row.IdProjeto)} className={`p-1 rounded transition-colors ${showDates ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`} title="Alternar Datas/Quantidades">
+                                                    <button
+                                                        onClick={() => hasDates && toggleDatesView(row.IdProjeto)}
+                                                        disabled={!hasDates}
+                                                        className={`p-1 rounded transition-colors ${
+                                                            !hasDates
+                                                                ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                                                                : showDates
+                                                                    ? 'bg-indigo-100 text-indigo-700'
+                                                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                        }`}
+                                                        title={!hasDates ? 'Sem datas cadastradas' : 'Exibir datas de planejamento'}
+                                                    >
                                                         <Calendar size={16} />
                                                     </button>
                                                     <button onClick={() => openEditModal(row)} className="text-[#03624C] hover:text-[#024a3a] p-1 bg-teal-50 hover:bg-teal-100 rounded transition-colors" title="Editar Datas Lote">
@@ -408,34 +510,58 @@ export default function AcompanhamentoEtapas() {
                                                 </td>
                                             </tr>
                                             {showDates && (
-                                                <tr className="bg-indigo-50/30 border-b-2 border-indigo-200">
-                                                    <td colSpan={6} className="p-2 border-r-4 border-gray-400 text-right pr-4 text-[10px] font-bold text-indigo-700 sticky left-0 z-10 bg-indigo-50/80">DATAS (Plan. / Real.):</td>
-                                                    
-                                                    {/* MEDIÇÃO */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.PlanMedicao || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.RealMedicao || '-'}</td>
-                                                    
-                                                    {/* ISOMETRICO */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.PlanIsometrico || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.RealIsometrico || '-'}</td>
-                                                    
-                                                    {/* ENGENHARIA */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.PlanEngenharia || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.RealEngenharia || '-'}</td>
-                                                    
-                                                    {/* APROVACAO */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.PlanAprovacao || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.RealAprovacao || '-'}</td>
-                                                    
-                                                    {/* ACABAMENTO */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.PlanAcabamento || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-blue-50/80">{row.RealAcabamento || '-'}</td>
-                                                    
-                                                    {/* EXPEDICAO */}
-                                                    <td className="p-2 border-r border-indigo-200 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.PlanExpedicao || '-'}</td>
-                                                    <td className="p-2 border-r-2 border-gray-400 text-center text-[10px] text-indigo-900 bg-indigo-50/80">{row.RealExpedicao || '-'}</td>
+                                                <tr className="border-b-2 border-indigo-300 bg-slate-50">
+                                                    <td colSpan={6} className="p-0 border-r-4 border-gray-400 sticky left-0 z-10 bg-slate-100"></td>
 
-                                                    <td className="p-2 border-l border-gray-200 sticky right-0 z-10 bg-indigo-50/80"></td>
+                                                    {/* MEDIÇÃO */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanMedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanMedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealMedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealMedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    {/* ISOMÉTRICO */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanIsometrico) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanIsometrico)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealIsometrico) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealIsometrico)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    {/* ENGENHARIA */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanEngenharia) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanEngenharia)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealEngenharia) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealEngenharia)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    {/* APROVAÇÃO */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanAprovacao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanAprovacao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealAprovacao) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealAprovacao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    {/* ACABAMENTO */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanAcabamento) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanAcabamento)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealAcabamento) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealAcabamento)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    {/* EXPEDIÇÃO */}
+                                                    <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
+                                                        {fmtBR(row.PlanExpedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanExpedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+                                                    <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
+                                                        {fmtBR(row.RealExpedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealExpedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+                                                    </td>
+
+                                                    <td className="p-2 border-l border-gray-200 sticky right-0 z-10 bg-slate-100"></td>
                                                 </tr>
                                             )}
                                             </React.Fragment>

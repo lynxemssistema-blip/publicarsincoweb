@@ -3,7 +3,7 @@ import type { MenuItem } from './iconMap';
 export const defaultMenuItems: MenuItem[] = [
     { id: 'acabamento', icon: 'Paintbrush', label: 'Acabamento', href: '/acabamento' },
     { id: 'acompanhamento-geral', icon: 'MonitorPlay', label: 'Acompanhamento Geral', href: '/acompanhamento-geral' },
-    { id: 'acompanhamento-etapas', icon: 'Briefcase', label: 'Acompanhamento Etapas', href: '/acompanhamento-etapas' },
+    { id: 'acompanhamento-etapas', icon: 'Briefcase', label: 'Visão Geral Engenharia', href: '/acompanhamento-etapas' },
     { id: 'apontamento', icon: 'Factory', label: 'Apontamento Produção', href: '/apontamento' },
     { id: 'apontamentos-parciais', icon: 'PieChart', label: 'Apontamentos Parciais', href: '/apontamentos-parciais' },
     {
@@ -64,6 +64,6 @@ export const defaultMenuItems: MenuItem[] = [
     { id: 'visao-geral-pendencias', icon: 'ListChecks', label: 'Todas as Pendências', href: '/visao-geral-pendencias' },
     { id: 'unidades-medida', icon: 'Ruler', label: 'Unidades de Medida', href: '/unidades-medida' },
     { id: 'usuarios', icon: 'Users', label: 'Usuários', href: '/usuarios' },
-    { id: 'visao-geral-engenharia', icon: 'Network', label: 'Visão Geral Engenharia', href: '/visao-geral-engenharia' },
+    { id: 'visao-geral-engenharia', icon: 'Network', label: 'Visão Engenharia', href: '/visao-geral-engenharia' },
     { id: 'visao-geral-producao', icon: 'BarChart3', label: 'Visão Geral Produção', href: '/visao-geral-producao' },
 ];

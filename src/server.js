@@ -4206,15 +4206,17 @@ app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
             SELECT
-                IdTag, Tag, DescTag, Projeto, DescEmpresa, TipoProduto, DataPrevisao, ProjetistaPlanejado, CaminhoIsometrico,
-                PlanejadoInicioMedicao, PlanejadoFinalMedicao, RealizadoInicioMedicao, RealizadoFinalMedicao,
-                PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, RealizadoFinalIsometrico,
-                PlanejadoInicioEngenharia, PlanejadoFinalEngenharia, RealizadoInicioEngenharia, RealizadoFinalEngenharia,
-                PlanejadoInicioAprovacao, PlanejadoFinalAprovacao, RealizadoInicioAprovacao, RealizadoFinalAprovacao
-            FROM tags
-            WHERE (Finalizado IS NULL OR Finalizado = '') 
-              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')
-            ORDER BY IdProjeto DESC, IdTag DESC
+                t.IdTag, t.Tag, t.DescTag, t.Projeto, t.DescEmpresa, t.TipoProduto, t.DataPrevisao, t.ProjetistaPlanejado, t.CaminhoIsometrico,
+                t.PlanejadoInicioMedicao, t.PlanejadoFinalMedicao, t.RealizadoInicioMedicao, t.RealizadoFinalMedicao,
+                t.PlanejadoInicioIsometrico, t.PlanejadoFinalIsometrico, t.RealizadoInicioIsometrico, t.RealizadoFinalIsometrico,
+                t.PlanejadoInicioEngenharia, t.PlanejadoFinalEngenharia, t.RealizadoInicioEngenharia, t.RealizadoFinalEngenharia,
+                t.PlanejadoInicioAprovacao, t.PlanejadoFinalAprovacao, t.RealizadoInicioAprovacao, t.RealizadoFinalAprovacao,
+                p.DataTermino
+            FROM tags t
+            LEFT JOIN projetos p ON t.IdProjeto = p.IdProjeto
+            WHERE (t.Finalizado IS NULL OR t.Finalizado = '') 
+              AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E != '*')
+            ORDER BY t.IdProjeto DESC, t.IdTag DESC
         `);
 
         res.json({ success: true, data: rows });
@@ -12532,6 +12534,7 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
                 p.DescEmpresa as Cliente,
                 p.Estado as EstadoOrigem,
                 p.StatusProj as StatusProj,
+                p.liberado as liberado,
                 COUNT(t.IdTag) as TotalTags,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
@@ -12586,7 +12589,16 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
         const data = payload || req.body; // retro-compatibility
         const usuarioLogado = usuario || 'Sistema';
 
-        // Lista de campos que podemos atualizar na tabela TAGS
+        // Setores e seus campos de Realizado (exigem PlanejadoInicio preenchido na tag)
+        const SETORES_REALIZADO = [
+            { setor: 'Medicao',     planField: 'PlanejadoInicioMedicao',     realFields: ['RealizadoInicioMedicao', 'RealizadoFinalMedicao'] },
+            { setor: 'Isometrico',  planField: 'PlanejadoInicioIsometrico',   realFields: ['RealizadoInicioIsometrico', 'RealizadoFinalIsometrico'] },
+            { setor: 'Engenharia',  planField: 'PlanejadoInicioEngenharia',   realFields: ['RealizadoInicioEngenharia', 'RealizadoFinalEngenharia'] },
+            { setor: 'Aprovacao',   planField: 'PlanejadoInicioAprovacao',    realFields: ['RealizadoInicioAprovacao', 'RealizadoFinalAprovacao'] },
+            { setor: 'Acabamento',  planField: 'PlanejadoInicioAcabamento',   realFields: ['RealizadoInicioAcabamento', 'RealizadoFinalAcabamento'] },
+            { setor: 'Expedicao',   planField: 'PlanejadoInicioExpedicao',    realFields: ['RealizadoInicioExpedicao', 'realizadoFinalExpedicao'] },
+        ];
+
         const camposPermitidos = [
             'PlanejadoInicioMedicao', 'PlanejadoFinalMedicao', 'RealizadoInicioMedicao', 'RealizadoFinalMedicao',
             'PlanejadoInicioIsometrico', 'PlanejadoFinalIsometrico', 'RealizadoInicioIsometrico', 'RealizadoFinalIsometrico',
@@ -12596,46 +12608,73 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
             'PlanejadoInicioExpedicao', 'PlanejadoFinalExpedicao', 'RealizadoInicioExpedicao', 'realizadoFinalExpedicao'
         ];
 
-        let updates = [];
-        let params = [];
-
+        // Normaliza datas ISO → BR no payload
+        const normalizedData = {};
         Object.keys(data).forEach(key => {
             if (camposPermitidos.includes(key)) {
                 let val = data[key];
-                // Formata YYYY-MM-DD para DD/MM/YYYY se necessário
                 if (val && val.includes('-') && val.split('-').length === 3 && val.split('-')[0].length === 4) {
                     const parts = val.split('-');
                     val = `${parts[2]}/${parts[1]}/${parts[0]}`;
                 }
-
-                updates.push(`${key} = ?`);
-                params.push(val);
-
-                // Adiciona o campo de Usuário correspondente
-                // ex: 'PlanejadoInicioMedicao' -> 'UsuarioPlanejadoInicioMedicao'
-                // Ajusta maiúscula inicial (útil para realizadoFinalExpedicao)
-                const capKey = key.charAt(0).toUpperCase() + key.slice(1);
-                updates.push(`Usuario${capKey} = ?`);
-                params.push(usuarioLogado);
+                normalizedData[key] = val;
             }
         });
 
-        if (updates.length === 0) {
+        if (Object.keys(normalizedData).length === 0) {
             return res.status(400).json({ success: false, message: 'Nenhum campo válido para atualizar.' });
         }
 
-        params.push(id); // Para o WHERE IdProjeto = ?
-
-        let query = `UPDATE tags SET ${updates.join(', ')} WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
-
+        // Busca as tags selecionadas para validação por tag
+        let tagFilter = `IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
+        const tagParams = [id];
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            const placeholders = tagIds.map(() => '?').join(',');
-            query += ` AND IdTag IN (${placeholders})`;
-            params.push(...tagIds);
+            tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
+            tagParams.push(...tagIds);
+        }
+        const [tagsRows] = await connection.execute(
+            `SELECT IdTag, ${SETORES_REALIZADO.map(s => `\`${s.planField}\``).join(', ')} FROM tags WHERE ${tagFilter}`,
+            tagParams
+        );
+
+        // Para cada tag, aplica o update respeitando a regra: Realizado só se PlanejadoInicio existir
+        let totalAffected = 0;
+        let totalBloqueados = 0;
+
+        for (const tag of tagsRows) {
+            const updates = [];
+            const params = [];
+
+            Object.keys(normalizedData).forEach(key => {
+                // Verifica se é campo de Realizado
+                const setorConf = SETORES_REALIZADO.find(s => s.realFields.includes(key));
+                if (setorConf) {
+                    // Tag já tem PlanejadoInicio? ou payload está enviando o PlanejadoInicio deste setor?
+                    const tagJaTemPlan = !!(tag[setorConf.planField] && tag[setorConf.planField].trim());
+                    const payloadTemPlan = !!(normalizedData[setorConf.planField]);
+                    if (!tagJaTemPlan && !payloadTemPlan) {
+                        totalBloqueados++;
+                        return; // Bloqueia este campo para esta tag
+                    }
+                }
+                updates.push(`\`${key}\` = ?`);
+                params.push(normalizedData[key]);
+                const capKey = key.charAt(0).toUpperCase() + key.slice(1);
+                updates.push(`\`Usuario${capKey}\` = ?`);
+                params.push(usuarioLogado);
+            });
+
+            if (updates.length === 0) continue;
+
+            params.push(tag.IdTag);
+            const [res2] = await connection.execute(
+                `UPDATE tags SET ${updates.join(', ')} WHERE IdTag = ?`,
+                params
+            );
+            totalAffected += res2.affectedRows;
         }
 
-        // Atualizamos as tags do projeto
-        const [result] = await connection.execute(query, params);
+        const result = { affectedRows: totalAffected };
 
         // -- RECALCULAR MIN/MAX DAS DATAS NO PROJETO --
         try {
@@ -12708,11 +12747,18 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
                     RealizadoFinalExpedicao: agg.RealizadoFinalExpedicaoMax
                 };
                 
+                
                 const updatesProj = [];
                 const paramsProj = [];
                 for (const [f, v] of Object.entries(mapFields)) {
                     updatesProj.push(`${f} = ?`);
                     paramsProj.push(v || '');
+                    // Grava o campo de usuário correspondente se a data não for vazia
+                    if (v) {
+                        const capF = f.charAt(0).toUpperCase() + f.slice(1);
+                        updatesProj.push(`Usuario${capF} = ?`);
+                        paramsProj.push(usuarioLogado);
+                    }
                 }
 
                 if (updatesProj.length > 0) {
@@ -12724,7 +12770,10 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
             console.error('Erro ao recalcular limites do projeto:', e);
         }
 
-        res.json({ success: true, message: `Datas atualizadas em ${result.affectedRows} tags do projeto.` });
+        const bloqueioMsg = totalBloqueados > 0 
+            ? ` (${totalBloqueados} campo(s) Realizado ignorado(s): sem data Planejado no setor correspondente)`
+            : '';
+        res.json({ success: true, message: `Datas atualizadas em ${result.affectedRows} tags do projeto.${bloqueioMsg}` });
 
     } catch (err) {
         console.error('Erro em bulk-update de acompanhamento-etapas:', err);

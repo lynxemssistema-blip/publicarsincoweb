@@ -63,6 +63,20 @@ function AppContent() {
         if (data.success && data.menu) {
           let savedMenu: MenuItem[] = data.menu;
 
+          // Reconcilia labels: garante que renomeações no defaultMenuItems se reflitam
+          // mesmo que o menu esteja salvo no banco com labels antigos
+          const reconcileLabels = (items: MenuItem[]): MenuItem[] =>
+            items.map(item => {
+              const def = defaultMenuItems.find(d => d.id === item.id);
+              const reconciledLabel = def ? def.label : item.label;
+              return {
+                ...item,
+                label: reconciledLabel,
+                children: item.children ? reconcileLabels(item.children) : item.children
+              };
+            });
+          savedMenu = reconcileLabels(savedMenu);
+
           // Ensure Superadmin menu is always visible
           if (!savedMenu.find(item => item.id === 'superadmin')) {
             const superadminItem = defaultMenuItems.find(item => item.id === 'superadmin');

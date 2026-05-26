@@ -179,6 +179,18 @@
 /* ===================================================
    LAYOUT GLOBAL — Utilitários para telas com tabela
    =================================================== */
+
+/* Força scrollbars SEMPRE visíveis (horizontal + vertical) */
+.scrollable-table {
+  flex: 1;
+  min-height: 0;
+  overflow: scroll !important;          /* always-on scrollbars */
+  overflow-x: scroll !important;
+  overflow-y: scroll !important;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;             /* reserva espaço para a scrollbar */
+}
+
 .table-container {
   flex: 1;
   min-height: 0;
@@ -196,4 +208,4 @@
   top: 0;
   z-index: 20;
   @apply bg-secondary/90 text-muted-foreground backdrop-blur-md;
-}
+}
