@@ -208,4 +208,31 @@
   top: 0;
   z-index: 20;
   @apply bg-secondary/90 text-muted-foreground backdrop-blur-md;
-}
+}
+
+/* ===================================================
+   SCROLL UTILITÁRIOS — Classes padrão para páginas
+   =================================================== */
+
+/* Página inteira com scroll vertical visível */
+.page-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+}
+
+/* Conteúdo com scroll em ambas as direções (grids/tabelas) */
+.content-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Garante scrollbar-gutter global para evitar layout shift */
+html {
+  scrollbar-gutter: stable;
+}
+

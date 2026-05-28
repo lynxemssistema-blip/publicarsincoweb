@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Menu, X, LogOut, ChevronDown, ChevronRight, Moon, Sun, User as UserIcon, Search, HelpCircle } from 'lucide-react';
+import { Menu, X, LogOut, ChevronDown, ChevronRight, Moon, Sun, User as UserIcon, Search, HelpCircle, Info } from 'lucide-react';
 import { cn } from '../lib/cn';
 import { helpContents } from '../utils/helpContent';
 import { getIcon } from '../utils/iconMap';
 import type { MenuItem } from '../utils/iconMap';
 import type { User } from '../contexts/AuthContext';
+import { DatabaseSwitcher } from '../components/DatabaseSwitcher';
 
 interface AppLayoutProps {
     children: React.ReactNode;
@@ -24,6 +25,10 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
     const [isDark, setIsDark] = useState(false);
     const [lastInteractedId, setLastInteractedId] = useState<string | null>(null);
     const [sidebarSearch, setSidebarSearch] = useState('');
+    const [showPageTooltip, setShowPageTooltip] = useState(false);
+
+    // Resolve o help content para a página ativa
+    const pageHelp = helpContents[activePageId] || helpContents['default'];
 
     // Ref para o scroll container do sidebar desktop
     const sidebarScrollRef = useRef<HTMLDivElement>(null);
@@ -336,7 +341,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                 {/* Floating Decorative Blur */}
                 <div className="absolute top-[-10%] left-[-5%] w-[40%] h-[30%] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
-                <div className="p-3 md:p-4 w-full flex-1 flex flex-col min-h-0 max-w-full mx-auto relative z-10 overflow-hidden">
+                <div className="p-3 md:p-4 w-full flex-1 flex flex-col min-h-0 max-w-full mx-auto relative z-10 overflow-y-auto overflow-x-hidden">
                     {/* Header Desktop (Breadcrumb/Title) */}
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 shrink-0">
                         <div className="flex items-start gap-3">
@@ -348,15 +353,64 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                                 <Menu size={20} strokeWidth={2} />
                             </button>
                             <div>
-                                <h1 id="main-page-title" className="text-xl md:text-2xl font-bold text-foreground tracking-tight leading-tight">{activeLabel}</h1>
-                                <p className="text-muted-foreground text-xs mt-0 font-medium">Plataforma de Gerenciamento Especializado</p>
+                                <div
+                                    className="relative group/title inline-block cursor-default"
+                                    onMouseEnter={() => setShowPageTooltip(true)}
+                                    onMouseLeave={() => setShowPageTooltip(false)}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <h1 id="main-page-title" className="text-xl md:text-2xl font-bold text-foreground tracking-tight leading-tight">
+                                            {activeLabel}
+                                        </h1>
+                                        <Info
+                                            size={15}
+                                            className="text-muted-foreground/40 group-hover/title:text-primary/60 transition-colors mt-0.5 shrink-0"
+                                        />
+                                    </div>
+                                    <p className="text-muted-foreground text-xs mt-0 font-medium">Plataforma de Gerenciamento Especializado</p>
+
+                                    {/* Tooltip de Objetivo da Tela */}
+                                    <AnimatePresence>
+                                        {showPageTooltip && pageHelp && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: 6, scale: 0.97 }}
+                                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                                exit={{ opacity: 0, y: 4, scale: 0.97 }}
+                                                transition={{ duration: 0.18, ease: 'easeOut' }}
+                                                className="absolute top-full left-0 mt-2 z-[100] w-80 pointer-events-none"
+                                            >
+                                                <div className="bg-[#32423D] text-white rounded-xl shadow-2xl border border-white/10 overflow-hidden">
+                                                    {/* Header do tooltip */}
+                                                    <div className="flex items-center gap-2.5 px-4 py-2.5 bg-black/20 border-b border-white/10">
+                                                        {pageHelp.icon && (
+                                                            <span className="text-base leading-none">{pageHelp.icon}</span>
+                                                        )}
+                                                        <span className="text-[11px] font-bold uppercase tracking-widest text-[#E0E800]">Objetivo desta Tela</span>
+                                                    </div>
+                                                    {/* Body do tooltip */}
+                                                    <div className="px-4 py-3">
+                                                        <p className="text-[13px] leading-relaxed text-white/90 font-medium">
+                                                            {pageHelp.description}
+                                                        </p>
+                                                    </div>
+                                                    {/* Footer decorativo */}
+                                                    <div className="h-0.5 w-full bg-gradient-to-r from-[#E0E800]/60 via-[#E0E800] to-[#E0E800]/60" />
+                                                </div>
+                                                {/* Seta apontando para o título */}
+                                                <div className="absolute -top-1.5 left-6 w-3 h-3 bg-[#32423D] rotate-45 border-l border-t border-white/10" />
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                             </div>
                         </div>
-                        <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden"></div>
+                        <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden">
+                            <DatabaseSwitcher />
+                        </div>
                     </div>
 
                     {/* Dashboard/Page Content Slot */}
-                    <div className="flex-1 flex flex-col min-h-0 w-full relative overflow-hidden">
+                    <div className="flex-1 flex flex-col min-h-0 w-full relative">
                         {children}
                     </div>
                 </div>

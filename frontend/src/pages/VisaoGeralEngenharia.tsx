@@ -3,6 +3,17 @@ import { Search, Loader, Edit3, Save, X, CalendarDays, Maximize2, Minimize2, Che
 
 const API_BASE = '/api';
 
+// Helper: monta headers com Authorization JWT
+const getAuthHeaders = (extraHeaders?: Record<string, string>): HeadersInit => {
+    const token = localStorage.getItem('sinco_token');
+    return {
+        ...(extraHeaders || {}),
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    };
+};
+
+const getJsonHeaders = (): HeadersInit => getAuthHeaders({ 'Content-Type': 'application/json' });
+
 interface TagData {
     IdTag: number;
     Tag: string;
@@ -130,7 +141,9 @@ export default function VisaoGeralEngenharia() {
     const fetchTags = async () => {
         setLoading(true); setError('');
         try {
-            const res = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags`)).json();
+            const res = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags`, {
+                headers: getAuthHeaders()
+            })).json();
             if (res.success) setTags(res.data);
             else setError(res.message);
         } catch (e: any) {
@@ -152,6 +165,21 @@ export default function VisaoGeralEngenharia() {
         const parts = br.split('/');
         if (parts.length === 3) return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
         return br;
+    };
+
+    // Compara data Real. Final com a previsão do projeto (DataTermino)
+    // Retorna: 'late' se realizado > previsão, 'ok' se <= previsão, 'none' se sem dados
+    const checkRealVsTermino = (realBR: string, terminoBR: string): 'late' | 'ok' | 'none' => {
+        if (!realBR || !terminoBR) return 'none';
+        const toDate = (br: string) => {
+            const p = br.split('/');
+            if (p.length === 3) return new Date(`${p[2]}-${p[1].padStart(2, '0')}-${p[0].padStart(2, '0')}`);
+            return null;
+        };
+        const dReal = toDate(realBR);
+        const dTerm = toDate(terminoBR);
+        if (!dReal || !dTerm) return 'none';
+        return dReal > dTerm ? 'late' : 'ok';
     };
 
     const getUser = () => { try { const u = JSON.parse(localStorage.getItem('sinco_user') || '{}'); return u.nome || u.NomeCompleto || u.username || 'Sistema'; } catch { return 'Sistema'; } };
@@ -190,7 +218,7 @@ export default function VisaoGeralEngenharia() {
                 usuario: getUser()
             };
             const r = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags/lote`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify(payload)
             })).json();
             if (r.success) {
                 await fetchTags();
@@ -224,7 +252,7 @@ export default function VisaoGeralEngenharia() {
 
         try {
             const r = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags/lote`, {
-                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+                method: 'PUT', headers: getJsonHeaders(), body: JSON.stringify(payload)
             })).json();
             if (!r.success) {
                 // Revert or show error if needed, for now just log
@@ -249,7 +277,7 @@ export default function VisaoGeralEngenharia() {
 
         try {
             const r = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags/${idTag}/isometrico`, {
-                method: 'POST', body: formData
+                method: 'POST', body: formData, headers: getAuthHeaders()
             })).json();
             if (r.success) {
                 setTags(prev => prev.map(t => t.IdTag === idTag ? { ...t, CaminhoIsometrico: r.data.CaminhoIsometrico } : t));
@@ -267,7 +295,7 @@ export default function VisaoGeralEngenharia() {
         if (!window.confirm(`Limpar o desenho associado à Tag '${tagNum}'?`)) return;
         try {
             const r = await (await fetch(`${API_BASE}/visao-geral-engenharia/tags/${idTag}/isometrico`, {
-                method: 'DELETE'
+                method: 'DELETE', headers: getAuthHeaders()
             })).json();
             if (r.success) {
                 setTags(prev => prev.map(t => t.IdTag === idTag ? { ...t, CaminhoIsometrico: '' } : t));
@@ -547,6 +575,9 @@ export default function VisaoGeralEngenharia() {
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 min-w-[150px]">Descrição Tag</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300">Produto</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300">Previsão Tag</th>
+                            <th className="px-2 py-1.5 border-r border-b border-gray-300 bg-orange-50 text-orange-800 font-bold" title="Prazo de entrega do projeto (data de término prevista)">
+                                Prev. Projeto
+                            </th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 text-red-700">Data Final Proj.</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300">Projetista</th>
                             <th className="px-2 py-1.5 border-r border-b border-gray-300 w-24">Des. Isométrico</th>
@@ -563,7 +594,7 @@ export default function VisaoGeralEngenharia() {
                         </tr>
                         {activeSectors.size > 0 && (
                             <tr className="bg-gray-50 text-gray-600 text-[10px]">
-                                <th className="border-r border-b border-gray-300" colSpan={9}></th>
+                                <th className="border-r border-b border-gray-300" colSpan={10}></th>
                                 {Array.from(activeSectors).map(s => {
                                     const colors = getSectorColors(s);
                                     return (
@@ -625,6 +656,18 @@ export default function VisaoGeralEngenharia() {
                                         <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[250px]" title={t.DescTag}>{t.DescTag}</td>
                                         <td className="px-2 py-1 border-r border-gray-200 overflow-hidden text-ellipsis max-w-[100px]" title={t.TipoProduto}>{t.TipoProduto}</td>
                                         <td className="px-2 py-1 border-r border-gray-200">{t.DataPrevisao}</td>
+
+                                        {/* PREV. PROJETO — nova coluna */}
+                                        <td className="px-2 py-1 border-r border-gray-200 text-center">
+                                            {t.DataTermino ? (
+                                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 border border-orange-400 text-orange-800 font-bold text-[11px] whitespace-nowrap">
+                                                    🗓 {t.DataTermino}
+                                                </span>
+                                            ) : (
+                                                <span className="text-gray-300 text-[11px]">—</span>
+                                            )}
+                                        </td>
+
                                         <td className="px-1 py-1 border-r border-gray-200">
                                             {t.DataTermino ? (
                                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-100 border border-amber-400 text-amber-800 font-bold text-[11px] whitespace-nowrap">
@@ -691,16 +734,38 @@ export default function VisaoGeralEngenharia() {
                                                             }`}
                                                         />
                                                     </td>
-                                                    {/* Real. Final - verde */}
+                                                    {/* Real. Final — cor por comparação com DataTermino do projeto */}
                                                     <td className="px-0.5 py-0.5 border-r border-gray-200 text-center">
-                                                        <input
-                                                            type="date"
-                                                            value={brToIso(rf)}
-                                                            onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoFinal', e.target.value)}
-                                                            className={`w-[110px] text-[11px] font-black rounded px-1 py-0.5 border outline-none focus:ring-2 focus:ring-emerald-400 cursor-pointer ${
-                                                                rf ? 'bg-emerald-100 border-emerald-500 text-emerald-800' : 'bg-slate-50 border-dashed border-slate-300 text-slate-400'
-                                                            }`}
-                                                        />
+                                                        {(() => {
+                                                            const status = checkRealVsTermino(rf, t.DataTermino);
+                                                            const colorClass = rf
+                                                                ? status === 'late'
+                                                                    ? 'bg-red-100 border-red-500 text-red-800 ring-red-400'
+                                                                    : status === 'ok'
+                                                                    ? 'bg-green-100 border-green-500 text-green-800 ring-green-400'
+                                                                    : 'bg-emerald-100 border-emerald-500 text-emerald-800 ring-emerald-400'
+                                                                : 'bg-slate-50 border-dashed border-slate-300 text-slate-400 ring-emerald-400';
+                                                            return (
+                                                                <div className="relative group/rfflag">
+                                                                    <input
+                                                                        type="date"
+                                                                        value={brToIso(rf)}
+                                                                        onChange={e => handleInlineDateChange(t.IdTag, s, 'RealizadoFinal', e.target.value)}
+                                                                        className={`w-[110px] text-[11px] font-black rounded px-1 py-0.5 border outline-none focus:ring-2 cursor-pointer ${colorClass}`}
+                                                                    />
+                                                                    {rf && status !== 'none' && (
+                                                                        <span
+                                                                            className={`absolute -top-1 -right-1 w-3 h-3 rounded-full border border-white shadow text-[8px] flex items-center justify-center font-black ${
+                                                                                status === 'late' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
+                                                                            }`}
+                                                                            title={status === 'late' ? `Atrasado! Real. Final (${rf}) > Prev. Projeto (${t.DataTermino})` : `No prazo! Real. Final (${rf}) ≤ Prev. Projeto (${t.DataTermino})`}
+                                                                        >
+                                                                            {status === 'late' ? '!' : '✓'}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
                                                 </React.Fragment>
                                             );

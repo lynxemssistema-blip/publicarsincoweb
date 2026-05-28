@@ -18,6 +18,7 @@ interface AuthContextType {
     isAuthenticated: boolean;
     login: (userData: User, token: string) => void;
     logout: () => void;
+    switchDatabase: (dbName: string) => Promise<{ success: boolean; message?: string }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -71,8 +72,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         window.location.href = '/';
     };
 
+    /** SuperAdmin only: switch active database without re-login */
+    const switchDatabase = async (dbName: string): Promise<{ success: boolean; message?: string }> => {
+        if (!token) return { success: false, message: 'Sem token de autenticação.' };
+        try {
+            const res = await fetch('/api/superadmin/switch-db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({ dbName })
+            });
+            const data = await res.json();
+            if (data.success && data.token && data.user) {
+                setUser(data.user);
+                setToken(data.token);
+                localStorage.setItem('sinco_user', JSON.stringify(data.user));
+                localStorage.setItem('sinco_token', data.token);
+                return { success: true };
+            }
+            return { success: false, message: data.message || 'Erro ao trocar banco.' };
+        } catch (err: any) {
+            return { success: false, message: err.message || 'Erro de rede.' };
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, login, logout }}>
+        <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, login, logout, switchDatabase }}>
             {children}
         </AuthContext.Provider>
     );

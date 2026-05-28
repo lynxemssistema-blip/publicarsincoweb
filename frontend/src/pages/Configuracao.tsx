@@ -9,6 +9,17 @@ import { defaultMenuItems } from '../utils/constants';
 
 const API_BASE = '/api';
 
+// Padrão de PermitirRealizadoSemPlanejamento depende do banco ativo
+const getDefaultPermitirRealizado = (): string => {
+    const bancosLivres = ['lynxlocal', 'amceletrica'];
+    try {
+        const userData = JSON.parse(localStorage.getItem('sinco_user') || '{}');
+        const dbName = (userData.dbName || '').toLowerCase();
+        const isLivre = bancosLivres.some(b => dbName.includes(b));
+        return isLivre ? 'Sim' : 'Não';
+    } catch { return 'Não'; }
+};
+
 export default function ConfiguracaoPage() {
     const { addToast } = useToast();
     const { refetchConfig } = useAppConfig();
@@ -21,6 +32,7 @@ export default function ConfiguracaoPage() {
     // Config Regras
     const [restringirApontamento, setRestringirApontamento] = useState('Não');
     const [mostrarPowerBuild, setMostrarPowerBuild] = useState('Não');
+    const [permitirRealizadoSemPlanejamento, setPermitirRealizadoSemPlanejamento] = useState(getDefaultPermitirRealizado); // padrão: depende do banco
     const [processosVisiveis, setProcessosVisiveis] = useState<string[]>(['corte', 'dobra', 'solda', 'pintura', 'montagem']);
     const [planoCorteFiltroDC, setPlanoCorteFiltroDC] = useState<'corte' | 'chaparia'>('corte');
     const [maxRegistros, setMaxRegistros] = useState<number>(500);
@@ -65,6 +77,8 @@ export default function ConfiguracaoPage() {
             .then(data => {
                 if (data.success) {
                     setRestringirApontamento(data.config.RestringirApontamentoSemSaldoAnterior || 'Não');
+                    // Padrão depende do banco: lynxlocal/amceletrica=Desbloqueado, outros=Bloqueado
+                    setPermitirRealizadoSemPlanejamento(data.config.PermitirRealizadoSemPlanejamento ?? getDefaultPermitirRealizado());
                     if (data.config.ProcessosVisiveis) {
                         try {
                             setProcessosVisiveis(JSON.parse(data.config.ProcessosVisiveis));
@@ -205,8 +219,11 @@ export default function ConfiguracaoPage() {
             maxRegistros,
             processosVisiveis,
             restringirApontamento,
-            mostrarPowerBuild
+            mostrarPowerBuild,
+            permitirRealizadoSemPlanejamento
         });
+        // Persiste também no localStorage como chave individual (lida pelo VisaoGeralEngenharia)
+        localStorage.setItem('sinco_permitirRealizadoSemPlanejamento', permitirRealizadoSemPlanejamento);
 
         // 2. Tenta salvar na API (banco de dados)
         try {
@@ -216,7 +233,8 @@ export default function ConfiguracaoPage() {
                 body: JSON.stringify({
                     restringirApontamento,
                     processosVisiveis: JSON.stringify(processosVisiveis),
-                    maxRegistros
+                    maxRegistros,
+                    permitirRealizadoSemPlanejamento
                 })
             });
             const data = await res.json();
@@ -576,6 +594,40 @@ export default function ConfiguracaoPage() {
                             </div>
                             <label className="relative inline-flex items-center cursor-pointer">
                                 <input type="checkbox" className="sr-only peer" checked={mostrarPowerBuild === 'Sim'} onChange={(e) => setMostrarPowerBuild(e.target.checked ? 'Sim' : 'Não')} />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#E0E800]/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#32423D]"></div>
+                            </label>
+                        </div>
+                        {/* NOVO: Permitir Realizado sem Planejamento */}
+                        <div className="flex items-start justify-between p-4 border rounded-lg hover:bg-gray-50 transition-colors mt-4 border-l-4 border-l-blue-300">
+                            <div>
+                                <h3 className="font-medium text-gray-900 flex items-center gap-2">
+                                    Permitir Realizado sem Planejamento
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                        permitirRealizadoSemPlanejamento === 'Sim'
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-red-100 text-red-700'
+                                    }`}>
+                                        {permitirRealizadoSemPlanejamento === 'Sim' ? 'DESBLOQUEADO' : 'BLOQUEADO'}
+                                    </span>
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1 max-w-xl">
+                                    Controla se datas de <strong>Realizado</strong> podem ser registradas na tela
+                                    <strong> Visão Geral Engenharia</strong> sem que as datas de{' '}
+                                    <strong>Planejamento</strong> estejam preenchidas para aquele setor.
+                                    <span className="ml-1 text-blue-600">
+                                        {permitirRealizadoSemPlanejamento === 'Sim'
+                                            ? '(Ativo — Realizado livre)'  
+                                            : '(Restrito — Planejamento obrigatório)'}
+                                    </span>
+                                </p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer flex-shrink-0 ml-4">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={permitirRealizadoSemPlanejamento === 'Sim'}
+                                    onChange={(e) => setPermitirRealizadoSemPlanejamento(e.target.checked ? 'Sim' : 'Não')}
+                                />
                                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#E0E800]/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#32423D]"></div>
                             </label>
                         </div>

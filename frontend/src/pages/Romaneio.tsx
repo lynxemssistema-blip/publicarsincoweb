@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
     Save, Loader2, Truck, ArrowLeft, FileText,
-    FolderOpen, Trash2, Plus, Calendar, Building2, Search,
+    FolderOpen, Trash2, Plus, Calendar, Building2, Search, X,
     CheckCircle, XCircle, FileCheck, FileX, RefreshCw, FileSpreadsheet,
     List, PlusSquare, Box, AlertTriangle, MessageSquare, Printer, Copy
 } from 'lucide-react';
@@ -660,8 +660,17 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                                 placeholder="Buscar por Cliente, ID ou Descrição..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#32423D]/20 focus:border-[#32423D] transition-all"
+                                className="w-full pl-10 pr-9 py-2 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#32423D]/20 focus:border-[#32423D] transition-all"
                             />
+                            {searchTerm && (
+                                <button
+                                    onClick={() => setSearchTerm('')}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="Limpar busca"
+                                >
+                                    <X size={16} />
+                                </button>
+                            )}
                         </div>
                         {selectedId && (
                             <span className="text-sm text-[#32423D] font-medium animate-pulse ml-auto">
@@ -926,15 +935,24 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                                                 onChange={(e) => setItemFilters(prev => ({ ...prev, codFabricante: e.target.value.toUpperCase() }))}
                                             />
                                         </div>
-                                        <div className="flex items-end">
+                                        <div className="flex items-end gap-2">
                                             <button
                                                 onClick={fetchAvailableItems}
                                                 disabled={loadingItems}
-                                                className="w-full flex items-center justify-center gap-2 bg-[#32423D] text-[#E0E800] px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#3d4f49] transition-all disabled:opacity-50"
+                                                className="flex-1 flex items-center justify-center gap-2 bg-[#32423D] text-[#E0E800] px-4 py-2 rounded-lg font-bold text-sm hover:bg-[#3d4f49] transition-all disabled:opacity-50"
                                             >
                                                 {loadingItems ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                                                 FILTRAR
                                             </button>
+                                            {(itemFilters.projeto || itemFilters.tag || itemFilters.resumo || itemFilters.codFabricante) && (
+                                                <button
+                                                    onClick={() => setItemFilters(prev => ({ ...prev, projeto: '', tag: '', resumo: '', codFabricante: '' }))}
+                                                    className="flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-sm font-medium"
+                                                    title="Limpar filtros"
+                                                >
+                                                    <XCircle size={15} /> Limpar
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                     <div className="mt-3 flex items-center gap-4">

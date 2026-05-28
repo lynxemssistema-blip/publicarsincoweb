@@ -39,31 +39,43 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
     const [users, setUsers] = useState<any[]>([]);
 
     useEffect(() => {
-        let token = localStorage.getItem('superadmin_token');
-        
-        // Se não tiver o token do painel, verifica se o login principal já foi como superadmin
-        if (!token) {
-            const sincoUserRaw = localStorage.getItem('sinco_user');
-            if (sincoUserRaw) {
-                try {
-                    const sincoUser = JSON.parse(sincoUserRaw);
-                    if (sincoUser.isSuperadmin || sincoUser.superadmin === 'S') {
-                        const mainToken = localStorage.getItem('sinco_token');
-                        if (mainToken) {
-                            token = mainToken;
-                            localStorage.setItem('superadmin_token', token);
-                        }
+        // Regra definitiva: SuperAdmin = lynxlocal + credenciais de superadmin
+        const sincoUserRaw = localStorage.getItem('sinco_user');
+        if (sincoUserRaw) {
+            try {
+                const sincoUser = JSON.parse(sincoUserRaw);
+
+                // Qualifica como superadmin SOMENTE se:
+                // 1. Banco ativo é lynxlocal E
+                // 2. Tem credenciais de superadmin
+                const isLynxlocal = sincoUser.dbName === 'lynxlocal';
+                const hasSuperCreds =
+                    sincoUser.isSuperadmin === true ||
+                    sincoUser.superadmin === 'S' ||
+                    sincoUser.login?.toLowerCase() === 'superadmin';
+
+                if (isLynxlocal && hasSuperCreds) {
+                    const mainToken = localStorage.getItem('sinco_token');
+                    if (mainToken) {
+                        localStorage.setItem('superadmin_token', mainToken);
+                        setIsAuthenticated(true);
+                        fetchTenants(mainToken);
+                        fetchUsers(mainToken);
+                        return;
                     }
-                } catch (e) {
-                    console.error('Erro ao verificar sessão principal', e);
                 }
+            } catch (e) {
+                console.error('Erro ao verificar sessão principal', e);
             }
         }
 
-        if (token) {
-            checkAuth(token);
+        // Fallback: token de login manual do painel
+        const superToken = localStorage.getItem('superadmin_token');
+        if (superToken) {
+            checkAuth(superToken);
         }
     }, []);
+
 
     const checkAuth = async (token: string) => {
         try {

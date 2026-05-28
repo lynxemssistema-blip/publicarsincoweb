@@ -77,12 +77,18 @@ function AppContent() {
             });
           savedMenu = reconcileLabels(savedMenu);
 
-          // Ensure Superadmin menu is always visible
-          if (!savedMenu.find(item => item.id === 'superadmin')) {
-            const superadminItem = defaultMenuItems.find(item => item.id === 'superadmin');
-            if (superadminItem) {
-              savedMenu = [...savedMenu, superadminItem];
-            }
+          // SuperAdmin: EXCLUSIVO do banco lynxlocal + usuário com perfil superadmin
+          // Outros bancos: sem acesso ao SuperAdmin, independente do role
+          const isSuperUser =
+            user.dbName === 'lynxlocal' &&
+            (user.isSuperadmin === true ||
+             user.superadmin === 'S' ||
+             user.login?.toLowerCase() === 'superadmin');
+
+          // SuperAdmin: menu completo sem filtros
+          if (isSuperUser) {
+            setMenuItems(sortMenuRecursive(defaultMenuItems));
+            return;
           }
 
           // Force add 'romaneio' parent if missing
@@ -286,21 +292,45 @@ function AppContent() {
 
           setMenuItems(sortMenuRecursive(savedMenu));
         } else {
-          const filtered = defaultMenuItems.filter(item => 
-             !(item.id === 'controle-expedicao' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2')
-          );
-          setMenuItems(sortMenuRecursive(filtered));
+          // Menu não salvo: lynxlocal recebe tudo (mas sem SuperAdmin para usuários comuns)
+          const isSuperDefault =
+            user.dbName === 'lynxlocal' &&
+            (user.isSuperadmin === true ||
+             user.superadmin === 'S' ||
+             user.login?.toLowerCase() === 'superadmin');
+          if (isSuperDefault) {
+            setMenuItems(sortMenuRecursive(defaultMenuItems));
+          } else {
+            // Qualquer outro usuário: menu sem SuperAdmin
+            const filtered = defaultMenuItems.filter(item =>
+              item.id !== 'superadmin' &&
+              !(item.id === 'controle-expedicao' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') &&
+              !(item.id === 'teste-final-montagem' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2')
+            );
+            setMenuItems(sortMenuRecursive(filtered));
+          }
         }
       })
       .catch(err => {
-        console.error("Failed to load custom menu, using default.", err);
+        console.error('Failed to load custom menu, using default.', err);
+        const isSuperFallback =
+          user.dbName === 'lynxlocal' &&
+          (user.isSuperadmin === true ||
+           user.superadmin === 'S' ||
+           user.login?.toLowerCase() === 'superadmin');
+        if (isSuperFallback) {
+          setMenuItems(sortMenuRecursive(defaultMenuItems));
+          return;
+        }
         const filtered = defaultMenuItems.filter(item => {
-          if (!user.isSuperadmin && item.id === 'superadmin') return false;
-          if (item.id === 'controle-expedicao' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') return false;
+          if (item.id === 'superadmin') return false;
+          if ((item.id === 'controle-expedicao' || item.id === 'teste-final-montagem') &&
+              user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') return false;
           return true;
         });
         setMenuItems(sortMenuRecursive(filtered));
       });
+
 
     // Handle initial URL mapping — only once on first load
     if (!hasInitialized.current) {
@@ -376,10 +406,14 @@ function AppContent() {
       case 'visao-geral-engenharia':
         return <VisaoGeralEngenhariaPage />;
       case 'controle-expedicao':
-        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2') return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
+        // lynxlocal: sem barreira
+        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2' && !user?.isSuperadmin && user?.superadmin !== 'S')
+          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
         return <ControleExpedicaoPage />;
       case 'teste-final-montagem':
-        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2') return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
+        // lynxlocal: sem barreira
+        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2' && !user?.isSuperadmin && user?.superadmin !== 'S')
+          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
         return <TesteFinalMontagemPage />;
       case 'pesquisar-desenho':
         return <PesquisarDesenhoPage />;
@@ -397,11 +431,17 @@ function AppContent() {
         return <div className="p-8 text-center text-gray-500">Módulo CIPA em Desenvolvimento</div>;
       case 'sgq':
         return <div className="p-8 text-center text-gray-500">Módulo SGQ em Desenvolvimento</div>;
-      case 'usuarios':
-        if (user?.login === 'SUPERADMIN' || user?.isSuperadmin) {
+      case 'usuarios': {
+        const isSuperOnUsuarios =
+          user?.isSuperadmin === true ||
+          user?.superadmin === 'S' ||
+          user?.login?.toLowerCase() === 'superadmin' ||
+          (user?.role === 'admin' && user?.dbName === 'lynxlocal');
+        if (isSuperOnUsuarios) {
           return <SuperadminPage defaultTab="users" />;
         }
         return <UsuarioPage />;
+      }
       case 'cadastro-de-usuario':
       case 'cadastro-usuario':
       case 'group_1775495483371':

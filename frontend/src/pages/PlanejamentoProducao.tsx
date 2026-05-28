@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Search, Loader2, Calendar, LayoutGrid, CheckCircle2, Circle, Target, Hash, ArrowLeft } from 'lucide-react';
+import { Search, Loader2, Calendar, LayoutGrid, CheckCircle2, Circle, Target, Hash, ArrowLeft, X, XCircle } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
 interface PlanejamentoItem {
@@ -145,6 +145,7 @@ export default function PlanejamentoProducao({ fromGlobal, onBack }: { fromGloba
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-6 gap-2 items-end bg-gray-50/50 p-2 rounded-md border border-gray-100">
+                    {/* OS ou Descrição */}
                     <div className="md:col-span-2">
                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">OS ou Descrição</label>
                         <div className="relative">
@@ -154,26 +155,95 @@ export default function PlanejamentoProducao({ fromGlobal, onBack }: { fromGloba
                                 placeholder="Nº da OS ou Texto"
                                 value={osPesquisa} 
                                 onChange={e => setOsPesquisa(e.target.value)} 
-                                className="w-full pl-9 pr-3 py-2.5 text-sm border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all shadow-sm" 
+                                className="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all shadow-sm" 
                             />
+                            {osPesquisa && (
+                                <button onClick={() => setOsPesquisa('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors" title="Limpar">
+                                    <X size={14} />
+                                </button>
+                            )}
                         </div>
                     </div>
+
+                    {/* PLAN. INÍCIO (DE) — DESTACADO */}
                     <div>
-                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Plan. Início (De)</label>
-                        <input type="date" value={planInicioDe} onChange={e => setPlanInicioDe(e.target.value)} className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all" />
+                        <label className="block text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Calendar size={11} className="text-amber-500" />
+                            Plan. Início (De)
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={planInicioDe}
+                                onChange={e => setPlanInicioDe(e.target.value)}
+                                className="w-full px-3 py-2.5 text-[13px] border-2 border-amber-400 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-400/50 outline-none transition-all bg-amber-50 font-semibold text-amber-800"
+                            />
+                            {planInicioDe && (
+                                <button onClick={() => setPlanInicioDe('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-400 hover:text-red-500 transition-colors" title="Limpar">
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* PLAN. INÍCIO (ATÉ) — DESTACADO */}
                     <div>
-                        <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Plan. Início (Até)</label>
-                        <input type="date" value={planInicioAte} onChange={e => setPlanInicioAte(e.target.value)} className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all" />
+                        <label className="block text-[11px] font-bold text-amber-600 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                            <Calendar size={11} className="text-amber-500" />
+                            Plan. Início (Até)
+                        </label>
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={planInicioAte}
+                                onChange={e => setPlanInicioAte(e.target.value)}
+                                className="w-full px-3 py-2.5 text-[13px] border-2 border-amber-400 rounded-lg shadow-sm focus:ring-2 focus:ring-amber-400/50 outline-none transition-all bg-amber-50 font-semibold text-amber-800"
+                            />
+                            {planInicioAte && (
+                                <button onClick={() => setPlanInicioAte('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-400 hover:text-red-500 transition-colors" title="Limpar">
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Plan. Fim (De) */}
                     <div>
                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Plan. Fim (De)</label>
-                        <input type="date" value={planFimDe} onChange={e => setPlanFimDe(e.target.value)} className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all" />
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={planFimDe}
+                                onChange={e => setPlanFimDe(e.target.value)}
+                                className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all"
+                            />
+                            {planFimDe && (
+                                <button onClick={() => setPlanFimDe('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors" title="Limpar">
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Plan. Fim (Até) */}
                     <div>
                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Plan. Fim (Até)</label>
-                        <input type="date" value={planFimAte} onChange={e => setPlanFimAte(e.target.value)} className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all" />
+                        <div className="relative">
+                            <input
+                                type="date"
+                                value={planFimAte}
+                                onChange={e => setPlanFimAte(e.target.value)}
+                                className="w-full px-3 py-2.5 text-[13px] border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all"
+                            />
+                            {planFimAte && (
+                                <button onClick={() => setPlanFimAte('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors" title="Limpar">
+                                    <X size={13} />
+                                </button>
+                            )}
+                        </div>
                     </div>
+
+                    {/* Setor */}
                     <div className="md:col-span-3">
                         <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">Setor</label>
                         <select value={setor} onChange={e => setSetor(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-[#E0E800]/50 outline-none transition-all appearance-none bg-white">
@@ -183,8 +253,26 @@ export default function PlanejamentoProducao({ fromGlobal, onBack }: { fromGloba
                             ))}
                         </select>
                     </div>
-                    <div className="md:col-span-3">
-                        <button onClick={() => fetchPlanejamento(false)} className="w-full bg-[#32423D] text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#1f2926] transition-colors shadow-md font-medium text-sm">
+
+                    {/* Botões: Limpar Todos + Buscar */}
+                    <div className="md:col-span-3 flex gap-2">
+                        {(osPesquisa || planInicioDe || planInicioAte || planFimDe || planFimAte || setor !== 'todos') && (
+                            <button
+                                onClick={() => {
+                                    setOsPesquisa('');
+                                    setPlanInicioDe(today);
+                                    setPlanInicioAte(today);
+                                    setPlanFimDe('');
+                                    setPlanFimAte('');
+                                    setSetor('todos');
+                                }}
+                                className="flex items-center gap-1.5 px-3 py-2.5 rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 transition-colors text-sm font-medium shrink-0"
+                                title="Limpar todos os filtros"
+                            >
+                                <XCircle size={15} /> Limpar
+                            </button>
+                        )}
+                        <button onClick={() => fetchPlanejamento(false)} className="flex-1 bg-[#32423D] text-white py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 hover:bg-[#1f2926] transition-colors shadow-md font-medium text-sm">
                             <Search className="w-4 h-4" /> Buscar Planos
                         </button>
                     </div>

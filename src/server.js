@@ -1740,7 +1740,9 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                             token,
                             user: {
                                 id: user.idUsuario,
-                                nome: user.NomeCompleto,
+                                login: login,
+                                // Superadmin: exibe o próprio login como nome (não NomeCompleto da tabela local)
+                                nome: centralAuth.isSuperadmin ? login : user.NomeCompleto,
                                 role,
                                 setor: user.Setor,
                                 isSuperadmin: centralAuth.isSuperadmin,
@@ -1764,6 +1766,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                             token,
                             user: {
                                 id: centralAuth.originalUserId,
+                                login: login,
                                 nome: login,
                                 role: 'user',
                                 isSuperadmin: centralAuth.isSuperadmin,
@@ -1813,15 +1816,18 @@ app.post('/api/login', loginLimiter, async (req, res) => {
             const user = rows[0];
             const role = (user.TipoUsuario === 'A' || user.TipoUsuario === 'Admin') ? 'admin' : 'user';
 
-            // Check if Superadmin in central even if logging in locally
+            // Check if Superadmin in central DB
             const isSuper = await isUserSuperadmin(login);
+            // Admin em lynxlocal (fallback local) é considerado superadmin nativo do sistema
+            const isLocalAdmin = login.toLowerCase() === 'admin';
+            const isSuperFinal = isSuper || isLocalAdmin;
 
             const token = jwt.sign({
                 id: user.idUsuario,
                 login: login,
                 role: role,
-                dbName: 'lynxlocal', // Local fallback assumed central or current
-                isSuperadmin: isSuper
+                dbName: 'lynxlocal',
+                isSuperadmin: isSuperFinal
             }, JWT_SECRET, { expiresIn: '12h' });
 
             return res.json({
@@ -1829,9 +1835,12 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                 token,
                 user: {
                     id: user.idUsuario,
+                    login: login,
                     nome: user.NomeCompleto,
                     role,
-                    isSuperadmin: isSuper
+                    dbName: 'lynxlocal',
+                    clientName: 'LYNX (LYNXLOCAL)',
+                    isSuperadmin: isSuperFinal
                 }
             });
         } else {
@@ -1856,11 +1865,17 @@ const authenticateAdmin = (req, res, next) => {
     const token = authHeader.split(' ')[1];
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        if (decoded.isSuperadmin === true) {
+        // Aceita: isSuperadmin=true OU Admin no banco principal (lynxlocal)
+        const isAllowed =
+            decoded.isSuperadmin === true ||
+            (decoded.role === 'admin' && decoded.dbName === 'lynxlocal') ||
+            decoded.login?.toLowerCase() === 'superadmin';
+
+        if (isAllowed) {
             req.adminUser = decoded;
             return next();
         } else {
-            console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Not a Superadmin`);
+            console.warn(`[AUTH MIDDLEWARE] Blocked access to ${req.method} ${req.url} - Not a Superadmin (role:${decoded.role}, db:${decoded.dbName})`);
             return res.status(403).json({ success: false, message: 'Forbidden: Acesso restrito ao Superadmin' });
         }
     } catch (err) {
@@ -1950,6 +1965,94 @@ app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
     } catch (err) {
         console.error('[ADMIN IMPERSONATE] Token error:', err);
         return res.status(401).json({ success: false, message: 'Token de superadmin invÃƒÂ¡lido' });
+    }
+});
+
+// ─── SUPERADMIN: Database Switching (via normal JWT route) ───────────────────
+
+// GET /api/superadmin/bancos-ativos — lista todos os bancos ativos (apenas SuperAdmin)
+app.get('/api/superadmin/bancos-ativos', async (req, res) => {
+    try {
+        if (!req.tenantUser?.isSuperadmin) {
+            return res.status(403).json({ success: false, message: 'Acesso restrito a SuperAdmins.' });
+        }
+        const [rows] = await db.executeOnDefault(
+            'SELECT id, nome_cliente, db_name, db_host, ativo FROM conexoes_bancos WHERE ativo = 1 ORDER BY nome_cliente ASC'
+        );
+        res.json({ success: true, data: rows });
+    } catch (err) {
+        console.error('[SuperAdmin] Erro ao listar bancos:', err);
+        res.status(500).json({ success: false, message: 'Erro ao listar bancos: ' + err.message });
+    }
+});
+
+// POST /api/superadmin/switch-db — gera novo token JWT com o dbName solicitado (apenas SuperAdmin)
+app.post('/api/superadmin/switch-db', async (req, res) => {
+    try {
+        if (!req.tenantUser?.isSuperadmin) {
+            return res.status(403).json({ success: false, message: 'Acesso restrito a SuperAdmins.' });
+        }
+
+        const { dbName } = req.body;
+        if (!dbName) {
+            return res.status(400).json({ success: false, message: 'dbName é obrigatório.' });
+        }
+
+        // Validate that the target DB exists and is active
+        const [rows] = await db.executeOnDefault(
+            'SELECT id, nome_cliente, db_name, db_host, db_user, db_pass, db_port FROM conexoes_bancos WHERE db_name = ? AND ativo = 1 LIMIT 1',
+            [dbName]
+        );
+
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: `Banco '${dbName}' não encontrado ou inativo.` });
+        }
+
+        const banco = rows[0];
+
+        // Ensure pool exists for target DB
+        if (!db.hasPool(dbName)) {
+            db.initPool({
+                host: banco.db_host,
+                user: banco.db_user,
+                password: banco.db_pass,
+                database: banco.db_name,
+                port: banco.db_port || 3306
+            });
+            console.log(`[SuperAdmin] Pool lazy-loaded for switch to: ${dbName}`);
+        }
+
+        const decoded = req.tenantUser;
+        const newToken = jwt.sign({
+            id: decoded.id,
+            login: decoded.login,
+            nome: decoded.nome || decoded.login,
+            role: 'admin',
+            dbName: dbName,
+            clientName: banco.nome_cliente,
+            isSuperadmin: true,
+            superadmin: 'S'
+        }, JWT_SECRET, { expiresIn: '12h' });
+
+        console.log(`[SuperAdmin] ${decoded.login} switched to DB: ${dbName} (${banco.nome_cliente})`);
+
+        res.json({
+            success: true,
+            token: newToken,
+            user: {
+                id: decoded.id,
+                nome: decoded.nome || decoded.login,
+                login: decoded.login,
+                role: 'admin',
+                dbName: dbName,
+                clientName: banco.nome_cliente,
+                isSuperadmin: true,
+                superadmin: 'S'
+            }
+        });
+    } catch (err) {
+        console.error('[SuperAdmin] Erro ao trocar banco:', err);
+        res.status(500).json({ success: false, message: 'Erro ao trocar banco: ' + err.message });
     }
 });
 
@@ -3983,11 +4086,23 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
 app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
+        const tenantDb = req.tenantDb || 'default';
+
+        // Build column list defensively — check if Observacao exists before using it
+        let observacaoExpr = 'NULL AS Observacao';
+        try {
+            const [cols] = await queryPool.execute(
+                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'Observacao'"
+            );
+            if (cols.length > 0) observacaoExpr = 'Observacao';
+        } catch (_) { /* fallback to NULL */ }
+
         const [rows] = await queryPool.execute(`
             SELECT
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
                 QtdeOS, QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS, QtdeTotalPecas,
-                qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia, Observacao,
+                qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
+                ${observacaoExpr},
                 PlanejadoInicioCorte, PlanejadoFinalCorte, RealizadoInicioCorte, RealizadoFinalCorte,
                 CorteTotalExecutado, CorteTotalExecutar, CortePercentual,
                 PlanejadoInicioDobra, PlanejadoFinalDobra, RealizadoInicioDobra, RealizadoFinalDobra,
@@ -3997,19 +4112,27 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
                 PlanejadoInicioPintura, PlanejadoFinalPintura, RealizadoInicioPintura, RealizadoFinalPintura,
                 PinturaTotalExecutado, PinturaTotalExecutar, PinturaPercentual,
                 PlanejadoInicioMontagem, PlanejadoFinalMontagem, RealizadoInicioMontagem, RealizadoFinalMontagem,
-                MontagemTotalExecutado, MontagemTotalExecutar, MontagemPercentual
+                MontagemTotalExecutado, MontagemTotalExecutar, MontagemPercentual,
+                -- Datas dos setores de engenharia (para modo Tag Individual no modal de edição)
+                PlanejadoInicioMedicao,   PlanejadoFinalMedicao,   RealizadoInicioMedicao,   RealizadoFinalMedicao,
+                PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, RealizadoFinalIsometrico,
+                PlanejadoInicioAprovacao,  PlanejadoFinalAprovacao,  RealizadoInicioAprovacao,  RealizadoFinalAprovacao,
+                PlanejadoInicioAcabamento, PlanejadoFinalAcabamento, RealizadoInicioAcabamento, RealizadoFinalAcabamento,
+                PlanejadoInicioExpedicao,  PlanejadoFinalExpedicao,  RealizadoInicioExpedicao,  realizadoFinalExpedicao
             FROM tags
             WHERE IdProjeto = ?
               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             ORDER BY IdTag ASC
         `, [req.params.projetoId]);
 
+        console.log(`[Tags] [${tenantDb}] Projeto ${req.params.projetoId}: ${rows.length} tags found`);
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('Error fetching visao-geral tags:', error);
+        console.error(`[Tags] Error fetching tags for projeto ${req.params.projetoId} (tenant: ${req.tenantDb || 'default'}):`, error.message);
         res.status(500).json({ success: false, message: 'Erro ao buscar tags: ' + error.message });
     }
 });
+
 
 // PUT planejar-projetista for a tag
 app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) => {
@@ -4204,7 +4327,8 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
 // GET Tags for Visao Geral Engenharia
 app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute(`
             SELECT
                 t.IdTag, t.Tag, t.DescTag, t.Projeto, t.DescEmpresa, t.TipoProduto, t.DataPrevisao, t.ProjetistaPlanejado, t.CaminhoIsometrico,
                 t.PlanejadoInicioMedicao, t.PlanejadoFinalMedicao, t.RealizadoInicioMedicao, t.RealizadoFinalMedicao,
@@ -4261,10 +4385,10 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nenhuma tag selecionada.' });
         }
         if (!setor || !['Medicao', 'Isometrico', 'Engenharia', 'Aprovacao'].includes(setor)) {
-            return res.status(400).json({ success: false, message: 'Setor invÃƒÂ¡lido.' });
+            return res.status(400).json({ success: false, message: 'Setor inválido.' });
         }
         if (!usuario) {
-            return res.status(400).json({ success: false, message: 'UsuÃƒÂ¡rio obrigatÃƒÂ³rio.' });
+            return res.status(400).json({ success: false, message: 'Usuário obrigatório.' });
         }
 
         const updates = [];
@@ -4288,10 +4412,9 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
         }
 
         if (updates.length === 0) {
-            return res.status(400).json({ success: false, message: 'Nenhum dado fornecido para atualizaÃƒÂ§ÃƒÂ£o.' });
+            return res.status(400).json({ success: false, message: 'Nenhum dado fornecido para atualização.' });
         }
 
-        // Create placeholders for the IN clause
         const placeholders = idTags.map(() => '?').join(',');
         params.push(...idTags);
 
@@ -4301,7 +4424,83 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             WHERE IdTag IN (${placeholders})
         `;
 
-        const [result] = await pool.execute(query, params);
+        const queryPool = req.tenantDbPool || pool;
+        const [result] = await queryPool.execute(query, params);
+
+        // ── PROPAGAR 4 DATAS DO SETOR PARA PROJETOS (com usuário responsável) ──
+        // MIN para Início | MAX para Final | usuario = NomeCompleto do usuário logado
+        const SETOR_MAP_LOTE = {
+            Medicao: [
+                { tag: 'PlanejadoInicioMedicao',  proj: 'PlanejadoInicioMEDICAO',  usu: 'UsuarioPlanejadoInicioMEDICAO',  fn: 'MIN' },
+                { tag: 'PlanejadoFinalMedicao',   proj: 'PlanejadoFinalMEDICAO',   usu: 'UsuarioPlanejadoFinalMEDICAO',   fn: 'MAX' },
+                { tag: 'RealizadoInicioMedicao',  proj: 'RealizadoInicioMEDICAO',  usu: 'UsuarioRealizadoInicioMEDICAO',  fn: 'MIN' },
+                { tag: 'RealizadoFinalMedicao',   proj: 'RealizadoFinalMEDICAO',   usu: 'UsuarioRealizadoFinalMEDICAO',   fn: 'MAX' },
+            ],
+            Isometrico: [
+                { tag: 'PlanejadoInicioIsometrico',  proj: 'PlanejadoInicioISOMETRICO',  usu: 'UsuarioPlanejadoInicioISOMETRICO',  fn: 'MIN' },
+                { tag: 'PlanejadoFinalIsometrico',   proj: 'PlanejadoFinalISOMETRICO',   usu: 'UsuarioPlanejadoFinalISOMETRICO',   fn: 'MAX' },
+                { tag: 'RealizadoInicioIsometrico',  proj: 'RealizadoInicioISOMETRICO',  usu: 'UsuarioRealizadoInicioISOMETRICO',  fn: 'MIN' },
+                { tag: 'RealizadoFinalIsometrico',   proj: 'RealizadoFinalISOMETRICO',   usu: 'UsuarioRealizadoFinalISOMETRICO',   fn: 'MAX' },
+            ],
+            Engenharia: [
+                { tag: 'PlanejadoInicioEngenharia',  proj: 'PlanejadoInicioENGENHARIA',  usu: 'UsuarioPlanejadoInicioENGENHARIA',  fn: 'MIN' },
+                { tag: 'PlanejadoFinalEngenharia',   proj: 'PlanejadoFinalENGENHARIA',   usu: 'UsuarioPlanejadoFinalENGENHARIA',   fn: 'MAX' },
+                { tag: 'RealizadoInicioEngenharia',  proj: 'RealizadoInicioENGENHARIA',  usu: 'UsuarioRealizadoInicioENGENHARIA',  fn: 'MIN' },
+                { tag: 'RealizadoFinalEngenharia',   proj: 'RealizadoFinalENGENHARIA',   usu: 'UsuarioRealizadoFinalENGENHARIA',   fn: 'MAX' },
+            ],
+            Aprovacao: [
+                { tag: 'PlanejadoInicioAprovacao',   proj: 'PlanejadoInicioAPROVACAO',   usu: 'UsuarioPlanejadoInicioAPROVACAO',   fn: 'MIN' },
+                { tag: 'PlanejadoFinalAprovacao',    proj: 'PlanejadoFinalAPROVACAO',    usu: 'UsuarioPlanejadoFinalAPROVACAO',    fn: 'MAX' },
+                { tag: 'RealizadoInicioAprovacao',   proj: 'RealizadoInicioAPROVACAO',   usu: 'UsuarioRealizadoInicioAPROVACAO',   fn: 'MIN' },
+                { tag: 'RealizadoFinalAprovacao',    proj: 'RealizadoFinalAPROVACAO',    usu: 'UsuarioRealizadoFinalAPROVACAO',    fn: 'MAX' },
+            ],
+        };
+        try {
+            const camposSetor = SETOR_MAP_LOTE[setor];
+            if (camposSetor) {
+                // 1) Descobre os projetos afetados pelas tags alteradas
+                const phIds = idTags.map(() => '?').join(',');
+                const [tagProjRows] = await queryPool.execute(
+                    `SELECT DISTINCT IdProjeto FROM tags WHERE IdTag IN (${phIds})`, idTags
+                );
+
+                for (const { IdProjeto } of tagProjRows) {
+                    const setProjeto   = [];
+                    const paramsProjeto = [];
+
+                    // 2) Para cada um dos 4 campos do setor: recalcula MIN ou MAX nas tags
+                    for (const { tag, proj, usu, fn } of camposSetor) {
+                        const [[aggRow]] = await queryPool.execute(`
+                            SELECT DATE_FORMAT(
+                                ${fn}(STR_TO_DATE(NULLIF(TRIM(\`${tag}\`),''), '%d/%m/%Y')),
+                                '%d/%m/%Y'
+                            ) AS val
+                            FROM tags
+                            WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+                        `, [IdProjeto]);
+
+                        const valor = aggRow.val || null;
+                        // Grava data calculada no campo do projeto
+                        setProjeto.push(`\`${proj}\` = ?`);
+                        paramsProjeto.push(valor);
+                        // Grava NomeCompleto do usuário responsável
+                        setProjeto.push(`\`${usu}\` = ?`);
+                        paramsProjeto.push(valor ? usuario : null);
+                    }
+
+                    paramsProjeto.push(IdProjeto);
+                    await queryPool.execute(
+                        `UPDATE projetos SET ${setProjeto.join(', ')} WHERE IdProjeto = ?`,
+                        paramsProjeto
+                    );
+                }
+                console.log(`[lote] 4 datas de ${setor} propagadas para ${tagProjRows.length} projeto(s). Resp: ${usuario}`);
+            }
+        } catch (propagErr) {
+            console.error('[lote] Erro na propagação para projetos:', propagErr.message);
+            // Não interrompe — dado principal (tags) já foi salvo com sucesso
+        }
+        // ─────────────────────────────────────────────────────────────────────
 
         res.json({ success: true, message: `${result.affectedRows} tags atualizadas com sucesso.` });
     } catch (error) {
@@ -4337,15 +4536,16 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
             return res.status(400).json({ success: false, message: 'Nenhum arquivo enviado.' });
         }
 
-        const [rows] = await pool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
-        if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag jÃƒÂ¡ Finalizado!' });
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
+        if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
         const filePath = `/uploads/isometricos/${file.filename}`;
 
-        await pool.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
+        await queryPool.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
 
-        res.json({ success: true, message: 'Desenho IsomÃƒÂ©trico associado com sucesso.', data: { CaminhoIsometrico: filePath } });
+        res.json({ success: true, message: 'Desenho Isométrico associado com sucesso.', data: { CaminhoIsometrico: filePath } });
     } catch (error) {
         console.error('Error uploading isometrico:', error);
         res.status(500).json({ success: false, message: 'Erro ao associar desenho: ' + error.message });
@@ -4356,12 +4556,13 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
 app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res) => {
     try {
         const { idTag } = req.params;
+        const queryPool = req.tenantDbPool || pool;
         
-        const [rows] = await pool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
-        if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag jÃƒÂ¡ Finalizado!' });
+        const [rows] = await queryPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
+        if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
-        const [tagRow] = await pool.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
+        const [tagRow] = await queryPool.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
         const caminho = tagRow[0].CaminhoIsometrico;
 
         if (caminho) {
@@ -4371,9 +4572,9 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
             }
         }
 
-        await pool.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
+        await queryPool.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
 
-        res.json({ success: true, message: 'Desenho IsomÃƒÂ©trico removido com sucesso.', data: { CaminhoIsometrico: null } });
+        res.json({ success: true, message: 'Desenho Isométrico removido com sucesso.', data: { CaminhoIsometrico: null } });
     } catch (error) {
         console.error('Error clearing isometrico:', error);
         res.status(500).json({ success: false, message: 'Erro ao limpar desenho: ' + error.message });
@@ -4384,7 +4585,8 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
 // GET RNCs for a project in production overview
 app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 Estatus,
@@ -8391,7 +8593,8 @@ app.get('/api/config', async (req, res) => {
             'ProcessosVisiveis',
             'PlanoCorteFiltroDC',
             'MaxRegistros',
-            'MenuStructure'
+            'MenuStructure',
+            'PermitirRealizadoSemPlanejamento'
         ].filter(c => colNames.includes(c));
 
         const query = availableCols.length > 0 
@@ -8410,7 +8613,8 @@ app.get('/api/config', async (req, res) => {
             RestringirApontamentoSemSaldoAnterior: 'Não',
             ProcessosVisiveis: '["corte","dobra","solda","pintura","montagem"]',
             PlanoCorteFiltroDC: 'corte',
-            MaxRegistros: 300
+            MaxRegistros: 300,
+            PermitirRealizadoSemPlanejamento: 'Sim'
         }});
     } catch (error) {
         // Banco legado (ex: alfatec2) nÃƒÂ£o tem essas colunas Ã¢â‚¬â€ retorna config padrÃƒÂ£o sem erro
@@ -8429,16 +8633,34 @@ app.get('/api/config', async (req, res) => {
 // PUT /api/config - Salvar configuraÃƒÂ§ÃƒÂµes do sistema
 app.put('/api/config', async (req, res) => {
     try {
-        const { restringirApontamento, processosVisiveis } = req.body;
+        const { restringirApontamento, processosVisiveis, maxRegistros, permitirRealizadoSemPlanejamento } = req.body;
         
-        // Verificar se as colunas existem antes de tentar atualizar (bancos legados nÃƒÂ£o as tÃƒÂªm)
+        // Verificar e criar coluna PermitirRealizadoSemPlanejamento se não existir
+        try {
+            const [existsCols] = await pool.execute(
+                `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+                 WHERE TABLE_SCHEMA = DATABASE()
+                 AND TABLE_NAME = 'configuracaosistema'
+                 AND COLUMN_NAME = 'PermitirRealizadoSemPlanejamento'`
+            );
+            if (existsCols.length === 0) {
+                await pool.execute(
+                    `ALTER TABLE configuracaosistema ADD COLUMN PermitirRealizadoSemPlanejamento VARCHAR(10) DEFAULT 'Sim'`
+                );
+                console.log('[Config] Coluna PermitirRealizadoSemPlanejamento criada automaticamente.');
+            }
+        } catch (alterErr) {
+            console.warn('[Config] Não foi possível criar coluna:', alterErr.message);
+        }
+
+        // Verificar se as colunas existem antes de tentar atualizar (bancos legados não as têm)
         let [cols] = [];
         try {
             [cols] = await pool.execute(
                 `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
                  WHERE TABLE_SCHEMA = DATABASE()
                  AND TABLE_NAME = 'configuracaosistema'
-                 AND COLUMN_NAME IN ('RestringirApontamentoSemSaldoAnterior','ProcessosVisiveis')`
+                 AND COLUMN_NAME IN ('RestringirApontamentoSemSaldoAnterior','ProcessosVisiveis','PermitirRealizadoSemPlanejamento')`
             );
         } catch (e) {
             cols = [];
@@ -8467,15 +8689,18 @@ app.put('/api/config', async (req, res) => {
                 updates.push('ProcessosVisiveis = ?');
                 params.push(processosVisiveis);
             }
+            if (permitirRealizadoSemPlanejamento !== undefined && colNames.includes('PermitirRealizadoSemPlanejamento')) {
+                updates.push('PermitirRealizadoSemPlanejamento = ?');
+                params.push(permitirRealizadoSemPlanejamento);
+            }
             if (updates.length > 0) {
                 await pool.execute('UPDATE configuracaosistema SET ' + updates.join(', ') + ' WHERE id = ' + existing[0].id, params);
             }
         } else {
-            // Somente insere se as colunas existem
             if (colNames.includes('RestringirApontamentoSemSaldoAnterior') && colNames.includes('ProcessosVisiveis')) {
                 await pool.execute(
-                    'INSERT INTO configuracaosistema (RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis) VALUES (?, ?)',
-                    [restringirApontamento || 'NÃƒÂ£o', processosVisiveis || '["corte","dobra","solda","pintura","montagem"]']
+                    'INSERT INTO configuracaosistema (RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PermitirRealizadoSemPlanejamento) VALUES (?, ?, ?)',
+                    [restringirApontamento || 'Não', processosVisiveis || '["corte","dobra","solda","pintura","montagem"]', permitirRealizadoSemPlanejamento || 'Sim']
                 );
             }
         }
@@ -12475,12 +12700,12 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
         // Filtros de Datas
         // DataPrevisao
         if (dataPrevisaoInicio && dataPrevisaoFim) {
-            whereClause += " AND STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')";
+            whereClause += " AND STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataPrevisaoInicio, dataPrevisaoFim);
         }
         // DataFinal (usaremos DataTermino)
         if (dataFinalInicio && dataFinalFim) {
-            whereClause += " AND STR_TO_DATE(p.DataTermino, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')";
+            whereClause += " AND STR_TO_DATE(p.DataTermino, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataFinalInicio, dataFinalFim);
         }
 
@@ -12492,12 +12717,12 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
                 WHERE t2.IdProjeto = p.IdProjeto 
                 AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
                 AND (
-                    STR_TO_DATE(t2.PlanejadoInicioMedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.PlanejadoInicioIsometrico, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.PlanejadoInicioEngenharia, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.PlanejadoInicioAprovacao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.PlanejadoInicioAcabamento, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.PlanejadoInicioExpedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    STR_TO_DATE(t2.PlanejadoInicioMedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.PlanejadoInicioIsometrico, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.PlanejadoInicioEngenharia, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.PlanejadoInicioAprovacao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.PlanejadoInicioAcabamento, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.PlanejadoInicioExpedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
                 )
             )`;
             for(let i=0; i<6; i++) {
@@ -12511,12 +12736,12 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
                 WHERE t2.IdProjeto = p.IdProjeto 
                 AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
                 AND (
-                    STR_TO_DATE(t2.RealizadoFinalMedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.RealizadoFinalIsometrico, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.RealizadoFinalEngenharia, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.RealizadoFinalAprovacao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.RealizadoFinalAcabamento, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
-                    OR STR_TO_DATE(t2.realizadoFinalExpedicao, '%d/%m/%Y') BETWEEN STR_TO_DATE(?, '%d/%m/%Y') AND STR_TO_DATE(?, '%d/%m/%Y')
+                    STR_TO_DATE(t2.RealizadoFinalMedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.RealizadoFinalIsometrico, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.RealizadoFinalEngenharia, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.RealizadoFinalAprovacao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.RealizadoFinalAcabamento, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
+                    OR STR_TO_DATE(t2.realizadoFinalExpedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
                 )
             )`;
             for(let i=0; i<6; i++) {
@@ -12538,27 +12763,33 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
                 COUNT(t.IdTag) as TotalTags,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '' THEN 1 ELSE 0 END) as FaltaMedicao,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
-                MAX(t.PlanejadoInicioMedicao) as PlanMedicao, MAX(t.RealizadoFinalMedicao) as RealMedicao,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioMedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanMedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealMedicao,
                 
                 SUM(CASE WHEN t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '' THEN 1 ELSE 0 END) as FaltaIsometrico,
                 SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,
-                MAX(t.PlanejadoInicioIsometrico) as PlanIsometrico, MAX(t.RealizadoFinalIsometrico) as RealIsometrico,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioIsometrico),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanIsometrico,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealIsometrico,
                 
                 SUM(CASE WHEN t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '' THEN 1 ELSE 0 END) as FaltaEngenharia,
                 SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,
-                MAX(t.PlanejadoInicioEngenharia) as PlanEngenharia, MAX(t.RealizadoFinalEngenharia) as RealEngenharia,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioEngenharia),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanEngenharia,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealEngenharia,
                 
                 SUM(CASE WHEN t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '' THEN 1 ELSE 0 END) as FaltaAprovacao,
                 SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,
-                MAX(t.PlanejadoInicioAprovacao) as PlanAprovacao, MAX(t.RealizadoFinalAprovacao) as RealAprovacao,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAprovacao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAprovacao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAprovacao,
                 
                 SUM(CASE WHEN t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '' THEN 1 ELSE 0 END) as FaltaAcabamento,
                 SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,
-                MAX(t.PlanejadoInicioAcabamento) as PlanAcabamento, MAX(t.RealizadoFinalAcabamento) as RealAcabamento,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAcabamento),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAcabamento,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAcabamento,
                 
                 SUM(CASE WHEN t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '' THEN 1 ELSE 0 END) as FaltaExpedicao,
                 SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao,
-                MAX(t.PlanejadoInicioExpedicao) as PlanExpedicao, MAX(t.realizadoFinalExpedicao) as RealExpedicao
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioExpedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanExpedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.realizadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealExpedicao
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE ${whereClause}
@@ -12716,35 +12947,36 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
             if (aggRows && aggRows.length > 0) {
                 const agg = aggRows[0];
                 const mapFields = {
-                    PlanejadoInicioMedicao: agg.PlanejadoInicioMedicaoMin,
-                    PlanejadoFinalMedicao: agg.PlanejadoFinalMedicaoMax,
-                    RealizadoInicioMedicao: agg.RealizadoInicioMedicaoMin,
-                    RealizadoFinalMedicao: agg.RealizadoFinalMedicaoMax,
+                    // Campos em MAIUSCULAS conforme a tabela projetos
+                    PlanejadoInicioMEDICAO:    agg.PlanejadoInicioMedicaoMin,
+                    PlanejadoFinalMEDICAO:     agg.PlanejadoFinalMedicaoMax,
+                    RealizadoInicioMEDICAO:    agg.RealizadoInicioMedicaoMin,
+                    RealizadoFinalMEDICAO:     agg.RealizadoFinalMedicaoMax,
 
-                    PlanejadoInicioIsometrico: agg.PlanejadoInicioIsometricoMin,
-                    PlanejadoFinalIsometrico: agg.PlanejadoFinalIsometricoMax,
-                    RealizadoInicioIsometrico: agg.RealizadoInicioIsometricoMin,
-                    RealizadoFinalIsometrico: agg.RealizadoFinalIsometricoMax,
+                    PlanejadoInicioISOMETRICO: agg.PlanejadoInicioIsometricoMin,
+                    PlanejadoFinalISOMETRICO:  agg.PlanejadoFinalIsometricoMax,
+                    RealizadoInicioISOMETRICO: agg.RealizadoInicioIsometricoMin,
+                    RealizadoFinalISOMETRICO:  agg.RealizadoFinalIsometricoMax,
 
-                    PlanejadoInicioEngenharia: agg.PlanejadoInicioEngenhariaMin,
-                    PlanejadoFinalEngenharia: agg.PlanejadoFinalEngenhariaMax,
-                    RealizadoInicioEngenharia: agg.RealizadoInicioEngenhariaMin,
-                    RealizadoFinalEngenharia: agg.RealizadoFinalEngenhariaMax,
+                    PlanejadoInicioENGENHARIA: agg.PlanejadoInicioEngenhariaMin,
+                    PlanejadoFinalENGENHARIA:  agg.PlanejadoFinalEngenhariaMax,
+                    RealizadoInicioENGENHARIA: agg.RealizadoInicioEngenhariaMin,
+                    RealizadoFinalENGENHARIA:  agg.RealizadoFinalEngenhariaMax,
 
-                    PlanejadoInicioAprovacao: agg.PlanejadoInicioAprovacaoMin,
-                    PlanejadoFinalAprovacao: agg.PlanejadoFinalAprovacaoMax,
-                    RealizadoInicioAprovacao: agg.RealizadoInicioAprovacaoMin,
-                    RealizadoFinalAprovacao: agg.RealizadoFinalAprovacaoMax,
+                    PlanejadoInicioAPROVACAO:  agg.PlanejadoInicioAprovacaoMin,
+                    PlanejadoFinalAPROVACAO:   agg.PlanejadoFinalAprovacaoMax,
+                    RealizadoInicioAPROVACAO:  agg.RealizadoInicioAprovacaoMin,
+                    RealizadoFinalAPROVACAO:   agg.RealizadoFinalAprovacaoMax,
 
-                    PlanejadoInicioAcabamento: agg.PlanejadoInicioAcabamentoMin,
-                    PlanejadoFinalAcabamento: agg.PlanejadoFinalAcabamentoMax,
-                    RealizadoInicioAcabamento: agg.RealizadoInicioAcabamentoMin,
-                    RealizadoFinalAcabamento: agg.RealizadoFinalAcabamentoMax,
+                    PlanejadoInicioACABAMENTO: agg.PlanejadoInicioAcabamentoMin,
+                    PlanejadoFinalACABAMENTO:  agg.PlanejadoFinalAcabamentoMax,
+                    RealizadoInicioACABAMENTO: agg.RealizadoInicioAcabamentoMin,
+                    RealizadoFinalACABAMENTO:  agg.RealizadoFinalAcabamentoMax,
 
-                    PlanejadoInicioExpedicao: agg.PlanejadoInicioExpedicaoMin,
-                    PlanejadoFinalExpedicao: agg.PlanejadoFinalExpedicaoMax,
-                    RealizadoInicioExpedicao: agg.RealizadoInicioExpedicaoMin,
-                    RealizadoFinalExpedicao: agg.RealizadoFinalExpedicaoMax
+                    PlanejadoInicioExpedicao:  agg.PlanejadoInicioExpedicaoMin,
+                    PlanejadoFinalExpedicao:   agg.PlanejadoFinalExpedicaoMax,
+                    RealizadoInicioExpedicao:  agg.RealizadoInicioExpedicaoMin,
+                    RealizadoFinalExpedicao:   agg.RealizadoFinalExpedicaoMax
                 };
                 
                 
