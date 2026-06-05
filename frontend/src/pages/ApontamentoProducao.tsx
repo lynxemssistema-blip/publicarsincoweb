@@ -7,6 +7,8 @@ import {
     PenTool, Box, AlertTriangle, Calendar, Maximize2, Minimize2
 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
+import { useAuth } from '../contexts/AuthContext';
+import { Lock } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import PlanejamentoProducaoPage from './PlanejamentoProducao';
 
@@ -110,6 +112,20 @@ const setores: { id: Setor; label: string; icon: typeof Scissors; color: string 
 
 export default function ApontamentoProducaoPage() {
     const { addToast } = useToast();
+    const { user } = useAuth();
+
+    if (!user || (user.role !== 'admin' && user.mapaProducao !== 'S' && !user.isSuperadmin && user.superadmin !== 'S')) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 min-h-0 bg-slate-50">
+                <div className="p-4 bg-red-100 rounded-full text-red-600"><Lock size={40} /></div>
+                <h2 className="text-xl font-black text-red-700">Acesso Negado</h2>
+                <p className="text-sm text-slate-500 text-center max-w-xs">
+                    Somente usuários com permissão de Mapa de Produção ou Administradores podem acessar esta tela.
+                </p>
+            </div>
+        );
+    }
+
     const { processosVisiveis, maxRegistros } = useAppConfig();
     // visibleSetores is derived from the global config (replaces per-component state)
     const visibleSetores: string[] = processosVisiveis;

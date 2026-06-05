@@ -59,7 +59,7 @@ export default function ConfiguracaoPage() {
 
     useEffect(() => {
         // Se o usuário global já for o 'Admin' (ou superadmin), desbloqueia automaticamente
-        if (globalUser && (globalUser.login?.toLowerCase() === 'admin' || globalUser.isSuperadmin)) {
+        if (globalUser && (globalUser.login?.toLowerCase() === 'admin' || globalUser.login?.toLowerCase() === 'superadmin' || globalUser.isSuperadmin)) {
             setIsAdmin(true);
             fetchConfig();
             fetchMenu();
@@ -70,7 +70,7 @@ export default function ConfiguracaoPage() {
         if (storedAdmin) {
             try {
                 const parsed = JSON.parse(storedAdmin);
-                if (parsed.login?.toLowerCase() === 'admin' || parsed.isSuperadmin) {
+                if (parsed.login?.toLowerCase() === 'admin' || parsed.login?.toLowerCase() === 'superadmin' || parsed.isSuperadmin) {
                     setIsAdmin(true);
                     fetchConfig();
                     fetchMenu();

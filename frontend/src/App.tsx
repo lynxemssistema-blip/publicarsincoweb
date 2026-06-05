@@ -172,34 +172,25 @@ function AppContent() {
             }
           }
 
-          // Force add 'controle-expedicao' if it belongs to lynxlocal or alfatec
-          if (user.dbName === 'lynxlocal' || user.dbName === 'alfatec2') {
-            if (!savedMenu.find(item => item.id === 'controle-expedicao')) {
-              const ceItem = defaultMenuItems.find(item => item.id === 'controle-expedicao');
-              if (ceItem) {
-                const vgIdx = savedMenu.findIndex(item => item.id === 'visao-geral-engenharia');
-                if (vgIdx >= 0) {
-                  savedMenu = [...savedMenu.slice(0, vgIdx + 1), ceItem, ...savedMenu.slice(vgIdx + 1)];
-                } else {
-                  savedMenu = [...savedMenu, ceItem];
-                }
+                    // Force add 'controle-expedicao'
+          if (!savedMenu.find(item => item.id === 'controle-expedicao')) {
+            const ceItem = defaultMenuItems.find(item => item.id === 'controle-expedicao');
+            if (ceItem) {
+              const vgIdx = savedMenu.findIndex(item => item.id === 'visao-geral-engenharia');
+              if (vgIdx >= 0) {
+                savedMenu = [...savedMenu.slice(0, vgIdx + 1), ceItem, ...savedMenu.slice(vgIdx + 1)];
+              } else {
+                savedMenu = [...savedMenu, ceItem];
               }
             }
-          } else {
-             // Remove it if present and user is not one of those dbNames
-             savedMenu = savedMenu.filter(item => item.id !== 'controle-expedicao');
           }
 
-          // Force add 'teste-final-montagem' restrito a alfatec2 e lynxlocal
-          if (user.dbName === 'lynxlocal' || user.dbName === 'alfatec2') {
-            if (!savedMenu.find(item => item.id === 'teste-final-montagem')) {
-              const tfmItem = defaultMenuItems.find(item => item.id === 'teste-final-montagem');
-              if (tfmItem) {
-                 savedMenu = [...savedMenu, tfmItem];
-              }
+                    // Force add 'teste-final-montagem'
+          if (!savedMenu.find(item => item.id === 'teste-final-montagem')) {
+            const tfmItem = defaultMenuItems.find(item => item.id === 'teste-final-montagem');
+            if (tfmItem) {
+               savedMenu = [...savedMenu, tfmItem];
             }
-          } else {
-            savedMenu = savedMenu.filter(item => item.id !== 'teste-final-montagem');
           }
 
           // Force add 'power-build' (Power Build) dependendo apenas da configuração mostrarPowerBuild
@@ -344,8 +335,7 @@ function AppContent() {
         }
         const filtered = defaultMenuItems.filter(item => {
           if (item.id === 'superadmin') return false;
-          if ((item.id === 'controle-expedicao' || item.id === 'teste-final-montagem') &&
-              user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') return false;
+          
           return true;
         });
         setMenuItems(sortMenuRecursive(filtered));
@@ -430,14 +420,10 @@ function AppContent() {
       case 'visao-geral-engenharia':
         return <VisaoGeralEngenhariaPage />;
       case 'controle-expedicao':
-        // lynxlocal: sem barreira
-        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2' && !user?.isSuperadmin && user?.superadmin !== 'S')
-          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
+        
         return <ControleExpedicaoPage />;
       case 'teste-final-montagem':
-        // lynxlocal: sem barreira
-        if (user?.dbName !== 'lynxlocal' && user?.dbName !== 'alfatec2' && !user?.isSuperadmin && user?.superadmin !== 'S')
-          return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado</div>;
+        
         return <TesteFinalMontagemPage />;
       case 'pesquisar-desenho':
         return <PesquisarDesenhoPage />;

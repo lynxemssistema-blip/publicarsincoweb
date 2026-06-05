@@ -10,6 +10,7 @@ export interface User {
     clientName?: string;
     dbName?: string;
     setor?: string;
+    mapaProducao?: string;
 }
 
 interface AuthContextType {

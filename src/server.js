@@ -1745,6 +1745,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                                 nome: centralAuth.isSuperadmin ? login : user.NomeCompleto,
                                 role,
                                 setor: user.Setor,
+                                mapaProducao: user.MapaProducao,
                                 isSuperadmin: centralAuth.isSuperadmin,
                                 superadmin: centralAuth.superadmin,
                                 clientName: centralAuth.clientName,
@@ -1826,6 +1827,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                 id: user.idUsuario,
                 login: login,
                 role: role,
+                mapaProducao: user.MapaProducao,
                 dbName: 'lynxlocal',
                 isSuperadmin: isSuperFinal
             }, JWT_SECRET, { expiresIn: '12h' });
@@ -1838,6 +1840,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                     login: login,
                     nome: user.NomeCompleto,
                     role,
+                    mapaProducao: user.MapaProducao,
                     dbName: 'lynxlocal',
                     clientName: 'LYNX (LYNXLOCAL)',
                     isSuperadmin: isSuperFinal
