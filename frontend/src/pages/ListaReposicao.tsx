@@ -337,7 +337,7 @@ export default function ListaReposicaoPage() {
                                 <XCircle size={14} /> Limpar Filtros
                             </button>
                         )}
-                        <button onClick={fetchItens} className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-4 py-1.5 rounded flex items-center gap-2 transition-colors">
+                        <button onClick={fetchItens} className="bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 text-xs font-bold px-4 py-1.5 rounded flex items-center gap-2 transition-colors">
                             {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                             Pesquisar
                         </button>

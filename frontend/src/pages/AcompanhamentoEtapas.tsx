@@ -99,8 +99,8 @@ export default function AcompanhamentoEtapas() {
 
     const [data, setData] = useState<EtapasRow[]>([]);
     const [loading, setLoading] = useState(false);
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [showFilters, setShowFilters] = useState(true);
+    const [isExpanded, setIsExpanded] = useState(true);
+    const [showFilters, setShowFilters] = useState(false);
 
     // Filtros
     const [filters, setFilters] = useState({
@@ -412,17 +412,15 @@ export default function AcompanhamentoEtapas() {
     };
 
     return (
-        <div className={`flex flex-col bg-gray-50 transition-all duration-300 ${isExpanded ? 'fixed inset-0 z-50 overflow-hidden' : 'h-full'}`}>
+        <div className="h-full flex flex-col bg-gray-50 overflow-hidden">
                 
                 {/* HEADER & FILTERS */}
+                {!isExpanded && (
                 <div className={`bg-white shadow-sm transition-all duration-300 ${!showFilters ? 'p-2 border-b border-gray-200' : 'p-4 border-b border-gray-200'}`}>
                     <div className={`flex justify-end items-center ${showFilters ? 'mb-3' : ''}`}>
                         <div className="flex items-center gap-2">
                             <button type="button" onClick={() => setShowFilters(!showFilters)} className="text-xs flex items-center gap-1 text-gray-600 hover:text-[#03624C] transition-colors border px-2 py-1 rounded bg-gray-50">
                                 <Filter size={14} /> {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
-                            </button>
-                            <button type="button" onClick={() => setIsExpanded(!isExpanded)} className="p-1 text-gray-500 hover:text-[#03624C] transition-colors rounded border bg-gray-50" title={isExpanded ? "Restaurar" : "Maximizar"}>
-                                {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
                             </button>
                         </div>
                     </div>
@@ -545,6 +543,19 @@ export default function AcompanhamentoEtapas() {
                                 </button>
                             </div>
                         </form>
+                </div>
+                )}
+
+                {/* Main Grid Toolbar */}
+                <div className="px-6 py-2 border-b border-gray-300 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
+                    <div className="font-bold text-gray-800 text-sm flex items-center gap-2">
+                        Acompanhamento Etapas
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <button onClick={() => setIsExpanded(!isExpanded)} className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors" title={isExpanded ? "Restaurar tamanho" : "Expandir grid"}>
+                            {isExpanded ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                        </button>
+                    </div>
                 </div>
 
                 {/* GRID SECTION */}

@@ -23,7 +23,7 @@ const getDefaultPermitirRealizado = (): string => {
 export default function ConfiguracaoPage() {
     const { addToast } = useToast();
     const { refetchConfig } = useAppConfig();
-    const { user: globalUser } = useAuth();
+    const { user: globalUser, token } = useAuth();
     const [isAdmin, setIsAdmin] = useState(false);
     const [login, setLogin] = useState('');
     const [senha, setSenha] = useState('');
@@ -81,7 +81,7 @@ export default function ConfiguracaoPage() {
     }, [globalUser]);
 
     const fetchConfig = () => {
-        fetch(`${API_BASE}/config`)
+        fetch(`${API_BASE}/config?t=${Date.now()}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -130,7 +130,7 @@ export default function ConfiguracaoPage() {
     };
 
     const fetchMenu = () => {
-        fetch(`${API_BASE}/config/menu`)
+        fetch(`${API_BASE}/config/menu?t=${Date.now()}`, { headers: token ? { 'Authorization': `Bearer ${token}` } : {} })
             .then(res => res.json())
             .then(data => {
                 if (data.success) {
@@ -254,7 +254,10 @@ export default function ConfiguracaoPage() {
         try {
             const res = await fetch(`${API_BASE}/config`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({
                     restringirApontamento,
                     processosVisiveis: JSON.stringify(processosVisiveis),
@@ -279,10 +282,14 @@ export default function ConfiguracaoPage() {
         try {
             await fetch(`${API_BASE}/config/menu`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
                 body: JSON.stringify({ menu: menuItems })
             });
-            addToast({ type: 'success', title: 'Sucesso', message: 'Estrutura do menu salva! Atualize a página.' });
+            addToast({ type: 'success', title: 'Sucesso', message: 'Estrutura do menu salva!' });
+            window.dispatchEvent(new CustomEvent('sinco_menu_updated'));
         } catch (err) {
             addToast({ type: 'error', title: 'Erro', message: 'Erro ao salvar menu' });
         }

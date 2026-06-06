@@ -20,8 +20,8 @@ async function deploy() {
     console.log('✅ Conexão SSH estabelecida!');
     
     // Procura o diretório criado para o subdomínio
-    console.log('🔎 Procurando a pasta do subdomínio alfatecsinco...');
-    conn.exec('find . -maxdepth 4 -type d -name "*alfatecsinco*" | head -n 1', (err, stream) => {
+    console.log('🔎 Procurando a pasta do subdomínio sinco...');
+    conn.exec('find . -maxdepth 4 -type d -name "*sinco*" | head -n 1', (err, stream) => {
       if (err) throw err;
       let output = '';
       stream.on('data', (data) => {
@@ -30,7 +30,7 @@ async function deploy() {
         let remoteFolder = output.trim();
         if (!remoteFolder) {
             console.log('⚠️ Pasta não encontrada magicamente. Usando estrutura padrão...');
-            remoteFolder = './domains/lynxems.com.br/public_html/alfatecsinco';
+            remoteFolder = './domains/lynxems.com.br/public_html/sinco';
         }
         
         console.log(`📁 Diretório de destino: ${remoteFolder}`);

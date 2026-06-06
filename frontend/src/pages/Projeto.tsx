@@ -651,15 +651,7 @@ export default function ProjetoPage() {
                     <p className="text-gray-500 text-sm">Clique em um projeto para expandir e ver suas tags</p>
                 </div>
                 <div className="flex gap-2">
-                    <motion.button
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={fetchProjetos}
-                        className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
-                        disabled={loading}
-                    >
-                        <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                    </motion.button>
+
                     <motion.button
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
@@ -814,7 +806,7 @@ export default function ProjetoPage() {
                     <button
                         onClick={() => fetchProjetos()}
                         disabled={loading}
-                        className="px-5 py-1.5 bg-[#E0E800]/20 border border-[#32423D]/20 text-[#32423D] font-bold text-xs tracking-wide rounded hover:bg-[#E0E800]/40 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+                        className="px-5 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs tracking-wide rounded hover:bg-emerald-200 transition-colors flex items-center gap-1.5 disabled:opacity-50"
                     >
                         <Search size={13} />
                         {loading ? 'Buscando...' : 'Pesquisar'}

@@ -8,6 +8,8 @@ import {
     GanttChartSquare, List, LayoutList
 } from 'lucide-react';
 
+import { useAppConfig } from '../contexts/AppConfigContext';
+
 const API_BASE = '/api';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -200,16 +202,17 @@ interface GanttRow {
 interface GanttChartProps {
     data: any[]; // Can be TagDetalhe[] or ProjetoAcomp[]
     mode: 'tag' | 'projeto';
+    setoresVisiveis: typeof SETORES;
 }
 
-function GanttChart({ data, mode }: GanttChartProps) {
+function GanttChart({ data, mode, setoresVisiveis }: GanttChartProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     // Compute global date range
     const allDates: Date[] = [];
     data.forEach(item => {
-        SETORES.forEach(s => {
+        setoresVisiveis.forEach(s => {
             const pIni = parseDate(item[`PlanejadoInicio${s.key}`]);
             const pFin = parseDate(item[`PlanejadoFinal${s.key}`]);
             const rIni = parseDate(item[`RealizadoInicio${s.key}`]);
@@ -258,7 +261,7 @@ function GanttChart({ data, mode }: GanttChartProps) {
         label: mode === 'tag' ? item.Tag : item.Projeto,
         desc: mode === 'tag' ? item.DescTag : item.DescProjeto,
         finalizado: item.Finalizado === 'C',
-        bars: SETORES.map(s => {
+        bars: setoresVisiveis.map(s => {
             const total = Number(mode === 'tag' ? item[`${s.key}TotalExecutar`] : item[`Total${s.key}`]) || 0;
             const exec = Number(mode === 'tag' ? item[`${s.key}TotalExecutado`] : item[`Exec${s.key}`]) || 0;
             const pct = Number(mode === 'tag' ? item[`${s.key}Percentual`] : item[`Pct${s.key}`]) || 0;
@@ -285,13 +288,11 @@ function GanttChart({ data, mode }: GanttChartProps) {
     const cursor = new Date(minDate);
     cursor.setDate(1);
     while (cursor <= maxDate) {
-        const pct = dayPct(cursor);
-        if (pct >= 0 && pct <= 100) {
-            months.push({
-                label: cursor.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
-                leftPct: pct,
-            });
-        }
+        const pct = Math.max(0, dayPct(cursor));
+        months.push({
+            label: cursor.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+            leftPct: pct,
+        });
         cursor.setMonth(cursor.getMonth() + 1);
     }
 
@@ -317,7 +318,7 @@ function GanttChart({ data, mode }: GanttChartProps) {
                     <div className="w-px h-4 bg-red-500" />
                     <span className="text-[10px] text-slate-500 font-semibold">Hoje</span>
                 </div>
-                {SETORES.map(s => (
+                {setoresVisiveis.map(s => (
                     <div key={s.key} className="flex items-center gap-1">
                         <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: s.color }} />
                         <span className="text-[10px] font-semibold" style={{ color: s.color }}>{s.label}</span>
@@ -500,7 +501,7 @@ function GanttChart({ data, mode }: GanttChartProps) {
 
 // ─── TAG DETAIL SECTION (List View) ──────────────────────────────────────────
 
-function TagDetailSection({ tag }: { tag: TagDetalhe }) {
+function TagDetailSection({ tag, setoresVisiveis }: { tag: TagDetalhe; setoresVisiveis: typeof SETORES }) {
     const [expanded, setExpanded] = useState(false);
     const isFinished = tag.Finalizado === 'C';
 
@@ -527,7 +528,7 @@ function TagDetailSection({ tag }: { tag: TagDetalhe }) {
                 </div>
                 <div className="flex items-center gap-4 flex-shrink-0">
                     {/* Mini setor bars inline */}
-                    {SETORES.map(s => {
+                    {setoresVisiveis.map(s => {
                         const total = Number((tag as any)[`${s.key}TotalExecutar`]) || 0;
                         const exec  = Number((tag as any)[`${s.key}TotalExecutado`]) || 0;
                         const pct   = Number((tag as any)[`${s.key}Percentual`]) || 0;
@@ -550,7 +551,7 @@ function TagDetailSection({ tag }: { tag: TagDetalhe }) {
             {expanded && (
                 <div className="border-t border-slate-100 px-4 py-3 bg-slate-50/50">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
-                        {SETORES.map(s => {
+                        {setoresVisiveis.map(s => {
                             const total = Number((tag as any)[`${s.key}TotalExecutar`]) || 0;
                             const exec  = Number((tag as any)[`${s.key}TotalExecutado`]) || 0;
                             const pct   = Number((tag as any)[`${s.key}Percentual`]) || 0;
@@ -600,7 +601,7 @@ function TagDetailSection({ tag }: { tag: TagDetalhe }) {
 
 // ─── DETAIL VIEW (Project → Tags) ────────────────────────────────────────────
 
-function DetalheProjetoView({ projeto, onVoltar }: { projeto: ProjetoAcomp; onVoltar: () => void }) {
+function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: ProjetoAcomp; onVoltar: () => void; setoresVisiveis: typeof SETORES }) {
     const [tags, setTags] = useState<TagDetalhe[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -704,9 +705,9 @@ function DetalheProjetoView({ projeto, onVoltar }: { projeto: ProjetoAcomp; onVo
 
                 {/* Totals Bar */}
                 <div className="mt-4 grid grid-cols-5 gap-3">
-                    {SETORES.map(s => {
+                    {setoresVisiveis.map(s => {
                         const tot = totais[s.key as keyof typeof totais];
-                        const pct = (tot[0] + tot[1]) > 0 ? Math.round((tot[1] / (tot[0] + tot[1])) * 100) : 0;
+                        const pct = tot[0] > 0 ? Math.round((tot[1] / tot[0]) * 100) : 0;
                         const IconComp = s.icon;
                         return (
                             <div key={s.key} className="flex flex-col gap-1.5 p-3 rounded-xl border" style={{ backgroundColor: s.bg, borderColor: s.border }}>
@@ -766,13 +767,13 @@ function DetalheProjetoView({ projeto, onVoltar }: { projeto: ProjetoAcomp; onVo
                         {viewMode === 'lista' && (
                             <div className="h-full overflow-y-auto p-4 custom-scrollbar">
                                 <div className="flex flex-col gap-2">
-                                    {tags.map(tag => <TagDetailSection key={tag.IdTag} tag={tag} />)}
+                                    {tags.map(tag => <TagDetailSection key={tag.IdTag} tag={tag} setoresVisiveis={setoresVisiveis} />)}
                                 </div>
                             </div>
                         )}
                         {viewMode === 'gantt' && (
                             <div className="h-full flex flex-col">
-                                <GanttChart data={tags} mode="tag" />
+                                <GanttChart data={tags} mode="tag" setoresVisiveis={setoresVisiveis} />
                             </div>
                         )}
                     </>
@@ -785,6 +786,9 @@ function DetalheProjetoView({ projeto, onVoltar }: { projeto: ProjetoAcomp; onVo
 // ─── MAIN LIST VIEW ──────────────────────────────────────────────────────────
 
 export default function AcompanhamentoGeralPage() {
+    const { processosVisiveis } = useAppConfig();
+    const setoresAtivos = SETORES.filter(s => processosVisiveis.includes(s.label.toLowerCase()));
+
     const [projetos, setProjetos] = useState<ProjetoAcomp[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -872,11 +876,11 @@ export default function AcompanhamentoGeralPage() {
 
     // If detalhe mode, render the detail view
     if (detalhe) {
-        return <DetalheProjetoView projeto={detalhe} onVoltar={() => { setDetalhe(null); }} />;
+        return <DetalheProjetoView projeto={detalhe} onVoltar={() => { setDetalhe(null); }} setoresVisiveis={setoresAtivos} />;
     }
 
     return (
-        <div className="flex flex-col w-full bg-slate-50/50 font-sans border border-slate-200 rounded-xl shadow-sm">
+        <div className="flex flex-col h-[calc(100vh-4rem)] w-full min-h-0 bg-slate-50/50 font-sans border border-slate-200 rounded-xl shadow-sm">
 
             {/* ── Header (Sticky) ── */}
             <div className="sticky top-0 z-30 bg-white border-b border-slate-200 px-5 py-3 shadow-sm">
@@ -1051,7 +1055,7 @@ export default function AcompanhamentoGeralPage() {
 
                     {/* Refresh */}
                     <button onClick={handleRefresh} title="Atualizar"
-                        className="px-4 py-2 font-bold text-xs rounded-lg bg-[#32423D] text-white hover:bg-[#32423D]/80 transition-colors shadow-sm">
+                        className="px-4 py-2 font-bold text-xs rounded-lg bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 transition-colors shadow-sm">
                         Pesquisar
                     </button>
                 </div>
@@ -1076,43 +1080,40 @@ export default function AcompanhamentoGeralPage() {
                 {projetos.length > 0 && (
                     mainViewMode === 'lista' ? (
                         <table className="w-full text-[11px] border-collapse" style={{ minWidth: 1000 }}>
-                            <thead className="bg-[#567469] text-white bg-[#567469] text-white text-white bg-[#567469] sticky top-0 z-20 shadow-sm">
+                            <thead className="bg-[#567469] text-white sticky top-0 z-20 shadow-sm">
                                 <tr className="bg-[#0B3A2D] text-white border-b border-[#0B3A2D]">
-                                    
-                                    <th className="px-2 py-2 text-left font-black text-slate-100 uppercase tracking-wider">Projeto / Cliente</th>
-
-                                    <th className="px-2 py-2 text-left font-black text-slate-100 uppercase tracking-wider">Data Final</th>
-                                    {SETORES.map(s => (
-                                        <th key={s.key} className="px-1 py-2 text-center font-black text-slate-100 uppercase tracking-wider" style={{ width: 65 }}>
+                                    <th className="px-3 py-2 text-left font-black tracking-wider uppercase border-r border-[#155A47]">Projeto / Cliente</th>
+                                    <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47] w-24">Data Final</th>
+                                    {setoresAtivos.map(s => (
+                                        <th key={s.key} className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47] w-28">
                                             {s.label}
                                         </th>
                                     ))}
-                                    <th className="px-2 py-2 text-right font-black text-slate-100 uppercase tracking-wider w-20">Ações</th>
+                                    <th className="px-2 py-2 text-center font-black tracking-wider uppercase w-20">Ações</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 bg-white">
                                 {projetos.map(p => {
                                     const isSelected = selected?.IdProjeto === p.IdProjeto;
+                                    const finalizado = p.Finalizado === 'C';
                                     return (
                                         <tr
                                             key={p.IdProjeto}
                                             onClick={() => setSelected(isSelected ? null : p)}
-                                            className={`cursor-pointer transition-all ${
-                                                isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'
-                                            }`}
+                                            className={`cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'} ${finalizado ? 'bg-emerald-50/30' : ''}`}
                                         >
                                             
-                                            <td className="px-2 py-1.5">
+                                            <td className="px-3 py-2 border-r border-slate-100">
                                                 <div className="flex items-center gap-1.5 overflow-hidden">
                                                     <div className="font-black text-slate-800 leading-tight truncate">{p.Projeto}</div>
                                                     <div className="text-[10px] text-slate-500 truncate uppercase shrink-0 bg-slate-100 px-1 rounded-sm">{p.DescEmpresa || 'Sem Cliente'}</div>
                                                 </div>
                                             </td>
                                             
-                                            <td className="px-2 py-1.5 font-bold text-slate-600 whitespace-nowrap">
+                                            <td className="px-2 py-2 text-center border-r border-slate-100 font-black text-slate-600 whitespace-nowrap">
                                                 {fmtDate(p.DataPrevisao)}
                                             </td>
-                                            {SETORES.map(s => (
+                                            {setoresAtivos.map(s => (
                                                 <td key={s.key} className="px-1 py-1.5">
                                                     <SetorCell
                                                         total={Number((p as any)[`Total${s.key}`]) || 0}
@@ -1136,7 +1137,7 @@ export default function AcompanhamentoGeralPage() {
                             </tbody>
                         </table>
                     ) : (
-                        <GanttChart data={projetos} mode="projeto" />
+                        <GanttChart data={projetos} mode="projeto" setoresVisiveis={setoresAtivos} />
                     )
                 )}
 

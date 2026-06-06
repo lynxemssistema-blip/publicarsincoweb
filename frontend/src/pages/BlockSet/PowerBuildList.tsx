@@ -547,7 +547,7 @@ const PowerBuildList: React.FC<PowerBuildListProps> = ({ onNavigate }) => {
                             <button 
                                 onClick={handleSearch}
                                 disabled={loading || !selectedPlanilha || !selectedOS}
-                                className="flex-1 md:flex-none bg-[#32423D] hover:bg-[#32423D]/80 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
+                                className="flex-1 md:flex-none bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50 px-6 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-sm"
                                 title={!selectedOS ? 'Selecione a OS de destino antes de pesquisar' : ''}
                             >
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}

@@ -48,11 +48,11 @@ async function deploy() {
         npm install -g pm2 > /dev/null 2>&1
         
         echo "📂 Extraindo aplicação..."
-        mkdir -p /var/www/alfatecsinco
-        unzip -o /root/SINCO_Deploy.zip -d /var/www/alfatecsinco > /dev/null 2>&1
+        mkdir -p /var/www/sinco
+        unzip -o /root/SINCO_Deploy.zip -d /var/www/sinco > /dev/null 2>&1
         
         echo "⚙️ Instalando dependências..."
-        cd /var/www/alfatecsinco
+        cd /var/www/sinco
         npm install --omit=dev > /dev/null 2>&1
         
         echo "▶️ Iniciando a aplicação..."
@@ -61,10 +61,10 @@ async function deploy() {
         pm2 save > /dev/null 2>&1
         
         echo "🌐 Configurando Nginx para o domínio..."
-        cat << 'EOF' > /etc/nginx/sites-available/alfatecsinco
+        cat << 'EOF' > /etc/nginx/sites-available/sinco
 server {
     listen 80;
-    server_name alfatecsinco.lynxems.com.br;
+    server_name sinco.lynxems.com.br;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -76,7 +76,7 @@ server {
     }
 }
 EOF
-        ln -sf /etc/nginx/sites-available/alfatecsinco /etc/nginx/sites-enabled/
+        ln -sf /etc/nginx/sites-available/sinco /etc/nginx/sites-enabled/
         nginx -t && systemctl restart nginx
         
         echo "🎉 Deploy concluído com sucesso!"

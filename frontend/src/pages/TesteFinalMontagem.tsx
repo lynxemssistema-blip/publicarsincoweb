@@ -379,7 +379,7 @@ export default function TesteFinalMontagemPage() {
                                         className="w-full text-xs py-1.5 outline-none bg-transparent font-medium text-slate-700 placeholder:text-slate-400" />
                                 </div>
                             ))}
-                            <button onClick={handleSearch} className="flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-lg transition-colors shadow-sm">
+                            <button onClick={handleSearch} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 text-xs font-bold rounded-lg transition-colors shadow-sm">
                                 <Search size={13} />Pesquisar
                             </button>
                             <button onClick={handleLimpar} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 text-xs font-bold rounded-lg transition-colors">

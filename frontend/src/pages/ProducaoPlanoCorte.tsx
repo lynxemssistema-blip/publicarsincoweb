@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     Scissors, Loader2, Database, RefreshCw,
-    CheckCircle2, Clock, Search, X, ArrowRight,
+    CheckCircle2, Clock, Search, X, ArrowRight, ArrowLeft,
     FolderOpen, Send, Flag, Box, FileText, Layers, FileCode,
     ClipboardCheck
 } from 'lucide-react';
@@ -419,29 +419,29 @@ export default function ProducaoPlanoCorte() {
                         <div className="flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-2 py-1 shadow-inner focus-within:border-[#32423D]/40">
                             <Search size={12} className="text-slate-400" />
                             <div className="relative flex items-center w-full">
-    <input type="text" placeholder="ID" value={fPId} onChange={e=>setFPId(e.target.value)} className="pr-6 w-12 text-[10px] outline-none font-bold text-[#32423D]" onKeyDown={e=>
-    {fPId && (
-        <button onClick={() => setFPId('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchPlanos()} />
+                                <input type="text" placeholder="ID" value={fPId} onChange={e=>setFPId(e.target.value)} className="pr-6 w-12 text-[10px] outline-none font-bold text-[#32423D]" onKeyDown={e=>e.key==='Enter'&&fetchPlanos()} />
+                                {fPId && (
+                                    <button onClick={() => setFPId('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Descrição..." value={fPDesc} onChange={e=>setFPDesc(e.target.value)} className="pr-6 w-32 text-[10px] outline-none border-l border-slate-100 pl-1.5" onKeyDown={e=>
-    {fPDesc && (
-        <button onClick={() => setFPDesc('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchPlanos()} />
+                                <input type="text" placeholder="Descrição..." value={fPDesc} onChange={e=>setFPDesc(e.target.value)} className="pr-6 w-32 text-[10px] outline-none border-l border-slate-100 pl-1.5" onKeyDown={e=>e.key==='Enter'&&fetchPlanos()} />
+                                {fPDesc && (
+                                    <button onClick={() => setFPDesc('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Esp..." value={fPEsp} onChange={e=>setFPEsp(e.target.value)} className="pr-6 w-16 text-[10px] outline-none border-l border-slate-100 pl-1.5" onKeyDown={e=>
-    {fPEsp && (
-        <button onClick={() => setFPEsp('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchPlanos()} />
+                                <input type="text" placeholder="Esp..." value={fPEsp} onChange={e=>setFPEsp(e.target.value)} className="pr-6 w-16 text-[10px] outline-none border-l border-slate-100 pl-1.5" onKeyDown={e=>e.key==='Enter'&&fetchPlanos()} />
+                                {fPEsp && (
+                                    <button onClick={() => setFPEsp('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                        <X size={14} />
+                                    </button>
+                                )}
+                            </div>
                             {(fPId || fPDesc || fPEsp || fPMat) && (
                                 <button onClick={limparFiltrosPlanos} className="p-0.5 text-slate-300 hover:text-red-500 transition-colors"><X size={12}/></button>
                             )}
@@ -539,6 +539,13 @@ export default function ProducaoPlanoCorte() {
                 <div className="flex flex-col flex-1 bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-2">
                     <div className="flex items-center justify-between px-4 py-2 bg-indigo-50/50 border-b border-indigo-100">
                         <div className="flex items-center gap-2">
+                            <button 
+                                onClick={() => setPlanoSel(null)}
+                                className="p-1.5 text-indigo-400 hover:text-white hover:bg-indigo-600 rounded-lg transition-colors mr-1"
+                                title="Voltar para Planos de Corte"
+                            >
+                                <ArrowLeft size={18} />
+                            </button>
                             <div className="p-1.5 bg-indigo-600 text-white rounded-lg shadow-sm">
                                 <Database size={18} />
                             </div>
@@ -552,29 +559,29 @@ export default function ProducaoPlanoCorte() {
                             <div className="flex items-center gap-1.5 bg-white border border-indigo-100 rounded-lg px-2 py-1 shadow-sm focus-within:border-indigo-400">
                                 <Search size={12} className="text-indigo-300" />
                                 <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Projeto" value={fIProj} onChange={e=>setFIProj(e.target.value)} className="pr-6 w-24 text-[10px] outline-none font-bold" onKeyDown={e=>
-    {fIProj && (
-        <button onClick={() => setFIProj('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchItens()} />
+                                    <input type="text" placeholder="Projeto" value={fIProj} onChange={e=>setFIProj(e.target.value)} className="pr-6 w-24 text-[10px] outline-none font-bold" onKeyDown={e=>e.key==='Enter'&&fetchItens()} />
+                                    {fIProj && (
+                                        <button onClick={() => setFIProj('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Tag" value={fITag} onChange={e=>setFITag(e.target.value)} className="pr-6 w-20 text-[10px] outline-none border-l border-indigo-50 pl-1.5" onKeyDown={e=>
-    {fITag && (
-        <button onClick={() => setFITag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchItens()} />
+                                    <input type="text" placeholder="Tag" value={fITag} onChange={e=>setFITag(e.target.value)} className="pr-6 w-20 text-[10px] outline-none border-l border-indigo-50 pl-1.5" onKeyDown={e=>e.key==='Enter'&&fetchItens()} />
+                                    {fITag && (
+                                        <button onClick={() => setFITag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
                                 <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Fabricante..." value={fICod} onChange={e=>setFICod(e.target.value)} className="pr-6 w-28 text-[10px] outline-none border-l border-indigo-50 pl-1.5 uppercase" onKeyDown={e=>
-    {fICod && (
-        <button onClick={() => setFICod('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>e.key==='Enter'&&fetchItens()} />
+                                    <input type="text" placeholder="Fabricante..." value={fICod} onChange={e=>setFICod(e.target.value)} className="pr-6 w-28 text-[10px] outline-none border-l border-indigo-50 pl-1.5 uppercase" onKeyDown={e=>e.key==='Enter'&&fetchItens()} />
+                                    {fICod && (
+                                        <button onClick={() => setFICod('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                            <X size={14} />
+                                        </button>
+                                    )}
+                                </div>
                                 {(fIProj || fITag || fIRes || fICod) && (
                                     <button onClick={limparFiltrosItens} className="p-0.5 text-indigo-200 hover:text-red-500 transition-colors"><X size={12}/></button>
                                 )}

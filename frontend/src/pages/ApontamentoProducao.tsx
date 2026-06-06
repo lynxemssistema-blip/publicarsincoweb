@@ -1169,7 +1169,7 @@ export default function ApontamentoProducaoPage() {
                                 <button
                                     onClick={handleSearch}
                                     disabled={loading}
-                                    className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold text-white bg-[#32423D] hover:bg-[#32423D]/80 disabled:bg-blue-400 rounded shadow-sm transition-colors"
+                                    className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50 rounded shadow-sm transition-colors"
                                 >
                                     {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
                                     Pesquisar

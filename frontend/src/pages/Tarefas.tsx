@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, ListTodo, CheckCircle, Edit3, Loader, Plus, Save, FileSpreadsheet } from 'lucide-react';
+import { Loader2, ListTodo, CheckCircle, Edit3, Loader, Plus, Save, FileSpreadsheet, ChevronUp, ChevronDown } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const API_BASE = '/api';
@@ -65,6 +65,7 @@ export default function TarefasPage() {
     const [fromGlobal, setFromGlobal] = useState(false);
     const [openId, setOpenId] = useState<string | null>(null);
     const [visibleSetores, setVisibleSetores] = useState<string[]>(['corte', 'dobra', 'solda', 'pintura', 'montagem']);
+    const [formAberto, setFormAberto] = useState(true);
 
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -244,6 +245,8 @@ export default function TarefasPage() {
             wantsToFinalize: false
         });
 
+        setFormAberto(true);
+
         // Scroll to top to see the form
         window.scrollTo({ top: 0, behavior: 'smooth' });
     };
@@ -304,76 +307,88 @@ export default function TarefasPage() {
                 {isSaving && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center gap-2"><Loader className="animate-spin text-[#32423D]" size={28} /><span className="text-[10px] font-bold text-slate-600 uppercase">Processando...</span></div>}
 
                 {/* Topbar of Form */}
-                <div className="bg-[#f8fafc] border-b border-slate-200 px-5 py-3 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                    <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                        {rncForm.idRnc ? <Edit3 className="text-amber-500" size={20} /> : <Plus className="text-[#32423D]" size={20} />}
+                <div 
+                    className="bg-[#f8fafc] border-b border-slate-200 px-4 py-2.5 flex justify-between items-center cursor-pointer select-none"
+                    onClick={() => setFormAberto(!formAberto)}
+                >
+                    <h2 className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                        {rncForm.idRnc ? <Edit3 className="text-amber-500" size={16} /> : <Plus className="text-[#32423D]" size={16} />}
                         {rncForm.idRnc ? `Editando Tarefa #${rncForm.idRnc}` : 'Cadastrar Nova Tarefa'}
                     </h2>
                     
-                    <div className="flex items-center gap-2 w-full md:w-auto">
+                    <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                         <button 
-                            onClick={() => setRncForm({ ...limpo })}
-                            className="flex-1 md:flex-none bg-white hover:bg-slate-50 text-slate-600 border border-slate-300 text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg shadow-sm transition-colors"
+                            onClick={() => { setRncForm({ ...limpo }); setFormAberto(true); }}
+                            className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-300 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-sm transition-colors"
                         >
                             Limpar / Novo
                         </button>
                         <button 
                             onClick={salvarNovaTarefa} 
                             disabled={!rncForm.descricao.trim() || rncForm.estatus === 'TarefaFinalizada'}
-                            className="flex-1 md:flex-none bg-[#32423D] hover:bg-[#32423D]/80 text-white text-xs font-bold uppercase tracking-wider px-4 py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="bg-[#32423D] hover:bg-[#32423D]/80 text-white text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Save size={14} /> Salvar Dados
+                        </button>
+                        <button 
+                            className="ml-2 flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-slate-200 transition-colors shadow-sm"
+                            onClick={() => setFormAberto(!formAberto)}
+                        >
+                            {formAberto ? 'Ocultar' : 'Exibir'}
+                            {formAberto ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                     </div>
                 </div>
 
                 {/* Form Fields */}
-                <div className="p-5 flex flex-col gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4">
-                        {/* ID Readonly */}
-                        <div className="opacity-70 bg-slate-50 rounded-lg">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Cód. (ID)</label>
-                            <input type="text" readOnly value={rncForm.idRnc || ''} placeholder="Automático" className="w-full bg-transparent border border-slate-200 rounded-lg px-3 py-2 text-sm font-mono text-slate-700 outline-none cursor-not-allowed" />
+                {formAberto && (
+                    <div className="p-3 flex flex-col gap-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                            {/* ID Readonly */}
+                            <div className="opacity-70 bg-slate-50 rounded-lg">
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Cód. (ID)</label>
+                                <input type="text" readOnly value={rncForm.idRnc || ''} placeholder="Automático" className="w-full bg-transparent border border-slate-200 rounded-md px-2 py-1.5 text-xs font-mono text-slate-700 outline-none cursor-not-allowed" />
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Responsável</label>
+                                <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.usuario} onChange={e => setRncForm(prev => ({...prev, usuario: e.target.value}))} className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
+                                    <option value="">Selecione...</option>
+                                    {rncForm.usuario && !(usuarios || []).find(u => u.NomeCompleto === rncForm.usuario) && <option value={rncForm.usuario}>{rncForm.usuario}</option>}
+                                    {(usuarios || []).map(u => <option key={`task_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Tipo de Tarefa</label>
+                                <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.tipoTarefa} onChange={e => setRncForm(prev => ({...prev, tipoTarefa: e.target.value}))} className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
+                                    <option value="">Selecione...</option>
+                                    {rncForm.tipoTarefa && !(tipostarefa || []).find(t => t.TipoTarefa === rncForm.tipoTarefa) && <option value={rncForm.tipoTarefa}>{rncForm.tipoTarefa}</option>}
+                                    {(tipostarefa || []).map(t => <option key={`task_${t.IdTipoTarefa}`} value={t.TipoTarefa}>{t.TipoTarefa}</option>)}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Setor</label>
+                                <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.setor} onChange={e => setRncForm(prev => ({...prev, setor: e.target.value}))} className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
+                                    {SECTORS.filter(s => visibleSetores.includes(s.k.toLowerCase())).map(s => <option key={`task_${s.k}`} value={s.k}>{s.k}</option>)}
+                                    <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
+                                    {rncForm.setor && !SECTORS.find(s=>s.k===rncForm.setor) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setor) && <option value={rncForm.setor}>{rncForm.setor}</option>}
+                                </select>
+                            </div>
+                            
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Data Execução (Prevista)</label>
+                                <input disabled={rncForm.estatus === 'TarefaFinalizada'} type="date" value={rncForm.dataExec} onChange={e => setRncForm(prev => ({...prev, dataExec: e.target.value}))} className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors" />
+                            </div>
                         </div>
-                        
                         <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Responsável</label>
-                            <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.usuario} onChange={e => setRncForm(prev => ({...prev, usuario: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
-                                <option value="">Selecione...</option>
-                                {rncForm.usuario && !(usuarios || []).find(u => u.NomeCompleto === rncForm.usuario) && <option value={rncForm.usuario}>{rncForm.usuario}</option>}
-                                {(usuarios || []).map(u => <option key={`task_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
-                            </select>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Descrição / Notas da Tarefa <span className="text-red-500">*</span></label>
+                            <textarea disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.descricao} onChange={e => setRncForm(prev => ({...prev, descricao: e.target.value.toUpperCase()}))} rows={2} placeholder="Descreva a tarefa..." className="w-full border border-slate-300 rounded-md px-3 py-2 text-xs text-slate-700 outline-none focus:border-[#32423D] resize-none font-medium shadow-inner disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors" />
                         </div>
-                        
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Tipo de Tarefa</label>
-                            <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.tipoTarefa} onChange={e => setRncForm(prev => ({...prev, tipoTarefa: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
-                                <option value="">Selecione...</option>
-                                {rncForm.tipoTarefa && !(tipostarefa || []).find(t => t.TipoTarefa === rncForm.tipoTarefa) && <option value={rncForm.tipoTarefa}>{rncForm.tipoTarefa}</option>}
-                                {(tipostarefa || []).map(t => <option key={`task_${t.IdTipoTarefa}`} value={t.TipoTarefa}>{t.TipoTarefa}</option>)}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Setor</label>
-                            <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.setor} onChange={e => setRncForm(prev => ({...prev, setor: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
-                                {SECTORS.filter(s => visibleSetores.includes(s.k.toLowerCase())).map(s => <option key={`task_${s.k}`} value={s.k}>{s.k}</option>)}
-                                <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
-                                {rncForm.setor && !SECTORS.find(s=>s.k===rncForm.setor) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setor) && <option value={rncForm.setor}>{rncForm.setor}</option>}
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Data Execução (Prevista)</label>
-                            <input disabled={rncForm.estatus === 'TarefaFinalizada'} type="date" value={rncForm.dataExec} onChange={e => setRncForm(prev => ({...prev, dataExec: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors" />
-                        </div>
+                        {msg && <div className={`px-3 py-1.5 rounded-md text-[10px] uppercase font-bold text-center ${msg.ok ? 'bg-[#E0E800]/40 text-[#32423D] border border-blue-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>{msg.t}</div>}
                     </div>
-                    <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Descrição / Notas da Tarefa <span className="text-red-500">*</span></label>
-                        <textarea disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.descricao} onChange={e => setRncForm(prev => ({...prev, descricao: e.target.value.toUpperCase()}))} rows={2} placeholder="Descreva a tarefa..." className="w-full border border-slate-300 rounded-lg px-4 py-3 text-sm text-slate-700 outline-none focus:border-[#32423D] resize-none font-medium shadow-inner disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors" />
-                    </div>
-                    {msg && <div className={`px-4 py-2 rounded-lg text-xs uppercase font-bold text-center ${msg.ok ? 'bg-[#E0E800]/40 text-[#32423D] border border-blue-200' : 'bg-red-100 text-red-800 border border-red-200'}`}>{msg.t}</div>}
-                </div>
+                )}
             </div>
 
             {/* SEÇÃO INLINE DE FINALIZAÇÃO (SÓ APARECE SE ID EXISTIR) */}

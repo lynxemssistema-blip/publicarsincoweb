@@ -278,23 +278,16 @@ function PainelItensPlano({ plano, onFechar, aglutinado, setAglutinado, onGerarR
                     <div className="flex items-center bg-white border border-indigo-200 rounded px-1.5 focus-within:border-indigo-400 w-28">
                         <Search size={9} className="text-indigo-300 mr-1 shrink-0" />
                         <div className="relative flex items-center w-full">
-    <div className="relative flex items-center w-full">
-    <input type="text" placeholder="Filtrar item OS..." value={fItem}
-                            onChange={e => setFItem(e.target.value)}
-                            onKeyDown={e =>
-    {fItem && (
-        <button onClick={() => setFItem('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>
-    {fItem && (
-        <button onClick={() => setFItem('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div> e.key === 'Enter' && fetchItens(aglutinado, fItem)}
-                            className="w-full text-[10px] py-0.5 outline-none bg-transparent text-slate-700 placeholder:text-indigo-300" />
+                            <input type="text" placeholder="Filtrar item OS..." value={fItem}
+                                onChange={e => setFItem(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchItens(aglutinado, fItem)}
+                                className="w-full text-[10px] py-0.5 outline-none bg-transparent text-slate-700 placeholder:text-indigo-300" />
+                            {fItem && (
+                                <button onClick={() => setFItem('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
                     </div>
                     <button onClick={() => fetchItens(aglutinado, fItem)} className="p-1 rounded bg-indigo-600 hover:bg-indigo-700 text-white transition-colors"><Search size={10} /></button>
                     <button onClick={handleToggle} className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${aglutinado ? 'bg-[#32423D] text-white border-blue-700' : 'bg-white text-slate-600 border-slate-300'}`}>
@@ -628,27 +621,20 @@ function PainelPendenciasPlanoCorte({ codMatFabricante, usuarios, setores, refre
                     <div className="flex items-center bg-white border border-orange-200 rounded px-1.5 focus-within:border-orange-400 w-32">
                         <Search size={9} className="text-orange-300 mr-1 shrink-0" />
                         <div className="relative flex items-center w-full">
-    <div className="relative flex items-center w-full">
-    <input
-                            type="text"
-                            placeholder="Filtrar descricao..."
-                            value={fDesc}
-                            onChange={e => setFDesc(e.target.value)}
-                            onKeyDown={e =>
-    {fDesc && (
-        <button onClick={() => setFDesc('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div>
-    {fDesc && (
-        <button onClick={() => setFDesc('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
-            <X size={14} />
-        </button>
-    )}
-</div> e.key === 'Enter' && fetchPendencias(exibirFinalizadas, fDesc)}
-                            className="w-full text-[10px] py-0.5 outline-none bg-transparent text-slate-700 placeholder:text-orange-300 uppercase"
-                        />
+                            <input
+                                type="text"
+                                placeholder="Filtrar descricao..."
+                                value={fDesc}
+                                onChange={e => setFDesc(e.target.value)}
+                                onKeyDown={e => e.key === 'Enter' && fetchPendencias(exibirFinalizadas, fDesc)}
+                                className="w-full text-[10px] py-0.5 outline-none bg-transparent text-slate-700 placeholder:text-orange-300 uppercase"
+                            />
+                            {fDesc && (
+                                <button onClick={() => setFDesc('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+                                    <X size={14} />
+                                </button>
+                            )}
+                        </div>
                         {fDesc && (
                             <button
                                 onClick={() => { setFDesc(''); fetchPendencias(exibirFinalizadas, ''); }}

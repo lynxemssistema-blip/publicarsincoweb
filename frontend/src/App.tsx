@@ -47,7 +47,7 @@ import PowerBuildImportPage from './pages/BlockSet/PowerBuildImport';
 import PowerBuildRevisionPage from './pages/BlockSet/PowerBuildRevision';
 import PowerBuildAgglutinationPage from './pages/BlockSet/PowerBuildAgglutination';
 function AppContent() {
-  const { user, logout } = useAuth();
+  const { user, logout, token } = useAuth();
   const { mostrarPowerBuild } = useAppConfig();
   const [activePageId, setActivePageId] = useState('dashboard');
   const [menuItems, setMenuItems] = useState<MenuItem[]>(defaultMenuItems);
@@ -64,40 +64,27 @@ function AppContent() {
   });
 
   useEffect(() => {
-    if (!user) return; // Don't fetch if not logged in
+    const loadMenu = () => {
+      if (!user) return; // Don't fetch if not logged in
 
-    // Fetch menu structure from backend
-    fetch('/api/config/menu')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success && data.menu) {
+      // Fetch menu structure from backend
+      fetch(`/api/config/menu?t=${Date.now()}`, {
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.menu) {
           let savedMenu: MenuItem[] = data.menu;
 
-          // Reconcilia labels: garante que renomeações no defaultMenuItems se reflitam
-          // mesmo que o menu esteja salvo no banco com labels antigos
-          const reconcileLabels = (items: MenuItem[]): MenuItem[] =>
-            items.map(item => {
-              const def = defaultMenuItems.find(d => d.id === item.id);
-              const reconciledLabel = def ? def.label : item.label;
-              return {
-                ...item,
-                label: reconciledLabel,
-                children: item.children ? reconcileLabels(item.children) : item.children
-              };
-            });
-          savedMenu = reconcileLabels(savedMenu);
+          const itemExists = (items: MenuItem[], id: string): boolean => {
+            return items.some(item => item.id === id || (item.children && itemExists(item.children, id)));
+          };
 
           // SuperAdmin: independente do banco, se for admin tem acesso completo
           const isSuperUser =
             user.isSuperadmin === true ||
             user.superadmin === 'S' ||
             user.login?.toLowerCase() === 'superadmin';
-
-          // SuperAdmin: menu completo sem filtros
-          if (isSuperUser) {
-            setMenuItems(sortMenuRecursive(defaultMenuItems));
-            return;
-          }
 
           // Force add 'romaneio' parent if missing
           if (!savedMenu.find(item => item.id === 'romaneio')) {
@@ -258,23 +245,7 @@ function AppContent() {
             }
           }
 
-          // Force add 'cadastro-usuarios' group if missing (Check by ID and label to avoid duplicates)
-          const hasCadastro = savedMenu.some(item => 
-            item.id === 'cadastro-usuarios' || 
-            item.label.toLowerCase() === 'cadastro usuarios'
-          );
 
-          if (!hasCadastro) {
-            const cuItem = defaultMenuItems.find(item => item.id === 'cadastro-usuarios');
-            if (cuItem) {
-              const usrIdx = savedMenu.findIndex(item => item.id === 'usuarios');
-              if (usrIdx >= 0) {
-                savedMenu = [...savedMenu.slice(0, usrIdx + 1), cuItem, ...savedMenu.slice(usrIdx + 1)];
-              } else {
-                savedMenu = [...savedMenu, cuItem];
-              }
-            }
-          }
 
           // Force add 'apontamentos-parciais' if missing
           if (!savedMenu.find(item => item.id === 'apontamentos-parciais')) {
@@ -303,7 +274,15 @@ function AppContent() {
             }
           }
 
-          setMenuItems(sortMenuRecursive(savedMenu));
+          let finalMenu = savedMenu;
+          if (!isSuperUser) {
+            finalMenu = savedMenu.filter(item =>
+              item.id !== 'superadmin' &&
+              !(item.id === 'controle-expedicao' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') &&
+              !(item.id === 'teste-final-montagem' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2')
+            );
+          }
+          setMenuItems(sortMenuRecursive(finalMenu));
         } else {
           // Menu não salvo: superadmins recebem tudo
           const isSuperDefault =
@@ -355,7 +334,13 @@ function AppContent() {
         }
       }
     }
-  }, [user, mostrarPowerBuild]);
+  };
+
+  loadMenu();
+
+  window.addEventListener('sinco_menu_updated', loadMenu);
+  return () => window.removeEventListener('sinco_menu_updated', loadMenu);
+}, [user, mostrarPowerBuild]);
 
   const handleNavigate = (id: string) => {
     const item = findItemById(menuItems, id);

@@ -171,7 +171,7 @@ export default function VisaoGeralPendenciasPage() {
                             onChange={e => setSearchTerm(e.target.value)}
                             className="w-72 pl-4 pr-24 py-2 rounded-lg border border-slate-200 bg-white text-sm focus:outline-none focus:border-[#32423D] focus:ring-2 focus:ring-blue-100 transition-all font-medium text-slate-700"
                         />
-                        <button className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-[#32423D] text-white px-3 py-1 rounded text-xs font-bold hover:bg-[#32423D]/80 transition-colors">
+                        <button className="absolute right-1.5 top-1/2 -translate-y-1/2 bg-emerald-100 border border-emerald-200 text-emerald-800 px-3 py-1 rounded text-xs font-bold hover:bg-emerald-200 transition-colors">
                             Pesquisar
                         </button>
                     </div>
