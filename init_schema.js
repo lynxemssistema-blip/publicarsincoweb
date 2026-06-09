@@ -343,11 +343,13 @@ async function initSchema() {
     // Insert default admin user
     console.log('\n👤 Inserindo usuário admin padrão...');
     try {
+        const adminLogin = `Admin${process.env.DB_NAME}`;
+        const adminSenha = `Admin${process.env.DB_NAME}`;
         await conn.execute(
             `INSERT IGNORE INTO \`usuario\` (\`Login\`, \`Senha\`, \`NomeCompleto\`, \`TipoUsuario\`) VALUES (?, ?, ?, ?)`,
-            ['admin', 'admin123', 'Administrador', 'A']
+            [adminLogin, adminSenha, 'Administrador', 'A']
         );
-        console.log('  ✅ Usuário admin inserido (Login: admin / Senha: admin123).');
+        console.log(`  ✅ Usuário admin inserido (Login: ${adminLogin} / Senha: ${adminSenha}).`);
     } catch (err) {
         console.log('  ⚠️  Admin já existe ou erro:', err.message);
     }
