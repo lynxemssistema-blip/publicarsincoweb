@@ -260,19 +260,8 @@ function AppContent() {
             }
           }
 
-          // Force add 'login' — and remove any manually-created "Login" group (group_xxx) to avoid duplicates
-          const manualLoginIdx = savedMenu.findIndex(item => 
-            item.id !== 'login' && item.label?.toLowerCase() === 'login'
-          );
-          if (manualLoginIdx >= 0) {
-            savedMenu.splice(manualLoginIdx, 1);
-          }
-          if (!savedMenu.find(item => item.id === 'login')) {
-            const loginItem = defaultMenuItems.find(item => item.id === 'login');
-            if (loginItem) {
-              savedMenu = [...savedMenu, loginItem];
-            }
-          }
+          // Remove any manually-created 'Login' entries from the menu
+          savedMenu = savedMenu.filter(item => item.id !== 'login' && item.label?.toLowerCase() !== 'login');
 
           let finalMenu = savedMenu;
           if (!isSuperUser) {

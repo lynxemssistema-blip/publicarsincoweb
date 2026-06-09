@@ -613,16 +613,16 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                 </div>
 
                 {/* COMMAND CENTER (Actions Dashboard) */}
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-2">
                     {/* Primary Creation Action */}
                     <button
                         onClick={handleCreateNew}
-                        className="col-span-2 md:col-span-2 lg:col-span-2 p-4 rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:bg-[#32423D] hover:text-white hover:border-[#32423D] transition-all group flex flex-col items-center justify-center gap-2"
+                        className="col-span-2 md:col-span-2 lg:col-span-1 p-2 rounded-xl border border-dashed border-gray-300 bg-gray-50 hover:bg-[#32423D] hover:text-white hover:border-[#32423D] transition-all group flex flex-col items-center justify-center gap-1 min-h-[70px]"
                     >
-                        <div className="p-2 bg-white rounded-full text-gray-400 group-hover:text-[#32423D]">
-                            <Plus size={24} />
+                        <div className="p-1.5 bg-white rounded-full text-gray-400 group-hover:text-[#32423D]">
+                            <Plus size={18} />
                         </div>
-                        <span className="font-semibold text-sm">Criar Novo</span>
+                        <span className="font-semibold text-xs text-center leading-tight">Criar<br/>Novo</span>
                     </button>
 
                     {/* Dynamic Actions */}
@@ -631,13 +631,13 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                             key={action.id}
                             onClick={() => handleAction(action.label, action.id)}
                             disabled={!selectedId}
-                            className={`p-3 rounded-xl border transition-all flex flex-col items-center justify-center gap-2 ${selectedId
+                            className={`p-2 rounded-xl border transition-all flex flex-col items-center justify-center gap-1 min-h-[70px] ${selectedId
                                 ? `bg-white border-gray-100 cursor-pointer hover:shadow-md ${action.hover}`
                                 : 'bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed grayscale'
                                 }`}
                         >
-                            <action.icon size={20} className={selectedId ? action.color : 'text-gray-300'} />
-                            <span className={`text-xs font-medium text-center ${selectedId ? 'text-gray-600' : 'text-gray-300'}`}>
+                            <action.icon size={18} className={selectedId ? action.color : 'text-gray-300'} />
+                            <span className={`text-[10px] font-medium text-center leading-tight ${selectedId ? 'text-gray-600' : 'text-gray-300'}`}>
                                 {action.label}
                             </span>
                         </button>
@@ -651,8 +651,8 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                 )}
 
                 {/* List */}
-                <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-                    <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex gap-4 items-center">
+                <div className="flex-1 flex flex-col min-h-0 bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden mt-3">
+                    <div className="p-3 border-b border-gray-100 bg-gray-50/50 flex gap-4 items-center">
                         <div className="relative flex-1 max-w-md">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                             <input
@@ -681,19 +681,19 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
 
                     <div className="overflow-auto flex-1">
                         <table className="w-full">
-                            <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] text-white text-sm font-medium uppercase tracking-wider">
+                            <thead className="bg-[#567469] text-white text-[11px] font-medium uppercase tracking-wider sticky top-0 z-10">
                                 <tr>
-                                    
-                                    <th className="px-6 py-4 text-left">Status</th>
-                                    <th className="px-6 py-4 text-left">Cliente</th>
-                                    <th className="px-6 py-4 text-left hidden xl:table-cell">Motorista</th>
-                                    <th className="px-6 py-4 text-left hidden md:table-cell">Descrição</th>
-                                    <th className="px-6 py-4 text-left hidden xl:table-cell">Envio</th>
-                                    <th className="px-6 py-4 text-left hidden lg:table-cell">Criado em</th>
-                                    <th className="px-6 py-4 text-center">Ações</th>
+                                    <th className="px-3 py-2 text-left">ID</th>
+                                    <th className="px-3 py-2 text-left">Status</th>
+                                    <th className="px-3 py-2 text-left">Cliente</th>
+                                    <th className="px-3 py-2 text-left hidden xl:table-cell">Motorista</th>
+                                    <th className="px-3 py-2 text-left hidden md:table-cell">Descrição</th>
+                                    <th className="px-3 py-2 text-left hidden xl:table-cell">Envio</th>
+                                    <th className="px-3 py-2 text-left hidden lg:table-cell">Criado em</th>
+                                    <th className="px-3 py-2 text-center">Ações</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                            <tbody className="divide-y divide-gray-100 text-sm">
                                 {loading ? (
                                     <tr>
                                         <td colSpan={8} className="px-6 py-12 text-center text-gray-400">
@@ -719,8 +719,8 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                                                 : 'hover:bg-gray-50 border-transparent'
                                                 }`}
                                         >
-                                            <td className="px-6 py-4 text-gray-900 font-medium">#{romaneio.idRomaneio}</td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-3 py-2 text-gray-900 font-medium">#{romaneio.idRomaneio}</td>
+                                            <td className="px-3 py-2">
                                                 {(() => {
                                                     const getVal = (obj: any, key: string) => {
                                                         if (!obj) return '';
@@ -751,54 +751,54 @@ export default function RomaneioPage({ onNavigate, onSetRncItem }: RomaneioPageP
                                                     );
                                                 })()}
                                             </td>
-                                            <td className="px-6 py-4">
+                                            <td className="px-3 py-2">
                                                 <div className="flex flex-col">
-                                                    <span className="font-medium text-gray-800 flex items-center gap-2">
-                                                        <Building2 size={16} className="text-gray-400" />
+                                                    <span className="font-medium text-[13px] text-gray-800 flex items-center gap-1.5 leading-tight">
+                                                        <Building2 size={14} className="text-gray-400 shrink-0" />
                                                         {romaneio.EnviadoPara || 'Não informado'}
                                                     </span>
-                                                    <span className="text-xs text-gray-500 md:hidden mt-1 line-clamp-1">{romaneio.Descricao}</span>
+                                                    <span className="text-[11px] text-gray-500 md:hidden mt-0.5 line-clamp-1">{romaneio.Descricao}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-600 hidden xl:table-cell">
-                                                <div className="flex items-center gap-2">
-                                                    <Truck size={16} className="text-gray-400" />
-                                                    {romaneio.NomeMotorista || '-'}
+                                            <td className="px-3 py-2 text-gray-600 hidden xl:table-cell">
+                                                <div className="flex items-center gap-1.5 text-[13px]">
+                                                    <Truck size={14} className="text-gray-400 shrink-0" />
+                                                    <span className="line-clamp-2 leading-tight">{romaneio.NomeMotorista || '-'}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-600 hidden md:table-cell max-w-xs truncate" title={romaneio.Descricao}>
-                                                <div className="flex items-center gap-2">
-                                                    <FileText size={16} className="text-gray-400 flex-shrink-0" />
+                                            <td className="px-3 py-2 text-gray-600 hidden md:table-cell max-w-xs truncate" title={romaneio.Descricao}>
+                                                <div className="flex items-center gap-1.5 text-[13px]">
+                                                    <FileText size={14} className="text-gray-400 shrink-0" />
                                                     {romaneio.Descricao}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-500 text-sm hidden xl:table-cell">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={16} className="text-gray-400" />
+                                            <td className="px-3 py-2 text-gray-500 text-sm hidden xl:table-cell">
+                                                <div className="flex items-center gap-1.5 text-[13px]">
+                                                    <Calendar size={14} className="text-gray-400 shrink-0" />
                                                     {formatToBRDate(romaneio.DataEnvio)}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-gray-500 text-sm hidden lg:table-cell">
-                                                <div className="flex items-center gap-2">
-                                                    <Calendar size={16} className="text-gray-400" />
+                                            <td className="px-3 py-2 text-gray-500 text-sm hidden lg:table-cell">
+                                                <div className="flex items-center gap-1.5 text-[13px]">
+                                                    <Calendar size={14} className="text-gray-400 shrink-0" />
                                                     {formatToBRDate(romaneio.DATACRIACAO)}
                                                 </div>
                                             </td>
-                                            <td className="px-6 py-4 text-center" onClick={(e) => e.stopPropagation()}>
-                                                <div className="flex items-center justify-center gap-2">
+                                            <td className="px-3 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+                                                <div className="flex items-center justify-center gap-1">
                                                     <button
                                                         onClick={() => handleOpenFolder(romaneio.idRomaneio, romaneio.ENDERECORomaneio)}
-                                                        className="p-2 bg-[#E0E800]/30 text-[#32423D] rounded-lg hover:bg-[#E0E800]/20 transition-colors"
+                                                        className="p-1.5 bg-[#E0E800]/30 text-[#32423D] rounded-lg hover:bg-[#E0E800]/20 transition-colors"
                                                         title="Abrir Pasta"
                                                     >
-                                                        <FolderOpen size={18} />
+                                                        <FolderOpen size={16} />
                                                     </button>
                                                     <button
                                                         onClick={() => handleDelete(romaneio.idRomaneio || romaneio.id!)}
-                                                        className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                                                        className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                                                         title="Excluir"
                                                     >
-                                                        <Trash2 size={18} />
+                                                        <Trash2 size={16} />
                                                     </button>
                                                 </div>
                                             </td>

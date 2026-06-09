@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { motion, useAnimation } from 'framer-motion';
 import {
-    LayoutDashboard, Building2, Calendar, FileText,
+    Building2, Calendar, FileText,
     ShieldCheck, ClipboardCheck, ArrowRight, Activity, AlertCircle, CheckCircle2,
-    ClipboardList, Factory, HardHat
+    ClipboardList, Factory, HardHat, LayoutDashboard
 } from 'lucide-react';
 import { cn } from '../lib/cn';
 
@@ -12,7 +12,6 @@ interface DashboardProps {
 }
 
 const quickAccessItems = [
-    { icon: LayoutDashboard, label: 'Dashboard',              page: 'dashboard',              desc: 'Visão geral' },
     { icon: Building2,       label: 'Pessoa Jurídica',        page: 'pessoa-juridica',        desc: 'Gestão de clientes' },
     { icon: FileText,        label: 'Relatórios',             page: 'relatorios',             desc: 'Análise de dados' },
     { icon: ClipboardList,   label: 'Apontamento Produção',   page: 'apontamento',            desc: 'Registrar execução por setor' },

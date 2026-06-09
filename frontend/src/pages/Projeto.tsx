@@ -1038,8 +1038,6 @@ export default function ProjetoPage() {
                     <div className="flex flex-col h-full min-h-0">
                         {/* Headers */}
                         <div className="flex items-center gap-3 px-4 py-3 border-b border-[#2a3830] bg-[#32423D] text-[10px] font-bold text-white uppercase tracking-wider sticky top-0 z-10">
-                            <div className="w-6 h-6 shrink-0"></div>
-                            <div className="w-9 h-9 shrink-0"></div>
                             <div className="flex-1 min-w-0 max-w-[360px] flex items-center gap-2">
                                 Projeto / Cliente
                                 <span className="ml-1 text-[9px] font-normal text-white/50 normal-case tracking-normal">
@@ -1056,6 +1054,7 @@ export default function ProjetoPage() {
                             const isExpanded = expandedProjects.has(projeto.IdProjeto!);
                             const tags = projectTags[projeto.IdProjeto!] || [];
                             const isLoadingTags = loadingTags.has(projeto.IdProjeto!);
+                            const isDisabledStatus = projeto.StatusProj === 'PA' || projeto.StatusProj === 'CA';
 
                             return (
                                 <div key={projeto.IdProjeto}>
@@ -1067,22 +1066,6 @@ export default function ProjetoPage() {
                                         className={`flex items-center gap-3 px-4 py-3 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-[#E0E800]/5' : ''}`}
                                         onClick={() => projeto.IdProjeto && toggleProject(projeto.IdProjeto)}
                                     >
-                                        {/* Expand Icon */}
-                                        <div className="w-6 h-6 flex items-center justify-center text-gray-400">
-                                            {isLoadingTags ? (
-                                                <Loader2 size={16} className="animate-spin" />
-                                            ) : isExpanded ? (
-                                                <ChevronDown size={18} className="text-[#32423D]" />
-                                            ) : (
-                                                <ChevronRight size={18} />
-                                            )}
-                                        </div>
-
-                                        {/* Project Icon */}
-                                        <div className="w-9 h-9 rounded-lg bg-[#32423D]/10 text-[#32423D] flex items-center justify-center">
-                                            <FolderKanban size={16} />
-                                        </div>
-
                                         {/* Project Info */}
                                         <div className="flex-1 min-w-0 max-w-[360px]">
                                             <div className="flex items-center gap-1.5 overflow-hidden">
@@ -1116,33 +1099,35 @@ export default function ProjetoPage() {
                                         {/* Actions */}
                                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                             <button
-                                                onClick={() => projeto.IdProjeto && handleOpenFolder(projeto.IdProjeto)}
-                                                className="p-2 rounded-lg text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/10 transition-colors"
+                                                onClick={() => !isDisabledStatus && projeto.IdProjeto && handleOpenFolder(projeto.IdProjeto)}
+                                                className={`p-2 rounded-lg transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed' : 'text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/10'}`}
                                                 title="Abrir Pasta Projeto"
+                                                disabled={isDisabledStatus}
                                             >
                                                 <FolderOpen size={16} />
                                             </button>
                                             {(!projeto.liberado || projeto.liberado.trim() === '') ? (
                                                 <button
-                                                    onClick={() => projeto.IdProjeto && handleLiberar(projeto.IdProjeto)}
-                                                    className="p-2 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors"
+                                                    onClick={() => !isDisabledStatus && projeto.IdProjeto && handleLiberar(projeto.IdProjeto)}
+                                                    className={`p-2 rounded-lg transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`}
                                                     title="Liberar Projeto"
+                                                    disabled={isDisabledStatus}
                                                 >
                                                     <CheckCircle2 size={16} />
                                                 </button>
                                             ) : (
                                                 <button
-                                                    onClick={() => projeto.IdProjeto && handleCancelarLiberacao(projeto.IdProjeto)}
-                                                    className={`p-2 rounded-lg transition-colors ${Number(projeto.temApontamento) > 0 ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'}`}
+                                                    onClick={() => !isDisabledStatus && projeto.IdProjeto && handleCancelarLiberacao(projeto.IdProjeto)}
+                                                    className={`p-2 rounded-lg transition-colors ${isDisabledStatus || Number(projeto.temApontamento) > 0 ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-gray-400 hover:text-orange-600 hover:bg-orange-50'}`}
                                                     title={Number(projeto.temApontamento) > 0 ? 'Não é possível cancelar: projeto possui apontamentos de produção' : 'Cancelar Liberação'}
-                                                    disabled={Number(projeto.temApontamento) > 0}
+                                                    disabled={isDisabledStatus || Number(projeto.temApontamento) > 0}
                                                 >
                                                     <RotateCcw size={16} />
                                                 </button>
                                             )}
                                             <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                             {/* Reativar (aparece se parado ou cancelado) */}
-                                            {(projeto.StatusProj === 'PA' || projeto.StatusProj === 'CA') && (
+                                            {isDisabledStatus && (
                                                 <button
                                                     onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'AT')}
                                                     className="p-2 rounded-lg text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
@@ -1151,8 +1136,8 @@ export default function ProjetoPage() {
                                                     <Play size={16} />
                                                 </button>
                                             )}
-                                            {/* Parar Projeto (oculto se já parado) */}
-                                            {projeto.StatusProj !== 'PA' && (
+                                            {/* Parar Projeto (oculto se já parado ou cancelado) */}
+                                            {!isDisabledStatus && (
                                                 <button
                                                     onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'PA')}
                                                     className="p-2 rounded-lg text-gray-400 hover:text-yellow-600 hover:bg-yellow-50 transition-colors"
@@ -1161,8 +1146,8 @@ export default function ProjetoPage() {
                                                     <Pause size={16} />
                                                 </button>
                                             )}
-                                            {/* Cancelar Projeto (oculto se já cancelado) */}
-                                            {projeto.StatusProj !== 'CA' && (
+                                            {/* Cancelar Projeto (oculto se já cancelado ou parado) */}
+                                            {!isDisabledStatus && (
                                                 <button
                                                     onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'CA')}
                                                     className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
@@ -1173,23 +1158,26 @@ export default function ProjetoPage() {
                                             )}
                                             <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                             <button
-                                                onClick={() => openTagForm(projeto)}
-                                                className="p-2 rounded-lg text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/20 transition-colors"
+                                                onClick={() => !isDisabledStatus && openTagForm(projeto)}
+                                                className={`p-2 rounded-lg transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/20'}`}
                                                 title="Nova Tag"
+                                                disabled={isDisabledStatus}
                                             >
                                                 <Plus size={16} />
                                             </button>
                                             <button
-                                                onClick={() => projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
-                                                className="p-2 rounded-lg text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/20 transition-colors"
+                                                onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
+                                                className={`p-2 rounded-lg transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-gray-400 hover:text-[#32423D] hover:bg-[#E0E800]/20'}`}
                                                 title="Editar Projeto"
+                                                disabled={isDisabledStatus}
                                             >
                                                 <Edit2 size={16} />
                                             </button>
                                             <button
-                                                onClick={() => projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
-                                                className="p-2 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                                onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
+                                                className={`p-2 rounded-lg transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-gray-400 hover:text-red-500 hover:bg-red-50'}`}
                                                 title="Excluir Projeto"
+                                                disabled={isDisabledStatus}
                                             >
                                                 <Trash2 size={16} />
                                             </button>

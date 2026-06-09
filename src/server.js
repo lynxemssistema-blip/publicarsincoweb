@@ -1700,14 +1700,61 @@ async function authenticateCentralUser(login, password) {
 
 // Login Modified for Central Auth
 app.post('/api/login', loginLimiter, async (req, res) => {
-    const { login, senha, password } = req.body;
+    const { login, senha, password, banco } = req.body;
     const pwd = senha || password;
 
     if (!login || !pwd) {
-        return res.status(400).json({ success: false, message: 'UsuÃ¯Â¿Â½rio e senha sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios' });
+        return res.status(400).json({ success: false, message: 'Usuário e senha são obrigatórios' });
     }
 
     try {
+        // 0. Strict Tenant Auth (if banco is provided by LoginAcesso)
+        if (banco) {
+            console.log(`[AUTH] Modo estrito solicitado para banco: ${banco} (Usuário: ${login})`);
+            const tenantPool = pool.getPoolByName(banco);
+            if (!tenantPool) {
+                return res.status(401).json({ success: false, message: 'Banco de dados não encontrado ou inativo.' });
+            }
+
+            const [userRows] = await tenantPool.execute('SELECT * FROM usuario WHERE Login = ? AND Senha = ?', [login, pwd]);
+            if (userRows.length > 0) {
+                const user = userRows[0];
+                const tipo = user.TipoUsuario ? user.TipoUsuario.toString().trim().toUpperCase() : '';
+                const role = (tipo === 'A' || tipo === 'ADMIN') ? 'admin' : 'user';
+                const isSuper = await isUserSuperadmin(login);
+                const isLocalAdmin = login.toLowerCase() === 'admin';
+                const isSuperFinal = isSuper || isLocalAdmin;
+
+                const token = jwt.sign({
+                    id: user.idUsuario,
+                    login: login,
+                    role: role,
+                    nomeCompleto: user.NomeCompleto,
+                    dbName: banco,
+                    isSuperadmin: isSuperFinal
+                }, JWT_SECRET, { expiresIn: '12h' });
+
+                return res.json({
+                    success: true,
+                    token,
+                    user: {
+                        id: user.idUsuario,
+                        login: login,
+                        nome: isSuperFinal ? login : user.NomeCompleto,
+                        role,
+                        setor: user.Setor,
+                        mapaProducao: user.MapaProducao,
+                        isSuperadmin: isSuperFinal,
+                        superadmin: isSuperFinal ? 'S' : 'N',
+                        clientName: '', 
+                        dbName: banco
+                    }
+                });
+            } else {
+                return res.status(401).json({ success: false, message: 'Credenciais inválidas para este banco de dados.' });
+            }
+        }
+
         // 1. Try Central Auth First
         console.log(`[AUTH] Attempting central login for user: ${login}`);
         try {
@@ -1718,12 +1765,17 @@ app.post('/api/login', loginLimiter, async (req, res) => {
                     console.log(`[AUTH] Central user found. Switching to tenant DB: ${centralAuth.tenantConfig.database}`);
 
                     pool.initPool(centralAuth.tenantConfig);
+                    const tenantPool = pool.getPoolByName(centralAuth.tenantConfig.database);
 
-                    const [userRows] = await pool.execute('SELECT * FROM usuario WHERE Login = ?', [login]);
+                    console.log(`[AUTH-DEBUG] Querying DB ${centralAuth.tenantConfig.database} for login: "${login}"`);
+                    const [userRows] = await tenantPool.execute('SELECT * FROM usuario WHERE Login = ?', [login]);
+                    console.log(`[AUTH-DEBUG] Found ${userRows.length} rows in local DB`);
 
                     if (userRows.length > 0) {
                         const user = userRows[0];
-                        const role = (user.TipoUsuario === 'A' || user.TipoUsuario === 'Admin') ? 'admin' : 'user';
+                        const tipo = user.TipoUsuario ? user.TipoUsuario.toString().trim().toUpperCase() : '';
+                        console.log(`[AUTH-DEBUG] TipoUsuario found: "${tipo}"`);
+                        const role = (tipo === 'A' || tipo === 'ADMIN') ? 'admin' : 'user';
 
                         // Generate JWT
                         const token = jwt.sign({
@@ -1815,7 +1867,8 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
         if (rows.length > 0) {
             const user = rows[0];
-            const role = (user.TipoUsuario === 'A' || user.TipoUsuario === 'Admin') ? 'admin' : 'user';
+            const tipo = user.TipoUsuario ? user.TipoUsuario.toString().trim().toUpperCase() : '';
+            const role = (tipo === 'A' || tipo === 'ADMIN') ? 'admin' : 'user';
 
             // Check if Superadmin in central DB
             const isSuper = await isUserSuperadmin(login);
@@ -2061,45 +2114,35 @@ app.post('/api/superadmin/switch-db', async (req, res) => {
 
 // List Tenant Databases
 app.get('/api/admin/databases', authenticateAdmin, async (req, res) => {
-    let connection;
     try {
-        connection = await mysql.createConnection(CENTRAL_DB_CONFIG);
-        const [rows] = await connection.execute('SELECT * FROM conexoes_bancos ORDER BY id DESC');
+        const [rows] = await pool.executeOnDefault('SELECT * FROM conexoes_bancos ORDER BY id DESC', []);
         res.json({ success: true, data: rows });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error fetching databases: ' + error.message });
-    } finally {
-        if (connection) await connection.end();
     }
 });
 
 // Add/Update Tenant Database
 app.post('/api/admin/databases', authenticateAdmin, async (req, res) => {
     const { nome_cliente, db_host, db_user, db_pass, db_name, db_port, copia_banco_dados } = req.body;
-    let connection;
     try {
-        connection = await mysql.createConnection(CENTRAL_DB_CONFIG);
-        await connection.execute(
+        await pool.executeOnDefault(
             'INSERT INTO conexoes_bancos (nome_cliente, db_host, db_user, db_pass, db_name, db_port, copia_banco_dados) VALUES (?, ?, ?, ?, ?, ?, ?)',
             [nome_cliente, db_host, db_user, db_pass, db_name, db_port || 3306, copia_banco_dados || null]
         );
         res.json({ success: true, message: 'Banco cadastrado com sucesso' });
     } catch (error) {
         res.status(500).json({ success: false, message: 'Error saving database: ' + error.message });
-    } finally {
-        if (connection) await connection.end();
     }
 });
 
 // Toggle Tenant Database Status (Ativo/Inativo)
 app.put('/api/admin/databases/:id/toggle', authenticateAdmin, async (req, res) => {
-    let connection;
     try {
         const dbId = req.params.id;
-        connection = await mysql.createConnection(CENTRAL_DB_CONFIG);
         
         // Obter o status atual
-        const [rows] = await connection.execute('SELECT ativo FROM conexoes_bancos WHERE id = ?', [dbId]);
+        const [rows] = await pool.executeOnDefault('SELECT ativo FROM conexoes_bancos WHERE id = ?', [dbId]);
         if (rows.length === 0) {
             return res.status(404).json({ success: false, message: 'Banco de dados não encontrado' });
         }
@@ -2107,13 +2150,11 @@ app.put('/api/admin/databases/:id/toggle', authenticateAdmin, async (req, res) =
         const currentStatus = rows[0].ativo;
         const newStatus = currentStatus ? 0 : 1; // Toggle boolean
         
-        await connection.execute('UPDATE conexoes_bancos SET ativo = ? WHERE id = ?', [newStatus, dbId]);
+        await pool.executeOnDefault('UPDATE conexoes_bancos SET ativo = ? WHERE id = ?', [newStatus, dbId]);
         res.json({ success: true, message: `Banco de dados ${newStatus ? 'Ativado' : 'Desativado'} com sucesso`, ativo: newStatus });
     } catch (error) {
         console.error('Error toggling database:', error);
         res.status(500).json({ success: false, message: 'Erro ao alterar status do banco: ' + error.message });
-    } finally {
-        if (connection) await connection.end();
     }
 });
 
@@ -5902,7 +5943,8 @@ app.get('/api/ordemservico', async (req, res) => {
         const projeto = req.query.projeto;
         const tag = req.query.tag;
         const search = req.query.search;
-        const filter = req.query.filter || 'liberados';
+        const filtroFinalizado = req.query.filtroFinalizado || 'NAO_FINALIZADAS';
+        const filtroLiberado = req.query.filtroLiberado || 'LIBERADAS';
         const { 
             dataCriacaoInicio, dataCriacaoFim,
             dataPrevisaoInicio, dataPrevisaoFim,
@@ -5913,8 +5955,16 @@ app.get('/api/ordemservico', async (req, res) => {
         let whereClause = "(D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')";
         const params = [];
 
-        if (filter === 'liberados') {
-            whereClause += " AND Liberado_Engenharia = 'S' AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')";
+        if (filtroFinalizado === 'FINALIZADAS') {
+            whereClause += " AND OrdemServicoFinalizado = 'C'";
+        } else if (filtroFinalizado === 'NAO_FINALIZADAS') {
+            whereClause += " AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')";
+        }
+
+        if (filtroLiberado === 'LIBERADAS') {
+            whereClause += " AND Liberado_Engenharia = 'S'";
+        } else if (filtroLiberado === 'NAO_LIBERADAS') {
+            whereClause += " AND (Liberado_Engenharia IS NULL OR Liberado_Engenharia != 'S')";
         }
 
         if (projeto) {
@@ -7867,14 +7917,7 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
             if(!setor || setor === 'todos' || setor.toLowerCase() === 'montagem') processSetor(row, 'Montagem');
         });
         
-        // If no results and there is an OS filter, return the current items anyway
-        // the user said: "caso nada tenha na pesquisa exibir os totais mencionados na data atual"
-        // Wait, if no date match but they searched for OS, return items matching the OS without date filter, defaulting to "today" as visual info?
-        // Let's implement that: if result is empty after date filter, but they searched, we add items that matched OS but use today's date context? 
-        // Actually, the user means if no date is provided, default to today. We already default start and end to today.
-        // If "caso nada tenha na pesquisa exibir os totais mencionados na data atual" means fallback to today if the search returns empty. 
         if (result.length === 0 && (planInicioDe || planInicioAte || planFimDe || planFimAte)) {
-            // we could try a fallback but it's cleaner to handle this in frontend by showing a message or just returning empty array and letting frontend fetch today.
         }
 
         if(limit) { result = result.slice(0, parseInt(limit, 10) || 500); }
@@ -7885,7 +7928,6 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
     }
 });
 
-// LIST: Itens por setor para apontamento
 app.get('/api/apontamento/:setor', async (req, res) => {
     const setor = req.params.setor.toLowerCase();
     const setorConfig = setorColumns[setor];
@@ -7893,7 +7935,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
     if (!setorConfig) {
         return res.status(400).json({
             success: false,
-            message: 'Setor invÃ¯Â¿Â½lido. Use: corte, dobra, solda, pintura ou montagem'
+            message: 'Setor inválido. Use: corte, dobra, solda, pintura ou montagem'
         });
     }
 
@@ -7903,14 +7945,12 @@ app.get('/api/apontamento/:setor', async (req, res) => {
     const offsetNum = (pageNum - 1) * limitNum;
 
     try {
-        // D_E_L_E_T_E = '*' means deleted, Liberado_engenharia = 'S' required
         let whereClause = `osi.${setorConfig.txt} = '1' 
             AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
             AND osi.Liberado_engenharia = 'S'
             AND(os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`;
         const params = [];
 
-        // Filtro Projeto: busca por descrição do projeto (LIKE)
         if (projeto) {
             whereClause += ' AND (os.Projeto LIKE ? OR p.DescProjeto LIKE ?)';
             params.push(`%${projeto}%`, `%${projeto}%`);
@@ -7979,59 +8019,88 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         const [rows] = await pool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem,
-            osi.IdOrdemServico,
-            osi.CodMatFabricante,
-            osi.DescResumo,
-            osi.DescDetal,
-            osi.QtdeTotal,
-            osi.Peso,
-            osi.EnderecoArquivo,
-            osi.EnderecoArquivoItemOrdemServico,
-            osi.IdPlanodecorte as PlanoCorte,
-            osi.MaterialSW,
-            osi.Espessura,
-            CASE 
+                osi.IdOrdemServico,
+                osi.CodMatFabricante,
+                osi.DescResumo,
+                osi.DescDetal,
+                osi.QtdeTotal,
+                osi.Peso,
+                osi.EnderecoArquivo,
+                osi.EnderecoArquivoItemOrdemServico,
+                osi.IdPlanodecorte as PlanoCorte,
+                osi.MaterialSW,
+                osi.Espessura,
+                CASE 
                     WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.${setorConfig.total}, 0) / osi.QtdeTotal) * 100)
                     ELSE 0 
                 END as PercentualSetor,
-            osi.${setorConfig.status} as Status,
-            osi.${setorConfig.total} as QtdeProduzidaSetor,
-            osi.${setorConfig.executar} as TotalExecutar,
-            osi.PlanejadoInicio${setor.charAt(0).toUpperCase() + setor.slice(1)} as DataPlanejamento,
-            os.Projeto,
-            os.IdProjeto,
-            p.DescProjeto,
-            os.Tag,
-            os.IdTag,
-            os.DescTag,
-            CASE WHEN TRIM(COALESCE(os.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN (SELECT ClienteProjeto FROM projetos WHERE IdProjeto = os.IdProjeto LIMIT 1) ELSE os.DescEmpresa END as Cliente,
-            osi.txtcorte as txtCorte,
-            osi.txtdobra as txtDobra,
-            osi.txtsolda as txtSolda,
-            osi.txtpintura as txtPintura,
-            osi.txtmontagem as TxtMontagem,
-            osi.CorteTotalExecutado,
-            osi.DobraTotalExecutado,
-            osi.SoldaTotalExecutado,
-            osi.PinturaTotalExecutado,
-            osi.MontagemTotalExecutado,
-            osi.ProdutoPrincipal as IsProdutoPrincipal,
-            (SELECT DescResumo FROM ordemservicoitem WHERE IdOrdemServico = osi.IdOrdemServico AND ProdutoPrincipal = 'sim' LIMIT 1) as NomeProdutoPrincipal,
-            COALESCE(history.QtdeProduzidaHistory, 0) as QtdeProduzidaHistory
+                osi.${setorConfig.status} as Status,
+                osi.${setorConfig.total} as QtdeProduzidaSetor,
+                osi.${setorConfig.executar} as TotalExecutar,
+                osi.PlanejadoInicio${setor.charAt(0).toUpperCase() + setor.slice(1)} as DataPlanejamento,
+                os.Projeto,
+                os.IdProjeto,
+                p.DescProjeto,
+                os.Tag,
+                os.IdTag,
+                os.DescTag,
+                CASE WHEN TRIM(COALESCE(os.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE os.DescEmpresa END as Cliente,
+                osi.txtcorte as txtCorte,
+                osi.txtdobra as txtDobra,
+                osi.txtsolda as txtSolda,
+                osi.txtpintura as txtPintura,
+                osi.txtmontagem as TxtMontagem,
+                osi.CorteTotalExecutado,
+                osi.DobraTotalExecutado,
+                osi.SoldaTotalExecutado,
+                osi.PinturaTotalExecutado,
+                osi.MontagemTotalExecutado,
+                osi.ProdutoPrincipal as IsProdutoPrincipal
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
-            LEFT JOIN (
-                SELECT IdOrdemServicoItem, COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as QtdeProduzidaHistory
-                FROM ordemservicoitemcontrole
-                WHERE Processo = ?
-                  AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E != '*')
-                GROUP BY IdOrdemServicoItem
-            ) history ON history.IdOrdemServicoItem = osi.IdOrdemServicoItem
             WHERE ${whereClause}
             ORDER BY osi.IdOrdemServico DESC, osi.IdOrdemServicoItem
             LIMIT ${limitNum} OFFSET ${offsetNum}
-    `, [setor, ...params]);
+        `, params);
+
+        // Otimização (Data Loader)
+        if (rows.length > 0) {
+            const itemIds = rows.map(r => r.IdOrdemServicoItem);
+            const osIds = [...new Set(rows.map(r => r.IdOrdemServico))];
+
+            const [historyRows] = await pool.execute(`
+                SELECT IdOrdemServicoItem, COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as QtdeProduzidaHistory
+                FROM ordemservicoitemcontrole
+                WHERE Processo = ?
+                  AND IdOrdemServicoItem IN (${itemIds.join(',')})
+                  AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E != '*')
+                GROUP BY IdOrdemServicoItem
+            `, [setor]);
+
+            const historyMap = {};
+            for (const hr of historyRows) {
+                historyMap[hr.IdOrdemServicoItem] = hr.QtdeProduzidaHistory;
+            }
+
+            const [ppRows] = await pool.execute(`
+                SELECT IdOrdemServico, MAX(DescResumo) as NomeProdutoPrincipal
+                FROM ordemservicoitem
+                WHERE ProdutoPrincipal = 'sim'
+                  AND IdOrdemServico IN (${osIds.join(',')})
+                GROUP BY IdOrdemServico
+            `);
+
+            const ppMap = {};
+            for (const ppr of ppRows) {
+                ppMap[ppr.IdOrdemServico] = ppr.NomeProdutoPrincipal;
+            }
+
+            for (const r of rows) {
+                r.QtdeProduzidaHistory = historyMap[r.IdOrdemServicoItem] || 0;
+                r.NomeProdutoPrincipal = ppMap[r.IdOrdemServico] || null;
+            }
+        }
 
         res.json({ 
             success: true, 
@@ -8977,6 +9046,28 @@ app.get('/api/config', tenantMiddleware, async (req, res) => {
             );
             if (rows.length > 0) {
                 const row = rows[0];
+
+                // Merge com o template do lynxlocal para campos que não foram preenchidos no banco local
+                try {
+                    const lynxPool = await getLynxLocalPool();
+                    if (lynxPool) {
+                        const [lynxRows] = await lynxPool.execute(
+                            `SELECT RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC,
+                                    MaxRegistros, MenuStructure, PermitirRealizadoSemPlanejamento
+                             FROM configuracaosistema LIMIT 1`
+                        );
+                        if (lynxRows.length > 0) {
+                            const lynxRow = lynxRows[0];
+                            if (!row.RestringirApontamentoSemSaldoAnterior) row.RestringirApontamentoSemSaldoAnterior = lynxRow.RestringirApontamentoSemSaldoAnterior;
+                            if (!row.ProcessosVisiveis) row.ProcessosVisiveis = lynxRow.ProcessosVisiveis;
+                            if (!row.PlanoCorteFiltroDC) row.PlanoCorteFiltroDC = lynxRow.PlanoCorteFiltroDC;
+                            if (!row.MaxRegistros) row.MaxRegistros = lynxRow.MaxRegistros;
+                            if (!row.MenuStructure) row.MenuStructure = lynxRow.MenuStructure;
+                            if (!row.PermitirRealizadoSemPlanejamento) row.PermitirRealizadoSemPlanejamento = lynxRow.PermitirRealizadoSemPlanejamento;
+                        }
+                    }
+                } catch (e) {}
+
                 if (row.ProcessosVisiveis) {
                     try {
                         const saved = JSON.parse(row.ProcessosVisiveis);
@@ -9515,12 +9606,9 @@ app.get('/api/config/menu', async (req, res) => {
                 try {
                     const menu = JSON.parse(rows[0].MenuStructure);
                     return res.json({ success: true, menu, source: 'local' });
-                } catch (e) {
-                    return res.json({ success: true, menu: null, source: 'local' });
-                }
+                } catch (e) {}
             }
-            // Tem linha mas sem MenuStructure: usa default do frontend
-            return res.json({ success: true, menu: null, source: 'local' });
+            // Se tem linha mas MenuStructure está vazio, continua para buscar do lynxlocal
         }
 
         // Banco ativo não tem config própria: tenta buscar menu do lynxlocal como template
@@ -11023,7 +11111,21 @@ app.get('/api/teste-final-montagem/itens', async (req, res) => {
                 IdTag,
                 Tag,
                 DescTag,
-                Qtdetotal          AS QtdeTotal,
+                Qtdetotal AS QtdeTotal,
+                MontagemTotalExecutado,
+                MontagemTotalExecutar,
+                DescResumo,
+                DescDetal,
+                ProdutoPrincipal,
+                RealizadoInicioMontagem,
+                RealizadoFinalMontagem,
+                sttxtMontagem AS sttxtmontagem,
+                OrdemServicoItemFinalizado,
+                descempresa AS DescEmpresa,
+                PesoUnitario
+            FROM ordemservicoitem
+            WHERE ${whereClause}
+            ORDER BY RealizadoFinalMontagem DESC, RealizadoInicioMontagem DESC, IdOrdemServicoItem DESC
             LIMIT ${limite}
         `;
 

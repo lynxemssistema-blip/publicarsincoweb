@@ -122,6 +122,15 @@ export default function ApontamentoProducaoPage() {
                 <p className="text-sm text-slate-500 text-center max-w-xs">
                     Somente usuários com permissão de Mapa de Produção ou Administradores podem acessar esta tela.
                 </p>
+                {user && (
+                    <div className="mt-4 text-xs text-slate-400 bg-white p-2 rounded border border-slate-200">
+                        <p><strong>Debug Info:</strong></p>
+                        <p>Role: {user.role || 'N/A'}</p>
+                        <p>MapaProducao: {user.mapaProducao || 'N/A'}</p>
+                        <p>DB: {user.dbName || 'N/A'}</p>
+                        <p className="mt-2 text-red-500 font-bold">Por favor, clique em SAIR no menu e faça login novamente.</p>
+                    </div>
+                )}
             </div>
         );
     }

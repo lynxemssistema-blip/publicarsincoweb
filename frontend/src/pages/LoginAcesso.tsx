@@ -53,10 +53,11 @@ export default function LoginAcessoPage({ onAuthSuccess }: LoginAcessoProps) {
 
         setLoading(true);
         try {
+            const activeDbForLogin = getActiveDb();
             const res = await fetch('/api/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ login: username, senha: password })
+                body: JSON.stringify({ login: username, senha: password, banco: activeDbForLogin })
             });
 
             const data = await res.json();

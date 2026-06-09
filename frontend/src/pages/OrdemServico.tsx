@@ -194,7 +194,8 @@ function OrdemServicoContent() {
     const [cloneTags, setCloneTags] = useState<DropdownOption[]>([]);
     const [loadingCloneTags, setLoadingCloneTags] = useState(false);
     const [cloneTagsEmpty, setCloneTagsEmpty] = useState(false);
-    const [mostrarTodos, setMostrarTodos] = useState(false);
+    const [filtroFinalizado, setFiltroFinalizado] = useState<'TODAS' | 'FINALIZADAS' | 'NAO_FINALIZADAS'>('NAO_FINALIZADAS');
+    const [filtroLiberado, setFiltroLiberado] = useState<'TODAS' | 'LIBERADAS' | 'NAO_LIBERADAS'>('LIBERADAS');
     const { addToast } = useToast();
 
     // ============================================================
@@ -576,8 +577,8 @@ function OrdemServicoContent() {
             const params = new URLSearchParams();
             params.set('page', String(page));
             params.set('limit', '50');
-            if (!mostrarTodos) params.set('filter', 'liberados');
-            else params.set('filter', 'todos');
+            params.set('filtroFinalizado', filtroFinalizado);
+            params.set('filtroLiberado', filtroLiberado);
             if (projetoFilter) params.set('projeto', projetoFilter);
             if (tagFilter) params.set('tag', tagFilter);
             if (searchTerm && searchMode === 'os') params.set('search', searchTerm);
@@ -614,7 +615,7 @@ function OrdemServicoContent() {
             setLoading(false);
             setLoadingMore(false);
         }
-    }, [projetoFilter, tagFilter, searchTerm, searchMode, mostrarTodos, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataLiberacaoInicio, dataLiberacaoFim]);
+    }, [projetoFilter, tagFilter, searchTerm, searchMode, filtroFinalizado, filtroLiberado, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataLiberacaoInicio, dataLiberacaoFim]);
 
     // Search items by document code
     const searchItems = useCallback(async (term: string) => {
@@ -651,7 +652,7 @@ function OrdemServicoContent() {
     // Initial load and filter changes
     useEffect(() => {
         fetchOrdens(1);
-    }, [projetoFilter, tagFilter, mostrarTodos, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataLiberacaoInicio, dataLiberacaoFim]);
+    }, [projetoFilter, tagFilter, filtroFinalizado, filtroLiberado, dataCriacaoInicio, dataCriacaoFim, dataPrevisaoInicio, dataPrevisaoFim, dataLiberacaoInicio, dataLiberacaoFim]);
 
     const fetchItens = useCallback(async (osId: number) => {
         setLoadingItens(prev => new Set(prev).add(osId));
@@ -721,8 +722,15 @@ function OrdemServicoContent() {
         return <Clock size={16} className="text-yellow-500" />;
     };
 
-    const getStatusBadge = (finalizado?: string) => {
-        if (finalizado === 'C') return 'bg-green-100 text-green-700';
+    const getStatusText = (os: OrdemServico) => {
+        if (os.OrdemServicoFinalizado === 'C') return 'Finalizado';
+        if (os.Liberado_Engenharia === 'S') return 'Em Andamento';
+        return 'Aguardando Liberação';
+    };
+
+    const getStatusBadge = (os: OrdemServico) => {
+        if (os.OrdemServicoFinalizado === 'C') return 'bg-green-100 text-green-700';
+        if (os.Liberado_Engenharia === 'S') return 'bg-blue-100 text-blue-700';
         return 'bg-yellow-100 text-yellow-700';
     };
 
@@ -2009,12 +2017,6 @@ function OrdemServicoContent() {
                         )}
                     </div>
 
-                    {getStatusIcon(os.Estatus, os.OrdemServicoFinalizado)}
-
-                    <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-                        <ClipboardList size={16} />
-                    </div>
-
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">OS {os.IdOrdemServico}</span>
@@ -2034,6 +2036,16 @@ function OrdemServicoContent() {
                         </div>
                     </div>
 
+                    {/* Descrição da OS */}
+                    <div className="hidden lg:flex flex-col justify-center w-44 min-w-0" title={os.Descricao || ''}>
+                        <span className="text-xs text-gray-700 truncate">{os.Descricao || '-'}</span>
+                    </div>
+
+                    {/* Empresa */}
+                    <div className="hidden xl:flex flex-col justify-center w-36 min-w-0" title={os.DescEmpresa || ''}>
+                        <span className="text-xs text-gray-700 truncate">{os.DescEmpresa || '-'}</span>
+                    </div>
+
                     <div className="hidden md:flex flex-col items-center text-center w-16">
                         <span className="text-sm font-medium text-gray-900">
                             {Number(os.QtdeItensExecutadosCalc ?? os.QtdeItensExecutados) || 0}/{Number(os.QtdeTotalItensCalc ?? os.QtdeTotalItens) || 0}
@@ -2051,9 +2063,24 @@ function OrdemServicoContent() {
                         </div>
                     </div>
 
-                    <span className={`hidden sm:inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(os.OrdemServicoFinalizado)}`}>
-                        {os.OrdemServicoFinalizado === 'C' ? 'Finalizado' : 'Em Andamento'}
+                    <span className={`hidden sm:inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(os)}`}>
+                        {getStatusText(os)}
                     </span>
+
+                    <div className="flex items-center gap-1 justify-end shrink-0 w-24">
+                        {os.Liberado_Engenharia !== 'S' && os.OrdemServicoFinalizado !== 'C' && (
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenIncluirItens(os);
+                                }}
+                                disabled={liberandoOS === os.IdOrdemServico}
+                                className="p-2 rounded-lg text-teal-500 hover:text-teal-700 hover:bg-teal-50 transition-colors disabled:opacity-50"
+                                title="Incluir Itens na Ordem de Serviço"
+                            >
+                                <PackagePlus size={16} />
+                            </button>
+                        )}
 
                     
 
@@ -2104,6 +2131,7 @@ function OrdemServicoContent() {
                             <FileSpreadsheet size={16} />
                         </button>
                     )}
+                    </div>
                 </motion.div>
 
                 
@@ -2123,22 +2151,10 @@ function OrdemServicoContent() {
                 </motion.div>
             )}
 
-            <div className="pt-2 flex justify-end w-full">
-<motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => fetchOrdens(1)}
-                    className="inline-flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors shadow-sm"
-                    disabled={loading}
-                >
-                    <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
-                    Atualizar
-                </motion.button>
-</div>
 
             {/* Filters Bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
-                <div className="flex flex-wrap items-center gap-3">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                     {/* Search Input */}
                     <div className="relative flex-1 min-w-[200px] flex items-center gap-2">
                         <div className="relative flex-1">
@@ -2148,7 +2164,7 @@ function OrdemServicoContent() {
                                 placeholder="Buscar Ordem de Serviço..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all"
+                                className="w-full pl-10 pr-4 py-1.5 rounded-lg border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent transition-all text-sm"
                             />
                             {(searchingItems || (searchMode === 'os' && loading && searchTerm)) && (
                                 <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" size={16} />
@@ -2169,7 +2185,7 @@ function OrdemServicoContent() {
                             value={projetoFilter}
                             onChange={(e) => { setProjetoFilter(e.target.value); setTagFilter(''); }}
                             onKeyDown={(e) => e.key === 'Enter' && fetchOrdens(1)}
-                            className="pl-3 pr-7 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-40"
+                            className="pl-3 pr-7 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-40"
                         />
                         {projetoFilter && (
                             <button
@@ -2190,7 +2206,7 @@ function OrdemServicoContent() {
                             value={tagFilter}
                             onChange={(e) => setTagFilter(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && fetchOrdens(1)}
-                            className="pl-3 pr-7 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-36"
+                            className="pl-3 pr-7 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 w-36"
                         />
                         {tagFilter && (
                             <button
@@ -2209,7 +2225,7 @@ function OrdemServicoContent() {
                         <select
                             value={groupBy}
                             onChange={(e) => setGroupBy(e.target.value as 'none' | 'projeto' | 'tag')}
-                            className="px-3 py-2.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
                         >
                             <option value="none">Sem Agrupamento</option>
                             <option value="projeto">Agrupar por Projeto</option>
@@ -2217,20 +2233,32 @@ function OrdemServicoContent() {
                         </select>
                     </div>
 
-                    <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-gray-200 bg-white">
-                        <input
-                            type="checkbox"
-                            checked={mostrarTodos}
-                            onChange={(e) => setMostrarTodos(e.target.checked)}
-                            className="w-4 h-4 text-accent border-gray-300 rounded focus:ring-accent"
-                        />
-                        <span className="text-sm text-gray-700 cursor-pointer select-none" onClick={() => setMostrarTodos(!mostrarTodos)}>
-                            Exibir Não Liberados / Finalizados
-                        </span>
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={filtroFinalizado}
+                            onChange={(e) => setFiltroFinalizado(e.target.value as any)}
+                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        >
+                            <option value="TODAS">Finalização: Todas</option>
+                            <option value="NAO_FINALIZADAS">Finalização: Não Finalizadas</option>
+                            <option value="FINALIZADAS">Finalização: Finalizadas</option>
+                        </select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        <select
+                            value={filtroLiberado}
+                            onChange={(e) => setFiltroLiberado(e.target.value as any)}
+                            className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-accent/50"
+                        >
+                            <option value="TODAS">Liberação: Todas</option>
+                            <option value="NAO_LIBERADAS">Liberação: Não Liberadas</option>
+                            <option value="LIBERADAS">Liberação: Liberadas</option>
+                        </select>
                     </div>
 
                     {/* Date Filters Row */}
-                    <div className="flex flex-wrap items-center gap-2 w-full mt-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full mt-1.5">
                         {/* Data Criação */}
                         <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg border border-gray-100 bg-gray-50/30">
                             <Calendar size={12} className="text-gray-400" />
@@ -2266,6 +2294,18 @@ function OrdemServicoContent() {
                                 <button onClick={() => { setDataLiberacaoInicio(''); setDataLiberacaoFim(''); setTimeout(() => fetchOrdens(1), 100); }} className="ml-1 text-gray-300 hover:text-red-400"><X size={10} /></button>
                             )}
                         </div>
+                        
+                        <div className="flex-1"></div>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => fetchOrdens(1)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors text-xs font-medium bg-white"
+                            disabled={loading}
+                        >
+                            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                            Atualizar
+                        </motion.button>
                     </div>
 
                     {/* Clear Filters */}
@@ -2351,7 +2391,7 @@ function OrdemServicoContent() {
 
             {/* Main Content */}
             {searchMode === 'os' && selectedOSId && ordens.find(o => o.IdOrdemServico === selectedOSId) ? renderOSDetail(ordens.find(o => o.IdOrdemServico === selectedOSId)!) : searchMode === 'os' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                     {loading ? (
                         <div className="p-12 flex flex-col items-center justify-center gap-3 text-gray-400">
                             <Loader2 size={32} className="animate-spin" />
@@ -2371,9 +2411,18 @@ function OrdemServicoContent() {
                     ) : groupBy !== 'none' && groupedOrdens ? (
                         // Grouped View
                         <div>
+                            {/* Cabeçalho fixo do grid agrupado */}
+                            <div className="sticky top-0 z-20 flex items-center gap-3 px-4 py-2 bg-[#32423D] text-white text-[11px] font-semibold uppercase tracking-wide border-b border-[#32423D]/40 shadow-sm rounded-t-xl">
+                                <span className="w-6 shrink-0" />
+                                <span className="flex-1 min-w-0">OS / Tag / Projeto</span>
+                                <span className="hidden md:block w-16 text-center">Itens</span>
+                                <span className="hidden md:block w-20 text-center">Progresso</span>
+                                <span className="hidden sm:block w-24 text-center">Status</span>
+                                <span className="w-20 text-center">Ações</span>
+                            </div>
                             {Object.entries(groupedOrdens).map(([groupName, groupOrdens]) => (
                                 <div key={groupName}>
-                                    <div className="px-4 py-3 bg-gradient-to-r from-[#32423D] to-[#32423D]/80 text-white sticky top-0 z-10">
+                                    <div className="px-4 py-3 bg-gradient-to-r from-[#32423D] to-[#32423D]/80 text-white sticky top-9 z-10">
                                         <div className="flex items-center justify-between">
                                             <span className="font-medium">{groupName}</span>
                                             <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">
@@ -2388,9 +2437,21 @@ function OrdemServicoContent() {
                             ))}
                         </div>
                     ) : (
-                        // Normal View
-                        <div className="divide-y divide-gray-100">
-                            {ordens.map((os, idx) => renderOSCard(os, idx))}
+                        // Normal View com cabeçalho fixo
+                        <div>
+                            <div className="sticky top-0 z-20 flex items-center gap-3 px-4 py-2 bg-[#32423D] text-white text-[11px] font-semibold uppercase tracking-wide border-b border-[#32423D]/40 shadow-sm rounded-t-xl">
+                                <span className="w-6 shrink-0" />
+                                <span className="flex-1 min-w-0">OS / Tag / Projeto</span>
+                                <span className="hidden lg:block w-44">Descrição OS</span>
+                                <span className="hidden xl:block w-36">Empresa</span>
+                                <span className="hidden md:block w-16 text-center">Itens</span>
+                                <span className="hidden md:block w-20 text-center">Progresso</span>
+                                <span className="hidden sm:block w-24 text-center">Status</span>
+                                <span className="w-20 text-center">Ações</span>
+                            </div>
+                            <div className="divide-y divide-gray-100">
+                                {ordens.map((os, idx) => renderOSCard(os, idx))}
+                            </div>
                         </div>
                     )}
 

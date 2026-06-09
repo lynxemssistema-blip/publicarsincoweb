@@ -231,13 +231,14 @@ export default function AcompanhamentoEtapas() {
         setSelectedProjeto(row);
         // Em um caso real, buscaríamos as datas atuais do projeto.
         // Aqui estamos apenas inicializando vazio para que o usuário insira as novas datas que irão sobrepor em lote
+
         setEditForm({
-            PlanejadoInicioMedicao: '', PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: '',
-            PlanejadoInicioIsometrico: '', PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: '',
-            PlanejadoInicioEngenharia: '', PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: '',
-            PlanejadoInicioAprovacao: '', PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: '',
-            PlanejadoInicioAcabamento: '', PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: '',
-            PlanejadoInicioExpedicao: '', PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: ''
+            PlanejadoInicioMedicao: toISO(row.PlanMedicao), PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: toISO(row.RealMedicao),
+            PlanejadoInicioIsometrico: toISO(row.PlanIsometrico), PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: toISO(row.RealIsometrico),
+            PlanejadoInicioEngenharia: toISO(row.PlanEngenharia), PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: toISO(row.RealEngenharia),
+            PlanejadoInicioAprovacao: toISO(row.PlanAprovacao), PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: toISO(row.RealAprovacao),
+            PlanejadoInicioAcabamento: toISO(row.PlanAcabamento), PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: toISO(row.RealAcabamento),
+            PlanejadoInicioExpedicao: toISO(row.PlanExpedicao), PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: toISO(row.RealExpedicao)
         });
         setIsModalOpen(true);
         setModoIndividual(false);
@@ -263,23 +264,24 @@ export default function AcompanhamentoEtapas() {
         }
     };
 
+    // Converte DD/MM/YYYY para YYYY-MM-DD para os inputs type="date"
+    const toISO = (d: string | null | undefined): string => {
+        if (!d || !d.trim() || d === '-') return '';
+        const s = d.trim();
+        if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+            const [dd, mm, yyyy] = s.split('/');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
+        return '';
+    };
+
     const handleEditChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setEditForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
     };
 
     // Pré-carrega as datas da tag selecionada nos campos do formulário
     const loadTagDates = (tag: any) => {
-        // Converte DD/MM/YYYY para YYYY-MM-DD para os inputs type="date"
-        const toISO = (d: string | null | undefined): string => {
-            if (!d || !d.trim()) return '';
-            const s = d.trim();
-            if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
-                const [dd, mm, yyyy] = s.split('/');
-                return `${yyyy}-${mm}-${dd}`;
-            }
-            if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.substring(0, 10);
-            return '';
-        };
         setEditForm({
             PlanejadoInicioMedicao:    toISO(tag.PlanejadoInicioMedicao),
             PlanejadoFinalMedicao:     toISO(tag.PlanejadoFinalMedicao),
@@ -694,7 +696,16 @@ export default function AcompanhamentoEtapas() {
                                                     >
                                                         <Calendar size={16} />
                                                     </button>
-                                                    <button onClick={() => openEditModal(row)} className="text-[#03624C] hover:text-[#024a3a] p-1 bg-teal-50 hover:bg-teal-100 rounded transition-colors" title="Editar Datas Lote">
+                                                    <button 
+                                                        onClick={() => row.TotalTags > 0 && openEditModal(row)} 
+                                                        disabled={row.TotalTags === 0}
+                                                        className={`p-1 rounded transition-colors ${
+                                                            row.TotalTags === 0
+                                                                ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
+                                                                : 'text-[#03624C] hover:text-[#024a3a] bg-teal-50 hover:bg-teal-100'
+                                                        }`} 
+                                                        title={row.TotalTags === 0 ? 'Sem tags cadastradas' : 'Editar Datas Lote'}
+                                                    >
                                                         <Edit3 size={16} />
                                                     </button>
                                                 </td>
@@ -833,12 +844,12 @@ export default function AcompanhamentoEtapas() {
                                             // Restaura todos selecionados
                                             setSelectedTagIds(new Set(projetoTags.map(t => t.IdTag)));
                                             setEditForm({
-                                                PlanejadoInicioMedicao: '', PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: '',
-                                                PlanejadoInicioIsometrico: '', PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: '',
-                                                PlanejadoInicioEngenharia: '', PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: '',
-                                                PlanejadoInicioAprovacao: '', PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: '',
-                                                PlanejadoInicioAcabamento: '', PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: '',
-                                                PlanejadoInicioExpedicao: '', PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: ''
+                                                PlanejadoInicioMedicao: toISO(selectedProjeto?.PlanMedicao), PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: toISO(selectedProjeto?.RealMedicao),
+                                                PlanejadoInicioIsometrico: toISO(selectedProjeto?.PlanIsometrico), PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: toISO(selectedProjeto?.RealIsometrico),
+                                                PlanejadoInicioEngenharia: toISO(selectedProjeto?.PlanEngenharia), PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: toISO(selectedProjeto?.RealEngenharia),
+                                                PlanejadoInicioAprovacao: toISO(selectedProjeto?.PlanAprovacao), PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: toISO(selectedProjeto?.RealAprovacao),
+                                                PlanejadoInicioAcabamento: toISO(selectedProjeto?.PlanAcabamento), PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: toISO(selectedProjeto?.RealAcabamento),
+                                                PlanejadoInicioExpedicao: toISO(selectedProjeto?.PlanExpedicao), PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: toISO(selectedProjeto?.RealExpedicao)
                                             });
                                         }}
                                         className={`px-3 py-1.5 rounded text-xs font-semibold transition-all ${

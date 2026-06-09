@@ -447,13 +447,13 @@ export default function TesteFinalMontagemPage() {
                                     <th className="px-3 py-2 font-black text-right whitespace-nowrap">Executado</th>
                                     <th className="px-3 py-2 font-black text-right whitespace-nowrap">A Executar</th>
                                     <th className="px-3 py-2 font-black text-center whitespace-nowrap">Parcial</th>
+                                    <th className="px-3 py-2 font-black text-center whitespace-nowrap">Ação</th>
                                     <th className="px-3 py-2 font-black text-right whitespace-nowrap">Peso Un.</th>
                                     <th className="px-3 py-2 font-black whitespace-nowrap">Cód. Fabri.</th>
                                     <th className="px-3 py-2 font-black whitespace-nowrap">Desc. Resumo</th>
                                     <th className="px-3 py-2 font-black text-center whitespace-nowrap">Principal</th>
                                     <th className="px-3 py-2 font-black whitespace-nowrap">Início Mont.</th>
                                     <th className="px-3 py-2 font-black whitespace-nowrap">Final Mont.</th>
-                                    <th className="px-3 py-2 font-black text-center whitespace-nowrap">Ação</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -503,6 +503,20 @@ export default function TesteFinalMontagemPage() {
                                                         )}
                                                     </span>
                                                 </td>
+                                                <td className="px-3 py-1.5 text-center">
+                                                    {concluido ? (
+                                                        <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 text-[9px] font-bold">
+                                                            <CheckCircle2 size={9} />OK
+                                                        </span>
+                                                    ) : (
+                                                        <button
+                                                            onClick={() => setModalItem(item)}
+                                                            className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-2 py-1 text-[10px] font-bold transition-colors shadow-sm"
+                                                        >
+                                                            <ClipboardPen size={10} />Lançar
+                                                        </button>
+                                                    )}
+                                                </td>
                                                 <td className="px-3 py-1.5 text-right text-slate-500">
                                                     {item.PesoUnitario !== null ? (
                                                         <span className="flex items-center justify-end gap-0.5"><Weight size={10} />{Number(item.PesoUnitario).toFixed(2)}</span>
@@ -519,20 +533,6 @@ export default function TesteFinalMontagemPage() {
                                                 </td>
                                                 <td className={`px-3 py-1.5 whitespace-nowrap text-[10px] ${corInicio}`}>{formatarData(item.RealizadoInicioMontagem)}</td>
                                                 <td className={`px-3 py-1.5 whitespace-nowrap text-[10px] ${corFinal}`}>{formatarData(item.RealizadoFinalMontagem)}</td>
-                                                <td className="px-3 py-1.5 text-center">
-                                                    {concluido ? (
-                                                        <span className="inline-flex items-center gap-0.5 bg-emerald-100 text-emerald-700 rounded px-1.5 py-0.5 text-[9px] font-bold">
-                                                            <CheckCircle2 size={9} />OK
-                                                        </span>
-                                                    ) : (
-                                                        <button
-                                                            onClick={() => setModalItem(item)}
-                                                            className="inline-flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-2 py-1 text-[10px] font-bold transition-colors shadow-sm"
-                                                        >
-                                                            <ClipboardPen size={10} />Lançar
-                                                        </button>
-                                                    )}
-                                                </td>
                                             </tr>
                                         );
                                     })

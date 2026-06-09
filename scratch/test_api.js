@@ -1,23 +1,42 @@
-const jwt = require('jsonwebtoken');
-const axios = require('axios');
-require('dotenv').config();
+const http = require('http');
 
-async function run() {
-    const token = jwt.sign(
-        { id: 1, usuario: 'admin', nivel: 'admin', tenantId: 'lynxlocal' },
-        process.env.JWT_SECRET,
-        { expiresIn: '1h' }
-    );
-
-    try {
-        const res = await axios.get('http://localhost:3000/api/apontamento/dobra?os=12', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const items = res.data.data;
-        const target = items.find(i => i.IdOrdemServicoItem === 32874);
-        console.log('Result for item 32874:', target);
-    } catch (e) {
-        console.error('Error:', e.response ? e.response.data : e.message);
+const options = {
+    hostname: 'localhost',
+    port: 3000,
+    path: '/api/apontamento/dobra',
+    method: 'GET',
+    headers: {
+        'x-tenant-db': 'amceletrica'
     }
-}
-run();
+};
+
+const start = Date.now();
+const req = http.request(options, res => {
+    let data = '';
+    res.on('data', d => {
+        data += d;
+    });
+    res.on('end', () => {
+        console.log('Status Code:', res.statusCode);
+        console.log('Time taken:', Date.now() - start, 'ms');
+        
+        try {
+            const json = JSON.parse(data);
+            console.log('Success:', json.success);
+            console.log('Rows returned:', json.data.length);
+            console.log('Total pagination:', json.pagination.total);
+            if(json.data.length > 0) {
+                console.log('First Item QtdeProduzidaHistory:', json.data[0].QtdeProduzidaHistory);
+                console.log('First Item NomeProdutoPrincipal:', json.data[0].NomeProdutoPrincipal);
+            }
+        } catch(e) {
+            console.log('Failed to parse JSON:', data.substring(0, 100));
+        }
+    });
+});
+
+req.on('error', error => {
+    console.error(error);
+});
+
+req.end();

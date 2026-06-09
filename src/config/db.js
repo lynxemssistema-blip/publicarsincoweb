@@ -73,15 +73,12 @@ const getPool = () => {
   return defaultPool;
 };
 
-// Wrapper for execute
-const execute = async (sql, params) => {
+const execute = async (sql, params, retries = 1) => {
   const pool = getPool();
   if (!pool) {
     throw new Error('Database pool not initialized.');
   }
 
-  // PERF: Slow query logging — só loga queries acima do threshold (padrão 200ms)
-  // Configurável via variável: SLOW_QUERY_MS=200 no .env
   const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_MS) || 200;
   const cleanSql = sql.replace(/\s+/g, ' ').trim();
 
@@ -94,7 +91,6 @@ const execute = async (sql, params) => {
     const store = asyncLocalStorage.getStore();
     const dbLabel = store?.dbName ? `[${store.dbName}]` : '[DEFAULT]';
 
-    // Só loga se for slow query (acima do threshold) ou em modo dev explícito
     if (duration >= SLOW_QUERY_MS) {
       console.warn(`[DB] ${dbLabel} ⚠️  SLOW QUERY (${duration}ms | rows:${rowCount}): ${cleanSql.substring(0, 300)}`);
     } else if (process.env.DB_VERBOSE === 'true') {
@@ -102,6 +98,11 @@ const execute = async (sql, params) => {
     }
     return result;
   } catch (err) {
+    // Retry logic for dropped connections (common in Hostinger/remote MySQL)
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}). Retrying query...`);
+        return execute(sql, params, retries - 1);
+    }
     console.error(`[DB] 🔴 ERROR: ${err.message}`);
     console.error(err);
     throw err;
@@ -146,14 +147,22 @@ const testConnection = async (config) => {
 };
 
 // Execute always on the default/central pool (ignores tenant context)
-const executeOnDefault = async (sql, params) => {
+const executeOnDefault = async (sql, params, retries = 1) => {
   if (!defaultPool) throw new Error('Default database pool not initialized.');
   const cleanSql = sql.replace(/\s+/g, ' ').trim();
   console.log(`\n[DB] 🔵 EXEC (DEFAULT): ${cleanSql}`);
-  const result = await defaultPool.execute(sql, params);
-  const rowCount = Array.isArray(result[0]) ? result[0].length : (result[0]?.affectedRows || 0);
-  console.log(`[DB] [DEFAULT] 🟢 OK - Rows: ${rowCount}`);
-  return result;
+  try {
+    const result = await defaultPool.execute(sql, params);
+    const rowCount = Array.isArray(result[0]) ? result[0].length : (result[0]?.affectedRows || 0);
+    console.log(`[DB] [DEFAULT] 🟢 OK - Rows: ${rowCount}`);
+    return result;
+  } catch (err) {
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}) on DEFAULT pool. Retrying query...`);
+        return executeOnDefault(sql, params, retries - 1);
+    }
+    throw err;
+  }
 };
 
 module.exports = {
