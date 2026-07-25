@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-import { Search, Filter, X, CalendarDays, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList, Maximize2, Minimize2 , Share2 } from 'lucide-react';
+import { Activity, Search, Filter, X, CalendarDays, Calendar, ArrowUp, ArrowDown, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList, Maximize2, Minimize2 , Share2 } from 'lucide-react';
 import VisaoGeralTagsGlobais from './VisaoGeralTagsGlobais';
 
 
@@ -16,7 +16,28 @@ const SECTOR_RESOURCE_FIELDS = [
   { field: 'TxtMontagem', key: 'Montagem', label: 'Montagem', color: 'bg-indigo-100 text-indigo-800 border-indigo-300', order: 8 }
 ];
 
+const ALL_TAG_SECTORS = [
+  { key: 'Corte', label: 'Corte', flagField: 'txtCorte', piField: 'PlanejadoInicioCorte', pfField: 'PlanejadoFinalCorte' },
+  { key: 'Laser', label: 'Corte a Laser', flagField: 'txtCorteaLaser', piField: 'PlanejadoInicioCorteaLaser', pfField: 'PlanejadoFinalCorteaLaser' },
+  { key: 'Pulsionadeira', label: 'Pulsionadeira', flagField: 'txtPULSIONADEIRA', piField: 'PlanejadoInicioPULSIONADEIRA', pfField: 'PlanejadoFinalPULSIONADEIRA' },
+  { key: 'Dobra', label: 'Dobra', flagField: 'txtDobra', piField: 'PlanejadoInicioDobra', pfField: 'PlanejadoFinalDobra' },
+  { key: 'Solda', label: 'Solda', flagField: 'txtSolda', piField: 'PlanejadoInicioSolda', pfField: 'PlanejadoFinalSolda' },
+  { key: 'Pintura', label: 'Pintura', flagField: 'txtPintura', piField: 'PlanejadoInicioPintura', pfField: 'PlanejadoFinalPintura' },
+  { key: 'Galvanizar', label: 'Galvanizar', flagField: 'txtGALVANIZAR', piField: 'PlanejadoInicioGALVANIZAR', pfField: 'PlanejadoFinalGALVANIZAR' },
+  { key: 'Montagem', label: 'Montagem', flagField: 'TxtMontagem', piField: 'PlanejadoInicioMontagem', pfField: 'PlanejadoFinalMontagem' },
+];
+
 const API_BASE = '/api';
+
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token') || localStorage.getItem('sinco_token') || localStorage.getItem('jwt') || '';
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+};
+
 
 const getSavedEntitySectorDates = (entity: any, sectorKey: string) => {
   if (!entity) return { pi: '', pf: '' };
@@ -124,6 +145,8 @@ export default function VisaoGeralProducaoPage() {
  const [load, setLoad] = useState(true); const [loadTags, setLoadTags] = useState(false); const [loadRncs, setLoadRncs] = useState(false);
  const [selProj, setSelProj] = useState<Projeto | null>(null);
  const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [sectorDays, setSectorDays] = useState<Record<string, string>>({});
+  const [baseStartDate, setBaseStartDate] = useState<string>('');
  const [rncPanel, setRncPanel] = useState(false); const [fTag, setFTag] = useState('');
  const [fDataEntradaIni, setFDataEntradaIni] = useState(''); const [fDataEntradaFim, setFDataEntradaFim] = useState('');
  const [fDataPrevIni, setFDataPrevIni] = useState(''); const [fDataPrevFim, setFDataPrevFim] = useState('');
@@ -198,13 +221,24 @@ export default function VisaoGeralProducaoPage() {
  const [osDetailsModal, setOsDetailsModal] = useState<{ type: 'tag' | 'projeto', id: number, osList: Record<string, unknown>[] } | null>(null);
   const [expandedTagsOs, setExpandedTagsOs] = useState<{ [key: number]: Record<string, unknown>[] | null }>({});
   const [expandedOsItems, setExpandedOsItems] = useState<{ [key: string]: Record<string, unknown>[] | null }>({});
+  const [expandedTagSectors, setExpandedTagSectors] = useState<{ [key: number]: boolean }>({});
+  const [expandedOsSectors, setExpandedOsSectors] = useState<{ [key: string]: boolean }>({});
+  const [expandedItemSectors, setExpandedItemSectors] = useState<{ [key: string]: boolean }>({});
+  const [tagItemsCache, setTagItemsCache] = useState<{ [key: number]: any[] }>({});
   
-  const [showPlanningDatesTag, setShowPlanningDatesTag] = useState<{ [key: number]: boolean }>({});
+    const [showPlanningDatesTag, setShowPlanningDatesTag] = useState<{ [key: number]: boolean }>({});
+  const [tagPlanningModes, setTagPlanningModes] = useState<{ [key: number]: 'progressivo' | 'regressivo' }>({});
+  const [tagBaseDateInputs, setTagBaseDateInputs] = useState<{ [key: number]: string }>({});
+  const [tagSectorDaysMap, setTagSectorDaysMap] = useState<Record<string, string>>({});
+  const [customSectorOrdersTag, setCustomSectorOrdersTag] = useState<{ [key: number]: string[] }>({});
   const [tagItemsSilentCache, setTagItemsSilentCache] = useState<{ [key: number]: Record<string, unknown>[] }>({});
   const [tagResourceDays, setTagResourceDays] = useState<{ [key: string]: string }>({});
   const [planningModes, setPlanningModes] = useState<{ [key: string]: 'progressivo' | 'regressivo' }>({});
   const [planningTargetDates, setPlanningTargetDates] = useState<{ [key: string]: string }>({});
   const [planningSectorOrders, setPlanningSectorOrders] = useState<{ [key: string]: string[] }>({});
+  const [planningMode, setPlanningMode] = useState<'progressivo' | 'regressivo'>('progressivo');
+  const [baseDateInput, setBaseDateInput] = useState<string>('');
+  const [customSectorOrder, setCustomSectorOrder] = useState<string[]>([]);
 
   
   const handleSaveTagPlanning = async (idTag: number, calculatedList: any[]) => {
@@ -523,7 +557,301 @@ export default function VisaoGeralProducaoPage() {
     }
   };
 
-    const toggleOsExpansion = async (idTag: number) => {
+    
+  
+  
+  
+  const getOsComputedTotals = (os: any, items?: any[]) => {
+    if (items && items.length > 0) {
+      const totalItens = items.length;
+      const itensExecutados = items.filter(i => {
+        const st = String(i.OrdemServicoItemFinalizado || i.Finalizado || '').trim().toUpperCase();
+        return st === 'C' || st === 'S';
+      }).length;
+      
+      let totalPecas = 0;
+      let pecasExecutadas = 0;
+      let pesoTotal = 0;
+      let areaPinturaTotal = 0;
+      
+      items.forEach(i => {
+        const q = parseFloat(i.QtdeTotal || i.qtde || 1) || 1;
+        const st = String(i.OrdemServicoItemFinalizado || i.Finalizado || '').trim().toUpperCase();
+        const isFin = st === 'C' || st === 'S';
+        
+        totalPecas += q;
+        if (isFin) pecasExecutadas += q;
+        
+        const pUnit = parseFloat(i.PesoUnitario || 0);
+        const p = parseFloat(i.Peso || 0) || (pUnit * q);
+        pesoTotal += p;
+        
+        const aUnit = parseFloat(i.AreaPinturaUnitario || 0);
+        const a = parseFloat(i.AreaPintura || 0) || (aUnit * q);
+        areaPinturaTotal += a;
+      });
+      
+      return {
+        totalItens,
+        itensExecutados,
+        totalPecas,
+        pecasExecutadas,
+        pesoTotal,
+        areaPinturaTotal,
+        percentualItens: totalItens > 0 ? Math.round((itensExecutados / totalItens) * 100) : 0,
+        percentualPecas: totalPecas > 0 ? Math.round((pecasExecutadas / totalPecas) * 100) : 0
+      };
+    }
+
+    const totalItens = parseInt(os.QtdeTotalItens) || (os.ItensCount ? parseInt(os.ItensCount) : 0);
+    const itensExecutados = parseInt(os.QtdeItensExecutados) || 0;
+    const totalPecas = parseInt(os.QtdeTotalPecas || os.qtadetotal) || 0;
+    const pecasExecutadas = parseInt(os.QtdePecasExecutadas) || 0;
+    const pesoTotal = parseFloat(os.PesoTotal) || 0;
+    const areaPinturaTotal = parseFloat(os.AreaPinturaTotal) || 0;
+
+    return {
+      totalItens,
+      itensExecutados,
+      totalPecas,
+      pecasExecutadas,
+      pesoTotal,
+      areaPinturaTotal,
+      percentualItens: totalItens > 0 ? Math.round((itensExecutados / totalItens) * 100) : 0,
+      percentualPecas: totalPecas > 0 ? Math.round((pecasExecutadas / totalPecas) * 100) : 0
+    };
+  };
+
+  const checkSectorActive = (obj: any, key: string) => {
+    if (!obj) return false;
+    const val = (v: any) => String(v ?? '').trim();
+    switch (key) {
+      case 'Corte':
+        return val(obj.txtCorte) === '1' || val(obj.txtCorte) === 'S' || val(obj.txtCORTE) === '1' || val(obj.txtCORTE) === 'S' || obj.flagCorte === 1;
+      case 'Dobra':
+        return val(obj.txtDobra) === '1' || val(obj.txtDobra) === 'S' || val(obj.txtDOBRA) === '1' || val(obj.txtDOBRA) === 'S' || obj.flagDobra === 1;
+      case 'Solda':
+        return val(obj.txtSolda) === '1' || val(obj.txtSolda) === 'S' || val(obj.txtSOLDA) === '1' || val(obj.txtSOLDA) === 'S' || obj.flagSolda === 1;
+      case 'Pintura':
+        return val(obj.txtPintura) === '1' || val(obj.txtPintura) === 'S' || val(obj.txtPINTURA) === '1' || val(obj.txtPINTURA) === 'S' || obj.flagPintura === 1;
+      case 'Montagem':
+        return val(obj.TxtMontagem) === '1' || val(obj.TxtMontagem) === 'S' || val(obj.txtMontagem) === '1' || val(obj.txtMontagem) === 'S' || val(obj.txtMONTAGEM) === '1' || obj.flagMontagem === 1;
+      case 'CorteaLaser':
+        return val(obj.txtCorteaLaser) === '1' || val(obj.txtCorteaLaser) === 'S' || val(obj.txtCORTEALASER) === '1' || val(obj.txtCORTEALASER) === 'S' || obj.flagCorteaLaser === 1;
+      case 'Pulsionadeira':
+        return val(obj.txtPULSIONADEIRA) === '1' || val(obj.txtPULSIONADEIRA) === 'S' || val(obj.txtPulsionadeira) === '1' || val(obj.txtPulsionadeira) === 'S' || obj.flagPulsionadeira === 1;
+      case 'Galvanizar':
+        return val(obj.txtGALVANIZAR) === '1' || val(obj.txtGALVANIZAR) === 'S' || val(obj.txtGalvanizar) === '1' || val(obj.txtGalvanizar) === 'S' || obj.flagGalvanizar === 1;
+      default:
+        return false;
+    }
+  };
+
+  const getItemActiveSectors = (item: any) => {
+    const itemQty = parseFloat(item.qtde ?? item.QtdeTotal) || 1;
+    const isFin = item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S';
+
+    const SECTOR_DEFS = [
+      { key: 'Corte', label: 'Corte', rawExec: item.CorteTotalExecutado, rawAExec: item.CorteTotalExecutar },
+      { key: 'Dobra', label: 'Dobra', rawExec: item.DobraTotalExecutado, rawAExec: item.DobraTotalExecutar },
+      { key: 'Solda', label: 'Solda', rawExec: item.SoldaTotalExecutado, rawAExec: item.SoldaTotalExecutar },
+      { key: 'Pintura', label: 'Pintura', rawExec: item.PinturaTotalExecutado, rawAExec: item.PinturaTotalExecutar },
+      { key: 'Montagem', label: 'Montagem', rawExec: item.MontagemTotalExecutado, rawAExec: item.MontagemTotalExecutar },
+      { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: item.CorteaLaserTotalExecutado, rawAExec: item.CorteaLaserTotalExecutar },
+      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: item.PULSIONADEIRATotalExecutado ?? item.PulsionadeiraTotalExecutado, rawAExec: item.PULSIONADEIRATotalExecutar ?? item.PulsionadeiraTotalExecutar },
+      { key: 'Galvanizar', label: 'Galvanizar', rawExec: item.GALVANIZARTotalExecutado ?? item.GalvanizarTotalExecutado, rawAExec: item.GALVANIZARTotalExecutar ?? item.GalvanizarTotalExecutar },
+    ];
+
+    const activeDefs = SECTOR_DEFS.filter(s => checkSectorActive(item, s.key));
+
+    return activeDefs.map((s, idx) => {
+      const dbExec = toNum({ val: s.rawExec });
+      const dbAExec = toNum({ val: s.rawAExec });
+      let exec = 0;
+      let aExec = 0;
+      if (isFin) {
+        exec = dbExec > 0 ? dbExec : itemQty;
+        aExec = 0;
+      } else {
+        exec = dbExec;
+        if (dbAExec > 0) {
+          aExec = dbAExec;
+        } else if (idx === 0) {
+          aExec = itemQty;
+        } else {
+          aExec = 0;
+        }
+      }
+      return { key: s.key, label: s.label, exec, aExec };
+    });
+  };
+
+  const aggregateItemsSectors = (items: any[]) => {
+    const SECTOR_ORDER = [
+      { key: 'Corte', label: 'Corte' },
+      { key: 'Dobra', label: 'Dobra' },
+      { key: 'Solda', label: 'Solda' },
+      { key: 'Pintura', label: 'Pintura' },
+      { key: 'Montagem', label: 'Montagem' },
+      { key: 'CorteaLaser', label: 'Corte a Laser' },
+      { key: 'Pulsionadeira', label: 'Pulsionadeira' },
+      { key: 'Galvanizar', label: 'Galvanizar' },
+    ];
+
+    const mapSector = new Map<string, { key: string, label: string, exec: number, aExec: number, active: boolean }>();
+    SECTOR_ORDER.forEach(s => mapSector.set(s.key, { key: s.key, label: s.label, exec: 0, aExec: 0, active: false }));
+
+    items.forEach(item => {
+      const itemSectors = getItemActiveSectors(item);
+      itemSectors.forEach(s => {
+        const target = mapSector.get(s.key);
+        if (target) {
+          target.active = true;
+          target.exec += s.exec;
+          target.aExec += s.aExec;
+        }
+      });
+    });
+
+    return Array.from(mapSector.values()).filter(s => s.active);
+  };
+
+  const getTagSectors = (t: any) => {
+    const tagItems = tagItemsCache[t.IdTag] || [];
+    if (tagItems.length > 0) {
+      return aggregateItemsSectors(tagItems);
+    }
+
+    const SECTOR_ORDER = [
+      { key: 'Corte', label: 'Corte', rawExec: t.CorteTotalExecutado, rawAExec: t.CorteTotalExecutar },
+      { key: 'Dobra', label: 'Dobra', rawExec: t.DobraTotalExecutado, rawAExec: t.DobraTotalExecutar },
+      { key: 'Solda', label: 'Solda', rawExec: t.SoldaTotalExecutado, rawAExec: t.SoldaTotalExecutar },
+      { key: 'Pintura', label: 'Pintura', rawExec: t.PinturaTotalExecutado, rawAExec: t.PinturaTotalExecutar },
+      { key: 'Montagem', label: 'Montagem', rawExec: t.MontagemTotalExecutado, rawAExec: t.MontagemTotalExecutar },
+      { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: t.CorteaLaserTotalExecutado, rawAExec: t.CorteaLaserTotalExecutar },
+      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: t.PULSIONADEIRATotalExecutado ?? t.PulsionadeiraTotalExecutado, rawAExec: t.PULSIONADEIRATotalExecutar ?? t.PulsionadeiraTotalExecutar },
+      { key: 'Galvanizar', label: 'Galvanizar', rawExec: t.GALVANIZARTotalExecutado ?? t.GalvanizarTotalExecutado, rawAExec: t.GALVANIZARTotalExecutar ?? t.GalvanizarTotalExecutar },
+    ];
+
+    const tagQty = parseFloat(t.QtdeTotalPecas ?? t.QtdeTag ?? t.QtdeLiberada) || 1;
+    const isFin = t.Finalizado?.trim() === 'C' || t.Finalizado?.trim() === 'S';
+
+    const activeSectors = SECTOR_ORDER.filter(s => checkSectorActive(t, s.key));
+
+    return activeSectors.map((s, idx) => {
+      const dbExec = toNum({ val: s.rawExec });
+      const dbAExec = toNum({ val: s.rawAExec });
+      let exec = 0;
+      let aExec = 0;
+      if (isFin) {
+        exec = dbExec > 0 ? dbExec : tagQty;
+        aExec = 0;
+      } else {
+        exec = dbExec;
+        if (dbAExec > 0) {
+          aExec = dbAExec;
+        } else if (idx === 0) {
+          aExec = tagQty;
+        } else {
+          aExec = 0;
+        }
+      }
+      return { key: s.key, label: s.label, exec, aExec };
+    });
+  };
+
+  const getOsSectors = (os: any) => {
+    const osItems = expandedOsItems[os.IdOrdemServico] || [];
+    if (osItems.length > 0) {
+      return aggregateItemsSectors(osItems);
+    }
+
+    const SECTOR_ORDER = [
+      { key: 'Corte', label: 'Corte', rawExec: os.CorteTotalExecutado, rawAExec: os.CorteTotalExecutar },
+      { key: 'Dobra', label: 'Dobra', rawExec: os.DobraTotalExecutado, rawAExec: os.DobraTotalExecutar },
+      { key: 'Solda', label: 'Solda', rawExec: os.SoldaTotalExecutado, rawAExec: os.SoldaTotalExecutar },
+      { key: 'Pintura', label: 'Pintura', rawExec: os.PinturaTotalExecutado, rawAExec: os.PinturaTotalExecutar },
+      { key: 'Montagem', label: 'Montagem', rawExec: os.MontagemTotalExecutado, rawAExec: os.MontagemTotalExecutar },
+      { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: os.CorteaLaserTotalExecutado, rawAExec: os.CorteaLaserTotalExecutar },
+      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: os.PULSIONADEIRATotalExecutado ?? os.PulsionadeiraTotalExecutado, rawAExec: os.PULSIONADEIRATotalExecutar ?? os.PulsionadeiraTotalExecutar },
+      { key: 'Galvanizar', label: 'Galvanizar', rawExec: os.GALVANIZARTotalExecutado ?? os.GalvanizarTotalExecutado, rawAExec: os.GALVANIZARTotalExecutar ?? os.GalvanizarTotalExecutar },
+    ];
+
+    const osQty = parseFloat(os.QtdeTotalItens) || 1;
+    const isFin = os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S';
+
+    const activeSectors = SECTOR_ORDER.filter(s => checkSectorActive(os, s.key));
+
+    return activeSectors.map((s, idx) => {
+      const dbExec = toNum({ val: s.rawExec });
+      const dbAExec = toNum({ val: s.rawAExec });
+      let exec = 0;
+      let aExec = 0;
+      if (isFin) {
+        exec = dbExec > 0 ? dbExec : osQty;
+        aExec = 0;
+      } else {
+        exec = dbExec;
+        if (dbAExec > 0) {
+          aExec = dbAExec;
+        } else if (idx === 0) {
+          aExec = osQty;
+        } else {
+          aExec = 0;
+        }
+      }
+      return { key: s.key, label: s.label, exec, aExec };
+    });
+  };
+
+  const toggleTagSectorsExpansion = async (idTag: number) => {
+    setExpandedTagSectors(prev => ({ ...prev, [idTag]: !prev[idTag] }));
+    if (!tagItemsCache[idTag] || tagItemsCache[idTag].length === 0) {
+      try {
+        const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/itens`)).json();
+        if (r.success && r.data && r.data.length > 0) {
+          setTagItemsCache(prev => ({ ...prev, [idTag]: r.data }));
+        } else {
+          // Fallback: Fetch OSs and items for each OS to ensure no items are missed
+          const osRes = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
+          if (osRes.success && osRes.data) {
+            setExpandedTagsOs(prev => ({ ...prev, [idTag]: osRes.data }));
+            const allItems: any[] = [];
+            for (const os of osRes.data) {
+              const itemRes = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
+              if (itemRes.success && itemRes.data) {
+                allItems.push(...itemRes.data);
+              }
+            }
+            setTagItemsCache(prev => ({ ...prev, [idTag]: allItems }));
+          }
+        }
+      } catch (e) {
+        console.error('Erro ao buscar setores da tag:', e);
+      }
+    }
+  };
+
+  const toggleOsSectorsExpansion = async (idOs: string | number) => {
+    setExpandedOsSectors(prev => ({ ...prev, [idOs]: !prev[idOs] }));
+    if (!expandedOsItems[idOs]) {
+      try {
+        const r = await (await fetch(`${API_BASE}/ordemservico/${idOs}/itens`)).json();
+        if (r.success) {
+          setExpandedOsItems(prev => ({ ...prev, [idOs]: r.data }));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  };
+
+  const toggleItemSectorsExpansion = (idItem: string | number) => {
+    setExpandedItemSectors(prev => ({ ...prev, [idItem]: !prev[idItem] }));
+  };
+
+
+  const toggleOsExpansion = async (idTag: number) => {
     if (expandedTagsOs[idTag] !== undefined && expandedTagsOs[idTag] !== null) {
       setExpandedTagsOs(prev => {
         const next = { ...prev };
@@ -744,7 +1072,174 @@ const salvarDatasBulkTags = async () => {
  } finally { setIsSaving(false); }
  };
 
- const salvarPlanejamentoProjetista = async () => {
+   const handleSaveCalculatedSchedule = async (tag: Tag, schedule: any[], propagate: boolean) => {
+    setIsSaving(true); 
+    setMsg(null);
+    try {
+      const promises: Promise<any>[] = [];
+      const updatesForOs: { field: string; value: string }[] = [];
+
+      const keyToFields: Record<string, { pi: string; pf: string }> = {
+        'Corte': { pi: 'PlanejadoInicioCorte', pf: 'PlanejadoFinalCorte' },
+        'Laser': { pi: 'PlanejadoInicioCorteaLaser', pf: 'PlanejadoFinalCorteaLaser' },
+        'Pulsionadeira': { pi: 'PlanejadoInicioPulsionadeira', pf: 'PlanejadoFinalPulsionadeira' },
+        'Dobra': { pi: 'PlanejadoInicioDobra', pf: 'PlanejadoFinalDobra' },
+        'Solda': { pi: 'PlanejadoInicioSolda', pf: 'PlanejadoFinalSolda' },
+        'Pintura': { pi: 'PlanejadoInicioPintura', pf: 'PlanejadoFinalPintura' },
+        'Galvanizar': { pi: 'PlanejadoInicioGalvanizar', pf: 'PlanejadoFinalGalvanizar' },
+        'Montagem': { pi: 'PlanejadoInicioMontagem', pf: 'PlanejadoFinalMontagem' },
+      };
+
+      for (const item of schedule) {
+        const mapping = keyToFields[item.key];
+        if (mapping) {
+          promises.push(
+            fetch(`${API_BASE}/visao-geral/tag/${tag.IdTag}/setor-data`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ field: mapping.pi, value: item.startDateBr })
+            })
+          );
+          updatesForOs.push({ field: mapping.pi, value: item.startDateBr });
+
+          promises.push(
+            fetch(`${API_BASE}/visao-geral/tag/${tag.IdTag}/setor-data`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ field: mapping.pf, value: item.endDateBr })
+            })
+          );
+          updatesForOs.push({ field: mapping.pf, value: item.endDateBr });
+        }
+      }
+
+      if (schedule.length > 0) {
+        const lastEndDateBr = schedule[schedule.length - 1].endDateBr;
+        promises.push(
+          fetch(`${API_BASE}/acompanhamento/tags/${tag.IdTag}/previsao`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataPrevisao: lastEndDateBr, usuario: getUser() })
+          })
+        );
+      }
+
+      await Promise.all(promises);
+
+      if (propagate) {
+        const r = await (await fetch(`${API_BASE}/visao-geral/tag/${tag.IdTag}/propagar-datas-os`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ updates: updatesForOs })
+        })).json();
+        if (r.success) {
+          setMsg({ ok: true, t: 'Datas calculadas salvas e propagadas para todas as OSs!' });
+        } else {
+          setMsg({ ok: true, t: 'Datas calculadas salvas na Tag!' });
+        }
+      } else {
+        setMsg({ ok: true, t: 'Datas calculadas salvas na Tag!' });
+      }
+
+      if (selProj) fetchTags(selProj.IdProjeto);
+      setTimeout(() => setActionModal(null), 1500);
+    } catch (err) {
+      console.error('Erro ao salvar datas calculadas:', err);
+      setMsg({ ok: false, t: 'Erro ao salvar datas de planejamento.' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+        const handleSaveAllPlanning = async (selTagObj: Tag, scheduleItems: any[]) => {
+    if (!selTagObj || !scheduleItems || scheduleItems.length === 0) return;
+    setIsSaving(true);
+    setMsg(null);
+
+    try {
+      const updates: { field: string; value: string }[] = [];
+
+      scheduleItems.forEach(item => {
+        if (item.piField && item.startDateBr) {
+          updates.push({ field: item.piField, value: item.startDateBr });
+          (selTagObj as any)[item.piField] = item.startDateBr;
+          // Add camelCase alias if uppercase
+          if (item.piField === 'PlanejadoInicioPULSIONADEIRA') {
+            updates.push({ field: 'PlanejadoInicioPulsionadeira', value: item.startDateBr });
+            (selTagObj as any)['PlanejadoInicioPulsionadeira'] = item.startDateBr;
+          }
+          if (item.piField === 'PlanejadoInicioGALVANIZAR') {
+            updates.push({ field: 'PlanejadoInicioGalvanizar', value: item.startDateBr });
+            (selTagObj as any)['PlanejadoInicioGalvanizar'] = item.startDateBr;
+          }
+        }
+        if (item.pfField && item.endDateBr) {
+          updates.push({ field: item.pfField, value: item.endDateBr });
+          (selTagObj as any)[item.pfField] = item.endDateBr;
+          if (item.pfField === 'PlanejadoFinalPULSIONADEIRA') {
+            updates.push({ field: 'PlanejadoFinalPulsionadeira', value: item.endDateBr });
+            (selTagObj as any)['PlanejadoFinalPulsionadeira'] = item.endDateBr;
+          }
+          if (item.pfField === 'PlanejadoFinalGALVANIZAR') {
+            updates.push({ field: 'PlanejadoFinalGalvanizar', value: item.endDateBr });
+            (selTagObj as any)['PlanejadoFinalGalvanizar'] = item.endDateBr;
+          }
+        }
+      });
+
+      if (scheduleItems.length > 0) {
+        const lastEndDateBr = scheduleItems[scheduleItems.length - 1].endDateBr;
+        updates.push({ field: 'DataPrevisao', value: lastEndDateBr });
+        selTagObj.DataPrevisao = lastEndDateBr;
+      }
+
+      // Update state immediately for instant UI feedback
+      setTags(prev => prev.map(tItem => {
+        if (tItem.IdTag === selTagObj.IdTag) {
+          const updated = { ...tItem };
+          updates.forEach(u => { (updated as any)[u.field] = u.value; });
+          return updated;
+        }
+        return tItem;
+      }));
+
+      // 1. Bulk update Tag table in MySQL
+      const respTag = await fetch(`${API_BASE}/visao-geral/tag/${selTagObj.IdTag}/setor-data-bulk`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates })
+      });
+      const resTag = await respTag.json();
+
+      // 2. Propagate to OSs and Items of OSs in MySQL
+      const respOS = await fetch(`${API_BASE}/visao-geral/tag/${selTagObj.IdTag}/propagar-datas-os`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates })
+      });
+      const resOS = await respOS.json();
+
+      if (resTag.success && resOS.success) {
+        setMsg({ ok: true, t: 'Datas salvas com SUCESSO na Tag, Ordens de Serviço e Itens das OSs!' });
+      } else {
+        setMsg({ ok: true, t: 'Datas de planejamento salvas na Tag!' });
+      }
+
+      if (selProj) fetchTags(selProj.IdProjeto);
+
+      setTimeout(() => {
+        setShowPlanningDatesTag(prev => ({ ...prev, [selTagObj.IdTag]: false }));
+        setMsg(null);
+      }, 1500);
+    } catch (err) {
+      console.error('Erro ao salvar planejamento:', err);
+      setMsg({ ok: false, t: 'Erro ao salvar datas de planejamento.' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const salvarPlanejamentoProjetista = async () => {
  if (!selTag) return;
  if (!planejarProjetistaForm.projetistaPlanejado || !planejarProjetistaForm.planejadoInicioEngenharia || !planejarProjetistaForm.planejadoFinalEngenharia) {
  setMsg({ ok: false, t: 'Preencha todos os campos obrigatórios.' });
@@ -1166,15 +1661,9 @@ const salvarDatasBulkTags = async () => {
  ) : viewMode === 'list' ? (
  <div className="bg-white border border-slate-200 rounded-md shadow-sm overflow-auto min-w-full">
  <table className="w-full text-left text-xs whitespace-nowrap border-collapse min-w-[800px]">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] text-white font-bold uppercase tracking-wider text-[10px] border-b border-white/20 sticky top-0 z-10 shadow-sm">
+ <thead className="bg-[#32423D] text-white font-bold uppercase tracking-wider text-[10px] sticky top-0 z-20 shadow-sm border-b border-white/20">
  <tr>
- <th className="px-2 py-0.5 border-r border-slate-100">Projeto</th>
- <th className="px-3 py-3 border-r border-slate-100 text-center">Peças</th>
- <th className="px-3 py-3 border-r border-slate-100 text-center">TAGS / Qtde</th>
- <th className="px-3 py-3 border-r border-slate-100 text-center">OS / Itens</th>
- <th className="px-3 py-3 border-r border-slate-100 text-center">RNCs</th>
- <th className="px-2 py-0.5 border-r border-slate-100 w-32">Datas</th>
- <th className="px-3 py-3 text-center">Ações</th>
+ <th colSpan={2} className="px-4 py-2.5 text-left">Tag / Descrição & Observação / Opções</th>
  </tr>
  </thead>
  {Object.entries(groupedProjs).sort(([a], [b]) => a.localeCompare(b)).map(([client, projs]) => (
@@ -1443,7 +1932,11 @@ const salvarDatasBulkTags = async () => {
  {/* ══ MODAL DE COMPLETO DE TAGS DA SEGUNDA TELA ══ */}
  {createPortal(
  <>
- {showDetailsModal && selProj && (
+ 
+{/* ══ MODAL DE MONTAR DATAS DE PLANEJAMENTO DA TAG ══ */}
+
+
+  {showDetailsModal && selProj && (
  <div className="fixed inset-0 z-[60] bg-slate-900/60 flex items-center justify-center sm:p-4">
  <div className="bg-white w-full max-w-[100vw] sm:max-w-[95vw] h-full sm:h-[95vh] sm:rounded-md shadow-2xl flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden">
  
@@ -1548,13 +2041,7 @@ const salvarDatasBulkTags = async () => {
  <List size={12} /> Lista Limpa
  </button>
  </div>
- <button 
- onClick={() => { setBulkSectorDates({}); setMsg(null); setActionModal('bulkDateTags'); }} 
- className="bg-indigo-600 hover:bg-indigo-700 p-2 rounded-lg text-white transition-colors shadow-sm flex items-center gap-2 font-bold text-xs shrink-0"
- title="Planejar datas para TODAS as tags deste projeto"
- >
- <CalendarDays size={14} /> <span>Plan. em Lote</span>
- </button>
+ 
  <button onClick={() => setShowDetailsModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-2 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0">
  <X size={14} /> Fechar
  </button>
@@ -1571,1572 +2058,862 @@ const salvarDatasBulkTags = async () => {
  ) : (
  <div className="min-w-max pb-32">
  <table className="w-full text-left text-xs whitespace-nowrap border-collapse">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] text-white font-bold uppercase tracking-wider text-[10px] sticky top-0 z-20 shadow-[0_1px_3px_rgba(0,0,0,0.06)] border-b border-white/20">
+ <thead className="bg-[#32423D] text-white font-bold uppercase tracking-wider text-[10px] sticky top-0 z-20 shadow-sm border-b border-white/20">
  <tr>
- {/* Columns Fixed visually by background */}
- <th className="px-2 py-0.5 border-r border-white/20 bg-[#f8fafc] sticky left-0 z-10 shadow-[1px_0_0_#e2e8f0]">Tag / Descrição</th>
- <th className="px-3 py-3 border-r border-white/20 text-center /50">Cronograma</th>
+ <th colSpan={2} className="px-4 py-2.5 text-left">Tag / Descrição & Observação / Opções</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100">
- {filteredTags.map((t, idx) => {
- const tFin = t.Finalizado?.trim() !== '';
- return (
- <React.Fragment key={t.IdTag}><tr className={`group hover:bg-[#E0E800]/10/40 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'}`}>
- {/* TAG INFO */}
- <td className="px-2 py-0.5 align-top min-w-[220px] max-w-[280px] border-r border-slate-100 bg-inherit sticky left-0 z-10 shadow-[1px_0_0_#f1f5f9] group-hover:shadow-[1px_0_0_#dbeafe]">
- <div className="flex items-center gap-1.5 mb-1"><div className={`w-2 h-2 rounded-full shadow-sm ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} /> <span className="font-black text-slate-800 text-[13px] break-all whitespace-normal leading-tight">{t.Tag}</span></div>
- <div className="text-[10px] text-slate-500 line-clamp-2 leading-relaxed whitespace-normal pr-2" title={t.DescTag}>{t.DescTag}</div>
- <div className="mt-2 flex flex-wrap gap-1 items-center">
- <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold">Cod: {t.IdTag}</span>
- {t.StatusTag && <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{t.StatusTag}</span>}
- <button 
- onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'VISAOGERALTAG'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addRnc'); }}
- className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors"
- title="Gerar Pendência para esta Tag"
- >
- <ShieldAlert size={10} /> Pendência
- </button>
- <button 
- onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'ACAOPCP'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addTask'); }}
- className="bg-[#E0E800]/20 hover:bg-[#E0E800]/20 border border-blue-200 text-[#32423D] px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors"
- title="Agendar Tarefa"
- >
- <CalendarDays size={10} /> Tarefa
- </button>
- <button 
- onClick={(e) => { e.stopPropagation(); setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
- className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors"
- title="Planejar Projetista e Engenharia"
- >
- <Edit3 size={10} /> Plan. Eng/Proj.
- </button>
- <button 
- onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
- className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors"
- title="Alterar Qtde Liberada"
- >
- <Edit3 size={10} /> Qtde Lib.
- </button>
- {!t.Finalizado && (
- <button 
- onClick={(e) => { e.stopPropagation(); setSelTag(t); setMsg(null); setActionModal('finTag'); }}
- className="bg-slate-50 hover:bg-green-100 border border-slate-200 hover:border-green-300 text-slate-500 hover:text-green-700 px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors"
- title="Finalizar Tag(s)"
- >
- <CheckCircle size={10} /> Finalizar
- </button>
- )}
- <button 
- onClick={(e) => { e.stopPropagation(); togglePlanningDatesTag(t.IdTag); }}
- className="bg-[#32423D] hover:bg-[#32423D]/80 text-white border border-[#32423D] px-1.5 py-0.5 rounded text-[9px] font-bold flex items-center gap-1 transition-colors shadow-sm"
- title="Montar Datas de Planejamento dos Recursos desta Tag"
- >
- <CalendarDays size={10} /> Montar Datas
- </button>
- </div>
- </td>
-
- 
-  {/* DATAS DA TAG E QTD OS */}
-  <td className="px-3 py-3 align-top border-r border-slate-100 bg-slate-50/30">
-    <div className="flex flex-col gap-2 w-32">
-      <DateBadge editable={false} showStatus={false} date={t.DataEntrada} label="Entrada" />
-      <DateBadge editable={true} onClick={() => { setSelTag(t); setDateInput(brToIso(t.DataPrevisao)); setMsg(null); setActionModal('dateTagGlobal'); }} date={t.DataPrevisao} label="Previsão" />
-      
-      {/* QTD OS movido para ca */}
-      <div 
-        className={`flex flex-col rounded p-1.5 -ml-1.5 transition-colors mt-2 ${parseInt(t.QtdeOS || '0') > 0 ? 'hover:bg-[#E0E800]/10 cursor-pointer group' : ''}`}
-        onClick={() => { if (parseInt(t.QtdeOS || '0') > 0) toggleOsExpansion(t.IdTag); }}
-        title={parseInt(t.QtdeOS || '0') > 0 ? "Clique para exibir Ordens de Serviço inline" : ""}
-      >
-        <span className={`font-bold uppercase tracking-widest text-[8px] transition-colors ${parseInt(t.QtdeOS || '0') > 0 ? 'text-[#32423D] group-hover:text-[#32423D]' : 'text-slate-400'}`}>Qtd. OS</span>
-        <span className={`font-black flex items-center gap-2 transition-colors ${parseInt(t.QtdeOS || '0') > 0 ? 'text-[#32423D] group-hover:text-[#32423D]/70' : 'text-slate-700'}`}>
-          {t.QtdeOS || '0'}
-          {parseInt(t.QtdeOS || '0') > 0 && (
-            <span className="text-[9px] bg-blue-100 text-[#32423D] px-1.5 py-0.5 rounded leading-none group-hover:bg-[#32423D] group-hover:text-white transition-colors uppercase">
-              {expandedTagsOs[t.IdTag] ? 'Ocultar' : 'Exibir'}
-            </span>
-          )}
-        </span>
-      </div>
-    </div>
-  </td>
-</tr>
-
-  {/* ══ ROW INDEPENDENTE: TABELA DE 3 COLUNAS PARA PLANEJAMENTO DE DATAS DA TAG ══ */}
-  {showPlanningDatesTag[t.IdTag] && (
-    <tr>
-      <td colSpan={2} className="p-0 border-b border-slate-200">
-        <div className="p-4 bg-teal-50/30 border-y border-teal-100 shadow-inner animate-in fade-in duration-150">
-          <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200">
-            <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
-              <CalendarDays size={13} className="text-[#32423D]" />
-              Datas de Planejamento — Tag: {t.Tag} (Compilado de todas as OSs)
-            </h6>
-            <button 
-              onClick={() => togglePlanningDatesTag(t.IdTag)}
-              className="text-slate-400 hover:text-red-500 p-0.5 transition-colors"
-              title="Fechar"
-            >
-              <X size={14} />
-            </button>
-          </div>
-
-          {(() => {
-            const items = tagItemsSilentCache[t.IdTag];
-            if (!items) {
-              return (
-                <div className="py-4 text-center text-slate-500 font-bold text-xs flex items-center justify-center gap-2">
-                  <Loader className="animate-spin" size={16} /> Compilando recursos das OSs da Tag {t.Tag}...
-                </div>
-              );
-            }
-
-            const rawSectors = getUniqueOsResources(items);
-            if (rawSectors.length === 0) {
-              return (
-                <div className="py-4 text-center text-slate-400 font-medium text-xs">
-                  Nenhum recurso ativo localizado nos itens das OSs desta Tag.
-                </div>
-              );
-            }
-
-            const entityKey = `TAG-${t.IdTag}`;
-            const currentMode = planningModes[entityKey] || 'progressivo';
-            const customOrderKeys = planningSectorOrders[entityKey];
-
-            let orderedSectors = [...rawSectors];
-            if (customOrderKeys && customOrderKeys.length > 0) {
-              orderedSectors.sort((a, b) => {
-                const idxA = customOrderKeys.indexOf(a.sectorKey);
-                const idxB = customOrderKeys.indexOf(b.sectorKey);
-                if (idxA === -1) return 1;
-                if (idxB === -1) return -1;
-                return idxA - idxB;
-              });
-            }
-
-            const defaultTargetDateStr = t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0];
-            const currentTargetDate = planningTargetDates[entityKey] || defaultTargetDateStr;
-
-            let calculatedList: any[] = [];
-
-            if (currentMode === 'progressivo') {
-              let currentBaseDate = new Date();
-              currentBaseDate.setHours(0, 0, 0, 0);
-
-              calculatedList = orderedSectors.map((res) => {
-                const stateKey = `${entityKey}-${res.sectorKey}`;
-                const saved = getSavedEntitySectorDates(t, res.sectorKey);
-                
-                let currentDaysStr = tagResourceDays[stateKey];
-                if (currentDaysStr === undefined) {
-                  if (saved.pi && saved.pf) {
-                    const m1 = saved.pi.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                    const m2 = saved.pf.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                    if (m1 && m2) {
-                      const d1 = new Date(+m1[3], +m1[2] - 1, +m1[1]);
-                      const d2 = new Date(+m2[3], +m2[2] - 1, +m2[1]);
-                      const diffDays = Math.round((d2.getTime() - d1.getTime()) / (86400000));
-                      if (diffDays >= 0) currentDaysStr = String(diffDays);
-                    }
-                  }
-                }
-                if (currentDaysStr === undefined) currentDaysStr = '0';
-
-                const numDays = parseInt(currentDaysStr, 10);
-                const validDays = (!isNaN(numDays) && numDays >= 0) ? numDays : 0;
-
-                const startDate = new Date(currentBaseDate);
-                const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + validDays);
-
-                const dS = String(startDate.getDate()).padStart(2, '0');
-                const mS = String(startDate.getMonth() + 1).padStart(2, '0');
-                const yS = startDate.getFullYear();
-                const startDateStr = `${dS}/${mS}/${yS}`;
-
-                const dE = String(endDate.getDate()).padStart(2, '0');
-                const mE = String(endDate.getMonth() + 1).padStart(2, '0');
-                const yE = endDate.getFullYear();
-                const endDateStr = `${dE}/${mE}/${yE}`;
-
-                const plannedDateStr = `${startDateStr} → ${endDateStr}`;
-
-                // Avança a data base para o próximo setor
-                currentBaseDate = new Date(endDate);
-
-                return {
-                  ...res,
-                  stateKey,
-                  currentDaysStr,
-                  plannedDateStr
-                };
-              });
-            } else {
-              // Modo Regressivo: Começa da Data Final Alvo no ÚLTIMO setor e calcula de trás para frente
-              let targetEndDate = new Date(currentTargetDate + 'T00:00:00');
-              if (isNaN(targetEndDate.getTime())) {
-                targetEndDate = new Date();
-                targetEndDate.setHours(0, 0, 0, 0);
-              }
-
-              let currentBaseEnd = new Date(targetEndDate);
-              const reversedSectors = [...orderedSectors].reverse();
-
-              const calcReversed = reversedSectors.map((res) => {
-                const stateKey = `${entityKey}-${res.sectorKey}`;
-                const currentDaysStr = tagResourceDays[stateKey] || '';
-                const numDays = parseInt(currentDaysStr, 10);
-                const validDays = (!isNaN(numDays) && numDays >= 0) ? numDays : 0;
-
-                const endDate = new Date(currentBaseEnd);
-                const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - validDays);
-
-                const dE = String(endDate.getDate()).padStart(2, '0');
-                const mE = String(endDate.getMonth() + 1).padStart(2, '0');
-                const yE = endDate.getFullYear();
-                const endDateStr = `${dE}/${mE}/${yE}`;
-
-                const dS = String(startDate.getDate()).padStart(2, '0');
-                const mS = String(startDate.getMonth() + 1).padStart(2, '0');
-                const yS = startDate.getFullYear();
-                const startDateStr = `${dS}/${mS}/${yS}`;
-
-                currentBaseEnd = new Date(startDate);
-
-                return {
-                  ...res,
-                  stateKey,
-                  currentDaysStr,
-                  plannedDateStr: `${startDateStr} → ${endDateStr}`
-                };
-              });
-
-              calculatedList = calcReversed.reverse();
-            }
-
-            return (
-              <div>
-                {/* Header de seleção de Modo e Calendário da Data Alvo */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 bg-[#32423D]/5 rounded-lg border border-[#32423D]/20 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase text-slate-700 tracking-wider">Ordem de Cálculo:</span>
-                      <div className="flex bg-white rounded-md p-0.5 border border-slate-300 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => setPlanningModes(prev => ({ ...prev, [entityKey]: 'progressivo' }))}
-                          className={`px-3 py-1.5 text-[10px] font-bold rounded transition-all flex items-center gap-1.5 ${currentMode === 'progressivo' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
-                        >
-                          ➔ Progressivo (A partir de Hoje)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPlanningModes(prev => ({ ...prev, [entityKey]: 'regressivo' }))}
-                          className={`px-3 py-1.5 text-[10px] font-bold rounded transition-all flex items-center gap-1.5 ${currentMode === 'regressivo' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
-                        >
-                          ⬅ Regressivo (A partir do Prazo Final)
-                        </button>
-                      </div>
+  {filteredTags.map((t, idx) => {
+    const tFin = t.Finalizado?.trim() !== '';
+    return (
+      <React.Fragment key={t.IdTag}>
+        <tr className={`group hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'}`}>
+          <td colSpan={2} className="px-4 py-3 border-b border-slate-200">
+            <div className="flex flex-col gap-2.5">
+              {/* LINHA 1: Tag Name, Status, Badges (Previsão & Qtd. OS) Próximos */}
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <div className={`w-2.5 h-2.5 rounded-full shadow-sm shrink-0 ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <span className="font-black text-slate-800 text-sm truncate">{t.Tag}</span>
+                  <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold">Cod: {t.IdTag}</span>
+                  {t.StatusTag && <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{t.StatusTag}</span>}
+                  
+                  {/* BADGES DE PREVISÃO E QTD. OS BEM PRÓXIMOS DOS DADOS DA TAG */}
+                  <div className="flex items-center gap-2 ml-2 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 shadow-xs">
+                    <DateBadge editable={true} onClick={() => { setSelTag(t); setDateInput(brToIso(t.DataPrevisao)); setMsg(null); setActionModal('dateTagGlobal'); }} date={t.DataPrevisao} label="Previsão" />
+                    <div 
+                      className={`flex items-center gap-1 rounded px-2 py-0.5 transition-colors ${parseInt(t.QtdeOS || '0') > 0 ? 'bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 cursor-pointer group' : 'bg-slate-50 text-slate-400'}`}
+                      onClick={() => { if (parseInt(t.QtdeOS || '0') > 0) toggleOsExpansion(t.IdTag); }}
+                      title={parseInt(t.QtdeOS || '0') > 0 ? "Clique para exibir Ordens de Serviço inline" : ""}
+                    >
+                      <span className="font-bold uppercase tracking-widest text-[8px] text-slate-500">Qtd. OS:</span>
+                      <span className="font-black text-slate-800 text-xs">{t.QtdeOS || '0'}</span>
+                      {parseInt(t.QtdeOS || '0') > 0 && (
+                        <span className="text-[8.5px] font-bold bg-indigo-600 text-white px-1.5 py-0.2 rounded uppercase ml-1">
+                          {expandedTagsOs[t.IdTag] ? 'Ocultar' : 'Exibir'}
+                        </span>
+                      )}
                     </div>
-
-                    {currentMode === 'regressivo' && (
-                      <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 shadow-sm animate-in fade-in duration-200">
-                        <CalendarDays size={14} className="text-amber-700" />
-                        <span className="text-[10px] font-black uppercase text-amber-900">Data Final Alvo:</span>
-                        <input
-                          type="date"
-                          value={currentTargetDate}
-                          onChange={(e) => setPlanningTargetDates(prev => ({ ...prev, [entityKey]: e.target.value }))}
-                          className="px-2.5 py-1 text-xs font-bold text-slate-800 border border-amber-300 rounded outline-none focus:ring-2 focus:ring-amber-500 bg-white shadow-sm font-mono cursor-pointer"
-                        />
-                      </div>
-                    )}
                   </div>
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleSaveTagPlanning(t.IdTag, calculatedList)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors uppercase tracking-wider shrink-0"
-                    title="Gravar datas de início/término e usuário no banco de dados para a Tag, OSs e Itens"
+                {/* BOTÕES DE AÇÕES DA TAG */}
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'VISAOGERALTAG'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addRnc'); }}
+                    className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Gerar Pendência para esta Tag"
                   >
-                    <CheckCircle size={14} /> Gravar Datas de Planejamento
+                    <ShieldAlert size={11} /> Pendência
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'ACAOPCP'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addTask'); }}
+                    className="bg-[#E0E800]/20 hover:bg-[#E0E800]/30 border border-amber-300 text-[#32423D] px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Agendar Tarefa"
+                  >
+                    <CalendarDays size={11} /> Tarefa
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
+                    className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Planejar Projetista e Engenharia"
+                  >
+                    <Edit3 size={11} /> Plan. Eng/Proj.
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: !prev[t.IdTag] }));
+                    }}
+                    className={`px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm ${showPlanningDatesTag[t.IdTag] ? 'bg-indigo-700 text-white border border-indigo-800' : 'bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800'}`}
+                    title="Montar Datas de Planejamento dos Recursos desta Tag (Inline)"
+                  >
+                    <Calendar size={11} /> Montar Datas
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
+                    className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Alterar Qtde Liberada"
+                  >
+                    <Edit3 size={11} /> Qtde Lib.
+                  </button>
+                  {!t.Finalizado && (
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setSelTag(t); setMsg(null); setActionModal('finTag'); }}
+                      className="bg-slate-50 hover:bg-green-100 border border-slate-200 hover:border-green-300 text-slate-500 hover:text-green-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                      title="Finalizar Tag(s)"
+                    >
+                      <CheckCircle size={11} /> Finalizar
+                    </button>
+                  )}
+                  <button 
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); toggleTagSectorsExpansion(t.IdTag); }}
+                    className={`px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm ${expandedTagSectors[t.IdTag] ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800'}`}
+                    title="Exibir Produção dos Setores / Recursos desta Tag"
+                  >
+                    <Activity size={11} /> Prod. Setores
+                  </button>
+                </div>
+              </div>
+
+              {/* LINHA 2: Descrição da Tag */}
+              {t.DescTag && <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed" title={t.DescTag}>{t.DescTag}</div>}
+
+              {/* LINHA 3: CAMPO DE DIGITAÇÃO DE OBSERVAÇÃO AUTOMÁTICO */}
+              <div className="flex items-center gap-2 max-w-3xl">
+                <span className="text-[9.5px] font-bold text-slate-400 uppercase shrink-0">Obs:</span>
+                <input 
+                  type="text"
+                  placeholder="Digite a observação para esta Tag..."
+                  defaultValue={t.Observacao || ''}
+                  onBlur={async (e) => {
+                    const val = e.target.value;
+                    if (val !== (t.Observacao || '')) {
+                      try {
+                        await fetch(`${API_BASE}/acompanhamento/tags/${t.IdTag}/observacao`, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ observacao: val })
+                        });
+                        t.Observacao = val;
+                      } catch (err) {
+                        console.error('Erro ao atualizar observação:', err);
+                      }
+                    }
+                  }}
+                  className="w-full bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-indigo-400 rounded px-2.5 py-0.5 text-[11px] text-slate-700 outline-none transition-all placeholder:text-slate-300 shadow-xs"
+                />
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        {/* ══ ROW INDEPENDENTE EXPANSÍVEL: MONTAR DATAS DE PLANEJAMENTO DA TAG (SEM MODAL POPUP) ══ */}
+        {Boolean(showPlanningDatesTag[t.IdTag]) && (
+          <tr key={`planning-row-${t.IdTag}`} className="bg-indigo-50/70">
+            <td colSpan={2} className="p-3 border-b-2 border-indigo-300">
+              <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-md text-slate-800">
+                {/* Header */}
+                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 bg-indigo-100 text-indigo-800 rounded-lg">
+                      <Calendar size={16} />
+                    </div>
+                    <div>
+                      <h5 className="font-black text-xs uppercase tracking-wide text-slate-800">
+                        Montar Datas de Planejamento dos Recursos — Tag {t.Tag} (Código #{t.IdTag})
+                      </h5>
+                      <p className="text-[10px] text-slate-500 font-medium">
+                        Defina os dias por setor e ajuste a ordem da sequência de produção
+                      </p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={() => setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: false }))}
+                    className="px-2 py-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors text-xs font-bold flex items-center gap-1"
+                  >
+                    <X size={14} /> Fechar
                   </button>
                 </div>
 
-                {/* Tabela de 3 Colunas */}
-                <div className="overflow-x-auto rounded border border-slate-300 bg-white shadow-sm max-w-3xl">
-                  <table className="w-full text-[10px] text-left whitespace-nowrap border-collapse">
-                    <thead className="bg-[#32423D] text-white uppercase font-bold tracking-wider text-[9px]">
-                      <tr>
-                        <th className="px-3 py-2 border-r border-white/20">Setor / Recurso (Tag)</th>
-                        <th className="px-3 py-2 border-r border-white/20 text-center w-48">Dias para Produzir Item</th>
-                        <th className="px-3 py-2 text-center w-64">
-                          {currentMode === 'progressivo' ? 'Data Planejada Final da Produção' : 'Intervalo Planejado (Início → Término)'}
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {calculatedList.map((res, sIdx) => (
-                        <tr key={res.sectorKey} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-3 py-2 font-bold border-r border-slate-100">
-                            <div className="flex items-center justify-between">
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold inline-block ${res.sectorColor}`}>
-                                {res.sectorLabel}
-                              </span>
-                              <div className="flex items-center gap-0.5 ml-2">
-                                <button
-                                  type="button"
-                                  disabled={sIdx === 0}
-                                  onClick={() => moveSectorInOrder(entityKey, sIdx, sIdx - 1, rawSectors)}
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-20 transition-colors"
-                                  title="Mover setor para cima na sequência"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={sIdx === calculatedList.length - 1}
-                                  onClick={() => moveSectorInOrder(entityKey, sIdx, sIdx + 1, rawSectors)}
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-20 transition-colors"
-                                  title="Mover setor para baixo na sequência"
-                                >
-                                  ▼
-                                </button>
-                              </div>
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-2 text-center border-r border-slate-100 bg-slate-50/50">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={res.currentDaysStr}
-                                onChange={(e) => setTagResourceDays(prev => ({ ...prev, [res.stateKey]: e.target.value }))}
-                                className="w-20 px-2 py-1 text-center font-bold font-mono text-slate-800 border border-slate-300 rounded focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] outline-none bg-white shadow-inner text-xs"
-                              />
-                              <span className="text-[9px] text-slate-500 font-bold uppercase">dias</span>
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-2 text-center font-mono font-bold text-slate-800 bg-indigo-50/40">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-indigo-200 rounded text-indigo-900 shadow-sm text-xs">
-                              <CalendarDays size={12} className="text-indigo-600" />
-                              {res.plannedDateStr}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </td>
-    </tr>
-  )}
-
-{expandedTagsOs[t.IdTag] && (<tr><td colSpan={2} className="p-0 border-b border-slate-200"><div className="p-4 bg-slate-50 shadow-inner"><h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-2"><List size={14} className="text-[#32423D]" /> Ordens de Serviço para a Tag {t.Tag}</h4><div className="overflow-x-auto rounded border border-slate-200"><table className="w-full text-[10px] text-left whitespace-nowrap"><thead className="bg-slate-200 text-slate-700 uppercase font-bold tracking-wider"><tr><th className="px-3 py-2 border-b border-slate-300">OS / Descrição</th><th className="px-3 py-2 border-b border-slate-300 text-center">Liberação Eng.</th><th className="px-3 py-2 border-b border-slate-300 text-center">Previsão</th><th className="px-3 py-2 border-b border-slate-300 text-center">Qtd. Total</th><th className="px-3 py-2 border-b border-slate-300 text-center">Peso Total</th><th className="px-3 py-2 border-b border-slate-300 text-center">Fator</th><th className="px-3 py-2 border-b border-slate-300 text-center">Qtd. Itens</th><th className="px-3 py-2 border-b border-slate-300 text-center">Itens Executados</th><th className="px-3 py-2 border-b border-slate-300 text-center">Peças Executadas</th><th className="px-3 py-2 border-b border-slate-300 text-center">Total Peças</th><th className="px-3 py-2 border-b border-slate-300 text-center">Status</th></tr></thead>                <tbody className="divide-y divide-slate-100 bg-white">
-                  {expandedTagsOs[t.IdTag].map((os: any) => (
-                    <React.Fragment key={os.IdOrdemServico}>
-                      <tr 
-                        className={`hover:bg-slate-100 transition-colors cursor-pointer ${expandedOsItems[os.IdOrdemServico] ? 'bg-slate-50' : ''}`}
-                        onClick={() => toggleOsItemExpansion(os.IdOrdemServico)}
-                        title="Clique para ver os Itens da Ordem de Serviço"
+                {/* Controls: Modo Progressivo / Regressivo & Data Base */}
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">Modo de Planejamento:</span>
+                    <div className="flex bg-white p-1 rounded-md border border-slate-300 shadow-xs">
+                      <button 
+                        type="button"
+                        onClick={() => setTagPlanningModes(prev => ({ ...prev, [t.IdTag]: 'progressivo' }))}
+                        className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${(tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? 'bg-[#32423D] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}
                       >
-                        <td className="px-3 py-2 border-r border-slate-100 flex items-center gap-2">
-                          <span className="text-slate-400 font-bold">{expandedOsItems[os.IdOrdemServico] ? '▼' : '▶'}</span>
-                          <div>
-                            <div className="font-bold text-slate-800">OS: {os.IdOrdemServico}</div>
-                            <div className="text-[9px] text-slate-500 max-w-[200px] truncate" title={os.Descricao}>{os.Descricao}</div>
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100">
-                          <div className={`font-bold ${os.Liberado_Engenharia === 'S' ? 'text-emerald-600' : 'text-slate-400'}`}>{os.Liberado_Engenharia === 'S' ? 'Sim' : 'Não'}</div>
-                          {os.Data_Liberacao_Engenharia && <div className="text-[9px] text-slate-500">{isoToBr(os.Data_Liberacao_Engenharia.split('T')[0])}</div>}
-                        </td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-slate-600">{os.DataPrevisao ? isoToBr(os.DataPrevisao.split('T')[0]) : '—'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.qtadetotal || '0'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.PesoTotal ? parseFloat(os.PesoTotal).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' kg' : '—'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.Fator || '—'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.QtdeTotalItens || '0'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-emerald-600 font-bold">{os.QtdeItensExecutados || '0'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-emerald-600 font-bold">{os.QtdePecasExecutadas || '0'}</td>
-                        <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.QtdeTotalPecas || '0'}</td>
-                        <td className="px-3 py-2 text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${os.OrdemServicoFinalizado === 'C' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {os.OrdemServicoFinalizado === 'C' ? 'Finalizada' : 'Aberta'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); togglePlanningDatesOs(os.IdOrdemServico); }}
-                              className="bg-[#32423D] hover:bg-[#32423D]/80 text-white text-[9px] font-bold px-2 py-1 rounded shadow-sm transition-colors flex items-center gap-1 whitespace-nowrap"
-                              title="Montar Datas de Planejamento para esta OS"
-                            >
-                              <CalendarDays size={10} /> Montar Datas
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-
-                      {/* ══ ROW INDEPENDENTE: TABELA DE 3 COLUNAS PARA PLANEJAMENTO DE DATAS DA OS ══ */}
-  {showPlanningDatesOs[os.IdOrdemServico] && (
-    <tr>
-      <td colSpan={11} className="p-0 border-b border-slate-200">
-        <div className="p-4 bg-indigo-50/30 border-y border-indigo-100 shadow-inner animate-in fade-in duration-150">
-          <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-slate-200">
-            <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
-              <CalendarDays size={13} className="text-[#32423D]" />
-              Datas de Planejamento — OS #{os.IdOrdemServico}
-            </h6>
-            <button 
-              onClick={() => togglePlanningDatesOs(os.IdOrdemServico)}
-              className="text-slate-400 hover:text-red-500 p-0.5 transition-colors"
-              title="Fechar"
-            >
-              <X size={14} />
-            </button>
-          </div>
-
-          {(() => {
-            const items = expandedOsItems[os.IdOrdemServico] || osItemsSilentCache[os.IdOrdemServico];
-            if (!items) {
-              return (
-                <div className="py-4 text-center text-slate-500 font-bold text-xs flex items-center justify-center gap-2">
-                  <Loader className="animate-spin" size={16} /> Carregando recursos da OS #{os.IdOrdemServico}...
-                </div>
-              );
-            }
-
-            const rawSectors = getUniqueOsResources(items);
-            if (rawSectors.length === 0) {
-              return (
-                <div className="py-4 text-center text-slate-400 font-medium text-xs">
-                  Nenhum recurso ativo localizado nos itens desta OS.
-                </div>
-              );
-            }
-
-            const entityKey = `OS-${os.IdOrdemServico}`;
-            const currentMode = planningModes[entityKey] || 'progressivo';
-            const customOrderKeys = planningSectorOrders[entityKey];
-
-            let orderedSectors = [...rawSectors];
-            if (customOrderKeys && customOrderKeys.length > 0) {
-              orderedSectors.sort((a, b) => {
-                const idxA = customOrderKeys.indexOf(a.sectorKey);
-                const idxB = customOrderKeys.indexOf(b.sectorKey);
-                if (idxA === -1) return 1;
-                if (idxB === -1) return -1;
-                return idxA - idxB;
-              });
-            }
-
-            const defaultTargetDateStr = os.DataPrevisao ? brToIso(os.DataPrevisao) : new Date(Date.now() + 15 * 86400000).toISOString().split('T')[0];
-            const currentTargetDate = planningTargetDates[entityKey] || defaultTargetDateStr;
-
-            let calculatedList: any[] = [];
-
-            if (currentMode === 'progressivo') {
-              let currentBaseDate = new Date();
-              currentBaseDate.setHours(0, 0, 0, 0);
-
-              calculatedList = orderedSectors.map((res) => {
-                const stateKey = `${entityKey}-${res.sectorKey}`;
-                const saved = getSavedEntitySectorDates(os, res.sectorKey);
-                
-                let currentDaysStr = osResourceDays[stateKey];
-                if (currentDaysStr === undefined) {
-                  if (saved.pi && saved.pf) {
-                    const m1 = saved.pi.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                    const m2 = saved.pf.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                    if (m1 && m2) {
-                      const d1 = new Date(+m1[3], +m1[2] - 1, +m1[1]);
-                      const d2 = new Date(+m2[3], +m2[2] - 1, +m2[1]);
-                      const diffDays = Math.round((d2.getTime() - d1.getTime()) / (86400000));
-                      if (diffDays >= 0) currentDaysStr = String(diffDays);
-                    }
-                  }
-                }
-                if (currentDaysStr === undefined) currentDaysStr = '0';
-
-                const numDays = parseInt(currentDaysStr, 10);
-                const validDays = (!isNaN(numDays) && numDays >= 0) ? numDays : 0;
-
-                const startDate = new Date(currentBaseDate);
-                const endDate = new Date(startDate);
-                endDate.setDate(endDate.getDate() + validDays);
-
-                const dS = String(startDate.getDate()).padStart(2, '0');
-                const mS = String(startDate.getMonth() + 1).padStart(2, '0');
-                const yS = startDate.getFullYear();
-                const startDateStr = `${dS}/${mS}/${yS}`;
-
-                const dE = String(endDate.getDate()).padStart(2, '0');
-                const mE = String(endDate.getMonth() + 1).padStart(2, '0');
-                const yE = endDate.getFullYear();
-                const endDateStr = `${dE}/${mE}/${yE}`;
-
-                const plannedDateStr = `${startDateStr} → ${endDateStr}`;
-
-                // Avança a data base para o próximo setor
-                currentBaseDate = new Date(endDate);
-
-                return {
-                  ...res,
-                  stateKey,
-                  currentDaysStr,
-                  plannedDateStr
-                };
-              });
-            } else {
-              let targetEndDate = new Date(currentTargetDate + 'T00:00:00');
-              if (isNaN(targetEndDate.getTime())) {
-                targetEndDate = new Date();
-                targetEndDate.setHours(0, 0, 0, 0);
-              }
-
-              let currentBaseEnd = new Date(targetEndDate);
-              const reversedSectors = [...orderedSectors].reverse();
-
-              const calcReversed = reversedSectors.map((res) => {
-                const stateKey = `${entityKey}-${res.sectorKey}`;
-                const currentDaysStr = osResourceDays[stateKey] || '';
-                const numDays = parseInt(currentDaysStr, 10);
-                const validDays = (!isNaN(numDays) && numDays >= 0) ? numDays : 0;
-
-                const endDate = new Date(currentBaseEnd);
-                const startDate = new Date(endDate);
-                startDate.setDate(startDate.getDate() - validDays);
-
-                const dE = String(endDate.getDate()).padStart(2, '0');
-                const mE = String(endDate.getMonth() + 1).padStart(2, '0');
-                const yE = endDate.getFullYear();
-                const endDateStr = `${dE}/${mE}/${yE}`;
-
-                const dS = String(startDate.getDate()).padStart(2, '0');
-                const mS = String(startDate.getMonth() + 1).padStart(2, '0');
-                const yS = startDate.getFullYear();
-                const startDateStr = `${dS}/${mS}/${yS}`;
-
-                currentBaseEnd = new Date(startDate);
-
-                return {
-                  ...res,
-                  stateKey,
-                  currentDaysStr,
-                  plannedDateStr: `${startDateStr} → ${endDateStr}`
-                };
-              });
-
-              calculatedList = calcReversed.reverse();
-            }
-
-            return (
-              <div>
-                {/* Header de seleção de Modo e Calendário da Data Alvo */}
-                <div className="flex flex-wrap items-center justify-between gap-3 mb-3 p-3 bg-[#32423D]/5 rounded-lg border border-[#32423D]/20 shadow-sm">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-black uppercase text-slate-700 tracking-wider">Ordem de Cálculo:</span>
-                      <div className="flex bg-white rounded-md p-0.5 border border-slate-300 shadow-sm">
-                        <button
-                          type="button"
-                          onClick={() => setPlanningModes(prev => ({ ...prev, [entityKey]: 'progressivo' }))}
-                          className={`px-3 py-1.5 text-[10px] font-bold rounded transition-all flex items-center gap-1.5 ${currentMode === 'progressivo' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
-                        >
-                          ➔ Progressivo (A partir de Hoje)
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPlanningModes(prev => ({ ...prev, [entityKey]: 'regressivo' }))}
-                          className={`px-3 py-1.5 text-[10px] font-bold rounded transition-all flex items-center gap-1.5 ${currentMode === 'regressivo' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100'}`}
-                        >
-                          ⬅ Regressivo (A partir do Prazo Final)
-                        </button>
-                      </div>
+                        Progressivo (1º → Último)
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => setTagPlanningModes(prev => ({ ...prev, [t.IdTag]: 'regressivo' }))}
+                        className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${(tagPlanningModes[t.IdTag] || 'progressivo') === 'regressivo' ? 'bg-[#32423D] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}
+                      >
+                        Regressivo (Último → 1º)
+                      </button>
                     </div>
-
-                    {currentMode === 'regressivo' && (
-                      <div className="flex items-center gap-2 bg-amber-50 px-3 py-1.5 rounded-md border border-amber-200 shadow-sm animate-in fade-in duration-200">
-                        <CalendarDays size={14} className="text-amber-700" />
-                        <span className="text-[10px] font-black uppercase text-amber-900">Data Final Alvo:</span>
-                        <input
-                          type="date"
-                          value={currentTargetDate}
-                          onChange={(e) => setPlanningTargetDates(prev => ({ ...prev, [entityKey]: e.target.value }))}
-                          className="px-2.5 py-1 text-xs font-bold text-slate-800 border border-amber-300 rounded outline-none focus:ring-2 focus:ring-amber-500 bg-white shadow-sm font-mono cursor-pointer"
-                        />
-                      </div>
-                    )}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => handleSaveTagPlanning(t.IdTag, calculatedList)}
-                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-3.5 py-2 rounded-lg flex items-center gap-2 shadow-sm transition-colors uppercase tracking-wider shrink-0"
-                    title="Gravar datas de início/término e usuário no banco de dados para a Tag, OSs e Itens"
-                  >
-                    <CheckCircle size={14} /> Gravar Datas de Planejamento
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
+                      {(tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? 'Data Inicial Base (1º Recurso):' : 'Data Final Alvo (Último Recurso):'}
+                    </label>
+                    <input 
+                      type="date" 
+                      value={tagBaseDateInputs[t.IdTag] || ((tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? (t.DataEntrada ? brToIso(t.DataEntrada) : new Date().toISOString().split('T')[0]) : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]))}
+                      onChange={e => setTagBaseDateInputs(prev => ({ ...prev, [t.IdTag]: e.target.value }))}
+                      className="bg-white border border-slate-300 focus:border-[#32423D] rounded px-3 py-1.5 text-xs text-slate-800 font-bold outline-none shadow-xs"
+                    />
+                  </div>
                 </div>
 
-                {/* Tabela de 3 Colunas */}
-                <div className="overflow-x-auto rounded border border-slate-300 bg-white shadow-sm max-w-3xl">
-                  <table className="w-full text-[10px] text-left whitespace-nowrap border-collapse">
-                    <thead className="bg-[#32423D] text-white uppercase font-bold tracking-wider text-[9px]">
+                {/* Table of Active Sectors */}
+                {(() => {
+                  const activeSectorsRaw = ALL_TAG_SECTORS.filter(s => {
+                    const val = String((t as any)[s.flagField] ?? (t as any)['flag' + s.key] ?? (t as any)['txt' + s.key] ?? '');
+                    return val === '1' || val === 'S' || val === 'Sim' || (t as any)[s.flagField] === 1;
+                  });
+                  const activeSectors = activeSectorsRaw.length > 0 ? activeSectorsRaw : ALL_TAG_SECTORS;
+
+                  const tagCustomOrder = customSectorOrdersTag[t.IdTag] || [];
+                  let orderedSectors = [...activeSectors];
+                  if (tagCustomOrder.length > 0) {
+                    orderedSectors.sort((a, b) => {
+                      const idxA = tagCustomOrder.indexOf(a.key);
+                      const idxB = tagCustomOrder.indexOf(b.key);
+                      if (idxA === -1) return 1;
+                      if (idxB === -1) return -1;
+                      return idxA - idxB;
+                    });
+                  }
+
+                  const currentMode = tagPlanningModes[t.IdTag] || 'progressivo';
+                  const baseDateVal = tagBaseDateInputs[t.IdTag] || (currentMode === 'progressivo' ? (t.DataEntrada ? brToIso(t.DataEntrada) : new Date().toISOString().split('T')[0]) : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]));
+
+                  let schedule: any[] = [];
+                  if (currentMode === 'progressivo') {
+                    let currentStart = new Date(baseDateVal);
+                    if (isNaN(currentStart.getTime())) currentStart = new Date();
+
+                    schedule = orderedSectors.map(s => {
+                      const daysKey = `${t.IdTag}-${s.key}`;
+                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] || '1', 10));
+                      const startDateStr = currentStart.toISOString().split('T')[0];
+                      const endDateObj = new Date(currentStart);
+                      endDateObj.setDate(endDateObj.getDate() + numDays);
+                      const endDateStr = endDateObj.toISOString().split('T')[0];
+
+                      currentStart = new Date(endDateObj);
+
+                      return {
+                        ...s,
+                        numDays,
+                        startDateStr,
+                        endDateStr,
+                        startDateBr: isoToBr(startDateStr),
+                        endDateBr: isoToBr(endDateStr)
+                      };
+                    });
+                  } else {
+                    let currentEnd = new Date(baseDateVal);
+                    if (isNaN(currentEnd.getTime())) currentEnd = new Date();
+
+                    const revSchedule: any[] = [];
+                    for (let i = orderedSectors.length - 1; i >= 0; i--) {
+                      const s = orderedSectors[i];
+                      const daysKey = `${t.IdTag}-${s.key}`;
+                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] || '1', 10));
+                      const endDateStr = currentEnd.toISOString().split('T')[0];
+                      const startDateObj = new Date(currentEnd);
+                      startDateObj.setDate(startDateObj.getDate() - numDays);
+                      const startDateStr = startDateObj.toISOString().split('T')[0];
+
+                      currentEnd = new Date(startDateObj);
+
+                      revSchedule.unshift({
+                        ...s,
+                        numDays,
+                        startDateStr,
+                        endDateStr,
+                        startDateBr: isoToBr(startDateStr),
+                        endDateBr: isoToBr(endDateStr)
+                      });
+                    }
+                    schedule = revSchedule;
+                  }
+
+                  const finalPrevDateBr = schedule.length > 0 ? schedule[schedule.length - 1].endDateBr : '';
+
+                  const moveUp = (idx: number) => {
+                    if (idx <= 0) return;
+                    const keys = orderedSectors.map(s => s.key);
+                    const temp = keys[idx];
+                    keys[idx] = keys[idx - 1];
+                    keys[idx - 1] = temp;
+                    setCustomSectorOrdersTag(prev => ({ ...prev, [t.IdTag]: keys }));
+                  };
+
+                  const moveDown = (idx: number) => {
+                    if (idx >= orderedSectors.length - 1) return;
+                    const keys = orderedSectors.map(s => s.key);
+                    const temp = keys[idx];
+                    keys[idx] = keys[idx + 1];
+                    keys[idx + 1] = temp;
+                    setCustomSectorOrdersTag(prev => ({ ...prev, [t.IdTag]: keys }));
+                  };
+
+                  const executeSaveAction = async () => {
+                    if (!t || !schedule || schedule.length === 0) return;
+                    setIsSaving(true);
+
+                    try {
+                      const updates: { field: string; value: string }[] = [];
+
+                      schedule.forEach(item => {
+                        if (item.piField && item.startDateBr) {
+                          updates.push({ field: item.piField, value: item.startDateBr });
+                          (t as any)[item.piField] = item.startDateBr;
+                          if (item.piField === 'PlanejadoInicioPULSIONADEIRA') {
+                            updates.push({ field: 'PlanejadoInicioPulsionadeira', value: item.startDateBr });
+                          }
+                          if (item.piField === 'PlanejadoInicioGALVANIZAR') {
+                            updates.push({ field: 'PlanejadoInicioGalvanizar', value: item.startDateBr });
+                          }
+                        }
+                        if (item.pfField && item.endDateBr) {
+                          updates.push({ field: item.pfField, value: item.endDateBr });
+                          (t as any)[item.pfField] = item.endDateBr;
+                          if (item.pfField === 'PlanejadoFinalPULSIONADEIRA') {
+                            updates.push({ field: 'PlanejadoFinalPulsionadeira', value: item.endDateBr });
+                          }
+                          if (item.pfField === 'PlanejadoFinalGALVANIZAR') {
+                            updates.push({ field: 'PlanejadoFinalGalvanizar', value: item.endDateBr });
+                          }
+                        }
+                      });
+
+                      if (schedule.length > 0) {
+                        const lastEndDateBr = schedule[schedule.length - 1].endDateBr;
+                        updates.push({ field: 'DataPrevisao', value: lastEndDateBr });
+                        t.DataPrevisao = lastEndDateBr;
+                      }
+
+                      // Update local React state for immediate UI feedback
+                      setTags(prev => prev.map(tItem => {
+                        if (tItem.IdTag === t.IdTag) {
+                          const updated = { ...tItem };
+                          updates.forEach(u => { (updated as any)[u.field] = u.value; });
+                          return updated;
+                        }
+                        return tItem;
+                      }));
+
+                      if (selProj) {
+                        setProjects(prev => prev.map(p => {
+                          if (p.IdProjeto === selProj.IdProjeto) {
+                            const updated = { ...p };
+                            updates.forEach(u => { (updated as any)[u.field] = u.value; });
+                            return updated;
+                          }
+                          return p;
+                        }));
+                      }
+
+                      // 1. Save on Tag (MySQL)
+                      const respTag = await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/setor-data-bulk`, {
+                        method: 'PUT',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ updates })
+                      });
+                      const resTag = await respTag.json();
+
+                      // 2. Propagate to OSs and Items of OSs (MySQL)
+                      const respOS = await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/propagar-datas-os`, {
+                        method: 'PUT',
+                        headers: getAuthHeaders(),
+                        body: JSON.stringify({ updates })
+                      });
+                      const resOS = await respOS.json();
+
+                      alert('Datas de planejamento salvas com SUCESSO no banco de dados para o Projeto, Tag, Ordens de Serviço e Itens!');
+                      fetchProjects();
+
+                      if (selProj) fetchTags(selProj.IdProjeto);
+
+                      setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: false }));
+                    } catch (err) {
+                      console.error('Erro ao salvar planejamento:', err);
+                      alert('Erro ao salvar datas de planejamento.');
+                    } finally {
+                      setIsSaving(false);
+                    }
+                  };
+
+                  return (
+                    <>
+                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-xs">
+                        <table className="w-full text-left text-xs border-collapse">
+                          <thead className="bg-slate-100 text-slate-700 uppercase font-black text-[9.5px] tracking-wider border-b border-slate-200">
+                            <tr>
+                              <th className="px-3 py-2 text-center w-16 border-r border-slate-200">Ordem</th>
+                              <th className="px-3.5 py-2 border-r border-slate-200">Recurso (Setor Ativo)</th>
+                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-36">Dias de Produção</th>
+                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-32">Data Início</th>
+                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-32">Data Final</th>
+                              <th className="px-3.5 py-2 text-center w-56">Intervalo de Datas (Início → Fim)</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 bg-white">
+                            {schedule.map((item, idx) => (
+                              <tr key={item.key} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-2 py-1.5 text-center border-r border-slate-100 bg-slate-50/50">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button 
+                                      type="button"
+                                      onClick={() => moveUp(idx)} 
+                                      disabled={idx === 0}
+                                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-20 hover:bg-slate-200 rounded transition-colors" 
+                                      title="Subir Recurso"
+                                    >
+                                      <ArrowUp size={12} />
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      onClick={() => moveDown(idx)} 
+                                      disabled={idx === schedule.length - 1}
+                                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-20 hover:bg-slate-200 rounded transition-colors" 
+                                      title="Descer Recurso"
+                                    >
+                                      <ArrowDown size={12} />
+                                    </button>
+                                  </div>
+                                </td>
+                                <td className="px-3.5 py-2 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2">
+                                  <span className="w-2 h-2 rounded-full bg-[#32423D] shrink-0" />
+                                  <span>{item.label}</span>
+                                </td>
+                                <td className="px-3.5 py-2 text-center border-r border-slate-100 bg-slate-50/30">
+                                  <div className="inline-flex items-center gap-1.5 justify-center">
+                                    <input 
+                                      type="number" 
+                                      min={1} 
+                                      value={tagSectorDaysMap[`${t.IdTag}-${item.key}`] ?? '1'}
+                                      onChange={e => setTagSectorDaysMap(prev => ({ ...prev, [`${t.IdTag}-${item.key}`]: e.target.value }))}
+                                      className="w-16 text-center font-bold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 text-xs outline-none focus:border-[#32423D]"
+                                    />
+                                    <span className="text-[10px] text-slate-400 font-bold uppercase">dias</span>
+                                  </div>
+                                </td>
+                                <td className="px-3.5 py-2 text-center font-mono font-bold text-slate-700 border-r border-slate-100 bg-slate-50/20 text-xs">
+                                  {item.startDateBr}
+                                </td>
+                                <td className="px-3.5 py-2 text-center font-mono font-bold text-emerald-800 border-r border-slate-100 bg-emerald-50/20 text-xs">
+                                  {item.endDateBr}
+                                </td>
+                                <td className="px-3.5 py-2 text-center font-mono font-bold text-indigo-700 bg-indigo-50/30 text-xs">
+                                  {item.startDateBr} até {item.endDateBr}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Footer action */}
+                      <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-200">
+                        <span className="text-xs font-bold text-slate-700">
+                          Data Final Prevista da Tag: <span className="text-emerald-700 font-black">{finalPrevDateBr || '—'}</span>
+                        </span>
+                        <button 
+                          type="button"
+                          onClick={executeSaveAction}
+                          disabled={isSaving}
+                          className="px-5 py-2 bg-[#32423D] hover:bg-[#32423D]/90 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center gap-2 disabled:opacity-50"
+                          title="Salvar datas na Tag, nas OSs e nos Itens das OSs"
+                        >
+                          {isSaving ? <Loader className="animate-spin" size={14} /> : <CheckCircle size={14} />} Salvar Datas (Tag + OSs + Itens)
+                        </button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </td>
+          </tr>
+        )}
+
+{/* ══ ROW EXPANSIVEL DE SETORES DA TAG ══ */}
+        {expandedTagSectors[t.IdTag] && (() => {
+          const activeSectors = getTagSectors(t);
+
+          return (
+            <tr>
+              <td colSpan={2} className="p-0 border-b border-slate-200">
+                <div className="p-3 bg-[#eaf4f0] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
+                  <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#32423D]/20">
+                    <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                      <Activity size={13} className="text-[#32423D]" />
+                      Produção por Setor/Recurso (Tag #{t.IdTag} — {t.Tag})
+                    </h6>
+                    <button onClick={() => toggleTagSectorsExpansion(t.IdTag)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
+                  </div>
+                  {activeSectors.length === 0 ? (
+                    <div className="py-2 text-center text-slate-500 text-xs font-medium">Nenhum recurso/setor ativo localizado para esta Tag.</div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm max-w-3xl">
+                      <table className="w-full text-xs text-left border-collapse">
+                        <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[9px] border-b border-slate-200">
+                          <tr>
+                            <th className="px-3 py-1.5 border-r border-slate-200">Setor / Recurso</th>
+                            <th className="px-3 py-1.5 text-center border-r border-slate-200 w-24">Executado</th>
+                            <th className="px-3 py-1.5 text-center border-r border-slate-200 w-24">A Executar</th>
+                            <th className="px-3 py-1.5 text-center w-44">Conclusão (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {activeSectors.map(s => {
+                            const tot = s.exec + s.aExec;
+                            const calcPct = tot > 0 ? Math.min(100, Math.round((s.exec / tot) * 100)) : 0;
+                            return (
+                              <tr key={s.key} className="hover:bg-slate-50 transition-colors">
+                                <td className="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-[#32423D] shrink-0" />
+                                  <span>{s.label}</span>
+                                </td>
+                                <td className="px-3 py-1.5 text-center font-bold text-emerald-700 border-r border-slate-100 bg-emerald-50/20">{s.exec}</td>
+                                <td className="px-3 py-1.5 text-center font-bold text-amber-700 border-r border-slate-100 bg-amber-50/20">{s.aExec}</td>
+                                <td className="px-3 py-1.5 text-center">
+                                  <div className="flex items-center gap-2 px-1">
+                                    <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                      <div className={`h-full transition-all duration-300 ${calcPct === 100 ? 'bg-emerald-500' : 'bg-[#32423D]'}`} style={{ width: `${calcPct}%` }} />
+                                    </div>
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${calcPct === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>{calcPct}%</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </td>
+            </tr>
+          );
+        })()}
+
+        {/* ══ EXPANSÃO DAS OSs DA TAG ══ */}
+        {expandedTagsOs[t.IdTag] && (
+          <tr>
+            <td colSpan={2} className="p-0 border-b border-slate-200">
+              <div className="p-4 bg-slate-50 shadow-inner">
+                <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-2">
+                  <List size={14} className="text-[#32423D]" /> Ordens de Serviço para a Tag {t.Tag}
+                </h4>
+                <div className="overflow-x-auto rounded border border-slate-200">
+                  <table className="w-full text-[10px] text-left whitespace-nowrap">
+                    <thead className="bg-slate-200 text-slate-700 uppercase font-bold tracking-wider text-[9px]">
                       <tr>
-                        <th className="px-3 py-2 border-r border-white/20">Setor / Recurso (OS)</th>
-                        <th className="px-3 py-2 border-r border-white/20 text-center w-48">Dias para Produzir Item</th>
-                        <th className="px-3 py-2 text-center w-64">
-                          {currentMode === 'progressivo' ? 'Data Planejada Final da Produção' : 'Intervalo Planejado (Início → Término)'}
-                        </th>
+                        <th className="px-2 py-1.5 border-b border-slate-300">OS / Descrição</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Lib. Eng.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Prev.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Qtd. Tot.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Peso Tot.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Fator</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Qtd. Itens</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Itens Exec.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Peças Exec.</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center">Tot. Peças</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center w-24">Status</th>
+                        <th className="px-2 py-1.5 border-b border-slate-300 text-center w-28">Opções</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {calculatedList.map((res, sIdx) => (
-                        <tr key={res.sectorKey} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-3 py-2 font-bold border-r border-slate-100">
-                            <div className="flex items-center justify-between">
-                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold inline-block ${res.sectorColor}`}>
-                                {res.sectorLabel}
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {expandedTagsOs[t.IdTag].map((os: any) => (
+                        <React.Fragment key={os.IdOrdemServico}>
+                          <tr 
+                            className={`hover:bg-slate-100 transition-colors cursor-pointer ${expandedOsItems[os.IdOrdemServico] ? 'bg-slate-50' : ''}`}
+                            onClick={() => toggleOsItemExpansion(os.IdOrdemServico)}
+                            title="Clique para ver os Itens da Ordem de Serviço"
+                          >
+                            <td className="px-3 py-2 border-r border-slate-100 flex items-center gap-2">
+                              <span className="text-slate-400 font-bold">{expandedOsItems[os.IdOrdemServico] ? '▼' : '▶'}</span>
+                              <div>
+                                <div className="font-bold text-slate-800">OS: {os.IdOrdemServico}</div>
+                                <div className="text-[9px] text-slate-500 max-w-[200px] truncate" title={os.Descricao}>{os.Descricao}</div>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center border-r border-slate-100">
+                              <div className={`font-bold ${os.Liberado_Engenharia === 'S' ? 'text-emerald-600' : 'text-slate-400'}`}>{os.Liberado_Engenharia === 'S' ? 'Sim' : 'Não'}</div>
+                              {os.Data_Liberacao_Engenharia && <div className="text-[9px] text-slate-500">{isoToBr(os.Data_Liberacao_Engenharia.split('T')[0])}</div>}
+                            </td>
+                            {(() => {
+                              const osItems = expandedOsItems[os.IdOrdemServico] || (tagItemsCache[t.IdTag] ? tagItemsCache[t.IdTag].filter((i: any) => String(i.IdOrdemServico) === String(os.IdOrdemServico)) : undefined);
+                              const comp = getOsComputedTotals(os, osItems);
+                              return (
+                                <>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-slate-600">{os.DataPrevisao ? isoToBr(os.DataPrevisao.split('T')[0]) : '—'}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700 font-bold">{comp.totalPecas}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{comp.pesoTotal > 0 ? comp.pesoTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + ' kg' : '—'}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700">{os.Fator || '1'}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700 font-bold">{comp.totalItens}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-emerald-600 font-bold">{comp.itensExecutados}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-emerald-600 font-bold">{comp.pecasExecutadas}</td>
+                                  <td className="px-3 py-2 text-center border-r border-slate-100 text-slate-700 font-bold">{comp.totalPecas}</td>
+                                </>
+                              );
+                            })()}
+                            <td className="px-2 py-2 text-center border-r border-slate-100 w-24">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase inline-block ${os.OrdemServicoFinalizado === 'C' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                {os.OrdemServicoFinalizado === 'C' ? 'Finalizada' : 'Aberta'}
                               </span>
-                              <div className="flex items-center gap-0.5 ml-2">
-                                <button
-                                  type="button"
-                                  disabled={sIdx === 0}
-                                  onClick={() => moveSectorInOrder(entityKey, sIdx, sIdx - 1, rawSectors)}
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-20 transition-colors"
-                                  title="Mover setor para cima na sequência"
-                                >
-                                  ▲
-                                </button>
-                                <button
-                                  type="button"
-                                  disabled={sIdx === calculatedList.length - 1}
-                                  onClick={() => moveSectorInOrder(entityKey, sIdx, sIdx + 1, rawSectors)}
-                                  className="p-0.5 rounded text-slate-400 hover:text-slate-800 hover:bg-slate-200 disabled:opacity-20 transition-colors"
-                                  title="Mover setor para baixo na sequência"
-                                >
-                                  ▼
-                                </button>
-                              </div>
-                            </div>
-                          </td>
+                            </td>
+                            <td className="px-2 py-2 text-center w-28">
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleOsSectorsExpansion(os.IdOrdemServico); }}
+                                className={`text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap ${expandedOsSectors[os.IdOrdemServico] ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800'}`}
+                                title="Exibir Produção dos Setores / Recursos desta OS"
+                              >
+                                <Activity size={10} /> Prod. Setores
+                              </button>
+                            </td>
+                          </tr>
+                          {/* ROW EXPANSIVEL DE SETORES DA OS */}
+                          {expandedOsSectors[os.IdOrdemServico] && (() => {
+                            const activeSectors = getOsSectors(os);
 
-                          <td className="px-3 py-2 text-center border-r border-slate-100 bg-slate-50/50">
-                            <div className="flex items-center justify-center gap-1.5">
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={res.currentDaysStr}
-                                onChange={(e) => setOsResourceDays(prev => ({ ...prev, [res.stateKey]: e.target.value }))}
-                                className="w-20 px-2 py-1 text-center font-bold font-mono text-slate-800 border border-slate-300 rounded focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] outline-none bg-white shadow-inner text-xs"
-                              />
-                              <span className="text-[9px] text-slate-500 font-bold uppercase">dias</span>
-                            </div>
-                          </td>
-
-                          <td className="px-3 py-2 text-center font-mono font-bold text-slate-800 bg-indigo-50/40">
-                            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-indigo-200 rounded text-indigo-900 shadow-sm text-xs">
-                              <CalendarDays size={12} className="text-indigo-600" />
-                              {res.plannedDateStr}
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })()}
-        </div>
-      </td>
-    </tr>
-  )}
-
-{expandedOsItems[os.IdOrdemServico] && (
-                        <tr>
-                          <td colSpan={11} className="p-0 border-b border-slate-200">
-                            <div className="p-4 bg-[#f0f4f8] shadow-inner border-y border-[#dbeafe]">
-                              <h5 className="text-[11px] font-bold text-slate-800 mb-2 flex items-center gap-2">
-                                <List size={12} className="text-[#3b82f6]" /> Itens da OS: {os.IdOrdemServico}
-                              </h5>
-                              <div className="overflow-x-auto rounded border border-slate-300">
-                                <table className="w-full text-[9px] text-left whitespace-nowrap">
-                                  <thead className="bg-[#e2e8f0] text-slate-700 uppercase font-bold tracking-wider">
-                                    <tr>
-                                      <th className="px-2 py-1.5 border-b border-slate-300">Resumo / Detalhado</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Cod Mat</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Prod Principal</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Medidas (EspxAltcxLarg)</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Dobras</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Peso Un. / Total</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Pint. Un. / Total</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Acabamento</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Fator</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Lib. Eng.</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Previsão</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Qtd. / Total</th>
-                                      <th className="px-2 py-1.5 border-b border-slate-300 text-center">Status</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-slate-200 bg-white">
-                                    {expandedOsItems[os.IdOrdemServico].map((item: any) => (
-                                      <tr key={item.IdOrdemServicoItem} className="hover:bg-slate-50">
-                                        <td className="px-2 py-1.5 border-r border-slate-100">
-                                          <div className="font-bold text-slate-800" title={item.DescResumo}>{item.DescResumo || '—'}</div>
-                                          <div className="text-[8px] text-slate-500 line-clamp-1" title={item.DescDetal}>{item.DescDetal || '—'}</div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 font-mono text-slate-600">{item.CodMatFabricante || '—'}</td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                          <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${item.ProdutoPrincipal === 'S' || item.ProdutoPrincipal === 'Sim' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400'}`}>{item.ProdutoPrincipal === 'S' || item.ProdutoPrincipal === 'Sim' ? 'Sim' : 'Não'}</span>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">
-                                          {item.Espessura || '-'} x {item.Altura || '-'} x {item.Largura || '-'}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.NumeroDobras || '0'}</td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                          <div className="text-slate-800">{item.PesoUnitario ? parseFloat(item.PesoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
-                                          <div className="text-[8px] text-slate-500">{item.Peso ? parseFloat(item.Peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                          <div className="text-slate-800">{item.AreaPinturaUnitario ? parseFloat(item.AreaPinturaUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
-                                          <div className="text-[8px] text-slate-500">{item.AreaPintura ? parseFloat(item.AreaPintura).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Acabamento || '—'}</td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Fator || '—'}</td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                          <div className={`font-bold ${item.Liberado_Engenharia === 'S' ? 'text-emerald-600' : 'text-slate-400'}`}>{item.Liberado_Engenharia === 'S' ? 'Sim' : 'Não'}</div>
-                                          {item.Data_Liberacao_Engenharia && <div className="text-[8px] text-slate-500">{isoToBr(item.Data_Liberacao_Engenharia.split('T')[0])}</div>}
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100 font-bold text-slate-600">{item.DataPrevisao ? isoToBr(item.DataPrevisao.split('T')[0]) : '—'}</td>
-                                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                          <div className="font-bold text-slate-800">{item.qtde || '0'}</div>
-                                          <div className="text-[8px] text-slate-500">{item.QtdeTotal || '0'}</div>
-                                        </td>
-                                        <td className="px-2 py-1.5 text-center">
-                                          <span className={`px-1 py-0.5 rounded text-[8px] font-bold uppercase ${item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                            {item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S' ? 'Finalizado' : 'Aberto'}
-                                          </span>
-                                        </td>
-                                      </tr>
-                                    ))}
-                                    {expandedOsItems[os.IdOrdemServico].length === 0 && (
-                                      <tr><td colSpan={13} className="px-2 py-3 text-center text-slate-400 font-medium">Nenhum Item localizado para esta OS.</td></tr>
+                            return (
+                              <tr>
+                                <td colSpan={12} className="p-0 border-b border-slate-200">
+                                  <div className="p-3 bg-[#eaf4f0] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
+                                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#32423D]/20">
+                                      <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                                        <Activity size={13} className="text-[#32423D]" />
+                                        Produção por Setor/Recurso (Ordem de Serviço #{os.IdOrdemServico})
+                                      </h6>
+                                      <button onClick={() => toggleOsSectorsExpansion(os.IdOrdemServico)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
+                                    </div>
+                                    {activeSectors.length === 0 ? (
+                                      <div className="py-2 text-center text-slate-500 text-xs font-medium">Nenhum recurso/setor ativo localizado para esta OS.</div>
+                                    ) : (
+                                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm max-w-3xl">
+                                        <table className="w-full text-xs text-left border-collapse">
+                                          <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[9px] border-b border-slate-200">
+                                            <tr>
+                                              <th className="px-3 py-1.5 border-r border-slate-200">Setor / Recurso</th>
+                                              <th className="px-3 py-1.5 text-center border-r border-slate-200 w-24">Executado</th>
+                                              <th className="px-3 py-1.5 text-center border-r border-slate-200 w-24">A Executar</th>
+                                              <th className="px-3 py-1.5 text-center w-44">Conclusão (%)</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-100">
+                                            {activeSectors.map(s => {
+                                              const tot = s.exec + s.aExec;
+                                              const calcPct = tot > 0 ? Math.min(100, Math.round((s.exec / tot) * 100)) : 0;
+                                              return (
+                                                <tr key={s.key} className="hover:bg-slate-50 transition-colors">
+                                                  <td className="px-3 py-1.5 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-[#32423D] shrink-0" /><span>{s.label}</span></td>
+                                                  <td className="px-3 py-1.5 text-center font-bold text-emerald-700 border-r border-slate-100 bg-emerald-50/20">{s.exec}</td>
+                                                  <td className="px-3 py-1.5 text-center font-bold text-amber-700 border-r border-slate-100 bg-amber-50/20">{s.aExec}</td>
+                                                  <td className="px-3 py-1.5 text-center">
+                                                    <div className="flex items-center gap-2 px-1">
+                                                      <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden"><div className={`h-full transition-all duration-300 ${calcPct === 100 ? 'bg-emerald-500' : 'bg-[#32423D]'}`} style={{ width: `${calcPct}%` }} /></div>
+                                                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded shrink-0 ${calcPct === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>{calcPct}%</span>
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
                                     )}
-                                  </tbody>
-                                </table>
-                              </div>
-                            </div>
-                          </td>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })()}
+                          {/* ROW EXPANSIVEL DE ITENS DA OS */}
+                          {expandedOsItems[os.IdOrdemServico] && (
+                            <tr>
+                              <td colSpan={12} className="p-0 border-b border-slate-200">
+                                <div className="px-0 py-3 bg-[#f0f4f8] shadow-inner border-y border-[#dbeafe]">
+                                  <h5 className="text-[11px] font-bold text-slate-800 mb-2 flex items-center gap-2 px-3">
+                                    <List size={12} className="text-[#3b82f6]" /> Itens da OS: {os.IdOrdemServico}
+                                  </h5>
+                                  <div className="overflow-x-auto rounded border border-slate-300">
+                                    <table className="w-full text-[9px] text-left whitespace-nowrap">
+                                      <thead className="bg-[#e2e8f0] text-slate-700 uppercase font-bold tracking-wider text-[8.5px]">
+                                         <tr>
+                                           <th className="px-2 py-1 border-b border-slate-300">Resumo / Detalhado</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Cód. Mat.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Prod. Princ.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Medidas (E x A x L)</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Dobras</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Peso Un./Tot.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Pint. Un./Tot.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Acab.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Fator</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Lib. Eng.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Prev.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Qtd./Tot.</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center w-24">Status</th>
+                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center w-28">Opções</th>
+                                         </tr>
+                                       </thead>
+                                      <tbody className="divide-y divide-slate-200 bg-white">
+                                        {expandedOsItems[os.IdOrdemServico].map((item: any) => (
+                                          <React.Fragment key={item.IdOrdemServicoItem}>
+                                            <tr className="hover:bg-slate-50">
+                                              <td className="px-2 py-1.5 border-r border-slate-100">
+                                                <div className="font-bold text-slate-800" title={item.DescResumo}>{item.DescResumo || '—'}</div>
+                                                <div className="text-[8px] text-slate-500 line-clamp-1" title={item.DescDetal}>{item.DescDetal || '—'}</div>
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 font-mono text-slate-600">{item.CodMatFabricante || '—'}</td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                                                <span className={`px-1 py-0.5 rounded text-[8px] font-bold ${item.ProdutoPrincipal === 'S' || item.ProdutoPrincipal === 'Sim' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400'}`}>{item.ProdutoPrincipal === 'S' || item.ProdutoPrincipal === 'Sim' ? 'Sim' : 'Não'}</span>
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">
+                                                {item.Espessura || '-'} x {item.Altura || '-'} x {item.Largura || '-'}
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.NumeroDobras || '0'}</td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                                                <div className="text-slate-800">{item.PesoUnitario ? parseFloat(item.PesoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
+                                                <div className="text-[8px] text-slate-500">{item.Peso ? parseFloat(item.Peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                                                <div className="text-slate-800">{item.AreaPinturaUnitario ? parseFloat(item.AreaPinturaUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
+                                                <div className="text-[8px] text-slate-500">{item.AreaPintura ? parseFloat(item.AreaPintura).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Acabamento || '—'}</td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Fator || '—'}</td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                                                <div className={`font-bold ${item.Liberado_Engenharia === 'S' ? 'text-emerald-600' : 'text-slate-400'}`}>{item.Liberado_Engenharia === 'S' ? 'Sim' : 'Não'}</div>
+                                                {item.Data_Liberacao_Engenharia && <div className="text-[8px] text-slate-500">{isoToBr(item.Data_Liberacao_Engenharia.split('T')[0])}</div>}
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 font-bold text-slate-600">{item.DataPrevisao ? isoToBr(item.DataPrevisao.split('T')[0]) : '—'}</td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                                                <div className="font-bold text-slate-800">{item.qtde || '0'}</div>
+                                                <div className="text-[8px] text-slate-500">{item.QtdeTotal || '0'}</div>
+                                              </td>
+                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 w-24">
+                                                  <span className={`px-2 py-0.5 rounded text-[8.5px] font-bold uppercase inline-block ${item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S' ? 'Finalizado' : 'Aberto'}
+                                                  </span>
+                                                </td>
+                                                <td className="px-2 py-1.5 text-center w-28">
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      toggleItemSectorsExpansion(item.IdOrdemServicoItem); 
+                                                    }}
+                                                    className={`text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap ${expandedItemSectors[item.IdOrdemServicoItem] ? 'bg-sky-700 text-white border border-sky-800' : 'bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800'}`}
+                                                    title="Exibir Produção dos Setores / Recursos deste Item"
+                                                  >
+                                                    <Activity size={9} /> Prod. Setores
+                                                  </button>
+                                                </td>
+                                            </tr>
+                                            {/* ══ ROW INDEPENDENTE: PRODUÇÃO DOS SETORES DO ITEM DA OS ══ */}
+                                            {expandedItemSectors[item.IdOrdemServicoItem] && (() => {
+                                              const activeSectors = getItemActiveSectors(item);
+
+                                              return (
+                                                <tr>
+                                                  <td colSpan={14} className="p-0 border-b border-slate-200">
+                                                    <div className="p-2.5 bg-[#f0f7f4] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
+                                                      <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#32423D]/20">
+                                                        <h6 className="text-[10px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
+                                                          <Activity size={12} className="text-[#32423D]" />
+                                                          Produção por Setor/Recurso (Item #{item.IdOrdemServicoItem} — {item.DescResumo || 'Sem descrição'})
+                                                        </h6>
+                                                        <button 
+                                                          onClick={() => toggleItemSectorsExpansion(item.IdOrdemServicoItem)}
+                                                          className="text-slate-400 hover:text-red-500 p-0.5 transition-colors"
+                                                          title="Fechar"
+                                                        >
+                                                          <X size={13} />
+                                                        </button>
+                                                      </div>
+
+                                                      {activeSectors.length === 0 ? (
+                                                        <div className="py-2 text-center text-slate-500 text-[10px] font-medium">
+                                                          Nenhum recurso/setor ativo localizado para este Item.
+                                                        </div>
+                                                      ) : (
+                                                        <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm max-w-3xl">
+                                                          <table className="w-full text-[9px] text-left border-collapse">
+                                                            <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[8.5px] border-b border-slate-200">
+                                                              <tr>
+                                                                <th className="px-2.5 py-1 border-r border-slate-200">Setor / Recurso</th>
+                                                                <th className="px-2.5 py-1 text-center border-r border-slate-200 w-24">Executado</th>
+                                                                <th className="px-2.5 py-1 text-center border-r border-slate-200 w-24">A Executar</th>
+                                                                <th className="px-2.5 py-1 text-center w-44">Conclusão (%)</th>
+                                                              </tr>
+                                                            </thead>
+                                                            <tbody className="divide-y divide-slate-100">
+                                                              {activeSectors.map(s => {
+                                                                const totalBase = s.exec + s.aExec;
+                                                                const calcPct = totalBase > 0 ? Math.min(100, Math.round((s.exec / totalBase) * 100)) : 0;
+
+                                                                return (
+                                                                  <tr key={s.key} className="hover:bg-slate-50 transition-colors">
+                                                                    <td className="px-2.5 py-1 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-1.5">
+                                                                      <span className="w-1.5 h-1.5 rounded-full bg-[#32423D] shrink-0" />
+                                                                      <span>{s.label}</span>
+                                                                    </td>
+                                                                    <td className="px-2.5 py-1 text-center font-bold text-emerald-700 border-r border-slate-100 bg-emerald-50/20">
+                                                                      {s.exec}
+                                                                    </td>
+                                                                    <td className="px-2.5 py-1 text-center font-bold text-amber-700 border-r border-slate-100 bg-amber-50/20">
+                                                                      {s.aExec}
+                                                                    </td>
+                                                                    <td className="px-2.5 py-1 text-center">
+                                                                      <div className="flex items-center gap-1.5 px-1">
+                                                                        <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                                                          <div 
+                                                                            className={`h-full transition-all duration-300 ${calcPct === 100 ? 'bg-emerald-500' : 'bg-[#32423D]'}`}
+                                                                            style={{ width: `${calcPct}%` }}
+                                                                          />
+                                                                        </div>
+                                                                        <span className={`text-[8.5px] font-black px-1 py-0.5 rounded shrink-0 ${calcPct === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                                                                          {calcPct}%
+                                                                        </span>
+                                                                      </div>
+                                                                    </td>
+                                                                  </tr>
+                                                                );
+                                                              })}
+                                                            </tbody>
+                                                          </table>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            })()}
+                                          </React.Fragment>
+                                        ))}
+                                        {expandedOsItems[os.IdOrdemServico].length === 0 && (
+                                          <tr><td colSpan={13} className="px-2 py-3 text-center text-slate-400 font-medium">Nenhum Item localizado para esta OS.</td></tr>
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                      {expandedTagsOs[t.IdTag].length === 0 && (
+                        <tr>
+                          <td colSpan={11} className="px-3 py-4 text-center text-slate-400 font-medium">Nenhuma Ordem de Serviço encontrada para esta Tag.</td>
                         </tr>
                       )}
-                    </React.Fragment>
-                  ))}
-                  {expandedTagsOs[t.IdTag].length === 0 && (
-                    <tr>
-                      <td colSpan={11} className="px-3 py-4 text-center text-slate-400 font-medium">Nenhuma Ordem de Serviço encontrada para esta Tag.</td>
-                    </tr>
-                  )}
-                </tbody></table></div></div></td></tr>)}</React.Fragment>
- )
- })}
- </tbody>
- </table></div>
- )}
- </div>
- </div>
- </div>
- )}
-
- {/* ══ MODAIS AÇÃO ══ */}
- {/* Modal Datas Simples (Projeto ou Tag Previsao) */}
- {(actionModal === 'dateProj' || actionModal === 'dateTagGlobal') && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md p-5 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
- <div className="flex justify-between items-start mb-4">
- <div><h3 className="font-bold text-slate-800 flex items-center gap-2 text-lg"><CalendarDays size={15} className="text-[#32423D]" /> Editar Data Previsão</h3><p className="text-[11px] font-bold bg-slate-100 border border-slate-200 px-2 py-0.5 mt-1.5 rounded-md text-slate-600 inline-block">{actionModal === 'dateTagGlobal' ? `Tag: ${selTag?.Tag}` : `${selProj?.Projeto}`}</p></div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- <input type="date" value={dateInput} onChange={e => setDateInput(e.target.value)} className="w-full border-2 border-slate-200 hover:border-blue-300 rounded-md px-2 py-0.5 text-slate-700 outline-none focus:border-[#32423D] transition mb-4 font-bold" />
- 
- {actionModal === 'dateProj' && (
- <label className="flex items-start gap-3 p-3 bg-slate-50 rounded-md text-xs mb-5 cursor-pointer hover:bg-slate-100 border border-slate-200 transition-colors">
- <input type="checkbox" checked={updateTagsCheck} onChange={e => setUpdateTagsCheck(e.target.checked)} className="rounded border-slate-300 text-[#32423D] mt-1 w-4 h-4" />
- <div className="leading-tight"><span className="font-bold text-slate-800 text-xs">Atualizar tags em cascata</span><br/><span className="text-[10px] text-slate-500 font-medium">Aplica a data para todas as filhas deste projeto</span></div>
- </label>
- )}
-
- {msg && <div className={`px-2 py-1.5 rounded-lg text-xs uppercase font-bold text-center mb-4 ${msg.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>{msg.t}</div>}
- <button onClick={actionModal === 'dateProj' ? salvarDataProj : salvarDataTagPrevisao} disabled={!dateInput || isSaving} className="w-full bg-[#32423D] hover:bg-[#32423D]/80 disabled:opacity-50 text-white font-bold text-xs py-3 rounded-md transition-all shadow-md shadow-blue-500/20 flex justify-center items-center gap-2">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Salvar Data Previsão'}
- </button>
- </div>
- </div>
- )}
-
- {/* Modal Editar Multiplas Datas Planejadas (Tags) */}
- {actionModal === 'dateTagSetores' && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4">
- <div className="bg-white rounded-md w-full max-w-4xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
- <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
- <div><h3 className="font-black text-slate-800 flex items-center gap-2 text-lg"><Edit3 size={15} className="text-[#32423D]" /> Planejamento de Setores</h3><p className="text-[11px] font-bold bg-white shadow-sm border border-slate-200 px-2 py-0.5 mt-1 rounded-md text-slate-600 inline-block uppercase">Tag: {selTag?.Tag}</p></div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- 
- <div className="p-6 overflow-auto bg-white flex-1 relative">
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(filteredTagSectors.filter(s => (selTag as any)['flag'+s.k] === 1).length, 3)}, minmax(0, 1fr))` }}>
-                {filteredTagSectors.filter(s => (selTag as any)['flag'+s.k] === 1).map(s => (
- <div key={s.k} className="bg-slate-50 border border-slate-200 rounded-md p-4">
- <div className="font-black text-slate-700 uppercase tracking-widest text-xs mb-4 pb-2 border-b border-slate-200 border-dashed flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${s.c}`}></div> Setor: {s.k}</div>
- <div className="flex flex-col gap-3">
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Inicial</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-[#32423D] outline-none" 
- value={tagSectorDates[s.fields.pi] || ''} onChange={(e) => setTagSectorDates(prev => ({...prev, [s.fields.pi]: e.target.value}))}/>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Final</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-[#32423D] outline-none" 
- value={tagSectorDates[s.fields.pf] || ''} onChange={(e) => setTagSectorDates(prev => ({...prev, [s.fields.pf]: e.target.value}))}/>
- </div>
- </div>
- </div>
- ))}
- </div>
- </div>
-
- <div className="p-5 border-t border-slate-200 bg-white rounded-b-2xl shrink-0 flex items-center justify-between">
- <span className="text-xs font-medium text-slate-500">Deixe em branco para limpar a data.</span>
- <div className="flex gap-3">
- {msg && <div className={`px-2 py-1.5 rounded-lg text-xs uppercase font-bold flex items-center ${msg.ok ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>{msg.t}</div>}
- <button onClick={() => setActionModal(null)} className="px-5 py-2.5 rounded-md text-xs font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
- <button onClick={salvarDatasTagSetores} disabled={isSaving || !Object.keys(tagSectorDates).some(k => tagSectorDates[k] !== initialTagSectorDates[k])} className="px-6 py-2.5 rounded-md text-xs font-bold bg-[#32423D] hover:bg-[#32423D]/80 text-white shadow-md shadow-[#32423D]/30 flex items-center gap-2 transition-all disabled:opacity-50">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Salvar Todos os Setores'}
- </button>
- </div>
- </div>
- </div>
- </div>
- )}
-
- {/* Modal Planejamento em Lote */}
- 
- {actionModal === 'propagateOS' && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4">
- <div className="bg-white rounded-md w-full max-w-4xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col">
- <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-emerald-50 rounded-t-2xl shrink-0">
- <div><h3 className="font-black text-emerald-800 flex items-center gap-2 text-lg"><Share2 size={15} /> Propagar Datas para Ordens de Serviço</h3><p className="text-[11px] font-bold bg-white shadow-sm border border-emerald-200 px-2 py-0.5 mt-1 rounded-md text-emerald-700 inline-block uppercase">Tag: {selTag?.Tag}</p></div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-emerald-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-emerald-700 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
- <X size={14} /> Não Propagar (Fechar)
- </button>
- </div>
- 
- <div className="bg-emerald-50 border-b border-emerald-200 p-4 shrink-0">
- <p className="text-xs text-emerald-800 font-medium leading-relaxed flex items-center gap-2">
- <ShieldAlert size={14} /> As datas gravadas na Tag podem ser automaticamente copiadas para as OS desta Tag ou você pode alterar setores livremente antes de propagar.
- </p>
- </div>
- 
- <div className="p-6 overflow-auto bg-white flex-1 relative">
- {isSaving && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-20 flex items-center justify-center"><Loader className="animate-spin text-emerald-600" size={42} /></div>}
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(filteredTagSectors.filter(s => (selTag as any)['flag'+s.k] === 1).length, 3)}, minmax(0, 1fr))` }}>
- {filteredTagSectors.filter(s => (selTag as any)['flag'+s.k] === 1).map(s => (
- <div key={`prop_${s.k}`} className="bg-slate-50 border border-slate-200 rounded-md p-4 shadow-sm">
- <div className="font-black text-slate-700 uppercase tracking-widest text-xs mb-4 pb-2 border-b border-slate-200 border-dashed flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${s.c}`}></div> Setor: {s.k}</div>
- <div className="flex flex-col gap-3">
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Inicial</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-emerald-500 outline-none transition-colors" 
- value={propagateSectorDates[s.fields.pi] || ''} onChange={(e) => setPropagateSectorDates(prev => ({...prev, [s.fields.pi]: e.target.value}))}/>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Final</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-emerald-500 outline-none transition-colors" 
- value={propagateSectorDates[s.fields.pf] || ''} onChange={(e) => setPropagateSectorDates(prev => ({...prev, [s.fields.pf]: e.target.value}))}/>
- </div>
- </div>
- </div>
- ))}
- </div>
- </div>
- 
- <div className="p-5 border-t border-slate-200 bg-white rounded-b-2xl shrink-0 flex items-center justify-between">
- <span className="text-xs font-medium text-slate-500">Deixe em branco para limpar a data.</span>
- <div className="flex items-center gap-3">
- {msg && <span className={`text-xs font-bold px-3 py-1.5 rounded-md ${msg.ok ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{msg.t}</span>}
- <button onClick={propagarDatasOS} disabled={isSaving} className="px-6 py-2.5 rounded-md text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/30 flex items-center gap-2 transition-all disabled:opacity-50">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Atualizar Ordens de Serviço'}
- </button>
- </div>
- </div>
- </div>
- </div>
- )}
-
-{actionModal === 'bulkDateTags' && selProj && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md w-full max-w-4xl max-h-[95vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
- <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 rounded-t-2xl shrink-0">
- <div>
- <h3 className="font-black text-slate-800 flex items-center gap-2 text-lg"><CalendarDays size={20} className="text-indigo-600" /> Planejamento em Lote (Projeto)</h3>
- <p className="text-[11px] font-bold bg-white shadow-sm border border-slate-200 px-2 py-0.5 mt-1 rounded-md text-slate-600 inline-block uppercase">Projeto: {selProj.Projeto} - Descrição: {selProj.DescProjeto}</p>
- </div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
-
- <div className="bg-amber-50 border-b border-amber-200 p-4 shrink-0">
- <p className="text-xs text-amber-800 font-medium leading-relaxed flex items-center gap-2">
- <ShieldAlert size={14} /> Esta ação aplicará as datas nos setores preenchidos para <strong>TODAS as TAGS</strong> deste projeto. Todas as tags serão atualizadas com as novas datas.
- </p>
- </div>
-
- <div className="p-6 overflow-auto bg-white flex-1 relative">
- {isSaving && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-20 flex items-center justify-center"><Loader className="animate-spin text-indigo-600" size={42} /></div>}
- 
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5" style={{ gridTemplateColumns: `repeat(${Math.min(filteredTagSectors.filter(s => (selProj as any)['flag'+s.k] === 1).length, 3)}, minmax(0, 1fr))` }}>
-                {filteredTagSectors.filter(s => (selProj as any)['flag'+s.k] === 1).map(s => (
- <div key={`bulk_${s.k}`} className="bg-slate-50 border border-slate-200 rounded-md p-4 shadow-sm">
- <div className="font-black text-slate-700 uppercase tracking-widest text-xs mb-4 pb-2 border-b border-slate-200 border-dashed flex items-center gap-2"><div className={`w-3 h-3 rounded-full ${s.c}`}></div> Setor: {s.k}</div>
- <div className="flex flex-col gap-3">
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Inicial</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-indigo-500 outline-none transition-colors" 
- value={bulkSectorDates[s.fields.pi] || ''} onChange={(e) => setBulkSectorDates(prev => ({...prev, [s.fields.pi]: e.target.value}))}/>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Plan. Final</label>
- <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-indigo-500 outline-none transition-colors" 
- value={bulkSectorDates[s.fields.pf] || ''} onChange={(e) => setBulkSectorDates(prev => ({...prev, [s.fields.pf]: e.target.value}))}/>
- </div>
- </div>
- </div>
- ))}
- </div>
- </div>
-
- <div className="p-5 border-t border-slate-200 bg-white rounded-b-2xl shrink-0 flex items-center justify-between">
- <span className="text-xs font-medium text-slate-500">Apenas os setores com data preenchida serão afetados.</span>
- <div className="flex gap-3 items-center">
- {msg && <div className={`px-2 py-1.5 rounded-lg text-xs uppercase font-bold flex items-center ${msg.ok ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>{msg.t}</div>}
- <button onClick={() => setActionModal(null)} className="px-5 py-2.5 rounded-md text-xs font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
- <button onClick={salvarDatasBulkTags} disabled={isSaving} className="px-6 py-2.5 rounded-md text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-lg shadow-indigo-500/30 flex items-center gap-2 transition-all disabled:opacity-50">
- <CheckCircle size={15}/> Aplicar Planejamento em Lote
- </button>
- </div>
- </div>
- </div>
- </div>
- )}
- 
- {/* Modal Planejar Projetista / Engenharia */}
- {actionModal === 'planejarProjetista' && selTag && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4">
- <div className="bg-white rounded-md w-full max-w-2xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
- <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
- <div>
- <h3 className="font-black text-slate-800 flex items-center gap-2 text-lg"><Edit3 size={15} className="text-indigo-600" /> Planejar Projetista / Engenharia</h3>
- <p className="text-[11px] font-bold bg-white shadow-sm border border-slate-200 px-2 py-0.5 mt-1 rounded-md text-slate-600 inline-block uppercase">Tag: {selTag.Tag}</p>
- </div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- 
- <div className="p-6 overflow-auto bg-white flex-1 relative">
- <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
- <div className="md:col-span-3">
- <label className="text-xs font-bold text-slate-600 uppercase">Projetista Planejado <span className="text-red-500">*</span></label>
- <select value={planejarProjetistaForm.projetistaPlanejado} onChange={e => setPlanejarProjetistaForm(prev => ({...prev, projetistaPlanejado: e.target.value}))} className="mt-1.5 w-full border border-slate-300 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-indigo-500 transition-colors cursor-pointer bg-white">
- <option value="">Selecione um Projetista...</option>
- {planejarProjetistaForm.projetistaPlanejado && !usuarios.find(u => u.NomeCompleto === planejarProjetistaForm.projetistaPlanejado) && <option value={planejarProjetistaForm.projetistaPlanejado}>{planejarProjetistaForm.projetistaPlanejado}</option>}
- {usuarios.map(u => <option key={`eng_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
- </select>
- </div>
- <div className="md:col-span-1 border-t md:border-t-0 md:border-l border-slate-200 md:pl-5 pt-4 md:pt-0">
- <label className="text-[10px] font-bold text-slate-500 uppercase">Início Engenharia (Plan) <span className="text-red-500">*</span></label>
- <input type="date" className="mt-1 md:mt-2 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-indigo-500 outline-none" 
- value={planejarProjetistaForm.planejadoInicioEngenharia} onChange={(e) => setPlanejarProjetistaForm(prev => ({...prev, planejadoInicioEngenharia: e.target.value}))}/>
- </div>
- <div className="md:col-span-1 pt-4 md:pt-0">
- <label className="text-[10px] font-bold text-slate-500 uppercase">Fim Engenharia (Plan) <span className="text-red-500">*</span></label>
- <input type="date" className="mt-1 md:mt-2 w-full border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:border-indigo-500 outline-none" 
- value={planejarProjetistaForm.planejadoFinalEngenharia} onChange={(e) => setPlanejarProjetistaForm(prev => ({...prev, planejadoFinalEngenharia: e.target.value}))}/>
- </div>
- </div>
- </div>
-
- <div className="p-5 border-t border-slate-200 bg-[#f8fafc] shrink-0 flex items-center justify-between">
- <span className="text-xs font-medium text-slate-500">Todos os campos desta tela são obrigatórios.</span>
- <div className="flex gap-3 items-center">
- {msg && <div className={`px-2 py-1.5 rounded-lg text-xs uppercase font-bold flex items-center ${msg.ok ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>{msg.t}</div>}
- <button onClick={() => setActionModal(null)} className="px-5 py-2.5 rounded-md text-xs font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
- <button onClick={salvarPlanejamentoProjetista} disabled={isSaving} className="px-6 py-2.5 rounded-md text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/30 flex items-center gap-2 transition-all disabled:opacity-50">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Salvar Planejamento'}
- </button>
- </div>
- </div>
- </div>
- </div>
- )}
-
- {/* Modal Alterar Qtde Liberada */}
- {actionModal === 'alterarQtdeLiberada' && selTag && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/60 p-4">
- <div className="bg-white rounded-md w-full max-w-sm max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
- <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
- <div>
- <h3 className="font-black text-slate-800 flex items-center gap-2 text-base"><Edit3 size={14} className="text-emerald-600" /> Alterar Qtde Liberada</h3>
- <p className="text-[10px] font-bold bg-white shadow-sm border border-slate-200 px-2 py-0.5 mt-1 rounded-md text-slate-600 inline-block uppercase">Tag: {selTag.Tag}</p>
- </div>
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- 
- <div className="p-6 overflow-auto bg-white flex-1 relative">
- <div className="flex justify-between items-center mb-5 p-4 bg-slate-50 border border-slate-200 rounded-md">
- <div className="flex flex-col"><span className="text-[10px] font-bold text-slate-400 uppercase">Qtd. Tag (Total)</span><span className="text-lg font-black text-slate-700">{selTag.QtdeTag || '0'}</span></div>
- <div className="w-px h-8 bg-slate-200"></div>
- <div className="flex flex-col items-end"><span className="text-[10px] font-bold text-slate-400 uppercase">Saldo Atual</span><span className="text-lg font-black text-orange-600">{selTag.SaldoTag || '0'}</span></div>
- </div>
-
- <label className="text-xs font-bold text-slate-600 uppercase">Nova Qtde. Liberada <span className="text-red-500">*</span></label>
- <input 
- type="number" 
- min="0" 
- step="any"
- className="mt-1.5 w-full border-2 border-slate-200 rounded-md px-2 py-0.5 text-lg font-black text-emerald-700 focus:border-emerald-500 outline-none transition-colors" 
- value={qtdeLiberadaForm.qtdeLiberada} 
- onChange={(e) => setQtdeLiberadaForm({ qtdeLiberada: e.target.value })}
- />
- {parseFloat(qtdeLiberadaForm.qtdeLiberada) > parseFloat(selTag.QtdeTag || '0') && (
- <p className="text-[10px] font-bold text-red-500 mt-2">A quantidade liberada não pode ser maior que a total ({selTag.QtdeTag}).</p>
- )}
- </div>
-
- <div className="p-5 border-t border-slate-200 bg-[#f8fafc] shrink-0">
- {msg && <div className={`px-2 py-1.5 rounded-lg text-xs uppercase font-bold text-center mb-3 ${msg.ok ? 'text-emerald-700 bg-emerald-50' : 'text-red-700 bg-red-50'}`}>{msg.t}</div>}
- <div className="flex gap-2 w-full">
- <button onClick={() => setActionModal(null)} className="flex-1 py-3 rounded-md text-xs font-bold border-2 border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
- <button onClick={salvarQtdeLiberada} disabled={isSaving || parseFloat(qtdeLiberadaForm.qtdeLiberada) > parseFloat(selTag.QtdeTag || '0')} className="flex-1 py-3 rounded-md text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-500/30 flex justify-center items-center gap-2 transition-all disabled:opacity-50">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Salvar Qtde'}
- </button>
- </div>
- </div>
- </div>
- </div>
- )}
- 
- {/* Modal Finalizar Tag */}
- {actionModal === 'finTag' && selTag && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md p-5 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
- <div className="flex flex-col items-center text-center mb-4">
- <CheckCircle size={36} className="text-emerald-500 mb-2" />
- <h3 className="font-bold text-lg text-emerald-700">Finalizar Tag(s)</h3>
- <p className="text-xs font-bold text-slate-600 mt-1 bg-slate-50 px-3 py-1 rounded-full border border-slate-200 max-w-full truncate">{selTag.Tag}</p>
- </div>
- <div className="text-[11px] text-slate-600 text-center mb-5 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
- Deseja finalizar <strong>apenas a tag atual</strong> ou finalizar <strong>todas as tags pendentes</strong> deste projeto ({selProj?.Projeto})?
- </div>
- {msg && <div className={`px-2 py-1 rounded-lg text-[10px] uppercase font-bold text-center mb-4 ${msg.ok ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-red-50 text-red-700 border border-red-100'}`}>{msg.t}</div>}
- <div className="flex flex-col gap-2">
- <button onClick={e => { e.preventDefault(); salvarFinalizarTag(false); }} disabled={isSaving} className="w-full text-white font-bold text-xs py-2.5 rounded-lg transition-all shadow-md flex justify-center items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 border border-emerald-700">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Finalizar Apenas Esta Tag'}
- </button>
- <button onClick={e => { e.preventDefault(); salvarFinalizarTag(true); }} disabled={isSaving} className="w-full text-indigo-700 font-bold text-xs py-2.5 rounded-lg transition-all flex justify-center items-center gap-2 bg-indigo-50 hover:bg-indigo-100 disabled:opacity-50 border border-indigo-200">
- {isSaving ? <Loader className="animate-spin" size={14} /> : 'Finalizar Todas as Tags!'}
- </button>
- <div className="w-full h-px bg-slate-200 my-1"></div>
- <button onClick={() => setActionModal(null)} className="w-full bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 font-bold text-xs py-2.5 rounded-lg transition-colors">Cancelar</button>
- </div>
- </div>
- </div>
- )}
-
- {/* Modal Finalizar Projeto */}
- {(actionModal === 'fin' || actionModal === 'cancelFin') && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md p-5 w-full max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
- <div className="flex flex-col items-center text-center mb-4">
- {actionModal === 'fin' ? <CheckCircle size={36} className="text-emerald-500 mb-2" /> : <RotateCcw size={36} className="text-orange-500 mb-2" />}
- <h3 className={`font-bold text-lg ${actionModal === 'fin' ? 'text-emerald-700' : 'text-orange-700'}`}>{actionModal === 'fin' ? 'Finalizar Projeto' : 'Desfazer Finalização'}</h3>
- <p className="text-xs font-bold text-slate-600 mt-1 bg-slate-50 px-3 py-1 rounded-full border border-slate-200 max-w-full truncate">{selProj?.Projeto}</p>
- </div>
- <div className="text-[11px] text-slate-600 text-center mb-5 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
- {actionModal === 'fin' ? 'Este projeto, tags e OS vinculadas serão marcados como finalizados.' : 'O projeto voltará para a esteira de liberação/produção ativa.'}
- </div>
- {msg && <div className={`px-2 py-1 rounded-lg text-[10px] uppercase font-bold text-center mb-4 ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>{msg.t}</div>}
- <div className="flex gap-2">
- <button onClick={() => setActionModal(null)} className="flex-1 bg-white hover:bg-slate-50 border border-slate-300 text-slate-600 font-bold text-xs py-2 rounded-lg transition-colors">Cancelar</button>
- <button onClick={e => { e.preventDefault(); if (actionModal === 'fin') { finProj(`${API_BASE}/visao-geral/projeto/${selProj?.IdProjeto}/finalizar`, true); } else { finProj(`${API_BASE}/visao-geral/projeto/${selProj?.IdProjeto}/cancelar-finalizacao`, false); } }} disabled={isSaving} className={`flex-1 text-white font-bold text-xs py-2 rounded-lg transition-all shadow-md flex justify-center items-center gap-2 ${actionModal === 'fin' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-orange-500 hover:bg-orange-600'} disabled:opacity-50`}>{isSaving ? <Loader className="animate-spin" size={14} /> : 'Confirmar'}</button>
- </div>
- </div>
- </div>
- )}
-
- {/* Modal Nova Pendência (RNC) - FULL MANAGER */}
- {actionModal === 'addRnc' && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md p-5 w-full max-w-4xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
- 
- {/* HEADER DA MODAL */}
- <div className="flex justify-between items-start mb-4 shrink-0">
- <div>
- <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xl"><ShieldAlert size={22} className="text-red-500" /> Gerenciar Pendências (RNC)</h3>
- <p className="text-xs font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 mt-1.5 rounded-md text-slate-600 inline-block">
- {selProj?.Projeto} {rncForm.tag ? ` > Tag: ${rncForm.tag}` : ''}
- </p>
- </div>
- <div className="flex items-center gap-2">
- {fromGlobal && (
- <button onClick={() => window.location.href = '/visao-geral-pendencias'} className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1">
- &larr; Voltar
- </button>
- )}
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- </div>
-
- {/* ÁREA DE FORMULÁRIO (TOP) */}
- <div className="bg-[#f8fafc] border border-slate-200 rounded-md p-4 mb-4 shrink-0 shadow-sm relative">
- {/* Overlay de Loading do Salvar */}
- {isSaving && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-md z-10 flex items-center justify-center"><Loader className="animate-spin text-red-600" size={28} /></div>}
- 
- <div className="flex justify-between items-center mb-3">
- <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5"><Edit3 size={14}/> {rncForm.idRnc ? `Editando Pendência #${rncForm.idRnc}` : 'Nova Pendência'}</h4>
- <div className="flex gap-2 items-center">
- {rncForm.idRnc && rncForm.estatus !== 'FINALIZADO' && !rncForm.wantsToFinalize && (
- <button onClick={() => setRncForm(p => ({...p, wantsToFinalize: true, dataFin: new Date().toISOString().split('T')[0]}))} className="px-2 py-0.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1.5 animate-in fade-in zoom-in duration-200">
- <CheckCircle size={14}/> Habilitar Finalização
- </button>
- )}
- {rncForm.wantsToFinalize && (
- <button onClick={() => setRncForm(p => ({...p, wantsToFinalize: false}))} className="px-2 py-0.5 text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1.5 animate-in fade-in zoom-in duration-200">
- Cancelar Finalização
- </button>
- )}
- <button onClick={() => setRncForm({ idTag: rncForm.idTag, tag: rncForm.tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false })} className="px-2 py-0.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">Novo</button>
- <button onClick={salvarNovaRnc} disabled={!rncForm.descricao.trim()} className="px-4 py-1.5 text-xs font-bold text-white bg-[#32423D] hover:bg-[#32423D]/80 border border-blue-700 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><ShieldAlert size={12}/> Salvar Dados</button>
- </div>
- </div>
-
- <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Responsável</label>
- <select value={rncForm.usuario} onChange={e => setRncForm(prev => ({...prev, usuario: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-red-400">
- <option value="">Selecione...</option>
- {rncForm.usuario && !usuarios.find(u => u.NomeCompleto === rncForm.usuario) && <option value={rncForm.usuario}>{rncForm.usuario}</option>}
- {usuarios.map(u => <option key={u.IdUsuario} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Tipo de Tarefa</label>
- <select value={rncForm.tipoTarefa} onChange={e => setRncForm(prev => ({...prev, tipoTarefa: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-red-400">
- <option value="">Selecione...</option>
- {rncForm.tipoTarefa && !tipostarefa.find(t => t.TipoTarefa === rncForm.tipoTarefa) && <option value={rncForm.tipoTarefa}>{rncForm.tipoTarefa}</option>}
- {tipostarefa.map(t => <option key={t.IdTipoTarefa} value={t.TipoTarefa}>{t.TipoTarefa}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Setor</label>
- <select value={rncForm.setor} onChange={e => setRncForm(prev => ({...prev, setor: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-red-400">
- {filteredSectors.map(s => <option key={s.k} value={s.k}>{s.k}</option>)}
- <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
- {rncForm.setor && !filteredSectors.find(s=>s.k===rncForm.setor) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setor) && <option value={rncForm.setor}>{rncForm.setor}</option>}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Data Execução (Prevista)</label>
- <input type="date" value={rncForm.dataExec} onChange={e => setRncForm(prev => ({...prev, dataExec: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-red-400" />
- </div>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Descrição Detalhada</label>
- <textarea value={rncForm.descricao} onChange={e => setRncForm(prev => ({...prev, descricao: e.target.value.toUpperCase()}))} rows={2} placeholder="Descreva a pendência..." className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-red-400 resize-none font-medium" />
- </div>
-
- {/* BLOCO DE FINALIZAÇÃO */}
- {rncForm.idRnc && (rncForm.estatus === 'FINALIZADO' || rncForm.wantsToFinalize) && (
- <div className={`mt-4 pt-3 border-t border-slate-200 ${rncForm.estatus === 'FINALIZADO' ? 'opacity-80' : ''}`}>
- <div className="flex justify-between items-center mb-2">
- <h4 className="font-bold text-xs text-emerald-700 flex items-center gap-1.5 uppercase"><CheckCircle size={14}/> Responsável pela Finalização {rncForm.estatus === 'FINALIZADO' && '(Já Finalizada)'}</h4>
- {rncForm.estatus !== 'FINALIZADO' && (
- <button onClick={finalizarRnc} disabled={!rncForm.usuarioFin || !rncForm.dataFin || isSaving} className="px-2.5 py-1 text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 uppercase"><CheckCircle size={12}/> Confirmar Finalização</button>
- )}
- </div>
- <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Responsável</label>
- <select disabled={rncForm.estatus === 'FINALIZADO'} value={rncForm.usuarioFin} onChange={e => setRncForm(prev => ({...prev, usuarioFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75">
- <option value="">Selecione...</option>
- {rncForm.usuarioFin && !usuarios.find(u => u.NomeCompleto === rncForm.usuarioFin) && <option value={rncForm.usuarioFin}>{rncForm.usuarioFin}</option>}
- {usuarios.map(u => <option key={`fin_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Data de Finalização</label>
- <input disabled={rncForm.estatus === 'FINALIZADO'} type="date" value={rncForm.dataFin} onChange={e => setRncForm(prev => ({...prev, dataFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75" />
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Setor</label>
- <select disabled={rncForm.estatus === 'FINALIZADO'} value={rncForm.setorFin} onChange={e => setRncForm(prev => ({...prev, setorFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75">
- {filteredSectors.map(s => <option key={`fin_${s.k}`} value={s.k}>{s.k}</option>)}
- <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
- {rncForm.setorFin && !filteredSectors.find(s=>s.k===rncForm.setorFin) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setorFin) && <option value={rncForm.setorFin}>{rncForm.setorFin}</option>}
- </select>
- </div>
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Descrição do Retorno / Resolução</label>
- <textarea disabled={rncForm.estatus === 'FINALIZADO'} value={rncForm.descFin} onChange={e => setRncForm(prev => ({...prev, descFin: e.target.value.toUpperCase()}))} rows={1} placeholder="Detalhes de como foi resolvido..." className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2 py-0.5 text-xs text-emerald-800 outline-none focus:border-emerald-400 resize-none font-medium disabled:opacity-75" />
- </div>
- </div>
- )}
-
- {msg && <div className={`mt-3 px-2 py-1 rounded-lg text-[10px] uppercase font-bold text-center ${msg.ok ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>{msg.t}</div>}
- </div>
-
- {/* ÁREA DE GRID (BOTTOM) */}
- <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-white border border-slate-200 rounded-md relative">
- {/* Toggle Filtro */}
- <div className="bg-[#f8fafc] border-b border-slate-200 px-2 py-1 flex justify-between items-center shrink-0">
- <h5 className="text-[10px] font-bold text-slate-500 uppercase">Histórico de Pendências</h5>
- <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 cursor-pointer hover:text-slate-800 transition-colors">
- <input type="checkbox" checked={showFinalizedRncs} onChange={e => setShowFinalizedRncs(e.target.checked)} className="accent-blue-500" /> Mostrar Finalizadas
- </label>
- </div>
-
- {loadRncs ? (
- <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-50/50 z-10"><Loader className="animate-spin" size={28} /> <span className="text-xs font-bold">Carregando pendências...</span></div>
- ) : rncs.length === 0 ? (
- <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-xs font-medium bg-slate-50">Nenhuma pendência encontrada.</div>
- ) : (
- <div className="flex-1 py-0 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-50 [&::-webkit-scrollbar]:h-2 relative bg-white min-h-0">
- <div className="w-max min-w-full pb-2">
- <table className="w-full text-left text-xs whitespace-nowrap border-collapse">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] text-white font-bold uppercase tracking-wider text-[9px] sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-b border-white/20">
- <tr>
- 
- <th className="px-2 py-1.5">Status</th>
- <th className="px-2 py-1.5">Descrição</th>
- <th className="px-2 py-1.5">Responsável</th>
- <th className="px-2 py-1.5">Tipo Tarefa</th>
- <th className="px-2 py-1.5">Setor</th>
- <th className="px-2 py-1.5 text-right flex-1">Data Cri.</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-slate-100">
- {filteredRncs.map((r, idx) => {
- // Adjust string cases since grid data might come slightly different
- const rawSetor = (r.SetorResponsavel || '').trim();
- const mappedSetor = filteredSectors.find(s => s.k.toLowerCase() === rawSetor.toLowerCase())?.k || (['Medição', 'Medicao'].includes(rawSetor) ? 'Medição' : (['Isométrico', 'Isometrico'].includes(rawSetor) ? 'Isométrico' : rawSetor)) || 'Corte';
- 
- const rawTipoTarefa = (r.TipoTarefa || '').trim();
- const mappedTipoTarefa = tipostarefa.find(t => t.TipoTarefa.toLowerCase() === rawTipoTarefa.toLowerCase())?.TipoTarefa || rawTipoTarefa;
- 
- const mappedUsuario = usuarios.find(u => u.NomeCompleto.toLowerCase() === (r.UsuarioResponsavel || '').toLowerCase())?.NomeCompleto || r.UsuarioResponsavel || '';
- 
- return (
- <tr key={r.IdRnc} onClick={() => setRncForm({ 
- idRnc: r.IdRnc, tag: r.Tag || undefined, estatus: r.Estatus, descricao: r.DescricaoPendencia || '', setor: mappedSetor, 
- usuario: mappedUsuario, tipoTarefa: mappedTipoTarefa, dataExec: r.DataCriacao ? brToIso(r.DataCriacao.split(' ')[0]) : '',
- usuarioFin: r.UsuarioResponsavelFinalizacao || '', dataFin: r.DataFinalizacao ? brToIso(r.DataFinalizacao) : '', setorFin: r.SetorResponsavelFinalizacao || 'Corte', descFin: r.DescricaoFinalizacao || '',
- wantsToFinalize: false 
- })} className={`cursor-pointer group hover:bg-[#E0E800]/10 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'} ${r.Estatus === 'FINALIZADO' ? 'opacity-60' : ''}`}>
- <td className="px-2 py-1 font-mono font-bold text-slate-600 text-[10px]">#{r.IdRnc}</td>
- <td className="px-2 py-1"><span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider ${r.Estatus?.toLowerCase().includes('fin') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>{r.Estatus || 'Aberta'}</span></td>
- <td className="px-2 py-1 max-w-[200px] truncate font-medium text-slate-700" title={r.DescricaoPendencia}>{r.DescricaoPendencia}</td>
- <td className="px-2 py-1 truncate max-w-[120px] text-slate-600">{r.UsuarioResponsavel || '—'}</td>
- <td className="px-2 py-1 truncate max-w-[120px] text-slate-600 font-medium">{r.TipoTarefa || '—'}</td>
- <td className="px-2 py-1 font-bold text-slate-600 text-[9px] uppercase"><span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-blue-400 transition-colors"></div>{r.SetorResponsavel}</span></td>
- <td className="px-2 py-1 text-right font-mono text-[9px] text-slate-400">{r.DataCriacao}</td>
- </tr>
- )})}
- </tbody>
- </table>
- </div>
- </div>
- )}
- </div>
- </div>
- </div>
- )}
-
- {/* Modal Agendar Tarefa */}
- {actionModal === 'addTask' && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/50 p-4">
- <div className="bg-white rounded-md p-5 w-full max-w-4xl max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col overflow-hidden">
- 
- {/* HEADER DA MODAL */}
- <div className="flex justify-between items-start mb-4 shrink-0">
- <div>
- <h3 className="font-bold text-slate-800 flex items-center gap-2 text-xl"><CalendarDays size={22} className="text-[#32423D]" /> Agendar Tarefa (PCP)</h3>
- <p className="text-xs font-bold bg-slate-100 border border-slate-200 px-2.5 py-1 mt-1.5 rounded-md text-slate-600 inline-block">
- {selProj?.Projeto} {rncForm.tag ? ` > Tag: ${rncForm.tag}` : ''}
- </p>
- </div>
- <div className="flex items-center gap-2">
- {fromGlobal && (
- <button onClick={() => window.location.href = '/visao-geral-pendencias'} className="px-2 py-0.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold text-xs rounded-lg transition-colors flex items-center gap-1">
- &larr; Voltar
- </button>
- )}
- <button onClick={() => setActionModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- </div>
-
- {/* ÁREA DE FORMULÁRIO (TOP) */}
- <div className="bg-[#f8fafc] border border-slate-200 rounded-md p-4 mb-4 shrink-0 shadow-sm relative">
- {/* Overlay de Loading do Salvar */}
- {isSaving && <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] rounded-md z-10 flex items-center justify-center"><Loader className="animate-spin text-[#32423D]" size={28} /></div>}
- 
- <div className="flex justify-between items-center mb-3">
- <h4 className="font-bold text-xs text-slate-700 flex items-center gap-1.5"><Edit3 size={14}/> {rncForm.idRnc ? `Editando Tarefa #${rncForm.idRnc}` : 'Nova Tarefa'}</h4>
- <div className="flex gap-2 items-center">
- {rncForm.idRnc && rncForm.estatus !== 'TarefaFinalizada' && !rncForm.wantsToFinalize && (
- <button onClick={() => setRncForm(p => ({...p, wantsToFinalize: true, dataFin: new Date().toISOString().split('T')[0]}))} className="px-2 py-0.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors flex items-center gap-1.5 animate-in fade-in zoom-in duration-200">
- <CheckCircle size={14}/> Habilitar Finalização
- </button>
- )}
- {rncForm.wantsToFinalize && (
- <button onClick={() => setRncForm(p => ({...p, wantsToFinalize: false}))} className="px-2 py-0.5 text-xs font-bold text-slate-500 bg-slate-100 border border-slate-200 rounded-lg hover:bg-slate-200 transition-colors flex items-center gap-1.5 animate-in fade-in zoom-in duration-200">
- Cancelar Finalização
- </button>
- )}
- <button onClick={() => setRncForm({ idTag: rncForm.idTag, tag: rncForm.tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false })} className="px-2 py-0.5 text-xs font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">Novo</button>
- <button onClick={salvarNovaTarefa} disabled={!rncForm.descricao.trim()} className="px-4 py-1.5 text-xs font-bold text-white bg-[#32423D] hover:bg-[#32423D]/80 border border-blue-700 rounded-lg shadow-sm transition-colors flex items-center gap-1.5"><CalendarDays size={12}/> Agendar Tarefa</button>
- </div>
- </div>
-
- <div className="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Responsável</label>
- <select value={rncForm.usuario} onChange={e => setRncForm(prev => ({...prev, usuario: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D]">
- <option value="">Selecione...</option>
- {rncForm.usuario && !usuarios.find(u => u.NomeCompleto === rncForm.usuario) && <option value={rncForm.usuario}>{rncForm.usuario}</option>}
- {usuarios.map(u => <option key={`task_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Tipo de Tarefa</label>
- <select value={rncForm.tipoTarefa} onChange={e => setRncForm(prev => ({...prev, tipoTarefa: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D]">
- <option value="">Selecione...</option>
- {rncForm.tipoTarefa && !tipostarefa.find(t => t.TipoTarefa === rncForm.tipoTarefa) && <option value={rncForm.tipoTarefa}>{rncForm.tipoTarefa}</option>}
- {tipostarefa.map(t => <option key={`task_${t.IdTipoTarefa}`} value={t.TipoTarefa}>{t.TipoTarefa}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Setor</label>
- <select value={rncForm.setor} onChange={e => setRncForm(prev => ({...prev, setor: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D]">
- {filteredSectors.map(s => <option key={`task_${s.k}`} value={s.k}>{s.k}</option>)}
- <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
- {rncForm.setor && !filteredSectors.find(s=>s.k===rncForm.setor) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setor) && <option value={rncForm.setor}>{rncForm.setor}</option>}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Data Execução (Prevista)</label>
- <input type="date" value={rncForm.dataExec} onChange={e => setRncForm(prev => ({...prev, dataExec: e.target.value}))} className="w-full border border-slate-300 rounded-lg px-2.5 py-2 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D]" />
- </div>
- </div>
- <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-1">Descrição / Notas da Tarefa</label>
- <textarea value={rncForm.descricao} onChange={e => setRncForm(prev => ({...prev, descricao: e.target.value.toUpperCase()}))} rows={2} placeholder="Descreva a tarefa..." className="w-full border border-slate-300 rounded-lg px-2 py-1 text-xs text-slate-700 outline-none focus:border-[#32423D] resize-none font-medium" />
- </div>
-
- {/* BLOCO DE FINALIZAÇÃO DA TAREFA */}
- {rncForm.idRnc && (rncForm.estatus === 'TarefaFinalizada' || rncForm.wantsToFinalize) && (
- <div className={`mt-4 pt-3 border-t border-slate-200 ${rncForm.estatus === 'TarefaFinalizada' ? 'opacity-80' : ''}`}>
- <div className="flex justify-between items-center mb-2">
- <h4 className="font-bold text-xs text-emerald-700 flex items-center gap-1.5 uppercase"><CheckCircle size={14}/> Responsável pela Finalização {rncForm.estatus === 'TarefaFinalizada' && '(Já Finalizada)'}</h4>
- {rncForm.estatus !== 'TarefaFinalizada' && (
- <button onClick={finalizarRnc} disabled={!rncForm.usuarioFin || !rncForm.dataFin || isSaving} className="px-2.5 py-1 text-[10px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-md shadow-sm transition-colors flex items-center gap-1.5 disabled:opacity-50 uppercase"><CheckCircle size={12}/> Confirmar Finalização</button>
- )}
- </div>
- <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-2">
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Responsável</label>
- <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.usuarioFin} onChange={e => setRncForm(prev => ({...prev, usuarioFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75">
- <option value="">Selecione...</option>
- {rncForm.usuarioFin && !usuarios.find(u => u.NomeCompleto === rncForm.usuarioFin) && <option value={rncForm.usuarioFin}>{rncForm.usuarioFin}</option>}
- {usuarios.map(u => <option key={`fin_${u.IdUsuario}`} value={u.NomeCompleto}>{u.NomeCompleto}</option>)}
- </select>
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Data de Finalização</label>
- <input disabled={rncForm.estatus === 'TarefaFinalizada'} type="date" value={rncForm.dataFin} onChange={e => setRncForm(prev => ({...prev, dataFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75" />
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Setor</label>
- <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.setorFin} onChange={e => setRncForm(prev => ({...prev, setorFin: e.target.value}))} className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-emerald-800 outline-none focus:border-emerald-400 disabled:opacity-75">
- {filteredSectors.map(s => <option key={`fin_${s.k}`} value={s.k}>{s.k}</option>)}
- <option value="Expedição">Expedição</option><option value="Manutenção">Manutenção</option><option value="Qualidade">Qualidade</option><option value="Projetos">Projetos</option><option value="Administrativo">Administrativo</option><option value="Comercial">Comercial</option><option value="Isométrico">Isométrico</option><option value="Medição">Medição</option>
- {rncForm.setorFin && !filteredSectors.find(s=>s.k===rncForm.setorFin) && !['Expedição','Manutenção','Qualidade','Projetos','Administrativo','Comercial','Isométrico','Medição'].includes(rncForm.setorFin) && <option value={rncForm.setorFin}>{rncForm.setorFin}</option>}
- </select>
- </div>
- </div>
- <div>
- <label className="text-[10px] font-bold text-emerald-700 uppercase ml-1 block mb-1">Descrição do Retorno / Resolução</label>
- <textarea disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.descFin} onChange={e => setRncForm(prev => ({...prev, descFin: e.target.value.toUpperCase()}))} rows={1} placeholder="Detalhes de como foi resolvido..." className="w-full border border-emerald-200 bg-emerald-50 rounded-lg px-2 py-0.5 text-xs text-emerald-800 outline-none focus:border-emerald-400 resize-none font-medium disabled:opacity-75" />
- </div>
- </div>
- )}
-
- {msg && <div className={`mt-3 px-2 py-1 rounded-lg text-[10px] uppercase font-bold text-center ${msg.ok ? 'bg-[#E0E800]/40 text-[#32423D]' : 'bg-red-100 text-red-800'}`}>{msg.t}</div>}
- </div>
-
- {/* ÁREA DE GRID (BOTTOM) */}
- <div className="flex-1 overflow-hidden flex flex-col min-h-0 bg-white border border-slate-200 rounded-md relative">
- <div className="bg-[#f8fafc] border-b border-slate-200 px-2 py-1 flex justify-between items-center shrink-0">
- <h5 className="text-[10px] font-bold text-slate-500 uppercase">Histórico de Tarefas (PCP)</h5>
- <button
- onClick={exportarTarefasPCP}
- disabled={filteredRncs.length === 0 || isExporting}
- className="px-2 py-0.5 text-[10px] font-bold text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-1.5 disabled:opacity-50"
- >
- {isExporting ? <Loader className="animate-spin" size={12} /> : <FileDown size={14} />}
- Emitir Relatório
- </button>
- </div>
-
- {loadRncs ? (
- <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 gap-3 bg-slate-50/50 z-10"><Loader className="animate-spin" size={28} /> <span className="text-xs font-bold">Carregando tarefas...</span></div>
- ) : rncs.length === 0 ? (
- <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-xs font-medium bg-slate-50">Nenhuma tarefa encontrada.</div>
- ) : (
- <div className="flex-1 py-0 overflow-auto scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-slate-50 [&::-webkit-scrollbar]:h-2 relative bg-white min-h-0">
- <div className="w-max min-w-full pb-2">
- <table className="w-full text-left text-xs whitespace-nowrap border-collapse">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] text-white font-bold uppercase tracking-wider text-[9px] sticky top-0 z-20 shadow-[0_1px_2px_rgba(0,0,0,0.05)] border-b border-white/20">
- <tr>
- 
- <th className="px-2 py-1.5">Status</th>
- <th className="px-2 py-1.5">Descrição</th>
- <th className="px-2 py-1.5">Responsável</th>
- <th className="px-2 py-1.5">Tipo Tarefa</th>
- <th className="px-2 py-1.5">Setor</th>
- <th className="px-2 py-1.5 text-right flex-1">Data Cri.</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-slate-100">
- {filteredRncs.map((r, idx) => {
- const rawSetor = (r.SetorResponsavel || '').trim();
- const mappedSetor = filteredSectors.find(s => s.k.toLowerCase() === rawSetor.toLowerCase())?.k || (['Medição', 'Medicao'].includes(rawSetor) ? 'Medição' : (['Isométrico', 'Isometrico'].includes(rawSetor) ? 'Isométrico' : rawSetor)) || 'Corte';
- 
- const rawTipoTarefa = (r.TipoTarefa || '').trim();
- const mappedTipoTarefa = tipostarefa.find(t => t.TipoTarefa.toLowerCase() === rawTipoTarefa.toLowerCase())?.TipoTarefa || rawTipoTarefa;
- 
- const mappedUsuario = usuarios.find(u => u.NomeCompleto.toLowerCase() === (r.UsuarioResponsavel || '').toLowerCase())?.NomeCompleto || r.UsuarioResponsavel || '';
- 
- return (
- <tr key={r.IdRnc} onClick={() => setRncForm({ 
- idRnc: r.IdRnc, tag: r.Tag || undefined, estatus: r.Estatus, descricao: r.DescricaoPendencia || '', setor: mappedSetor, 
- usuario: mappedUsuario, tipoTarefa: mappedTipoTarefa, dataExec: r.DataCriacao ? brToIso(r.DataCriacao.split(' ')[0]) : '',
- wantsToFinalize: false 
- })} className={`cursor-pointer group hover:bg-[#E0E800]/10 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'} ${r.Estatus === 'TarefaFinalizada' ? 'opacity-60' : ''}`}>
- <td className="px-2 py-1 font-mono font-bold text-slate-600 text-[10px]">#{r.IdRnc}</td>
- <td className="px-2 py-1"><span className={`text-[8px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider ${r.Estatus?.toLowerCase().includes('fin') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-[#E0E800]/30 text-[#32423D] border-blue-100'}`}>{r.Estatus || 'Aberta'}</span></td>
- <td className="px-2 py-1 max-w-[200px] truncate font-medium text-slate-700" title={r.DescricaoPendencia}>{r.DescricaoPendencia}</td>
- <td className="px-2 py-1 truncate max-w-[120px] text-slate-600">{r.UsuarioResponsavel || '—'}</td>
- <td className="px-2 py-1 truncate max-w-[120px] text-slate-600 font-medium">{r.TipoTarefa || '—'}</td>
- <td className="px-2 py-1 font-bold text-slate-600 text-[9px] uppercase"><span className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-slate-300 group-hover:bg-blue-400 transition-colors"></div>{r.SetorResponsavel}</span></td>
- <td className="px-2 py-1 text-right font-mono text-[9px] text-slate-400">{r.DataCriacao}</td>
- </tr>
- )})}
- </tbody>
- </table>
- </div>
- </div>
- )}
- </div>
- </div>
- </div>
- )}
-
- {/* Painel RNC */}
- {rncPanel && selProj && (
- <div className="fixed inset-0 z-[70] flex justify-end bg-slate-900/40 ">
- <div className="absolute inset-0" onClick={() => { setRncPanel(false); if (showDetailsModal) setShowDetailsModal(true); }} />
- <div className="w-[450px] max-w-full bg-slate-50 relative flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
- <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between shrink-0 shadow-sm"><div className="flex flex-col"><div className="flex items-center gap-2 font-black text-red-600 text-base"><ShieldAlert size={15} /> Ocorrências (RNC)</div><div className="text-[10px] font-bold text-slate-500 mt-0.5 truncate max-w-[300px]">{selProj.Projeto}</div></div><button className="bg-slate-100 hover:bg-slate-200 p-1.5 rounded-md text-slate-600 transition-colors" onClick={() => { setRncPanel(false); }}><X size={14} /></button></div>
- <div className="flex-1 overflow-auto p-4 md:p-5">
- {loadRncs ? <div className="flex items-center justify-center flex-col gap-2 text-slate-400 mt-20"><Loader className="animate-spin" size={24} /><span className="text-xs font-bold">Buscando pendências...</span></div> : rncs.length === 0 ? <div className="text-center text-slate-400 mt-20 text-xs font-medium">Nenhuma RNC identificada para este projeto.</div> : (
- <div className="space-y-3">
- {rncs.map(r => (
- <div key={r.IdRnc} className={`bg-white p-4 rounded-md border-l-4 shadow-sm ${r.Estatus?.toLowerCase().includes('fin') ? 'border-emerald-500' : 'border-red-500'}`}>
- <div className="flex justify-between items-start mb-2">
- <div className="font-bold text-slate-800 text-xs flex items-center gap-1.5">#{r.IdRnc} <span className="bg-slate-100 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-mono border border-slate-200">{r.Tag}</span></div>
- <span className={`text-[9px] font-black px-2 py-0.5 rounded border ${r.Estatus?.toLowerCase().includes('fin') ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-red-50 text-red-700 border-red-100'}`}>{r.Estatus || 'Aberta'}</span>
- </div>
- <div className="text-[11px] text-slate-600 bg-slate-50 p-2.5 rounded border border-slate-100 mb-2 leading-relaxed">{r.DescricaoPendencia || r.DescResumo}</div>
- <div className="flex justify-between items-center text-[9px] text-slate-400 font-bold uppercase tracking-wider pt-2 border-t border-slate-100 mt-1">
- <span className="flex items-center gap-1 text-slate-500"><div className="w-1.5 h-1.5 rounded-full bg-[#E0E800]/200"></div>{r.SetorResponsavel}</span><span>Cr: {r.DataCriacao}</span>
- </div>
- </div>
- ))}
- </div>
- )}
- </div>
- </div>
- </div>
- )}
-
- {osDetailsModal && (
- <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-900/40 p-4">
- <div className="bg-white rounded-md shadow-xl w-full max-w-lg overflow-hidden flex flex-col max-h-[80vh]">
- <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50">
- <div>
- <h3 className="font-black text-slate-800 text-lg">Ordens de Serviço</h3>
- <p className="text-xs text-slate-500 mt-0.5">Lista de O.S {osDetailsModal.type === 'tag' ? 'da Tag selecionada' : 'do Projeto selecionado'}</p>
- </div>
- <button onClick={() => setOsDetailsModal(null)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
- <div className="p-4 overflow-y-auto min-h-[150px] relative">
- {loadOsDetails ? (
- <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10"><Loader className="animate-spin text-[#32423D]" /></div>
- ) : osDetailsModal.osList.length === 0 ? (
- <div className="py-8 text-center text-slate-500 text-xs font-medium bg-slate-50 rounded-md border border-slate-100">Nenhuma ordem de serviço vinculada.</div>
- ) : (
- <div className="border border-slate-200 rounded-md overflow-hidden">
- <table className="w-full text-left text-xs">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white bg-[#567469] border-b border-white/20 text-white text-[10px] font-bold uppercase">
- <tr>
- <th className="px-2 py-1 border-r border-white/20">ID da O.S</th>
- <th className="px-2 py-1">Descrição</th>
- </tr>
- </thead>
- <tbody className="divide-y divide-slate-100">
- {osDetailsModal.osList.map((os, i) => (
- <tr key={i} className="hover:bg-slate-50/50 transition-colors">
- <td className="px-2 py-1 font-mono text-xs font-bold text-slate-700 border-r border-slate-100 w-24">#{String(os.IdOrdemServico).padStart(5, '0')}</td>
- <td className="px-2 py-1 text-xs text-slate-600 font-medium">{os.Descricao || '-'}</td>
- </tr>
- ))}
- </tbody>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    );
+  })}
+</tbody>
  </table>
  </div>
  )}

@@ -7,6 +7,19 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const pool = require('./config/db');
 const tenantMiddleware = require('./middleware/tenant');
+
+function toIsoDate(val) {
+    if (!val || typeof val !== 'string') return null;
+    val = val.trim();
+    if (val.includes('/')) {
+        const parts = val.split('/');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+    }
+    return val;
+}
+
 const matrizRoutes = require('./routes/matrizRoutes');
 const blocksetRoutes = require('./routes/blocksetRoutes');
 const pecaManufaturadaRoutes = require('./routes/pecaManufaturada');
@@ -8412,27 +8425,196 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
     }
 });
 
+
+// ══ ROTAS BULK DE PLANEJAMENTO DE SETORES (PROJETO + TAG + OSs + ITENS DAS OSs) ══
+app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
+    try {
+        const { updates } = req.body;
+        const tagId = req.params.id;
+        const queryPool = req.tenantDbPool || pool;
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.json({ success: true, message: 'Nenhuma alteração a salvar.' });
+        }
+
+        const allowedFields = [
+            'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
+            'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
+            'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioMontagem', 'PlanejadoFinalMontagem',
+            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia',
+            'DataPrevisao'
+        ];
+
+        const dateColsProj = [
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar'
+        ];
+
+        const setClausesTag = [];
+        const valuesTag = [];
+        const setClausesProj = [];
+        const valuesProj = [];
+
+        for (const u of updates) {
+            if (allowedFields.includes(u.field)) {
+                setClausesTag.push(`\`${u.field}\` = ?`);
+                valuesTag.push(u.value || null);
+
+                setClausesProj.push(`\`${u.field}\` = ?`);
+                if (dateColsProj.includes(u.field)) {
+                    valuesProj.push(toIsoDate(u.value));
+                } else {
+                    valuesProj.push(u.value || null);
+                }
+            }
+        }
+
+        if (setClausesTag.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nenhum campo permitido fornecido.' });
+        }
+
+        // 1. Atualizar a TAG no MySQL
+        valuesTag.push(tagId);
+        const sqlTag = `UPDATE tags SET ${setClausesTag.join(', ')} WHERE IdTag = ?`;
+        await queryPool.execute(sqlTag, valuesTag);
+
+        // 2. Atualizar o PROJETO correspondente no MySQL
+        const [tagRows] = await queryPool.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
+        if (tagRows.length > 0 && tagRows[0].IdProjeto) {
+            const idProjeto = tagRows[0].IdProjeto;
+            valuesProj.push(idProjeto);
+            const sqlProj = `UPDATE projetos SET ${setClausesProj.join(', ')} WHERE IdProjeto = ?`;
+            await queryPool.execute(sqlProj, valuesProj);
+        }
+
+        res.json({ success: true, message: 'Datas de planejamento do Projeto e Tag salvas com sucesso no banco de dados.' });
+    } catch (error) {
+        console.error('Error updating tag sector dates bulk:', error);
+        res.status(500).json({ success: false, message: 'Erro ao atualizar datas de planejamento.' });
+    }
+});
+
+app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
+    try {
+        const { updates } = req.body;
+        const tagId = req.params.id;
+        const queryPool = req.tenantDbPool || pool;
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.json({ success: true, message: 'Nenhuma alteração a propagar.' });
+        }
+
+        const allowedFields = [
+            'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
+            'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
+            'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioMontagem', 'PlanejadoFinalMontagem',
+            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia',
+            'DataPrevisao'
+        ];
+
+        const setClausesOS = [];
+        const setClausesItems = [];
+        const valuesOS = [];
+        const valuesItems = [];
+
+        for (const u of updates) {
+            if (allowedFields.includes(u.field)) {
+                setClausesOS.push(`\`${u.field}\` = ?`);
+                valuesOS.push(u.value || null);
+
+                setClausesItems.push(`osi.\`${u.field}\` = ?`);
+                valuesItems.push(u.value || null);
+            }
+        }
+
+        if (setClausesOS.length === 0) {
+            return res.json({ success: true, message: 'Nenhum campo válido para propagar.' });
+        }
+
+        valuesOS.push(tagId);
+        const sqlOS = `UPDATE ordemservico SET ${setClausesOS.join(', ')} WHERE IdTag = ?`;
+        await queryPool.execute(sqlOS, valuesOS);
+
+        valuesItems.push(tagId);
+        const sqlItems = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClausesItems.join(', ')} WHERE os.IdTag = ?`;
+        await queryPool.execute(sqlItems, valuesItems);
+
+        res.json({ success: true, message: 'Datas propagadas com sucesso para todas as OSs e Itens da Tag!' });
+    } catch (error) {
+        console.error('Error propagating dates to OS:', error);
+        res.status(500).json({ success: false, message: 'Erro ao propagar datas para as Ordens de Serviço.' });
+    }
+});
+
 app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
             SELECT 
-                IdOrdemServico, Descricao, OrdemServicoFinalizado, Liberado_Engenharia, QtdeTotalItens,
-                CorteTotalExecutar, CorteTotalExecutado,
-                DobraTotalExecutar, DobraTotalExecutado,
-                SoldaTotalExecutar, SoldaTotalExecutado,
-                PinturaTotalExecutar, PinturaTotalExecutado,
-                MontagemTotalExecutar, MontagemTotalExecutado,
-                CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
-                PULSIONADEIRATotalExecutar, PULSIONADEIRATotalExecutado,
-                GALVANIZARTotalExecutar, GALVANIZARTotalExecutado
-            FROM ordemservico 
-            WHERE IdTag = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
-            ORDER BY IdOrdemServico
+                os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
+                os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
+                
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN 1 ELSE 0 END), 0) AS QtdeTotalItens,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN 1 ELSE 0 END), 0) AS QtdeItensExecutados,
+                
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdeTotalPecas,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdePecasExecutadas,
+
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.Peso, 0), (COALESCE(osi.PesoUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS PesoTotal,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.AreaPintura, 0), (COALESCE(osi.AreaPinturaUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS AreaPinturaTotal,
+
+                os.CorteTotalExecutar, os.CorteTotalExecutado,
+                os.DobraTotalExecutar, os.DobraTotalExecutado,
+                os.SoldaTotalExecutar, os.SoldaTotalExecutado,
+                os.PinturaTotalExecutar, os.PinturaTotalExecutado,
+                os.MontagemTotalExecutar, os.MontagemTotalExecutado,
+                os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
+                os.PULSIONADEIRATotalExecutar, os.PULSIONADEIRATotalExecutado,
+                os.GALVANIZARTotalExecutar, os.GALVANIZARTotalExecutado
+            FROM ordemservico os
+            LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            GROUP BY os.IdOrdemServico
+            ORDER BY os.IdOrdemServico
         `, [req.params.id]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching ordens de servico for tag:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar ordens de servico da tag' });
+    }
+});
+
+app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT 
+                osi.*, osi.OrdemServicoItemFinalizado as Finalizado
+            FROM ordemservicoitem osi
+            INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+              AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            ORDER BY osi.IdOrdemServico, osi.IdOrdemServicoItem
+        `, [req.params.id]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error fetching items for tag:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar itens da tag' });
     }
 });
 
