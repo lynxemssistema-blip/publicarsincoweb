@@ -29,7 +29,7 @@ interface MatRow {
 
 const authHdr = () => ({ 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` });
 
-export default function MontaPecaManufaturadaPage({ usuario='Sistema' }:{usuario?:string}) {
+export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCodMatFabricante }:{usuario?:string, initialCodMatFabricante?:string}) {
   const { user, token } = useAuth();
   const idMatriz = (user as any)?.idMatriz||null;
   const uCriacao = (user as any)?.nome||usuario;
@@ -37,7 +37,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema' }:{usuario
   // Grid 1: Pesquisa de Materiais
   const [materiais1, setMateriais1] = useState<MatRow[]>([]);
   const [loading1, setLoading1] = useState(false);
-  const [fCod1, setFCod1] = useState('');
+  const [fCod1, setFCod1] = useState(initialCodMatFabricante || '');
   const [fDesc1, setFDesc1] = useState('');
   const [selMat1, setSelMat1] = useState<MatRow|null>(null);
 

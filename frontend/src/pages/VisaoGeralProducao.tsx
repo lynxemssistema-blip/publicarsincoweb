@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import Swal from 'sweetalert2';
 
 import { Activity, Search, Filter, X, CalendarDays, Calendar, ArrowUp, ArrowDown, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList, Maximize2, Minimize2 , Share2 } from 'lucide-react';
 import VisaoGeralTagsGlobais from './VisaoGeralTagsGlobais';
@@ -2248,7 +2249,7 @@ const salvarDatasBulkTags = async () => {
                     </label>
                     <input 
                       type="date" 
-                      value={tagBaseDateInputs[t.IdTag] || ((tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? (t.DataEntrada ? brToIso(t.DataEntrada) : new Date().toISOString().split('T')[0]) : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]))}
+                      value={tagBaseDateInputs[t.IdTag] || ((tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? new Date().toISOString().split('T')[0] : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]))}
                       onChange={e => setTagBaseDateInputs(prev => ({ ...prev, [t.IdTag]: e.target.value }))}
                       className="bg-white border border-slate-300 focus:border-[#32423D] rounded px-3 py-1.5 text-xs text-slate-800 font-bold outline-none shadow-xs"
                     />
@@ -2275,21 +2276,55 @@ const salvarDatasBulkTags = async () => {
                     });
                   }
 
+                  const parseLocalDateStr = (isoDateStr: string) => {
+                    if (!isoDateStr) return new Date();
+                    const parts = isoDateStr.split('-').map(Number);
+                    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+                      return new Date(parts[0], parts[1] - 1, parts[2]);
+                    }
+                    return new Date();
+                  };
+
+                  const getInitialDaysForSector = (tag: any, sectorKey: string) => {
+                    const { pi, pf } = getSavedEntitySectorDates(tag, sectorKey);
+                    if (pi && pf) {
+                      const isoPi = pi.includes('/') ? brToIso(pi) : pi;
+                      const isoPf = pf.includes('/') ? brToIso(pf) : pf;
+                      const d1 = parseLocalDateStr(isoPi);
+                      const d2 = parseLocalDateStr(isoPf);
+                      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
+                        const diffMs = d2.getTime() - d1.getTime();
+                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+                        if (diffDays > 0) return String(diffDays);
+                      }
+                    }
+                    return '1';
+                  };
+
+                  const formatLocalDateIso = (d: Date) => {
+                    const y = d.getFullYear();
+                    const m = String(d.getMonth() + 1).padStart(2, '0');
+                    const day = String(d.getDate()).padStart(2, '0');
+                    return `${y}-${m}-${day}`;
+                  };
+
                   const currentMode = tagPlanningModes[t.IdTag] || 'progressivo';
-                  const baseDateVal = tagBaseDateInputs[t.IdTag] || (currentMode === 'progressivo' ? (t.DataEntrada ? brToIso(t.DataEntrada) : new Date().toISOString().split('T')[0]) : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]));
+                  const todayIso = formatLocalDateIso(new Date());
+
+                  const baseDateVal = tagBaseDateInputs[t.IdTag] || (currentMode === 'progressivo' ? todayIso : (t.DataPrevisao ? (t.DataPrevisao.includes('/') ? brToIso(t.DataPrevisao) : t.DataPrevisao) : todayIso));
 
                   let schedule: any[] = [];
                   if (currentMode === 'progressivo') {
-                    let currentStart = new Date(baseDateVal);
-                    if (isNaN(currentStart.getTime())) currentStart = new Date();
+                    let currentStart = parseLocalDateStr(baseDateVal);
 
                     schedule = orderedSectors.map(s => {
                       const daysKey = `${t.IdTag}-${s.key}`;
-                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] || '1', 10));
-                      const startDateStr = currentStart.toISOString().split('T')[0];
+                      const defaultDays = getInitialDaysForSector(t, s.key);
+                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] ?? defaultDays, 10));
+                      const startDateStr = formatLocalDateIso(currentStart);
                       const endDateObj = new Date(currentStart);
                       endDateObj.setDate(endDateObj.getDate() + numDays);
-                      const endDateStr = endDateObj.toISOString().split('T')[0];
+                      const endDateStr = formatLocalDateIso(endDateObj);
 
                       currentStart = new Date(endDateObj);
 
@@ -2303,18 +2338,18 @@ const salvarDatasBulkTags = async () => {
                       };
                     });
                   } else {
-                    let currentEnd = new Date(baseDateVal);
-                    if (isNaN(currentEnd.getTime())) currentEnd = new Date();
+                    let currentEnd = parseLocalDateStr(baseDateVal);
 
                     const revSchedule: any[] = [];
                     for (let i = orderedSectors.length - 1; i >= 0; i--) {
                       const s = orderedSectors[i];
                       const daysKey = `${t.IdTag}-${s.key}`;
-                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] || '1', 10));
-                      const endDateStr = currentEnd.toISOString().split('T')[0];
+                      const defaultDays = getInitialDaysForSector(t, s.key);
+                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] ?? defaultDays, 10));
+                      const endDateStr = formatLocalDateIso(currentEnd);
                       const startDateObj = new Date(currentEnd);
                       startDateObj.setDate(startDateObj.getDate() - numDays);
-                      const startDateStr = startDateObj.toISOString().split('T')[0];
+                      const startDateStr = formatLocalDateIso(startDateObj);
 
                       currentEnd = new Date(startDateObj);
 
@@ -2397,7 +2432,7 @@ const salvarDatasBulkTags = async () => {
                       }));
 
                       if (selProj) {
-                        setProjects(prev => prev.map(p => {
+                        setProjetos(prev => prev.map(p => {
                           if (p.IdProjeto === selProj.IdProjeto) {
                             const updated = { ...p };
                             updates.forEach(u => { (updated as any)[u.field] = u.value; });
@@ -2415,6 +2450,16 @@ const salvarDatasBulkTags = async () => {
                       });
                       const resTag = await respTag.json();
 
+                      if (!respTag.ok || !resTag.success) {
+                        Swal.fire({
+                          icon: 'error',
+                          title: 'Erro de Salvamento',
+                          text: resTag.message || 'Erro ao salvar datas no Projeto/Tag.',
+                          confirmButtonColor: '#32423D'
+                        });
+                        return;
+                      }
+
                       // 2. Propagate to OSs and Items of OSs (MySQL)
                       const respOS = await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/propagar-datas-os`, {
                         method: 'PUT',
@@ -2423,15 +2468,36 @@ const salvarDatasBulkTags = async () => {
                       });
                       const resOS = await respOS.json();
 
-                      alert('Datas de planejamento salvas com SUCESSO no banco de dados para o Projeto, Tag, Ordens de Serviço e Itens!');
-                      fetchProjects();
+                      if (!respOS.ok || !resOS.success) {
+                        Swal.fire({
+                          icon: 'error',
+                          title: 'Erro de Propagação',
+                          text: resOS.message || 'Erro ao propagar datas para Ordens de Serviço.',
+                          confirmButtonColor: '#32423D'
+                        });
+                        return;
+                      }
+
+                      Swal.fire({
+                        icon: 'success',
+                        title: 'Sucesso',
+                        text: 'Datas de planejamento salvas com SUCESSO no banco de dados para o Projeto, Tag, Ordens de Serviço e Itens!',
+                        confirmButtonColor: '#32423D'
+                      });
+
+                      fetchProj();
 
                       if (selProj) fetchTags(selProj.IdProjeto);
 
                       setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: false }));
                     } catch (err) {
                       console.error('Erro ao salvar planejamento:', err);
-                      alert('Erro ao salvar datas de planejamento.');
+                      Swal.fire({
+                        icon: 'error',
+                        title: 'Erro',
+                        text: 'Erro ao salvar datas de planejamento.',
+                        confirmButtonColor: '#32423D'
+                      });
                     } finally {
                       setIsSaving(false);
                     }
@@ -2446,9 +2512,7 @@ const salvarDatasBulkTags = async () => {
                               <th className="px-3 py-2 text-center w-16 border-r border-slate-200">Ordem</th>
                               <th className="px-3.5 py-2 border-r border-slate-200">Recurso (Setor Ativo)</th>
                               <th className="px-3.5 py-2 text-center border-r border-slate-200 w-36">Dias de Produção</th>
-                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-32">Data Início</th>
-                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-32">Data Final</th>
-                              <th className="px-3.5 py-2 text-center w-56">Intervalo de Datas (Início → Fim)</th>
+                              <th className="px-3.5 py-2 text-center w-64">Intervalo de Datas (Início → Fim)</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-slate-100 bg-white">
@@ -2485,18 +2549,12 @@ const salvarDatasBulkTags = async () => {
                                     <input 
                                       type="number" 
                                       min={1} 
-                                      value={tagSectorDaysMap[`${t.IdTag}-${item.key}`] ?? '1'}
+                                      value={tagSectorDaysMap[`${t.IdTag}-${item.key}`] ?? getInitialDaysForSector(t, item.key)}
                                       onChange={e => setTagSectorDaysMap(prev => ({ ...prev, [`${t.IdTag}-${item.key}`]: e.target.value }))}
                                       className="w-16 text-center font-bold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 text-xs outline-none focus:border-[#32423D]"
                                     />
                                     <span className="text-[10px] text-slate-400 font-bold uppercase">dias</span>
                                   </div>
-                                </td>
-                                <td className="px-3.5 py-2 text-center font-mono font-bold text-slate-700 border-r border-slate-100 bg-slate-50/20 text-xs">
-                                  {item.startDateBr}
-                                </td>
-                                <td className="px-3.5 py-2 text-center font-mono font-bold text-emerald-800 border-r border-slate-100 bg-emerald-50/20 text-xs">
-                                  {item.endDateBr}
                                 </td>
                                 <td className="px-3.5 py-2 text-center font-mono font-bold text-indigo-700 bg-indigo-50/30 text-xs">
                                   {item.startDateBr} até {item.endDateBr}

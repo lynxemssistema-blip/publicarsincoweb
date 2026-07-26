@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, X, Loader2, Check, CheckCircle } from 'lucide-react';
+import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench } from 'lucide-react';
+import ModalMontagemProcessoFabricacao from './ModalMontagemProcessoFabricacao';
 
 const API_BASE = '/api';
 
@@ -19,42 +20,114 @@ interface ModalProps {
   token: string | null;
 }
 
+function mapProcessToKey(name: string): { key: string, label: string } {
+  const norm = (name || '').trim().toUpperCase().replace(/\s+/g, '');
+  if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) {
+    return { key: 'CorteaLaser', label: 'Corte a Laser' };
+  }
+  if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) {
+    return { key: 'Pulsionadeira', label: 'Pulsionadeira' };
+  }
+  if (norm.includes('GALVANIZAR')) {
+    return { key: 'Galvanizar', label: 'Galvanizar' };
+  }
+  if (norm.includes('ENGENHARIA')) {
+    return { key: 'Engenharia', label: 'Engenharia' };
+  }
+  if (norm.includes('CORTE')) {
+    return { key: 'Corte', label: 'Corte' };
+  }
+  if (norm.includes('DOBRA')) {
+    return { key: 'Dobra', label: 'Dobra' };
+  }
+  if (norm.includes('SOLDA')) {
+    return { key: 'Solda', label: 'Solda' };
+  }
+  if (norm.includes('PINTURA')) {
+    return { key: 'Pintura', label: 'Pintura' };
+  }
+  if (norm.includes('MONTAGEM')) {
+    return { key: 'Montagem', label: 'Montagem' };
+  }
+  const cleanKey = (name || '').trim().replace(/[^a-zA-Z0-9]/g, '');
+  return { key: cleanKey || 'Processo', label: name || 'Processo' };
+}
+
 export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContext, onSuccess, token }: ModalProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Material[]>([]);
   const [allMaterials, setAllMaterials] = useState<Material[]>([]);
-  const [selectedItems, setSelectedItems] = useState<{ [cod: string]: { qtde: number, acabamento: string } }>({});
+  const [existingOsCodigos, setExistingOsCodigos] = useState<string[]>([]);
+  const [selectedItems, setSelectedItems] = useState<{ 
+    [cod: string]: { 
+      qtde: number, 
+      fator: number,
+      acabamento: string, 
+      tempoSetup: number, 
+      tempoPadrao: number,
+      recursoTempos: Record<string, { tempoSetup: number, tempoPadrao: number }>
+    } 
+  }>({});
+  const [itemProcessos, setItemProcessos] = useState<{ [cod: string]: { key: string, label: string, tempoSetup: number, tempoPadrao: number }[] }>({});
+  const [loadingProcessos, setLoadingProcessos] = useState<{ [cod: string]: boolean }>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [globalAcabamento, setGlobalAcabamento] = useState('');
   const [acabamentos, setAcabamentos] = useState<{ id: string | number, label: string }[]>([]);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [totalAdded, setTotalAdded] = useState(0);
+  const [montarRecursoCod, setMontarRecursoCod] = useState<string | null>(null);
+
+  const fetchExistingOsCodigos = async () => {
+    try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
+      const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens-codigos`, {
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
+      });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.codigos)) {
+        setExistingOsCodigos(json.codigos);
+        return json.codigos;
+      }
+    } catch (e) {
+      console.error('Erro ao carregar codigos existentes na OS', e);
+    }
+    return [];
+  };
 
   useEffect(() => {
     if (isOpen) {
       setSearchTerm('');
       setSearchResults([]);
       setAllMaterials([]);
+      setExistingOsCodigos([]);
       setSelectedItems({});
+      setItemProcessos({});
+      setLoadingProcessos({});
       setGlobalAcabamento('');
       setSuccessMsg(null);
       setTotalAdded(0);
       fetchAcabamentos();
-      fetchInitialMaterials();
+      
+      fetchExistingOsCodigos().then((codsExistentes) => {
+        fetchInitialMaterials(codsExistentes);
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, osId]);
 
-  const fetchInitialMaterials = async () => {
+  const fetchInitialMaterials = async (codsExistentes?: string[]) => {
     setLoading(true);
     try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
       const res = await fetch(`${API_BASE}/material/busca-livre?q=`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
-      if (json.success) {
-        setAllMaterials(json.data);
-        setSearchResults(json.data);
+      if (json.success && Array.isArray(json.data)) {
+        const cods = codsExistentes || existingOsCodigos;
+        const disponiveis = json.data.filter((m: Material) => !cods.includes(m.CodMatFabricante));
+        setAllMaterials(disponiveis);
+        setSearchResults(disponiveis);
       }
     } catch (e) {
       console.error('Erro na busca inicial', e);
@@ -65,33 +138,91 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
   const fetchAcabamentos = async () => {
     try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
       const res = await fetch(`${API_BASE}/acabamento`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
-      if (json.success && json.data) {
-        setAcabamentos(json.data.map((a: any) => ({ id: a.DescAcabamento, label: a.DescAcabamento })));
+      if (json.success && Array.isArray(json.data)) {
+        const mapped = json.data.map((a: any) => ({
+          id: a.IDAcabamento,
+          label: a.DescAcabamento
+        }));
+        setAcabamentos(mapped);
       }
     } catch (e) {
       console.error('Erro ao buscar acabamentos', e);
     }
   };
 
+  const fetchMaterialProcessos = async (cod: string) => {
+    setLoadingProcessos(prev => ({ ...prev, [cod]: true }));
+    try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
+      const res = await fetch(`${API_BASE}/material/processos/${encodeURIComponent(cod)}`, {
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
+      });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const list = json.data.map((proc: any) => {
+          const { key, label } = mapProcessToKey(proc.processofabricacao);
+          return {
+            key,
+            label,
+            tempoSetup: Math.max(0, parseInt(String(proc.tempoSetup), 10) || 0),
+            tempoPadrao: Math.max(0, parseInt(String(proc.tempoPadrao), 10) || 0)
+          };
+        });
+
+        setItemProcessos(prev => ({ ...prev, [cod]: list }));
+
+        setSelectedItems(prev => {
+          const item = prev[cod];
+          if (!item) return prev;
+          const initialRecs: Record<string, { tempoSetup: number, tempoPadrao: number }> = { ...item.recursoTempos };
+          list.forEach((p: any) => {
+            if (!initialRecs[p.key]) {
+              initialRecs[p.key] = {
+                tempoSetup: p.tempoSetup,
+                tempoPadrao: p.tempoPadrao
+              };
+            }
+          });
+          return {
+            ...prev,
+            [cod]: {
+              ...item,
+              recursoTempos: initialRecs
+            }
+          };
+        });
+      } else {
+        setItemProcessos(prev => ({ ...prev, [cod]: [] }));
+      }
+    } catch (e) {
+      console.error(`Erro ao carregar processos do material ${cod}`, e);
+      setItemProcessos(prev => ({ ...prev, [cod]: [] }));
+    } finally {
+      setLoadingProcessos(prev => ({ ...prev, [cod]: false }));
+    }
+  };
+
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchTerm.trim()) {
-      // Se pesquisa vazia, volta à lista completa
       setSearchResults(allMaterials);
       return;
     }
     setLoading(true);
     try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
       const res = await fetch(`${API_BASE}/material/busca-livre?q=${encodeURIComponent(searchTerm)}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
-      if (json.success) {
-        setSearchResults(json.data);
+      if (json.success && Array.isArray(json.data)) {
+        const disponiveis = json.data.filter((m: Material) => !existingOsCodigos.includes(m.CodMatFabricante));
+        setSearchResults(disponiveis);
       }
     } catch (e) {
       console.error('Erro na busca', e);
@@ -100,37 +231,105 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
-  // Limpar pesquisa e voltar à lista completa
   const handleClearSearch = () => {
     setSearchTerm('');
     setSearchResults(allMaterials);
   };
 
   const toggleSelection = (mat: Material) => {
-    setSelectedItems(prev => {
-      const novo = { ...prev };
-      if (novo[mat.CodMatFabricante]) {
-        delete novo[mat.CodMatFabricante];
-      } else {
-        novo[mat.CodMatFabricante] = { qtde: 1, acabamento: globalAcabamento || mat.acabamento || '' };
-      }
-      return novo;
-    });
+    const cod = mat.CodMatFabricante;
+    const isCurrentlySelected = !!selectedItems[cod];
+
+    if (isCurrentlySelected) {
+      setSelectedItems(prev => {
+        const novo = { ...prev };
+        delete novo[cod];
+        return novo;
+      });
+    } else {
+      setSelectedItems(prev => ({
+        ...prev,
+        [cod]: {
+          qtde: 1,
+          fator: 1,
+          acabamento: globalAcabamento || mat.acabamento || '',
+          tempoSetup: 0,
+          tempoPadrao: 0,
+          recursoTempos: {}
+        }
+      }));
+      fetchMaterialProcessos(cod);
+    }
   };
 
-  const updateItem = (cod: string, field: 'qtde' | 'acabamento', value: any) => {
+  const updateItem = (cod: string, field: 'qtde' | 'fator' | 'acabamento' | 'tempoSetup' | 'tempoPadrao', value: any) => {
     setSelectedItems(prev => ({
       ...prev,
       [cod]: { ...prev[cod], [field]: value }
     }));
   };
 
+  const updateRecursoTempo = (cod: string, secKey: string, field: 'tempoSetup' | 'tempoPadrao', val: number) => {
+    setSelectedItems(prev => {
+      const item = prev[cod];
+      if (!item) return prev;
+      const currentRec = item.recursoTempos?.[secKey] || { tempoSetup: 0, tempoPadrao: 0 };
+      return {
+        ...prev,
+        [cod]: {
+          ...item,
+          recursoTempos: {
+            ...item.recursoTempos,
+            [secKey]: {
+              ...currentRec,
+              [field]: Math.max(0, val)
+            }
+          }
+        }
+      };
+    });
+  };
+
   const handleSubmit = async () => {
-    const itensArray = Object.keys(selectedItems).map(cod => ({
-      codmatfabricante: cod,
-      qtde: selectedItems[cod].qtde,
-      acabamento: selectedItems[cod].acabamento
-    }));
+    const itensArray = Object.keys(selectedItems).map(cod => {
+      const item = selectedItems[cod];
+      const qtde = Math.max(1, parseInt(String(item.qtde), 10) || 1);
+      const fator = Math.max(1, parseInt(String(item.fator), 10) || 1);
+      const tempoSetup = Math.max(0, parseInt(String(item.tempoSetup), 10) || 0);
+      const tempoPadrao = Math.max(0, parseInt(String(item.tempoPadrao), 10) || 0);
+      const totalTempo = (((tempoPadrao * qtde) + tempoSetup) * fator);
+
+      const recursoTemposCalculados: Record<string, { tempoSetup: number, tempoPadrao: number, totalTempo: number, totalSetup: number, totalPadrao: number }> = {};
+
+      if (item.recursoTempos) {
+        Object.keys(item.recursoTempos).forEach(secKey => {
+          const rec = item.recursoTempos[secKey];
+          const setup = Math.max(0, parseInt(String(rec.tempoSetup), 10) || 0);
+          const padrao = Math.max(0, parseInt(String(rec.tempoPadrao), 10) || 0);
+          const tot = ((padrao * qtde) + setup) * fator;
+          if (setup > 0 || padrao > 0 || tot > 0) {
+            recursoTemposCalculados[secKey] = {
+              tempoSetup: setup,
+              totalSetup: setup,
+              tempoPadrao: padrao,
+              totalPadrao: padrao * qtde,
+              totalTempo: tot
+            };
+          }
+        });
+      }
+
+      return {
+        codmatfabricante: cod,
+        qtde,
+        fator,
+        acabamento: item.acabamento,
+        tempoSetup,
+        tempoPadrao,
+        totalTempo,
+        recursoTempos: recursoTemposCalculados
+      };
+    });
 
     if (itensArray.length === 0) {
       alert('Selecione pelo menos um material.');
@@ -140,11 +339,12 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     setSaving(true);
     setSuccessMsg(null);
     try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
       const res = await fetch(`${API_BASE}/ordemservico/${osId}/incluir-materiais-dinamico`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {})
         },
         body: JSON.stringify({
           itensSelecionados: itensArray,
@@ -157,13 +357,15 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
         const qtdAdded = itensArray.length;
         setTotalAdded(prev => prev + qtdAdded);
 
-        // ✅ Limpar seleção e pesquisa — retornar à lista completa para novos itens
         setSelectedItems({});
+        setItemProcessos({});
         setSearchTerm('');
-        setSearchResults(allMaterials);
+        
+        const novosCodigos = await fetchExistingOsCodigos();
+        fetchInitialMaterials(novosCodigos);
+
         setSuccessMsg(`✓ ${qtdAdded} material(is) incluído(s) na OS. Selecione mais ou clique em Concluir.`);
 
-        // Notificar parent sem fechar (para atualizar contadores externos se necessário)
         onSuccess();
       } else {
         alert('Erro: ' + json.message);
@@ -176,7 +378,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
-  // Fechar o modal ao concluir (usuário decide quando parar)
   const handleConcluir = () => {
     onClose();
   };
@@ -187,7 +388,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b bg-[#32423D] text-white rounded-t-lg">
           <div>
@@ -195,7 +396,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               <Plus size={20} /> Incluir Materiais na O.S. #{osId}
             </h2>
             <p className="text-xs text-gray-300 mt-1">
-              Busque e selecione materiais. Após confirmar, a lista retorna para você incluir mais itens.
+              Busque e selecione materiais. Os recursos cadastrados para cada material são carregados automaticamente das tabelas <i>material_processo</i> e <i>processofabricacao</i>.
               {totalAdded > 0 && <span className="ml-2 font-bold text-[#E0E800]">({totalAdded} material(is) já incluído(s))</span>}
             </p>
           </div>
@@ -252,15 +453,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                   {acabamentos.map(a => <option key={a.id} value={a.id}>{a.label}</option>)}
                 </select>
               </div>
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={handleClearSearch}
-                  className="text-xs text-[#32423D] underline text-left hover:text-[#32423D]/70"
-                >
-                  ← Ver todos os materiais
-                </button>
-              )}
             </div>
             
             <div className="flex-1 overflow-auto p-2 bg-gray-50">
@@ -270,75 +462,197 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                 <div className="space-y-2">
                   {searchResults.map(mat => {
                     const isSelected = !!selectedItems[mat.CodMatFabricante];
+                    const currentItem = selectedItems[mat.CodMatFabricante];
+                    const currentQtde = currentItem?.qtde || 1;
+
                     return (
                       <div 
                         key={mat.CodMatFabricante}
                         onClick={() => toggleSelection(mat)}
-                        className={`px-2 py-1 bg-white border rounded shadow-sm cursor-pointer transition-all hover:border-[#32423D] ${isSelected ? 'border-[#E0E800] ring-1 ring-[#E0E800] bg-[#FAFAEE]' : 'border-gray-200'}`}
+                        className={`px-3 py-2 bg-white border rounded-lg shadow-xs cursor-pointer transition-all hover:border-[#32423D] ${isSelected ? 'border-[#E0E800] ring-1 ring-[#E0E800] bg-[#FAFAEE]' : 'border-gray-200'}`}
                       >
                         <div className="flex justify-between items-center gap-2">
                           <div className="flex-1 min-w-0 flex items-center">
                             <span className="text-xs font-bold text-gray-800 whitespace-nowrap">{mat.CodMatFabricante}</span>
                             <span className="text-[10px] text-gray-600 ml-2 truncate text-ellipsis">{mat.DescResumo}</span>
                           </div>
-                          {isSelected ? (
-                            <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                              <label className="text-[10px] text-gray-500">Qtd:</label>
+                          
+                          <div className="flex items-center gap-2 shrink-0" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center gap-1">
+                              <label className="text-[10px] font-bold text-gray-500">Qtd:</label>
                               <input 
                                 type="number" min="1" step="1"
-                                className="w-14 px-1 py-0.5 border rounded text-[10px] focus:outline-none focus:border-[#32423D]"
-                                value={selectedItems[mat.CodMatFabricante]?.qtde || 1}
-                                onChange={e => updateItem(mat.CodMatFabricante, 'qtde', parseInt(e.target.value) || 1)}
+                                className="w-14 px-1.5 py-0.5 border border-gray-300 rounded text-xs font-bold text-center focus:outline-none focus:border-[#32423D] bg-white"
+                                value={currentQtde}
+                                onChange={e => {
+                                  const v = Math.max(1, parseInt(e.target.value) || 1);
+                                  if (isSelected) {
+                                    updateItem(mat.CodMatFabricante, 'qtde', v);
+                                  } else {
+                                    toggleSelection(mat);
+                                    updateItem(mat.CodMatFabricante, 'qtde', v);
+                                  }
+                                }}
                               />
                             </div>
-                          ) : (
-                            <div className="text-gray-300 hover:text-gray-400">
-                              <Plus size={14} />
-                            </div>
-                          )}
+
+                            {isSelected ? (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-1 rounded flex items-center gap-1">
+                                <Check size={12} /> Selecionado
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => toggleSelection(mat)}
+                                className="p-1 text-gray-400 hover:text-[#32423D] hover:bg-gray-100 rounded transition-colors"
+                                title="Incluir material"
+                              >
+                                <Plus size={18} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <div className="text-center py-10 text-gray-400 text-sm">Nenhum resultado encontrado.</div>
+                <div className="text-center py-10 text-gray-400 text-sm">
+                  {existingOsCodigos.length > 0 ? 'Nenhum material disponível para incluir (materiais existentes na OS foram ocultados).' : 'Nenhum resultado encontrado.'}
+                </div>
               )}
             </div>
           </div>
 
           {/* Right panel - Selected Items */}
-          <div className="w-full md:w-[320px] shrink-0 flex flex-col bg-white">
-            <div className="p-4 border-b bg-gray-50">
-              <h3 className="font-bold text-gray-700">Itens Selecionados ({totalSelected})</h3>
+          <div className="w-full md:w-[410px] shrink-0 flex flex-col bg-white">
+            <div className="p-3 border-b bg-gray-50 flex items-center justify-between">
+              <h3 className="font-bold text-gray-700 text-sm">Itens Selecionados ({totalSelected})</h3>
+              {totalSelected > 0 && (
+                <span className="text-[10px] text-slate-500">Recursos via material_processo</span>
+              )}
             </div>
-            <div className="flex-1 overflow-auto p-4 space-y-2">
+
+            <div className="flex-1 overflow-auto p-3 space-y-3">
               {totalSelected === 0 ? (
-                <div className="text-center py-10 text-gray-400 text-sm">Nenhum item selecionado.</div>
+                <div className="text-center py-12 text-gray-400 text-sm">Nenhum item selecionado na lista à esquerda.</div>
               ) : (
                 Object.keys(selectedItems).map(cod => {
                   const item = selectedItems[cod];
                   const mat = searchResults.find(m => m.CodMatFabricante === cod) || { DescResumo: 'Desconhecido' };
+                  const itemQtde = item.qtde || 1;
+                  const itemFator = Math.max(1, item.fator || 1);
+                  const isProcLoading = !!loadingProcessos[cod];
+                  const procsList = itemProcessos[cod];
+
                   return (
-                    <div key={cod} className="border border-gray-200 rounded p-2 bg-gray-50 relative flex items-center justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center">
-                          <span className="text-xs font-bold text-gray-800">{cod}</span>
-                          <span className="text-[10px] text-gray-500 ml-2 truncate">{mat.DescResumo}</span>
+                    <div key={cod} className="border border-slate-200 rounded-lg p-3 bg-white shadow-xs flex flex-col gap-2">
+                      {/* Card Header com Codigo, Descricao, Qtd, Fator e Botao de Remover */}
+                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs font-black text-slate-800">{cod}</span>
+                          <span className="text-[10.5px] text-slate-500 block truncate">{mat.DescResumo}</span>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
-                          <label className="text-[10px] text-gray-500">Qtd:</label>
-                          <input
-                            type="number" min="1" step="1"
-                            className="w-14 px-1 py-0.5 border rounded text-[10px] focus:outline-none focus:border-[#32423D]"
-                            value={item.qtde}
-                            onChange={e => updateItem(cod, 'qtde', parseInt(e.target.value) || 1)}
-                          />
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className="flex items-center gap-1 bg-slate-50 px-2 py-0.5 border rounded">
+                            <span className="text-[10px] font-bold text-slate-500">Qtd:</span>
+                            <input
+                              type="number" min="1" step="1"
+                              className="w-12 px-1 py-0.5 border border-slate-300 rounded text-xs font-bold text-center focus:outline-none focus:border-[#32423D]"
+                              value={item.qtde}
+                              onChange={e => updateItem(cod, 'qtde', parseInt(e.target.value) || 1)}
+                            />
+                          </div>
+
+                          <div className="flex items-center gap-1 bg-amber-50/70 border border-amber-200 px-2 py-0.5 rounded">
+                            <span className="text-[10px] font-extrabold text-amber-800">Fator:</span>
+                            <input
+                              type="number" min="1" step="1"
+                              className="w-12 px-1 py-0.5 border border-amber-300 rounded text-xs font-bold text-center text-amber-900 focus:outline-none focus:border-[#32423D] bg-white"
+                              value={itemFator}
+                              onChange={e => updateItem(cod, 'fator', Math.max(1, parseInt(e.target.value) || 1))}
+                            />
+                          </div>
+
+                          <button onClick={() => toggleSelection({ CodMatFabricante: cod } as any)} className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors shrink-0" title="Remover item">
+                            <X size={16} />
+                          </button>
                         </div>
                       </div>
-                      <button onClick={() => toggleSelection({ CodMatFabricante: cod } as any)} className="text-red-500 hover:bg-red-100 rounded p-1 shrink-0">
-                        <X size={14} />
-                      </button>
+
+                      {/* Tempos por Recurso (subidos direto para a parte superior da tela) */}
+                      <div className="pt-1">
+                        <div className="text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1.5 flex items-center justify-between">
+                          <span>Tempos por Recurso (material_processo):</span>
+                          <div className="flex items-center gap-1.5">
+                            {isProcLoading && <Loader2 size={12} className="animate-spin text-[#32423D]" />}
+                            <button
+                              type="button"
+                              onClick={() => setMontarRecursoCod(cod)}
+                              className="text-[9.5px] font-bold text-[#32423D] hover:text-black bg-slate-100 hover:bg-[#E0E800]/40 px-2 py-0.5 rounded border border-slate-300 flex items-center gap-1 transition-colors"
+                              title="Abrir tela de Montagem Processo Fabricação para este item"
+                            >
+                              <Wrench size={11} /> Montar Recursos
+                            </button>
+                          </div>
+                        </div>
+                        
+                        {isProcLoading ? (
+                          <div className="flex items-center gap-2 py-4 justify-center text-[10.5px] text-slate-500 bg-slate-50 rounded">
+                            <Loader2 size={14} className="animate-spin text-[#32423D]" />
+                            <span>Buscando recursos em material_processo...</span>
+                          </div>
+                        ) : procsList && procsList.length > 0 ? (
+                          <div className="space-y-2 max-h-60 overflow-auto pr-1">
+                            {procsList.map(sec => {
+                              const recVal = item.recursoTempos?.[sec.key] || { tempoSetup: sec.tempoSetup, tempoPadrao: sec.tempoPadrao };
+                              const recSetup = recVal.tempoSetup;
+                              const recPadrao = recVal.tempoPadrao;
+                              const recTotal = ((recPadrao * itemQtde) + recSetup) * itemFator;
+
+                              return (
+                                <div key={sec.key} className="bg-slate-50 border border-slate-200 rounded-lg p-2 text-[9.5px] flex flex-col gap-1">
+                                  <div className="flex items-center justify-between font-bold text-slate-700">
+                                    <span className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                                      <span className="w-2 h-2 rounded-full bg-[#32423D]" />
+                                      {sec.label}
+                                    </span>
+                                    <span className="text-emerald-700 font-extrabold text-xs bg-emerald-50 px-2 py-0.5 border border-emerald-100 rounded">
+                                      Tempo Total: {recTotal} min
+                                    </span>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-2 mt-1">
+                                    <div>
+                                      <span className="text-slate-500 font-bold block mb-0.5">Setup (min):</span>
+                                      <input
+                                        type="number" min="0" step="1"
+                                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold text-slate-800 focus:outline-none focus:border-[#32423D] bg-white shadow-xs"
+                                        value={recSetup}
+                                        onChange={e => updateRecursoTempo(cod, sec.key, 'tempoSetup', parseInt(e.target.value) || 0)}
+                                      />
+                                    </div>
+                                    <div>
+                                      <span className="text-slate-500 font-bold block mb-0.5">Padrão (min):</span>
+                                      <input
+                                        type="number" min="0" step="1"
+                                        className="w-full px-2 py-1 border border-slate-300 rounded text-xs font-bold text-slate-800 focus:outline-none focus:border-[#32423D] bg-white shadow-xs"
+                                        value={recPadrao}
+                                        onChange={e => updateRecursoTempo(cod, sec.key, 'tempoPadrao', parseInt(e.target.value) || 0)}
+                                      />
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : procsList && procsList.length === 0 ? (
+                          <div className="p-3 bg-amber-50 border border-amber-200 rounded text-[10.5px] text-amber-800 font-medium text-center">
+                            ⚠️ Não encontrou recurso/processo para este material.
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
                   )
                 })
@@ -346,7 +660,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
             </div>
             
             {/* Footer Actions */}
-            <div className="p-4 border-t bg-gray-50 flex flex-col gap-2">
+            <div className="p-3 border-t bg-gray-50 flex flex-col gap-2">
               <button 
                 onClick={handleSubmit} 
                 disabled={saving || totalSelected === 0}
@@ -366,6 +680,19 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
           
         </div>
       </div>
+
+      {/* Modal de Montagem Processo Fabricacao */}
+      <ModalMontagemProcessoFabricacao
+        isOpen={!!montarRecursoCod}
+        codmatfabricante={montarRecursoCod || undefined}
+        onClose={() => {
+          const cod = montarRecursoCod;
+          setMontarRecursoCod(null);
+          if (cod) {
+            fetchMaterialProcessos(cod);
+          }
+        }}
+      />
     </div>
   );
 }

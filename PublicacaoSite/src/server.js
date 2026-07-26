@@ -7,6 +7,19 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 const pool = require('./config/db');
 const tenantMiddleware = require('./middleware/tenant');
+
+function toIsoDate(val) {
+    if (!val || typeof val !== 'string') return null;
+    val = val.trim();
+    if (val.includes('/')) {
+        const parts = val.split('/');
+        if (parts.length === 3) {
+            return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+        }
+    }
+    return val;
+}
+
 const matrizRoutes = require('./routes/matrizRoutes');
 const blocksetRoutes = require('./routes/blocksetRoutes');
 const pecaManufaturadaRoutes = require('./routes/pecaManufaturada');
@@ -5848,87 +5861,246 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
     }
 });
 
-// Propagar datas de planejamento da TAG → OS e OSItens respeitando txt{Recurso}='1'
+// Propag// Propagar datas de planejamento e usuário da TAG → OS e OSItens respeitando txt{Recurso}='1'
 app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
     try {
         const { idTag } = req.params;
-        const { setores } = req.body;
-        // setores = [{ sectorName, piField, pfField, piValue, pfValue }]
+        const { setores, usuario } = req.body;
+        const userName = usuario || 'SuperAdmin';
 
         if (!setores || !setores.length) {
             return res.status(400).json({ success: false, message: 'Nenhum setor informado.' });
         }
 
         const sectorFlagMap = {
-                  "Corte": "txtCorte",
-                  "Dobra": "txtDobra",
-                  "Solda": "txtSolda",
-                  "Pintura": "txtPintura",
-                  "Montagem": "TxtMontagem",
-                  "CorteaLaser": "txtCorteaLaser",
-                  "PULSIONADEIRA": "txtPULSIONADEIRA", "GALVANIZAR": "txtGALVANIZAR", "Pulsionadeira": "txtPULSIONADEIRA", "Galvanizar": "txtGALVANIZAR"
-        };
-
-        const toDbVal = (field, value) => {
-            if (!value || value.trim() === '') return null;
-            return value;
+            "Corte": "txtCORTE",
+            "Dobra": "txtDobra",
+            "Solda": "txtSolda",
+            "Pintura": "txtPintura",
+            "Montagem": "TxtMontagem",
+            "CorteaLaser": "txtCorteaLaser",
+            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "GALVANIZAR": "txtGALVANIZAR",
+            "Laser": "txtCorteaLaser",
+            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Galvanizar": "txtGALVANIZAR"
         };
 
         const queryPool = req.tenantDbPool || pool;
+
+        // Fetch column lists for dynamic column checking
+        const [colsTag] = await queryPool.execute('SHOW COLUMNS FROM tags');
+        const tagColNames = colsTag.map(c => c.Field);
+
+        const [colsOS] = await queryPool.execute('SHOW COLUMNS FROM ordemservico');
+        const osColNames = colsOS.map(c => c.Field);
+
+        const [colsOSI] = await queryPool.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const osiColNames = colsOSI.map(c => c.Field);
+
         let totalUpdated = 0;
 
         for (const s of setores) {
-            const { sectorName, piField, pfField, piValue, pfValue } = s;
+            const { sectorName, piValue, pfValue } = s;
             const txtFlag = sectorFlagMap[sectorName];
             if (!txtFlag) continue;
 
-            const piDb = toDbVal(piField, piValue);
-            const pfDb = toDbVal(pfField, pfValue);
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
 
-            // Campos a atualizar nas OS e OSItens
-            const setClauses = [];
-            const params = [];
+            const piField = `PlanejadoInicio${nameKey}`;
+            const pfField = `PlanejadoFinal${nameKey}`;
+            const upiField = `UsuarioPlanejadoInicio${nameKey}`;
+            const upfField = `UsuarioPlanejadoFinal${nameKey}`;
 
-            if (piDb !== undefined && piField) {
-                setClauses.push(`${piField} = ?`);
-                params.push(piDb);
+            const piDb = (piValue && piValue.trim() !== '') ? piValue : null;
+            const pfDb = (pfValue && pfValue.trim() !== '') ? pfValue : null;
+
+            // 1. Update TAG (incluindo txtFlag = '1')
+            const tagSetClauses = [`${piField} = COALESCE(?, ${piField})`, `${pfField} = COALESCE(?, ${pfField})`];
+            const tagParams = [piDb, pfDb];
+
+            // Encontrar nome exato da coluna flag na tag (ex: txtCORTE vs txtCorte)
+            const exactTagTxtFlag = tagColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase());
+            if (exactTagTxtFlag) {
+                tagSetClauses.push(`${exactTagTxtFlag} = '1'`);
             }
-            if (pfDb !== undefined && pfField) {
-                setClauses.push(`${pfField} = ?`);
-                params.push(pfDb);
+
+            if (tagColNames.includes(upiField)) {
+                tagSetClauses.push(`${upiField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upiField} END`);
+                tagParams.push(piDb, userName);
+            }
+            if (tagColNames.includes(upfField)) {
+                tagSetClauses.push(`${upfField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upfField} END`);
+                tagParams.push(pfDb, userName);
             }
 
-            if (!setClauses.length) continue;
-
-            // Atualizar ordemservico (OS nesta tag)
             await queryPool.execute(
-                `UPDATE ordemservico SET ${setClauses.join(', ')} WHERE IdTag = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
-                [...params, idTag]
+                `UPDATE tags SET ${tagSetClauses.join(', ')} WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
+                [...tagParams, idTag]
             );
 
-            // Atualizar ordemservicoitem somente onde txt{Recurso}='1'
+            // 2. Update ordemservico (incluindo txtFlag = '1')
+            const osSetClauses = [`${piField} = COALESCE(?, ${piField})`, `${pfField} = COALESCE(?, ${pfField})`];
+            const osParams = [piDb, pfDb];
+
+            const exactOsTxtFlag = osColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase());
+            if (exactOsTxtFlag) {
+                osSetClauses.push(`${exactOsTxtFlag} = '1'`);
+            }
+
+            if (osColNames.includes(upiField)) {
+                osSetClauses.push(`${upiField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upiField} END`);
+                osParams.push(piDb, userName);
+            }
+            if (osColNames.includes(upfField)) {
+                osSetClauses.push(`${upfField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upfField} END`);
+                osParams.push(pfDb, userName);
+            }
+
+            await queryPool.execute(
+                `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdTag = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
+                [...osParams, idTag]
+            );
+
+            // 3. Update ordemservicoitem
+            const osiSetClauses = [`osi.${piField} = COALESCE(?, osi.${piField})`, `osi.${pfField} = COALESCE(?, osi.${pfField})`];
+            const osiParams = [piDb, pfDb];
+            if (osiColNames.includes(upiField)) {
+                osiSetClauses.push(`osi.${upiField} = CASE WHEN ? IS NOT NULL THEN ? ELSE osi.${upiField} END`);
+                osiParams.push(piDb, userName);
+            }
+            if (osiColNames.includes(upfField)) {
+                osiSetClauses.push(`osi.${upfField} = CASE WHEN ? IS NOT NULL THEN ? ELSE osi.${upfField} END`);
+                osiParams.push(pfDb, userName);
+            }
+
+            const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
+
             const [result] = await queryPool.execute(
                 `UPDATE ordemservicoitem osi
-                  INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
-                  SET ${setClauses.map(c => 'osi.' + c).join(', ')}
-                  WHERE os.IdTag = ?
-                    AND osi.${txtFlag} = '1'
-                    AND (osi.OrdemServicoItemFinalizado IS NULL OR osi.OrdemServicoItemFinalizado != 'C')`,
-                [...params, idTag]
+                 INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+                 SET ${osiSetClauses.join(', ')}
+                 WHERE os.IdTag = ?
+                   AND osi.${exactOsiTxtFlag} = '1'
+                   AND (osi.OrdemServicoItemFinalizado IS NULL OR osi.OrdemServicoItemFinalizado != 'C')`,
+                [...osiParams, idTag]
             );
 
             totalUpdated += result.affectedRows || 0;
-            console.log(`[PropDatas] Setor ${sectorName}: ${result.affectedRows} itens atualizados`);
         }
 
-        res.json({ success: true, message: `Datas propagadas para OS: ${totalUpdated} itens atualizados.` });
+        res.json({ success: true, message: `Datas, flags e usuário (${userName}) gravados na Tag, OSs e ${totalUpdated} itens com sucesso!` });
     } catch (error) {
-        console.error('Error propagating dates to OS:', error);
-        res.status(500).json({ success: false, message: 'Erro ao propagar datas: ' + error.message });
+        console.error('Error in propagar-datas-os:', error);
+        res.status(500).json({ success: false, message: 'Erro ao gravar planejamento: ' + error.message });
     }
 });
 
-// POST: Finalizar Projeto em cascata (projetos Ã¢â€ â€™ tags Ã¢â€ â€™ OS Ã¢â€ â€™ OS itens)
+// Propagar datas de planejamento e usuário de uma OS específica para seus itens
+app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
+    try {
+        const { idOs } = req.params;
+        const { setores, usuario } = req.body;
+        const userName = usuario || 'SuperAdmin';
+
+        if (!setores || !setores.length) {
+            return res.status(400).json({ success: false, message: 'Nenhum setor informado.' });
+        }
+
+        const sectorFlagMap = {
+            "Corte": "txtCORTE",
+            "Dobra": "txtDobra",
+            "Solda": "txtSolda",
+            "Pintura": "txtPintura",
+            "Montagem": "TxtMontagem",
+            "CorteaLaser": "txtCorteaLaser",
+            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "GALVANIZAR": "txtGALVANIZAR",
+            "Laser": "txtCorteaLaser",
+            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Galvanizar": "txtGALVANIZAR"
+        };
+
+        const queryPool = req.tenantDbPool || pool;
+
+        const [colsOS] = await queryPool.execute('SHOW COLUMNS FROM ordemservico');
+        const osColNames = colsOS.map(c => c.Field);
+
+        const [colsOSI] = await queryPool.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const osiColNames = colsOSI.map(c => c.Field);
+
+        let totalUpdated = 0;
+
+        for (const s of setores) {
+            const { sectorName, piValue, pfValue } = s;
+            const txtFlag = sectorFlagMap[sectorName];
+            if (!txtFlag) continue;
+
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
+
+            const piField = `PlanejadoInicio${nameKey}`;
+            const pfField = `PlanejadoFinal${nameKey}`;
+            const upiField = `UsuarioPlanejadoInicio${nameKey}`;
+            const upfField = `UsuarioPlanejadoFinal${nameKey}`;
+
+            const piDb = (piValue && piValue.trim() !== '') ? piValue : null;
+            const pfDb = (pfValue && pfValue.trim() !== '') ? pfValue : null;
+
+            // 1. Update ordemservico (incluindo txtFlag = '1')
+            const osSetClauses = [`${piField} = COALESCE(?, ${piField})`, `${pfField} = COALESCE(?, ${pfField})`];
+            const osParams = [piDb, pfDb];
+
+            const exactOsTxtFlag = osColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase());
+            if (exactOsTxtFlag) {
+                osSetClauses.push(`${exactOsTxtFlag} = '1'`);
+            }
+
+            if (osColNames.includes(upiField)) {
+                osSetClauses.push(`${upiField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upiField} END`);
+                osParams.push(piDb, userName);
+            }
+            if (osColNames.includes(upfField)) {
+                osSetClauses.push(`${upfField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upfField} END`);
+                osParams.push(pfDb, userName);
+            }
+
+            await queryPool.execute(
+                `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdOrdemServico = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
+                [...osParams, idOs]
+            );
+
+            // 2. Update ordemservicoitem
+            const osiSetClauses = [`${piField} = COALESCE(?, ${piField})`, `${pfField} = COALESCE(?, ${pfField})`];
+            const osiParams = [piDb, pfDb];
+            if (osiColNames.includes(upiField)) {
+                osiSetClauses.push(`${upiField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upiField} END`);
+                osiParams.push(piDb, userName);
+            }
+            if (osiColNames.includes(upfField)) {
+                osiSetClauses.push(`${upfField} = CASE WHEN ? IS NOT NULL THEN ? ELSE ${upfField} END`);
+                osiParams.push(pfDb, userName);
+            }
+
+            const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
+
+            const [result] = await queryPool.execute(
+                `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
+                 WHERE IdOrdemServico = ?
+                   AND ${exactOsiTxtFlag} = '1'
+                   AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado != 'C')`,
+                [...osiParams, idOs]
+            );
+
+            totalUpdated += result.affectedRows || 0;
+        }
+
+        res.json({ success: true, message: `Datas, flags e usuário (${userName}) gravados na OS e ${totalUpdated} itens com sucesso!` });
+    } catch (error) {
+        console.error('Error in OS propagar-datas:', error);
+        res.status(500).json({ success: false, message: 'Erro ao gravar planejamento da OS: ' + error.message });
+    }
+});
+
 app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
@@ -6071,15 +6243,96 @@ app.post('/api/projeto/:id/open-folder', async (req, res) => {
     }
 });
 
+// PRE-CHECK STATUS LIBERACAO PROJETO
+app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
+    try {
+        const projectId = req.params.id;
+
+        const [tagRows] = await pool.execute(
+            `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
+            [projectId]
+        );
+        const tagCount = Number(tagRows[0]?.count || 0);
+
+        if (tagCount === 0) {
+            return res.json({
+                success: false,
+                liberavel: false,
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+            });
+        }
+
+        const [osRows] = await pool.execute(
+            `SELECT COUNT(*) as count FROM ordemservico os
+             INNER JOIN tags t ON t.IdTag = os.IdTag
+             WHERE t.IdProjeto = ? 
+               AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E <> '*') 
+               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E <> '*')`,
+            [projectId]
+        );
+        const osCount = Number(osRows[0]?.count || 0);
+
+        if (osCount === 0) {
+            return res.json({
+                success: false,
+                liberavel: false,
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+            });
+        }
+
+        return res.json({
+            success: true,
+            liberavel: true,
+            message: 'Projeto elegível para liberação.'
+        });
+    } catch (error) {
+        console.error('Error pre-checking project release:', error);
+        return res.status(500).json({ success: false, liberavel: false, message: 'Erro ao verificar elegibilidade do projeto.' });
+    }
+});
+
 // LIBERAR PROJETO
 app.post('/api/projeto/:id/liberar', async (req, res) => {
     try {
         const { usuario } = req.body;
+        const projectId = req.params.id;
         const now = getCurrentDateTimeBR();
 
-        const [rows] = await pool.execute('SELECT liberado FROM projetos WHERE IdProjeto = ?', [req.params.id]);
+        const [rows] = await pool.execute('SELECT liberado FROM projetos WHERE IdProjeto = ?', [projectId]);
         if (rows.length > 0 && rows[0].liberado && rows[0].liberado.trim() !== '') {
             return res.status(400).json({ success: false, message: 'O projeto não pode ser liberado pois o status de liberação não está vazio.' });
+        }
+
+        // 1. Validação: O projeto deve possuir pelo menos uma Tag
+        const [tagRows] = await pool.execute(
+            `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
+            [projectId]
+        );
+        const tagCount = Number(tagRows[0]?.count || 0);
+
+        if (tagCount === 0) {
+            return res.json({
+                success: false,
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+            });
+        }
+
+        // 2. Validação: Pelo menos uma Tag do projeto deve possuir pelo menos uma Ordem de Serviço (OS)
+        const [osRows] = await pool.execute(
+            `SELECT COUNT(*) as count FROM ordemservico os
+             INNER JOIN tags t ON t.IdTag = os.IdTag
+             WHERE t.IdProjeto = ? 
+               AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E <> '*') 
+               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E <> '*')`,
+            [projectId]
+        );
+        const osCount = Number(osRows[0]?.count || 0);
+
+        if (osCount === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+            });
         }
 
         // Lógica Não-Alfatec padrão (liberado = 'S', DataLiberacao)
@@ -6090,7 +6343,7 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
                 StatusProj = 'AT',
                 DescStatus = 'Ativo'
             WHERE IdProjeto = ?`,
-            [now, req.params.id]
+            [now, projectId]
         );
 
         res.json({ success: true, message: 'Projeto liberado com sucesso.' });
@@ -6100,9 +6353,6 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
     }
 });
 
-// ALTERAR STATUS DO PROJETO (Parar / Cancelar / Reativar)
-// PATCH /api/projeto/:id/status
-// Body: { status: 'PA'|'CA'|'AT', confirmar: true, usuario: 'Nome' }
 app.patch('/api/projeto/:id/status', async (req, res) => {
     try {
         const { id } = req.params;
@@ -8071,13 +8321,14 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
                 
                 worksheet.columns = [
                     { header: 'Cod Mat', key: 'cod', width: 20 },
-                    { header: 'DescriÃƒÂ§ÃƒÂ£o', key: 'desc', width: 50 },
+                    { header: 'Descrição', key: 'desc', width: 50 },
                     { header: 'Qtde', key: 'qtde', width: 10 },
                     { header: 'Peso', key: 'peso', width: 15 },
                     { header: 'Liberado', key: 'lib', width: 10 }
                 ];
 
-                const [itensData] = await connection.execute(`SELECT * FROM ordemservicoitem WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')`, [IdOrdemServico]);
+                const [itensData] = await connection.execute(`SELECT 
+                CodMatFabricante, DescResumo, DescDetal, QtdeTotal, Peso, Liberado_Engenharia FROM ordemservicoitem WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')`, [IdOrdemServico]);
                 itensData.forEach((it) => {
                     worksheet.addRow({
                         cod: it.CodMatFabricante,
@@ -8174,27 +8425,196 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
     }
 });
 
+
+// ══ ROTAS BULK DE PLANEJAMENTO DE SETORES (PROJETO + TAG + OSs + ITENS DAS OSs) ══
+app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
+    try {
+        const { updates } = req.body;
+        const tagId = req.params.id;
+        const queryPool = req.tenantDbPool || pool;
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.json({ success: true, message: 'Nenhuma alteração a salvar.' });
+        }
+
+        const allowedFields = [
+            'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
+            'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
+            'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioMontagem', 'PlanejadoFinalMontagem',
+            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia',
+            'DataPrevisao'
+        ];
+
+        const dateColsProj = [
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar'
+        ];
+
+        const setClausesTag = [];
+        const valuesTag = [];
+        const setClausesProj = [];
+        const valuesProj = [];
+
+        for (const u of updates) {
+            if (allowedFields.includes(u.field)) {
+                setClausesTag.push(`\`${u.field}\` = ?`);
+                valuesTag.push(u.value || null);
+
+                setClausesProj.push(`\`${u.field}\` = ?`);
+                if (dateColsProj.includes(u.field)) {
+                    valuesProj.push(toIsoDate(u.value));
+                } else {
+                    valuesProj.push(u.value || null);
+                }
+            }
+        }
+
+        if (setClausesTag.length === 0) {
+            return res.status(400).json({ success: false, message: 'Nenhum campo permitido fornecido.' });
+        }
+
+        // 1. Atualizar a TAG no MySQL
+        valuesTag.push(tagId);
+        const sqlTag = `UPDATE tags SET ${setClausesTag.join(', ')} WHERE IdTag = ?`;
+        await queryPool.execute(sqlTag, valuesTag);
+
+        // 2. Atualizar o PROJETO correspondente no MySQL
+        const [tagRows] = await queryPool.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
+        if (tagRows.length > 0 && tagRows[0].IdProjeto) {
+            const idProjeto = tagRows[0].IdProjeto;
+            valuesProj.push(idProjeto);
+            const sqlProj = `UPDATE projetos SET ${setClausesProj.join(', ')} WHERE IdProjeto = ?`;
+            await queryPool.execute(sqlProj, valuesProj);
+        }
+
+        res.json({ success: true, message: 'Datas de planejamento do Projeto e Tag salvas com sucesso no banco de dados.' });
+    } catch (error) {
+        console.error('Error updating tag sector dates bulk:', error);
+        res.status(500).json({ success: false, message: 'Erro ao atualizar datas de planejamento.' });
+    }
+});
+
+app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
+    try {
+        const { updates } = req.body;
+        const tagId = req.params.id;
+        const queryPool = req.tenantDbPool || pool;
+
+        if (!Array.isArray(updates) || updates.length === 0) {
+            return res.json({ success: true, message: 'Nenhuma alteração a propagar.' });
+        }
+
+        const allowedFields = [
+            'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
+            'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
+            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
+            'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
+            'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
+            'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar',
+            'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
+            'PlanejadoInicioMontagem', 'PlanejadoFinalMontagem',
+            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia',
+            'DataPrevisao'
+        ];
+
+        const setClausesOS = [];
+        const setClausesItems = [];
+        const valuesOS = [];
+        const valuesItems = [];
+
+        for (const u of updates) {
+            if (allowedFields.includes(u.field)) {
+                setClausesOS.push(`\`${u.field}\` = ?`);
+                valuesOS.push(u.value || null);
+
+                setClausesItems.push(`osi.\`${u.field}\` = ?`);
+                valuesItems.push(u.value || null);
+            }
+        }
+
+        if (setClausesOS.length === 0) {
+            return res.json({ success: true, message: 'Nenhum campo válido para propagar.' });
+        }
+
+        valuesOS.push(tagId);
+        const sqlOS = `UPDATE ordemservico SET ${setClausesOS.join(', ')} WHERE IdTag = ?`;
+        await queryPool.execute(sqlOS, valuesOS);
+
+        valuesItems.push(tagId);
+        const sqlItems = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClausesItems.join(', ')} WHERE os.IdTag = ?`;
+        await queryPool.execute(sqlItems, valuesItems);
+
+        res.json({ success: true, message: 'Datas propagadas com sucesso para todas as OSs e Itens da Tag!' });
+    } catch (error) {
+        console.error('Error propagating dates to OS:', error);
+        res.status(500).json({ success: false, message: 'Erro ao propagar datas para as Ordens de Serviço.' });
+    }
+});
+
 app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
             SELECT 
-                IdOrdemServico, Descricao, OrdemServicoFinalizado, Liberado_Engenharia, QtdeTotalItens,
-                CorteTotalExecutar, CorteTotalExecutado,
-                DobraTotalExecutar, DobraTotalExecutado,
-                SoldaTotalExecutar, SoldaTotalExecutado,
-                PinturaTotalExecutar, PinturaTotalExecutado,
-                MontagemTotalExecutar, MontagemTotalExecutado,
-                CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
-                PULSIONADEIRATotalExecutar, PULSIONADEIRATotalExecutado,
-                GALVANIZARTotalExecutar, GALVANIZARTotalExecutado
-            FROM ordemservico 
-            WHERE IdTag = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
-            ORDER BY IdOrdemServico
+                os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
+                os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
+                
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN 1 ELSE 0 END), 0) AS QtdeTotalItens,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN 1 ELSE 0 END), 0) AS QtdeItensExecutados,
+                
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdeTotalPecas,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdePecasExecutadas,
+
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.Peso, 0), (COALESCE(osi.PesoUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS PesoTotal,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.AreaPintura, 0), (COALESCE(osi.AreaPinturaUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS AreaPinturaTotal,
+
+                os.CorteTotalExecutar, os.CorteTotalExecutado,
+                os.DobraTotalExecutar, os.DobraTotalExecutado,
+                os.SoldaTotalExecutar, os.SoldaTotalExecutado,
+                os.PinturaTotalExecutar, os.PinturaTotalExecutado,
+                os.MontagemTotalExecutar, os.MontagemTotalExecutado,
+                os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
+                os.PULSIONADEIRATotalExecutar, os.PULSIONADEIRATotalExecutado,
+                os.GALVANIZARTotalExecutar, os.GALVANIZARTotalExecutado
+            FROM ordemservico os
+            LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            GROUP BY os.IdOrdemServico
+            ORDER BY os.IdOrdemServico
         `, [req.params.id]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching ordens de servico for tag:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar ordens de servico da tag' });
+    }
+});
+
+app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT 
+                osi.*, osi.OrdemServicoItemFinalizado as Finalizado
+            FROM ordemservicoitem osi
+            INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+              AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            ORDER BY osi.IdOrdemServico, osi.IdOrdemServicoItem
+        `, [req.params.id]);
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error fetching items for tag:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar itens da tag' });
     }
 });
 
@@ -8260,6 +8680,7 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
                 Espessura, Altura, Largura,
                 CodMatFabricante, MaterialSW, EnderecoArquivo,
                 ProdutoPrincipal,
+                DataPrevisao, qtde, Data_Liberacao_Engenharia, OrdemServicoItemFinalizado, NumeroDobras, AreaPinturaUnitario, PesoUnitario,
                 OrdemServicoItemFinalizado as Finalizado,
                 txtCorte, sttxtCorte, CortePercentual,
                 txtDobra, sttxtDobra, DobraPercentual,
@@ -8488,13 +8909,29 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
         res.json({ success: true, message: `${adicionados} itens incluídos com sucesso!`, adicionados });
     } catch (e) {
         if (conn) await conn.rollback();
-        console.error(e);
         res.status(500).json({ success: false, message: e.message || 'Erro ao incluir itens' });
     } finally {
         if (conn) conn.release();
     }
 });
 
+app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
+    try {
+        const osId = req.params.id;
+        const [rows] = await pool.execute(`
+            SELECT DISTINCT CodMatFabricante 
+            FROM ordemservicoitem 
+            WHERE IdOrdemServico = ? 
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+        `, [osId]);
+        
+        const codigos = rows.map(r => r.CodMatFabricante).filter(Boolean);
+        res.json({ success: true, codigos });
+    } catch (e) {
+        console.error('Erro ao buscar codigos na OS:', e);
+        res.status(500).json({ success: false, message: 'Erro ao buscar codigos na OS', error: e.message });
+    }
+});
 
 app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) => {
     let conn = null;
@@ -8510,9 +8947,9 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
         await conn.beginTransaction();
 
         const [osRows] = await conn.execute(`SELECT Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
-        if (osRows.length === 0) throw new Error('OS nÃ£o encontrada');
+        if (osRows.length === 0) throw new Error('OS não encontrada');
         if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
-            throw new Error('OS jÃ¡ liberada, nÃ£o pode incluir materiais');
+            throw new Error('OS já liberada, não pode incluir materiais');
         }
 
         // Helper para checar e criar colunas dinamicamente
@@ -8530,10 +8967,26 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             }
         }
 
+        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+
+        function getSectorKey(procName) {
+            const norm = (procName || '').trim().toUpperCase().replace(/\s+/g, '');
+            if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return 'CorteaLaser';
+            if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Pulsionadeira';
+            if (norm.includes('GALVANIZAR')) return 'Galvanizar';
+            if (norm.includes('ENGENHARIA')) return 'Engenharia';
+            if (norm.includes('CORTE')) return 'Corte';
+            if (norm.includes('DOBRA')) return 'Dobra';
+            if (norm.includes('SOLDA')) return 'Solda';
+            if (norm.includes('PINTURA')) return 'Pintura';
+            if (norm.includes('MONTAGEM')) return 'Montagem';
+            return null;
+        }
+
         let adicionados = 0;
         
         for (const item of itensSelecionados) {
-            const { codmatfabricante, qtde, acabamento } = item;
+            const { codmatfabricante, qtde, acabamento, tempoSetup, tempoPadrao, totalTempo, fator, recursoTempos } = item;
             
             const [matRows] = await conn.execute(
                 `SELECT * FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
@@ -8543,12 +8996,17 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             if (matRows.length === 0) continue;
             const mat = matRows[0];
             
+            const qtdeTotalNum = Number(qtde) || 1;
+            const fatorNum = Math.max(1, parseInt(String(fator), 10) || 1);
+            const pesoUnit = Number(mat.Peso) || 0;
+            const areaUnit = Number(mat.AreaPintura) || 0;
+
             const [procRows] = await conn.execute(
                 `SELECT pf.processofabricacao
                  FROM material_processo mp
                  JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-                 WHERE mp.IdMaterial = ? AND mp.Ativo = 'A' AND (pf.D_E_L_E_T_E IS NULL OR pf.D_E_L_E_T_E = '') AND pf.Fabrica = 'SIM'`,
-                [mat.IdMaterial]);
+                 WHERE (mp.IdMaterial = ? OR mp.codmatFabricante = ?) AND mp.Ativo = 'A' AND (pf.D_E_L_E_T_E IS NULL OR pf.D_E_L_E_T_E = '') AND pf.Fabrica = 'SIM'`,
+                [mat.IdMaterial, codmatfabricante]);
             const processosNomes = procRows.map(r => (r.processofabricacao || '').trim().replace(/\s+/g, ''));
             const colunasDinamicasVals = {};
 
@@ -8590,17 +9048,45 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                 // Habilitar a flag deste processo no item
                 colunasDinamicasVals[`txt${colBase}`] = '1';
             }
-            
-            const qtdeTotalNum = Number(qtde) || 0;
-            const pesoUnit = Number(mat.Peso) || 0;
-            const areaUnit = Number(mat.AreaPintura) || 0;
-            
+
+            let itemSumSetup = 0;
+            let itemSumPadrao = 0;
+            let itemSumTotal = 0;
+
+            if (recursoTempos && typeof recursoTempos === 'object') {
+                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                    if (!recVal) continue;
+                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                    const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+                    const rTotalPadrao = rPadrao * qtdeTotalNum;
+                    const rTotalSetup = rSetup;
+                    const rTotalTempo = ((rPadrao * qtdeTotalNum) + rSetup) * fatorNum;
+                    const rDiasProd = rTotalTempo > 0 ? Math.max(1, Math.ceil(rTotalTempo / 480)) : 0;
+
+                    colunasDinamicasVals[`${secKey}TempoSetup`] = rSetup;
+                    colunasDinamicasVals[`${secKey}TotalSetup`] = rTotalSetup;
+                    colunasDinamicasVals[`${secKey}TempoPadrao`] = rPadrao;
+                    colunasDinamicasVals[`${secKey}TotalPadrao`] = rTotalPadrao;
+                    colunasDinamicasVals[`${secKey}TotalTempo`] = rTotalTempo;
+                    colunasDinamicasVals[`${secKey}DiasProducao`] = rDiasProd;
+
+                    itemSumSetup += rSetup;
+                    itemSumPadrao += rPadrao;
+                    itemSumTotal += rTotalTempo;
+                }
+            }
+
+            const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
+            const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
+            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : (((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup) * fatorNum));
+
             const cols = [
                 'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal',
                 'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
                 'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
                 'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
-                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator'
+                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
+                'TempoSetup', 'TempoPadrao', 'TotalTempo'
             ];
             
             const vals = [
@@ -8609,7 +9095,8 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                 mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
                 osContext?.IdProjeto || null, osContext?.IdTag || null, osContext?.Projeto || null,
                 osContext?.Tag || null, osContext?.DescTag || null, osContext?.IdEmpresa || null, osContext?.DescEmpresa || null,
-                'Sistema', 'Sistema', new Date(), 'N', 1
+                'Sistema', 'Sistema', new Date(), 'N', fatorNum,
+                itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
             ];
             
             for (const [key, val] of Object.entries(colunasDinamicasVals)) {
@@ -14826,7 +15313,22 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
     try {
         const [osInfo] = await connection.execute(`SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?`, [IdOrdemServico]);
         if (!osInfo || osInfo.length === 0) return;
-        const { IdTag, IdProjeto } = osInfo[0];
+        async function ensureTimeCols(table) {
+            try {
+                const [cRows] = await connection.execute(`SHOW COLUMNS FROM ${table}`);
+                const exCols = cRows.map(r => r.Field.toLowerCase());
+                for (const col of ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo']) {
+                    if (!exCols.includes(col.toLowerCase())) {
+                        try {
+                            await connection.execute(`ALTER TABLE ${table} ADD COLUMN \`${col}\` INT NULL DEFAULT 0`);
+                        } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+        await ensureTimeCols('ordemservico');
+        await ensureTimeCols('tags');
+        await ensureTimeCols('projetos');
 
         // 1. Atualizar TUDO na OS
         await connection.execute(`
@@ -14836,9 +15338,78 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 PesoTotal = (SELECT COALESCE(SUM(oi.Peso), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 AreaPinturaTotal = (SELECT COALESCE(SUM(oi.AreaPintura), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
+                -- Agregação dos Tempos Globais da OS
+                TempoSetup = (SELECT COALESCE(SUM(oi.TempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalSetup = (SELECT COALESCE(SUM(oi.TempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TempoPadrao = (SELECT COALESCE(SUM(oi.TempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalPadrao = (SELECT COALESCE(SUM(oi.TempoPadrao * oi.QtdeTotal), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalTempo = (SELECT COALESCE(SUM(oi.TotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                -- Tempos por Setor/Recurso na OS
+                CorteTempoSetup = (SELECT COALESCE(SUM(oi.CorteTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalSetup = (SELECT COALESCE(SUM(oi.CorteTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTempoPadrao = (SELECT COALESCE(SUM(oi.CorteTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalPadrao = (SELECT COALESCE(SUM(oi.CorteTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalTempo = (SELECT COALESCE(SUM(oi.CorteTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteDiasProducao = (SELECT CASE WHEN SUM(oi.CorteTotalTempo) > 0 THEN CEIL(SUM(oi.CorteTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                DobraTempoSetup = (SELECT COALESCE(SUM(oi.DobraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalSetup = (SELECT COALESCE(SUM(oi.DobraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTempoPadrao = (SELECT COALESCE(SUM(oi.DobraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalPadrao = (SELECT COALESCE(SUM(oi.DobraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalTempo = (SELECT COALESCE(SUM(oi.DobraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraDiasProducao = (SELECT CASE WHEN SUM(oi.DobraTotalTempo) > 0 THEN CEIL(SUM(oi.DobraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                SoldaTempoSetup = (SELECT COALESCE(SUM(oi.SoldaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalSetup = (SELECT COALESCE(SUM(oi.SoldaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTempoPadrao = (SELECT COALESCE(SUM(oi.SoldaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalPadrao = (SELECT COALESCE(SUM(oi.SoldaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalTempo = (SELECT COALESCE(SUM(oi.SoldaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaDiasProducao = (SELECT CASE WHEN SUM(oi.SoldaTotalTempo) > 0 THEN CEIL(SUM(oi.SoldaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                PinturaTempoSetup = (SELECT COALESCE(SUM(oi.PinturaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalSetup = (SELECT COALESCE(SUM(oi.PinturaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTempoPadrao = (SELECT COALESCE(SUM(oi.PinturaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalPadrao = (SELECT COALESCE(SUM(oi.PinturaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalTempo = (SELECT COALESCE(SUM(oi.PinturaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaDiasProducao = (SELECT CASE WHEN SUM(oi.PinturaTotalTempo) > 0 THEN CEIL(SUM(oi.PinturaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                MontagemTempoSetup = (SELECT COALESCE(SUM(oi.MontagemTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalSetup = (SELECT COALESCE(SUM(oi.MontagemTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTempoPadrao = (SELECT COALESCE(SUM(oi.MontagemTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalPadrao = (SELECT COALESCE(SUM(oi.MontagemTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalTempo = (SELECT COALESCE(SUM(oi.MontagemTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemDiasProducao = (SELECT CASE WHEN SUM(oi.MontagemTotalTempo) > 0 THEN CEIL(SUM(oi.MontagemTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                CorteaLaserTempoSetup = (SELECT COALESCE(SUM(oi.CorteaLaserTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalSetup = (SELECT COALESCE(SUM(oi.CorteaLaserTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(oi.CorteaLaserTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(oi.CorteaLaserTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalTempo = (SELECT COALESCE(SUM(oi.CorteaLaserTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(oi.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(oi.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                GalvanizarTempoSetup = (SELECT COALESCE(SUM(oi.GalvanizarTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalSetup = (SELECT COALESCE(SUM(oi.GalvanizarTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTempoPadrao = (SELECT COALESCE(SUM(oi.GalvanizarTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalPadrao = (SELECT COALESCE(SUM(oi.GalvanizarTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalTempo = (SELECT COALESCE(SUM(oi.GalvanizarTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarDiasProducao = (SELECT CASE WHEN SUM(oi.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(oi.GalvanizarTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                EngenhariaTempoSetup = (SELECT COALESCE(SUM(oi.EngenhariaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalSetup = (SELECT COALESCE(SUM(oi.EngenhariaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTempoPadrao = (SELECT COALESCE(SUM(oi.EngenhariaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalPadrao = (SELECT COALESCE(SUM(oi.EngenhariaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalTempo = (SELECT COALESCE(SUM(oi.EngenhariaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaDiasProducao = (SELECT CASE WHEN SUM(oi.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(oi.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                
                 -- Pecas Executadas: minimo entre setores ativos.
-                -- IMPORTANTE: 999999999 é sentinela para "setor inativo" no LEAST.
-                -- Se LEAST retorna >= 999999999 significa que nenhum setor executou ainda → 0.
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
@@ -14914,6 +15485,10 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     PesoTotal = (SELECT COALESCE(SUM(os.PesoTotal), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     AreaPinturaTotal = (SELECT COALESCE(SUM(os.AreaPinturaTotal), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     
+                    TotalSetup = (SELECT COALESCE(SUM(os.TotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    TotalPadrao = (SELECT COALESCE(SUM(os.TotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    TotalTempo = (SELECT COALESCE(SUM(os.TotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+
                     CorteTotalExecutado = (SELECT COALESCE(SUM(os.CorteTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(os.CorteTotalExecutar), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(os.DobraTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
@@ -14950,6 +15525,10 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     QtdePecasExecutadas = (SELECT COALESCE(SUM(t.QtdePecasExecutadas), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     PesoTotal = (SELECT COALESCE(SUM(t.PesoTotal), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     AreaPinturaTotal = (SELECT COALESCE(SUM(t.AreaPinturaTotal), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    
+                    TotalSetup = (SELECT COALESCE(SUM(t.TotalSetup), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    TotalPadrao = (SELECT COALESCE(SUM(t.TotalPadrao), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    TotalTempo = (SELECT COALESCE(SUM(t.TotalTempo), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     
                     CorteTotalExecutado = (SELECT COALESCE(SUM(t.CorteTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(t.CorteTotalExecutar), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),

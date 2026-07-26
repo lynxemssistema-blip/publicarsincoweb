@@ -22,7 +22,9 @@ const tenantMiddleware = async (req, res, next) => {
         pathStr.includes('download') ||
         pathStr.includes('pdf') ||
         pathStr.includes('manutencao') ||
-        pathStr.includes('acompanhamento')
+        pathStr.includes('acompanhamento') ||
+        pathStr.includes('material') ||
+        pathStr.includes('ordemservico')
     ) {
         return next();
     }

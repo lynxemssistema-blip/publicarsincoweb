@@ -8909,13 +8909,29 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
         res.json({ success: true, message: `${adicionados} itens incluídos com sucesso!`, adicionados });
     } catch (e) {
         if (conn) await conn.rollback();
-        console.error(e);
         res.status(500).json({ success: false, message: e.message || 'Erro ao incluir itens' });
     } finally {
         if (conn) conn.release();
     }
 });
 
+app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
+    try {
+        const osId = req.params.id;
+        const [rows] = await pool.execute(`
+            SELECT DISTINCT CodMatFabricante 
+            FROM ordemservicoitem 
+            WHERE IdOrdemServico = ? 
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+        `, [osId]);
+        
+        const codigos = rows.map(r => r.CodMatFabricante).filter(Boolean);
+        res.json({ success: true, codigos });
+    } catch (e) {
+        console.error('Erro ao buscar codigos na OS:', e);
+        res.status(500).json({ success: false, message: 'Erro ao buscar codigos na OS', error: e.message });
+    }
+});
 
 app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) => {
     let conn = null;
@@ -8931,9 +8947,9 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
         await conn.beginTransaction();
 
         const [osRows] = await conn.execute(`SELECT Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
-        if (osRows.length === 0) throw new Error('OS nÃ£o encontrada');
+        if (osRows.length === 0) throw new Error('OS não encontrada');
         if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
-            throw new Error('OS jÃ¡ liberada, nÃ£o pode incluir materiais');
+            throw new Error('OS já liberada, não pode incluir materiais');
         }
 
         // Helper para checar e criar colunas dinamicamente
@@ -8951,10 +8967,26 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             }
         }
 
+        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+
+        function getSectorKey(procName) {
+            const norm = (procName || '').trim().toUpperCase().replace(/\s+/g, '');
+            if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return 'CorteaLaser';
+            if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Pulsionadeira';
+            if (norm.includes('GALVANIZAR')) return 'Galvanizar';
+            if (norm.includes('ENGENHARIA')) return 'Engenharia';
+            if (norm.includes('CORTE')) return 'Corte';
+            if (norm.includes('DOBRA')) return 'Dobra';
+            if (norm.includes('SOLDA')) return 'Solda';
+            if (norm.includes('PINTURA')) return 'Pintura';
+            if (norm.includes('MONTAGEM')) return 'Montagem';
+            return null;
+        }
+
         let adicionados = 0;
         
         for (const item of itensSelecionados) {
-            const { codmatfabricante, qtde, acabamento } = item;
+            const { codmatfabricante, qtde, acabamento, tempoSetup, tempoPadrao, totalTempo, fator, recursoTempos } = item;
             
             const [matRows] = await conn.execute(
                 `SELECT * FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
@@ -8964,12 +8996,17 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             if (matRows.length === 0) continue;
             const mat = matRows[0];
             
+            const qtdeTotalNum = Number(qtde) || 1;
+            const fatorNum = Math.max(1, parseInt(String(fator), 10) || 1);
+            const pesoUnit = Number(mat.Peso) || 0;
+            const areaUnit = Number(mat.AreaPintura) || 0;
+
             const [procRows] = await conn.execute(
                 `SELECT pf.processofabricacao
                  FROM material_processo mp
                  JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-                 WHERE mp.IdMaterial = ? AND mp.Ativo = 'A' AND (pf.D_E_L_E_T_E IS NULL OR pf.D_E_L_E_T_E = '') AND pf.Fabrica = 'SIM'`,
-                [mat.IdMaterial]);
+                 WHERE (mp.IdMaterial = ? OR mp.codmatFabricante = ?) AND mp.Ativo = 'A' AND (pf.D_E_L_E_T_E IS NULL OR pf.D_E_L_E_T_E = '') AND pf.Fabrica = 'SIM'`,
+                [mat.IdMaterial, codmatfabricante]);
             const processosNomes = procRows.map(r => (r.processofabricacao || '').trim().replace(/\s+/g, ''));
             const colunasDinamicasVals = {};
 
@@ -9011,17 +9048,45 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                 // Habilitar a flag deste processo no item
                 colunasDinamicasVals[`txt${colBase}`] = '1';
             }
-            
-            const qtdeTotalNum = Number(qtde) || 0;
-            const pesoUnit = Number(mat.Peso) || 0;
-            const areaUnit = Number(mat.AreaPintura) || 0;
-            
+
+            let itemSumSetup = 0;
+            let itemSumPadrao = 0;
+            let itemSumTotal = 0;
+
+            if (recursoTempos && typeof recursoTempos === 'object') {
+                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                    if (!recVal) continue;
+                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                    const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+                    const rTotalPadrao = rPadrao * qtdeTotalNum;
+                    const rTotalSetup = rSetup;
+                    const rTotalTempo = ((rPadrao * qtdeTotalNum) + rSetup) * fatorNum;
+                    const rDiasProd = rTotalTempo > 0 ? Math.max(1, Math.ceil(rTotalTempo / 480)) : 0;
+
+                    colunasDinamicasVals[`${secKey}TempoSetup`] = rSetup;
+                    colunasDinamicasVals[`${secKey}TotalSetup`] = rTotalSetup;
+                    colunasDinamicasVals[`${secKey}TempoPadrao`] = rPadrao;
+                    colunasDinamicasVals[`${secKey}TotalPadrao`] = rTotalPadrao;
+                    colunasDinamicasVals[`${secKey}TotalTempo`] = rTotalTempo;
+                    colunasDinamicasVals[`${secKey}DiasProducao`] = rDiasProd;
+
+                    itemSumSetup += rSetup;
+                    itemSumPadrao += rPadrao;
+                    itemSumTotal += rTotalTempo;
+                }
+            }
+
+            const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
+            const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
+            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : (((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup) * fatorNum));
+
             const cols = [
                 'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal',
                 'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
                 'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
                 'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
-                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator'
+                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
+                'TempoSetup', 'TempoPadrao', 'TotalTempo'
             ];
             
             const vals = [
@@ -9030,7 +9095,8 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                 mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
                 osContext?.IdProjeto || null, osContext?.IdTag || null, osContext?.Projeto || null,
                 osContext?.Tag || null, osContext?.DescTag || null, osContext?.IdEmpresa || null, osContext?.DescEmpresa || null,
-                'Sistema', 'Sistema', new Date(), 'N', 1
+                'Sistema', 'Sistema', new Date(), 'N', fatorNum,
+                itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
             ];
             
             for (const [key, val] of Object.entries(colunasDinamicasVals)) {
@@ -15247,7 +15313,22 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
     try {
         const [osInfo] = await connection.execute(`SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?`, [IdOrdemServico]);
         if (!osInfo || osInfo.length === 0) return;
-        const { IdTag, IdProjeto } = osInfo[0];
+        async function ensureTimeCols(table) {
+            try {
+                const [cRows] = await connection.execute(`SHOW COLUMNS FROM ${table}`);
+                const exCols = cRows.map(r => r.Field.toLowerCase());
+                for (const col of ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo']) {
+                    if (!exCols.includes(col.toLowerCase())) {
+                        try {
+                            await connection.execute(`ALTER TABLE ${table} ADD COLUMN \`${col}\` INT NULL DEFAULT 0`);
+                        } catch(e) {}
+                    }
+                }
+            } catch(e) {}
+        }
+        await ensureTimeCols('ordemservico');
+        await ensureTimeCols('tags');
+        await ensureTimeCols('projetos');
 
         // 1. Atualizar TUDO na OS
         await connection.execute(`
@@ -15257,9 +15338,78 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 PesoTotal = (SELECT COALESCE(SUM(oi.Peso), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 AreaPinturaTotal = (SELECT COALESCE(SUM(oi.AreaPintura), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
+                -- Agregação dos Tempos Globais da OS
+                TempoSetup = (SELECT COALESCE(SUM(oi.TempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalSetup = (SELECT COALESCE(SUM(oi.TempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TempoPadrao = (SELECT COALESCE(SUM(oi.TempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalPadrao = (SELECT COALESCE(SUM(oi.TempoPadrao * oi.QtdeTotal), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                TotalTempo = (SELECT COALESCE(SUM(oi.TotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                -- Tempos por Setor/Recurso na OS
+                CorteTempoSetup = (SELECT COALESCE(SUM(oi.CorteTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalSetup = (SELECT COALESCE(SUM(oi.CorteTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTempoPadrao = (SELECT COALESCE(SUM(oi.CorteTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalPadrao = (SELECT COALESCE(SUM(oi.CorteTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteTotalTempo = (SELECT COALESCE(SUM(oi.CorteTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteDiasProducao = (SELECT CASE WHEN SUM(oi.CorteTotalTempo) > 0 THEN CEIL(SUM(oi.CorteTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                DobraTempoSetup = (SELECT COALESCE(SUM(oi.DobraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalSetup = (SELECT COALESCE(SUM(oi.DobraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTempoPadrao = (SELECT COALESCE(SUM(oi.DobraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalPadrao = (SELECT COALESCE(SUM(oi.DobraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraTotalTempo = (SELECT COALESCE(SUM(oi.DobraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                DobraDiasProducao = (SELECT CASE WHEN SUM(oi.DobraTotalTempo) > 0 THEN CEIL(SUM(oi.DobraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                SoldaTempoSetup = (SELECT COALESCE(SUM(oi.SoldaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalSetup = (SELECT COALESCE(SUM(oi.SoldaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTempoPadrao = (SELECT COALESCE(SUM(oi.SoldaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalPadrao = (SELECT COALESCE(SUM(oi.SoldaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaTotalTempo = (SELECT COALESCE(SUM(oi.SoldaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                SoldaDiasProducao = (SELECT CASE WHEN SUM(oi.SoldaTotalTempo) > 0 THEN CEIL(SUM(oi.SoldaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                PinturaTempoSetup = (SELECT COALESCE(SUM(oi.PinturaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalSetup = (SELECT COALESCE(SUM(oi.PinturaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTempoPadrao = (SELECT COALESCE(SUM(oi.PinturaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalPadrao = (SELECT COALESCE(SUM(oi.PinturaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaTotalTempo = (SELECT COALESCE(SUM(oi.PinturaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PinturaDiasProducao = (SELECT CASE WHEN SUM(oi.PinturaTotalTempo) > 0 THEN CEIL(SUM(oi.PinturaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                MontagemTempoSetup = (SELECT COALESCE(SUM(oi.MontagemTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalSetup = (SELECT COALESCE(SUM(oi.MontagemTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTempoPadrao = (SELECT COALESCE(SUM(oi.MontagemTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalPadrao = (SELECT COALESCE(SUM(oi.MontagemTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemTotalTempo = (SELECT COALESCE(SUM(oi.MontagemTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                MontagemDiasProducao = (SELECT CASE WHEN SUM(oi.MontagemTotalTempo) > 0 THEN CEIL(SUM(oi.MontagemTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                CorteaLaserTempoSetup = (SELECT COALESCE(SUM(oi.CorteaLaserTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalSetup = (SELECT COALESCE(SUM(oi.CorteaLaserTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(oi.CorteaLaserTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(oi.CorteaLaserTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserTotalTempo = (SELECT COALESCE(SUM(oi.CorteaLaserTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(oi.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(oi.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                GalvanizarTempoSetup = (SELECT COALESCE(SUM(oi.GalvanizarTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalSetup = (SELECT COALESCE(SUM(oi.GalvanizarTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTempoPadrao = (SELECT COALESCE(SUM(oi.GalvanizarTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalPadrao = (SELECT COALESCE(SUM(oi.GalvanizarTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarTotalTempo = (SELECT COALESCE(SUM(oi.GalvanizarTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                GalvanizarDiasProducao = (SELECT CASE WHEN SUM(oi.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(oi.GalvanizarTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+
+                EngenhariaTempoSetup = (SELECT COALESCE(SUM(oi.EngenhariaTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalSetup = (SELECT COALESCE(SUM(oi.EngenhariaTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTempoPadrao = (SELECT COALESCE(SUM(oi.EngenhariaTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalPadrao = (SELECT COALESCE(SUM(oi.EngenhariaTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaTotalTempo = (SELECT COALESCE(SUM(oi.EngenhariaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                EngenhariaDiasProducao = (SELECT CASE WHEN SUM(oi.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(oi.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                
                 -- Pecas Executadas: minimo entre setores ativos.
-                -- IMPORTANTE: 999999999 é sentinela para "setor inativo" no LEAST.
-                -- Se LEAST retorna >= 999999999 significa que nenhum setor executou ainda → 0.
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
@@ -15335,6 +15485,10 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     PesoTotal = (SELECT COALESCE(SUM(os.PesoTotal), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     AreaPinturaTotal = (SELECT COALESCE(SUM(os.AreaPinturaTotal), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     
+                    TotalSetup = (SELECT COALESCE(SUM(os.TotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    TotalPadrao = (SELECT COALESCE(SUM(os.TotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    TotalTempo = (SELECT COALESCE(SUM(os.TotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+
                     CorteTotalExecutado = (SELECT COALESCE(SUM(os.CorteTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(os.CorteTotalExecutar), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(os.DobraTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
@@ -15371,6 +15525,10 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     QtdePecasExecutadas = (SELECT COALESCE(SUM(t.QtdePecasExecutadas), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     PesoTotal = (SELECT COALESCE(SUM(t.PesoTotal), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     AreaPinturaTotal = (SELECT COALESCE(SUM(t.AreaPinturaTotal), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    
+                    TotalSetup = (SELECT COALESCE(SUM(t.TotalSetup), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    TotalPadrao = (SELECT COALESCE(SUM(t.TotalPadrao), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
+                    TotalTempo = (SELECT COALESCE(SUM(t.TotalTempo), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     
                     CorteTotalExecutado = (SELECT COALESCE(SUM(t.CorteTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(t.CorteTotalExecutar), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
