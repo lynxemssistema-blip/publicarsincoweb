@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 
@@ -220,6 +220,8 @@ export default function VisaoGeralProducaoPage() {
  const [bulkSectorDates, setBulkSectorDates] = useState<{ [key: string]: string }>({});
 
  const [osDetailsModal, setOsDetailsModal] = useState<{ type: 'tag' | 'projeto', id: number, osList: Record<string, unknown>[] } | null>(null);
+  const osModalItemsCache = useRef<Record<string | number, any[]>>({});
+  const [sectorModal, setSectorModal] = useState<{ title: string; sectors: { key: string; label: string; exec: number; aExec: number }[] } | null>(null);
   const [expandedTagsOs, setExpandedTagsOs] = useState<{ [key: number]: Record<string, unknown>[] | null }>({});
   const [expandedOsItems, setExpandedOsItems] = useState<{ [key: string]: Record<string, unknown>[] | null }>({});
   const [expandedTagSectors, setExpandedTagSectors] = useState<{ [key: number]: boolean }>({});
@@ -529,7 +531,7 @@ export default function VisaoGeralProducaoPage() {
  } else {
  setOsDetailsModal({ type: 'tag', id: idTag, osList: [] });
  }
- } catch {
+ } catch (e) {
  console.error(e);
  setOsDetailsModal({ type: 'tag', id: idTag, osList: [] });
  } finally {
@@ -539,11 +541,11 @@ export default function VisaoGeralProducaoPage() {
 
  
   
-  const toggleOsItemExpansion = async (idOs: string) => {
-    if (expandedOsItems[idOs] !== undefined) {
+  const toggleOsItemExpansion = async (idOs: string | number) => {
+    if (expandedOsItems[idOs] !== undefined && expandedOsItems[idOs] !== null) {
       setExpandedOsItems(prev => {
         const next = { ...prev };
-        if (next[idOs]) { delete next[idOs]; }
+        delete next[idOs];
         return next;
       });
       return;
@@ -625,27 +627,42 @@ export default function VisaoGeralProducaoPage() {
 
   const checkSectorActive = (obj: any, key: string) => {
     if (!obj) return false;
-    const val = (v: any) => String(v ?? '').trim();
+    const isTrue = (v: any) => {
+      if (v === true || v === 1 || v === '1') return true;
+      const s = String(v ?? '').trim().toUpperCase();
+      if (!s || s === '0' || s === 'N' || s === 'NAO' || s === 'NÃO' || s === 'FALSE' || s === '0.00' || s === 'NULL' || s === 'UNDEFINED') return false;
+      return true;
+    };
+
     switch (key) {
       case 'Corte':
-        return val(obj.txtCorte) === '1' || val(obj.txtCorte) === 'S' || val(obj.txtCORTE) === '1' || val(obj.txtCORTE) === 'S' || obj.flagCorte === 1;
+        return isTrue(obj.txtCorte) || isTrue(obj.txtCORTE) || isTrue(obj.flagCorte) || toNum({val: obj.CorteTotalExecutado}) > 0 || toNum({val: obj.CorteTotalExecutar}) > 0;
       case 'Dobra':
-        return val(obj.txtDobra) === '1' || val(obj.txtDobra) === 'S' || val(obj.txtDOBRA) === '1' || val(obj.txtDOBRA) === 'S' || obj.flagDobra === 1;
+        return isTrue(obj.txtDobra) || isTrue(obj.txtDOBRA) || isTrue(obj.flagDobra) || toNum({val: obj.DobraTotalExecutado}) > 0 || toNum({val: obj.DobraTotalExecutar}) > 0;
       case 'Solda':
-        return val(obj.txtSolda) === '1' || val(obj.txtSolda) === 'S' || val(obj.txtSOLDA) === '1' || val(obj.txtSOLDA) === 'S' || obj.flagSolda === 1;
+        return isTrue(obj.txtSolda) || isTrue(obj.txtSOLDA) || isTrue(obj.flagSolda) || toNum({val: obj.SoldaTotalExecutado}) > 0 || toNum({val: obj.SoldaTotalExecutar}) > 0;
       case 'Pintura':
-        return val(obj.txtPintura) === '1' || val(obj.txtPintura) === 'S' || val(obj.txtPINTURA) === '1' || val(obj.txtPINTURA) === 'S' || obj.flagPintura === 1;
+        return isTrue(obj.txtPintura) || isTrue(obj.txtPINTURA) || isTrue(obj.flagPintura) || toNum({val: obj.PinturaTotalExecutado}) > 0 || toNum({val: obj.PinturaTotalExecutar}) > 0;
       case 'Montagem':
-        return val(obj.TxtMontagem) === '1' || val(obj.TxtMontagem) === 'S' || val(obj.txtMontagem) === '1' || val(obj.txtMontagem) === 'S' || val(obj.txtMONTAGEM) === '1' || obj.flagMontagem === 1;
+        return isTrue(obj.TxtMontagem) || isTrue(obj.txtMontagem) || isTrue(obj.txtMONTAGEM) || isTrue(obj.flagMontagem) || toNum({val: obj.MontagemTotalExecutado}) > 0 || toNum({val: obj.MontagemTotalExecutar}) > 0;
       case 'CorteaLaser':
-        return val(obj.txtCorteaLaser) === '1' || val(obj.txtCorteaLaser) === 'S' || val(obj.txtCORTEALASER) === '1' || val(obj.txtCORTEALASER) === 'S' || obj.flagCorteaLaser === 1;
+        return isTrue(obj.txtCorteaLaser) || isTrue(obj.txtCORTEALASER) || isTrue(obj.flagCorteaLaser) || toNum({val: obj.CorteaLaserTotalExecutado}) > 0 || toNum({val: obj.CorteaLaserTotalExecutar}) > 0;
       case 'Pulsionadeira':
-        return val(obj.txtPULSIONADEIRA) === '1' || val(obj.txtPULSIONADEIRA) === 'S' || val(obj.txtPulsionadeira) === '1' || val(obj.txtPulsionadeira) === 'S' || obj.flagPulsionadeira === 1;
+        return isTrue(obj.txtPULSIONADEIRA) || isTrue(obj.txtPulsionadeira) || isTrue(obj.flagPulsionadeira) || toNum({val: obj.PULSIONADEIRATotalExecutado}) > 0 || toNum({val: obj.PulsionadeiraTotalExecutado}) > 0 || toNum({val: obj.PULSIONADEIRATotalExecutar}) > 0 || toNum({val: obj.PulsionadeiraTotalExecutar}) > 0;
       case 'Galvanizar':
-        return val(obj.txtGALVANIZAR) === '1' || val(obj.txtGALVANIZAR) === 'S' || val(obj.txtGalvanizar) === '1' || val(obj.txtGalvanizar) === 'S' || obj.flagGalvanizar === 1;
+        return isTrue(obj.txtGALVANIZAR) || isTrue(obj.txtGalvanizar) || isTrue(obj.flagGalvanizar) || toNum({val: obj.GALVANIZARTotalExecutado}) > 0 || toNum({val: obj.GalvanizarTotalExecutado}) > 0 || toNum({val: obj.GALVANIZARTotalExecutar}) > 0 || toNum({val: obj.GalvanizarTotalExecutar}) > 0;
       default:
         return false;
     }
+  };
+
+  const getSectorPlanningDates = (obj: any, sectorKey: string) => {
+    if (!obj) return { pi: '', pf: '' };
+    const piKey = `PlanejadoInicio${sectorKey}`;
+    const pfKey = `PlanejadoFinal${sectorKey}`;
+    const pi = obj[piKey] ? String(obj[piKey]) : (obj[`pi${sectorKey}`] ? String(obj[`pi${sectorKey}`]) : '');
+    const pf = obj[pfKey] ? String(obj[pfKey]) : (obj[`pf${sectorKey}`] ? String(obj[`pf${sectorKey}`]) : '');
+    return { pi, pf };
   };
 
   const getItemActiveSectors = (item: any) => {
@@ -683,7 +700,9 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      return { key: s.key, label: s.label, exec, aExec };
+      const { pi, pf } = getSectorPlanningDates(item, s.key);
+      const dias = parseFloat(item[`${s.key}DiasProducao`] || item[`dias${s.key}`] || item[`Dias${s.key}`] || 0);
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
     });
   };
 
@@ -699,8 +718,8 @@ export default function VisaoGeralProducaoPage() {
       { key: 'Galvanizar', label: 'Galvanizar' },
     ];
 
-    const mapSector = new Map<string, { key: string, label: string, exec: number, aExec: number, active: boolean }>();
-    SECTOR_ORDER.forEach(s => mapSector.set(s.key, { key: s.key, label: s.label, exec: 0, aExec: 0, active: false }));
+    const mapSector = new Map<string, { key: string, label: string, exec: number, aExec: number, active: boolean, dias: number, pi: string, pf: string }>();
+    SECTOR_ORDER.forEach(s => mapSector.set(s.key, { key: s.key, label: s.label, exec: 0, aExec: 0, active: false, dias: 0, pi: '', pf: '' }));
 
     items.forEach(item => {
       const itemSectors = getItemActiveSectors(item);
@@ -710,6 +729,9 @@ export default function VisaoGeralProducaoPage() {
           target.active = true;
           target.exec += s.exec;
           target.aExec += s.aExec;
+          if (s.dias && !target.dias) target.dias = s.dias;
+          if (s.pi && !target.pi) target.pi = s.pi;
+          if (s.pf && !target.pf) target.pf = s.pf;
         }
       });
     });
@@ -757,7 +779,9 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      return { key: s.key, label: s.label, exec, aExec };
+      const { pi, pf } = getSectorPlanningDates(t, s.key);
+      const dias = parseFloat(t[`${s.key}DiasProducao`] || t[`dias${s.key}`] || t[`Dias${s.key}`] || 0);
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
     });
   };
 
@@ -801,10 +825,74 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      return { key: s.key, label: s.label, exec, aExec };
+      const { pi, pf } = getSectorPlanningDates(os, s.key);
+      const dias = parseFloat(os[`${s.key}DiasProducao`] || os[`dias${s.key}`] || os[`Dias${s.key}`] || 0);
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
     });
   };
 
+  const openTagSectorsModal = async (t: any) => {
+    let items = tagItemsCache[t.IdTag];
+    if (!items || items.length === 0) {
+      try {
+        const r = await (await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/itens`)).json();
+        if (r.success && r.data && r.data.length > 0) {
+          items = r.data;
+          setTagItemsCache(prev => ({ ...prev, [t.IdTag]: r.data }));
+        }
+      } catch (e) {
+        console.error('Error fetching Tag items for sector modal:', e);
+      }
+    }
+    const activeSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : getTagSectors(t);
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
+      sectors: activeSectors
+    });
+  };
+
+  const openOsSectorsModal = async (os: any) => {
+    let items = osModalItemsCache.current[os.IdOrdemServico] || expandedOsItems[os.IdOrdemServico];
+    if (!items || items.length === 0) {
+      try {
+        const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
+        if (r.success && r.data) {
+          items = r.data;
+          osModalItemsCache.current[os.IdOrdemServico] = r.data;
+        }
+      } catch (e) {
+        console.error('Error fetching OS items for sector modal:', e);
+      }
+    }
+    const itemSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : [];
+    const osHeaderSectors = getOsSectors(os);
+
+    const map = new Map<string, any>();
+    osHeaderSectors.forEach(s => map.set(s.key, s));
+    itemSectors.forEach(s => {
+      const existing = map.get(s.key);
+      if (!existing) {
+        map.set(s.key, s);
+      } else {
+        if (s.dias && !existing.dias) existing.dias = s.dias;
+        if (s.pi && !existing.pi) existing.pi = s.pi;
+        if (s.pf && !existing.pf) existing.pf = s.pf;
+      }
+    });
+
+    const activeSectors = Array.from(map.values());
+
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
+      sectors: activeSectors
+    });
+  };
+
+
+    
+  
+  
+  
   const toggleTagSectorsExpansion = async (idTag: number) => {
     setExpandedTagSectors(prev => ({ ...prev, [idTag]: !prev[idTag] }));
     if (!tagItemsCache[idTag] || tagItemsCache[idTag].length === 0) {
@@ -835,16 +923,6 @@ export default function VisaoGeralProducaoPage() {
 
   const toggleOsSectorsExpansion = async (idOs: string | number) => {
     setExpandedOsSectors(prev => ({ ...prev, [idOs]: !prev[idOs] }));
-    if (!expandedOsItems[idOs]) {
-      try {
-        const r = await (await fetch(`${API_BASE}/ordemservico/${idOs}/itens`)).json();
-        if (r.success) {
-          setExpandedOsItems(prev => ({ ...prev, [idOs]: r.data }));
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
   };
 
   const toggleItemSectorsExpansion = (idItem: string | number) => {
@@ -1925,14 +2003,12 @@ const salvarDatasBulkTags = async () => {
  onClick={() => window.location.href = '/visao-geral-pendencias'}
  className="mt-4 bg-white hover:bg-slate-50 text-slate-700 font-bold border border-slate-300 text-xs px-4 py-1.5 rounded-md transition-colors shadow-sm cursor-pointer flex items-center gap-2"
  >
- &larr; Voltar para Todas as Pendências
+&larr; Voltar para Todas as Pendências
  </button>
  </div>
  )}
 
  {/* ══ MODAL DE COMPLETO DE TAGS DA SEGUNDA TELA ══ */}
- {createPortal(
- <>
  
 {/* ══ MODAL DE MONTAR DATAS DE PLANEJAMENTO DA TAG ══ */}
 
@@ -2151,8 +2227,11 @@ const salvarDatasBulkTags = async () => {
                   )}
                   <button 
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); toggleTagSectorsExpansion(t.IdTag); }}
-                    className={`px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm ${expandedTagSectors[t.IdTag] ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800'}`}
+                    onClick={(e) => { 
+                      e.stopPropagation(); 
+                      openTagSectorsModal(t);
+                    }}
+                    className="px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800"
                     title="Exibir Produção dos Setores / Recursos desta Tag"
                   >
                     <Activity size={11} /> Prod. Setores
@@ -2718,8 +2797,11 @@ const salvarDatasBulkTags = async () => {
                             <td className="px-2 py-2 text-center w-28">
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleOsSectorsExpansion(os.IdOrdemServico); }}
-                                className={`text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap ${expandedOsSectors[os.IdOrdemServico] ? 'bg-emerald-700 text-white border border-emerald-800' : 'bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800'}`}
+                                onClick={(e) => { 
+                                  e.stopPropagation(); 
+                                  openOsSectorsModal(os);
+                                }}
+                                className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800"
                                 title="Exibir Produção dos Setores / Recursos desta OS"
                               >
                                 <Activity size={10} /> Prod. Setores
@@ -2854,9 +2936,13 @@ const salvarDatasBulkTags = async () => {
                                                     type="button"
                                                     onClick={(e) => { 
                                                       e.stopPropagation(); 
-                                                      toggleItemSectorsExpansion(item.IdOrdemServicoItem); 
+                                                      const activeSectors = getItemActiveSectors(item);
+                                                      setSectorModal({
+                                                        title: `Produção por Setor/Recurso (Item #${item.IdOrdemServicoItem} — ${item.DescResumo || 'Sem descrição'})`,
+                                                        sectors: activeSectors
+                                                      });
                                                     }}
-                                                    className={`text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap ${expandedItemSectors[item.IdOrdemServicoItem] ? 'bg-sky-700 text-white border border-sky-800' : 'bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800'}`}
+                                                    className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
                                                     title="Exibir Produção dos Setores / Recursos deste Item"
                                                   >
                                                     <Activity size={9} /> Prod. Setores
@@ -2981,13 +3067,174 @@ const salvarDatasBulkTags = async () => {
  Voltar
  </button>
  </div>
- </div>
- </div>
- )}
- </>,
- document.body
- )}
- </div>
- );
-}
+  </div>
+  </div>
+  )}
 
+  {/* MODAL DE PRODUÇÃO POR SETORES DA TAG / OS / ITEM */}
+  {sectorModal && (
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+        {/* MODAL HEADER */}
+        <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
+          <div className="flex items-center gap-2">
+            <Activity size={18} className="text-[#E0E800]" />
+            <h3 className="font-black text-xs uppercase tracking-wide">
+              {sectorModal.title}
+            </h3>
+          </div>
+          <button 
+            onClick={() => setSectorModal(null)} 
+            className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
+            title="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* MODAL BODY */}
+        <div className="p-5 bg-slate-50/50">
+          {sectorModal.sectors.length === 0 ? (
+            <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
+              Nenhum recurso/setor ativo localizado.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2.5 border-r border-slate-200">Setor / Recurso</th>
+                    <th className="px-4 py-2.5 text-center border-r border-slate-200 w-28">Executado</th>
+                    <th className="px-4 py-2.5 text-center border-r border-slate-200 w-28">A Executar</th>
+                    <th className="px-4 py-2.5 text-center w-48">Conclusão (%)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {sectorModal.sectors.map(s => {
+                    const tot = s.exec + s.aExec;
+                    const calcPct = tot > 0 ? Math.min(100, Math.round((s.exec / tot) * 100)) : 0;
+                    return (
+                      <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-2.5 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full bg-[#32423D] shrink-0" />
+                          <span>{s.label}</span>
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-emerald-700 border-r border-slate-100 bg-emerald-50/20 text-sm">
+                          {s.exec}
+                        </td>
+                        <td className="px-4 py-2.5 text-center font-bold text-amber-700 border-r border-slate-100 bg-amber-50/20 text-sm">
+                          {s.aExec}
+                        </td>
+                        <td className="px-4 py-2.5 text-center">
+                          <div className="flex items-center gap-2 px-1">
+                            <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden shadow-inner">
+                              <div 
+                                className={`h-full transition-all duration-300 ${calcPct === 100 ? 'bg-emerald-500' : 'bg-[#32423D]'}`} 
+                                style={{ width: `${calcPct}%` }} 
+                              />
+                            </div>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${calcPct === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
+                              {calcPct}%
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* MODAL FOOTER */}
+        <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={() => setSectorModal(null)}
+            className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+  {/* MODAL DE PRODUÇÃO POR SETORES DA TAG / OS / ITEM */}
+  {sectorModal && createPortal(
+    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+        {/* MODAL HEADER */}
+        <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
+          <div className="flex items-center gap-2">
+            <Activity size={18} className="text-[#E0E800]" />
+            <h3 className="font-black text-xs uppercase tracking-wide">
+              {sectorModal.title}
+            </h3>
+          </div>
+          <button 
+            onClick={() => setSectorModal(null)} 
+            className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
+            title="Fechar"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* MODAL BODY */}
+        <div className="p-5 bg-slate-50/50">
+          {sectorModal.sectors.length === 0 ? (
+            <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
+              Nenhum recurso/setor ativo localizado.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+              <table className="w-full text-xs text-left border-collapse">
+                <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-3 border-r border-slate-200 font-black text-slate-800">Recurso Ativo</th>
+                    <th className="px-4 py-3 text-center border-r border-slate-200 w-48 font-black text-slate-800">Dias p/ Produção do Item</th>
+                    <th className="px-4 py-3 text-center border-r border-slate-200 w-56 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 bg-white">
+                  {sectorModal.sectors.map(s => {
+                    const dateInterval = (s.pi || s.pf) ? `${s.pi || '—'} até ${s.pf || '—'}` : '—';
+                    const diasText = (s.dias !== undefined && s.dias !== null && s.dias > 0) ? `${s.dias} ${s.dias === 1 ? 'dia' : 'dias'}` : '1 dia';
+
+                    return (
+                      <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="px-4 py-3 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2 text-xs">
+                          <span className="w-2.5 h-2.5 rounded-full bg-[#32423D] shrink-0" />
+                          <span>{s.label}</span>
+                        </td>
+                        <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100 text-xs">
+                          {diasText}
+                        </td>
+                        <td className="px-4 py-3 text-center font-medium text-slate-700 border-r border-slate-100 text-xs whitespace-nowrap">
+                          {dateInterval}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* MODAL FOOTER */}
+        <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
+          <button
+            onClick={() => setSectorModal(null)}
+            className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  )}
+  </div>
+  );
+}

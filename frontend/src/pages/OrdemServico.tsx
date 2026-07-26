@@ -1,9 +1,9 @@
 /* eslint-disable */
 import { createPortal } from 'react-dom';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Search, ChevronRight, ChevronDown, ClipboardList, Eye,
+    Activity, Search, ChevronRight, ChevronDown, ChevronUp, ClipboardList, Eye,
     Loader2, RefreshCw, Box, CheckCircle, Clock, XCircle, User, Calendar, Settings2, FileText, FolderOpen,
     Filter, Layers, X, ArrowLeft, Trash2, Flag, RotateCcw, Hash, Copy, FileSpreadsheet, PenTool, AlertTriangle, Star,
     ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus
@@ -159,6 +159,82 @@ class ErrorBoundary extends React.Component<any, any> {
     }
 }
 
+
+const SECTOR_RESOURCE_FIELDS = [
+  { field: 'txtCorte', key: 'Corte', label: 'Corte', order: 1 },
+  { field: 'txtDobra', key: 'Dobra', label: 'Dobra', order: 2 },
+  { field: 'txtSolda', key: 'Solda', label: 'Solda', order: 3 },
+  { field: 'txtPintura', key: 'Pintura', label: 'Pintura', order: 4 },
+  { field: 'TxtMontagem', key: 'Montagem', label: 'Montagem', order: 5 },
+  { field: 'txtCorteaLaser', key: 'CorteaLaser', label: 'Corte a Laser', order: 6 },
+  { field: 'txtPULSIONADEIRA', key: 'Pulsionadeira', label: 'Pulsionadeira', order: 7 },
+  { field: 'txtGALVANIZAR', key: 'Galvanizar', label: 'Galvanizar', order: 8 }
+];
+
+const checkSectorActiveInOS = (obj: any, fieldName: string): boolean => {
+  if (!obj) return false;
+  const directVal = obj[fieldName];
+  if (directVal === true || directVal === 1 || directVal === '1') return true;
+  const sDirect = String(directVal ?? '').trim().toUpperCase();
+  if (sDirect === 'S' || sDirect === 'SIM' || sDirect === 'TRUE') return true;
+
+  const upperField = fieldName.toUpperCase();
+  const upperVal = obj[upperField];
+  if (upperVal === true || upperVal === 1 || upperVal === '1') return true;
+  const sUpper = String(upperVal ?? '').trim().toUpperCase();
+  if (sUpper === 'S' || sUpper === 'SIM' || sUpper === 'TRUE') return true;
+
+  const lowerField = fieldName.toLowerCase();
+  const lowerVal = obj[lowerField];
+  if (lowerVal === true || lowerVal === 1 || lowerVal === '1') return true;
+  const sLower = String(lowerVal ?? '').trim().toUpperCase();
+  if (sLower === 'S' || sLower === 'SIM' || sLower === 'TRUE') return true;
+
+  return false;
+};
+
+const getOsHeaderActiveSectors = (os: any) => {
+  if (!os) return [];
+  return SECTOR_RESOURCE_FIELDS.filter(f => checkSectorActiveInOS(os, f.field)).map(f => {
+    const diasKey = `${f.key}DiasProducao`;
+    const piKey = `PlanejadoInicio${f.key}`;
+    const pfKey = `PlanejadoFinal${f.key}`;
+    return {
+      key: f.key,
+      label: f.label,
+      dias: os[diasKey] || 0,
+      pi: os[piKey] || '',
+      pf: os[pfKey] || ''
+    };
+  });
+};
+
+const aggregateItemsSectorsInOS = (items: any[]) => {
+  if (!items || items.length === 0) return [];
+  const map = new Map<string, any>();
+
+  items.forEach(item => {
+    SECTOR_RESOURCE_FIELDS.forEach(f => {
+      if (checkSectorActiveInOS(item, f.field)) {
+        if (!map.has(f.key)) {
+          const diasKey = `${f.key}DiasProducao`;
+          const piKey = `PlanejadoInicio${f.key}`;
+          const pfKey = `PlanejadoFinal${f.key}`;
+          map.set(f.key, {
+            key: f.key,
+            label: f.label,
+            dias: item[diasKey] || 0,
+            pi: item[piKey] || '',
+            pf: item[pfKey] || ''
+          });
+        }
+      }
+    });
+  });
+
+  return Array.from(map.values());
+};
+
 export default function OrdemServicoPage() {
     return <ErrorBoundary><OrdemServicoContent /></ErrorBoundary>;
 }
@@ -198,11 +274,52 @@ function OrdemServicoContent() {
     // Seleção de itens da OS aberta (para excluir em lote)
     const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
     const [deletandoSelecionados, setDeletandoSelecionados] = useState(false);
+    const [sectorModal, setSectorModal] = useState<{ title: string; sectors: any[] } | null>(null);
+    const osModalItemsCache = useRef<Record<string | number, any[]>>({});
+    
+    const openOsSectorsModal = async (os: any) => {
+      let items = osModalItemsCache.current[os.IdOrdemServico];
+      if (!items || items.length === 0) {
+        try {
+          const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
+          if (r.success && r.data) {
+            items = r.data;
+            osModalItemsCache.current[os.IdOrdemServico] = r.data;
+          }
+        } catch (e) {
+          console.error('Error fetching OS items for sector modal:', e);
+        }
+      }
+      const itemSect = (items && items.length > 0) ? aggregateItemsSectorsInOS(items) : [];
+      const osHeaderSect = getOsHeaderActiveSectors(os);
+
+      const secMap = new Map<string, any>();
+      osHeaderSect.forEach(s => secMap.set(s.key, s));
+      itemSect.forEach(s => {
+        const existing = secMap.get(s.key);
+        if (!existing) {
+          secMap.set(s.key, s);
+        } else {
+          if (s.dias && !existing.dias) existing.dias = s.dias;
+          if (s.pi && !existing.pi) existing.pi = s.pi;
+          if (s.pf && !existing.pf) existing.pf = s.pf;
+        }
+      });
+
+      const activeSectors = Array.from(secMap.values());
+
+      setSectorModal({
+        title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
+        sectors: activeSectors
+      });
+    };
+    
     const [cloneTags, setCloneTags] = useState<DropdownOption[]>([]);
     const [loadingCloneTags, setLoadingCloneTags] = useState(false);
     const [cloneTagsEmpty, setCloneTagsEmpty] = useState(false);
     const [filtroFinalizado, setFiltroFinalizado] = useState<'TODAS' | 'FINALIZADAS' | 'NAO_FINALIZADAS'>('NAO_FINALIZADAS');
     const [filtroLiberado, setFiltroLiberado] = useState<'TODAS' | 'LIBERADAS' | 'NAO_LIBERADAS'>('LIBERADAS');
+    const [showFilterBar, setShowFilterBar] = useState<boolean>(() => localStorage.getItem('sincoweb_show_os_filters') !== 'false');
     const { addToast } = useToast();
 
     // ============================================================
@@ -2003,11 +2120,18 @@ function OrdemServicoContent() {
                                                 )}
                                                 <span className="w-12 text-xs text-gray-600 text-center">{item.QtdeTotal || '-'}</span>
                                                 <span className="w-14 text-xs text-gray-600 text-center">{item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}</span>
-                                                {setoresParaRender.map(s => (
-                                                    <div key={s.key} className="hidden lg:flex w-16 justify-center">
-                                                        <ProgressBar value={(item as any)[s.percentField]} label={s.label} />
-                                                    </div>
-                                                ))}
+                                                {setoresParaRender.map(s => {
+                                                    const temSetorNoItem = String((item as any)[s.txtField] ?? '') === '1';
+                                                    return (
+                                                        <div key={s.key} className="hidden lg:flex w-16 justify-center items-center">
+                                                            {temSetorNoItem ? (
+                                                                <ProgressBar value={(item as any)[s.percentField]} label={s.label} />
+                                                            ) : (
+                                                                <span className="text-gray-300 text-xs font-semibold text-center" title="Recurso/Setor não aplicável a este item">-</span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                                 
                                                 {/* Botão Gerar Pendência (RNC) - sempre visível */}
                                                 <button
@@ -2204,8 +2328,28 @@ function OrdemServicoContent() {
             )}
 
 
+            {/* Header Action: Ocultar / Exibir Pesquisa */}
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => {
+                        setShowFilterBar(prev => {
+                            const next = !prev;
+                            localStorage.setItem('sincoweb_show_os_filters', String(next));
+                            return next;
+                        });
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors shadow-xs"
+                    title={showFilterBar ? "Ocultar o painel de pesquisa e filtros" : "Exibir o painel de pesquisa e filtros"}
+                >
+                    <Filter size={14} className={showFilterBar ? 'text-[#32423D]' : 'text-gray-400'} />
+                    {showFilterBar ? 'Ocultar Pesquisa e Filtros' : 'Exibir Pesquisa e Filtros'}
+                    {showFilterBar ? <ChevronUp size={14} className="ml-1 text-gray-400" /> : <ChevronDown size={14} className="ml-1 text-gray-400" />}
+                </button>
+            </div>
+
             {/* Filters Bar */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2.5">
+            {showFilterBar && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2.5">
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Search Input */}
                     <div className="relative flex-1 min-w-[200px] flex items-center gap-2">
@@ -2395,6 +2539,7 @@ function OrdemServicoContent() {
                     </div>
                 )}
             </div>
+            )}
 
             {/* Item Search Results */}
             {searchMode === 'item' && itemSearchResults.length > 0 && (
@@ -3232,4 +3377,77 @@ function OrdemServicoContent() {
             </AnimatePresence>
         </div>
     );
+    {sectorModal && createPortal(
+      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
+        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
+            <div className="flex items-center gap-2">
+              <Activity size={18} className="text-[#E0E800]" />
+              <h3 className="font-black text-xs uppercase tracking-wide">
+                {sectorModal.title}
+              </h3>
+            </div>
+            <button 
+              onClick={() => setSectorModal(null)} 
+              className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
+              title="Fechar"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="p-5 bg-slate-50/50">
+            {sectorModal.sectors.length === 0 ? (
+              <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
+                Nenhum recurso/setor ativo localizado.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                <table className="w-full text-xs text-left border-collapse">
+                  <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
+                    <tr>
+                      <th className="px-4 py-3 border-r border-slate-200 font-black text-slate-800">Recurso Ativo</th>
+                      <th className="px-4 py-3 text-center border-r border-slate-200 w-48 font-black text-slate-800">Dias p/ Produção do Item</th>
+                      <th className="px-4 py-3 text-center border-r border-slate-200 w-56 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 bg-white">
+                    {sectorModal.sectors.map(s => {
+                      const dateInterval = (s.pi || s.pf) ? `${s.pi || '—'} até ${s.pf || '—'}` : '—';
+                      const diasText = (s.dias !== undefined && s.dias !== null && s.dias > 0) ? `${s.dias} ${s.dias === 1 ? 'dia' : 'dias'}` : '1 dia';
+
+                      return (
+                        <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="px-4 py-3 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2 text-xs">
+                            <span className="w-2.5 h-2.5 rounded-full bg-[#32423D] shrink-0" />
+                            <span>{s.label}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100 text-xs">
+                            {diasText}
+                          </td>
+                          <td className="px-4 py-3 text-center font-medium text-slate-700 border-r border-slate-100 text-xs whitespace-nowrap">
+                            {dateInterval}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
+            <button
+              onClick={() => setSectorModal(null)}
+              className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
+
 }

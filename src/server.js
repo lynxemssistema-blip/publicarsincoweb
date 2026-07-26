@@ -4106,6 +4106,51 @@ app.get('/api/material/busca-livre', async (req, res) => {
     }
 });
 
+// GET PROCESSOS DO MATERIAL (Processos de Fabricacao)
+app.get('/api/material/processos/:cod', async (req, res) => {
+    try {
+        const cod = req.params.cod;
+        if (!cod) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const [mats] = await pool.execute(
+            `SELECT IdMaterial FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
+            [cod]
+        );
+        const idMaterial = mats.length > 0 ? mats[0].IdMaterial : null;
+
+        const [rows] = await pool.execute(
+            `SELECT 
+                mp.IdMaterialProcesso,
+                mp.IdProcesso,
+                mp.SequenciaExecucao,
+                COALESCE(NULLIF(mp.TempoEstimadoMin, ''), '0') AS tempoSetup,
+                COALESCE(NULLIF(mp.TempoPadraoMin, ''), '0') AS tempoPadrao,
+                mp.Ativo,
+                COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS processofabricacao
+             FROM material_processo mp
+             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+             WHERE (mp.codmatFabricante = ? OR (mp.IdMaterial IS NOT NULL AND mp.IdMaterial = ?))
+               AND (mp.Ativo = 'A' OR mp.Ativo IS NULL OR mp.Ativo = '1')
+             ORDER BY mp.SequenciaExecucao ASC, mp.IdMaterialProcesso ASC`,
+            [cod, idMaterial]
+        );
+
+        const data = rows.map(r => ({
+            idProcesso: r.IdProcesso,
+            processofabricacao: r.processofabricacao,
+            tempoSetup: Math.max(0, parseFloat(String(r.tempoSetup)) || 0),
+            tempoPadrao: Math.max(0, parseFloat(String(r.tempoPadrao)) || 0)
+        }));
+
+        res.json({ success: true, data });
+    } catch (e) {
+        console.error('Erro ao buscar processos do material:', e);
+        res.status(500).json({ success: false, message: 'Erro ao buscar processos do material', error: e.message });
+    }
+});
+
 // GET ONE (Read Single)
 app.get('/api/material/:id', async (req, res) => {
     try {
@@ -8565,16 +8610,17 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
 
 app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
                 os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
                 
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN 1 ELSE 0 END), 0) AS QtdeTotalItens,
-                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN 1 ELSE 0 END), 0) AS QtdeItensExecutados,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, '')) IN ('C','S') THEN 1 ELSE 0 END), 0) AS QtdeItensExecutados,
                 
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdeTotalPecas,
-                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, osi.Finalizado, '')) IN ('C','S') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdePecasExecutadas,
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, '')) IN ('C','S') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdePecasExecutadas,
 
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.Peso, 0), (COALESCE(osi.PesoUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS PesoTotal,
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.AreaPintura, 0), (COALESCE(osi.AreaPinturaUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS AreaPinturaTotal,
@@ -8585,8 +8631,8 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
                 os.PinturaTotalExecutar, os.PinturaTotalExecutado,
                 os.MontagemTotalExecutar, os.MontagemTotalExecutado,
                 os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
-                os.PULSIONADEIRATotalExecutar, os.PULSIONADEIRATotalExecutado,
-                os.GALVANIZARTotalExecutar, os.GALVANIZARTotalExecutado
+                os.PulsionadeiraTotalExecutar, os.PulsionadeiraTotalExecutado,
+                os.GalvanizarTotalExecutar, os.GalvanizarTotalExecutado
             FROM ordemservico os
             LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
             WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
@@ -8602,7 +8648,8 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
 
 app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const queryPool = req.tenantDbPool || pool;
+        const [rows] = await queryPool.execute(`
             SELECT 
                 osi.*, osi.OrdemServicoItemFinalizado as Finalizado
             FROM ordemservicoitem osi
@@ -8638,8 +8685,8 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
                 PinturaTotalExecutar, PinturaTotalExecutado,
                 MontagemTotalExecutar, MontagemTotalExecutado,
                 CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
-                PULSIONADEIRATotalExecutar, PULSIONADEIRATotalExecutado,
-                GALVANIZARTotalExecutar, GALVANIZARTotalExecutado
+                PulsionadeiraTotalExecutar, PulsionadeiraTotalExecutado,
+                GalvanizarTotalExecutar, GalvanizarTotalExecutado
             FROM ordemservico 
             WHERE (IdProjeto = ? `;
         let params = [projId];
@@ -8655,15 +8702,6 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
         const [rows] = await queryPool.execute(sql, params);
         console.log(`[API] Returning ${rows.length} OSes for project ${projId} (Projeto Name: ${projName})`);
         
-        // MOCK TEST TO FORCE UI DISPLAY
-        if (rows.length === 0) {
-            console.log(`[API] Forcing mock data since DB returned 0!`);
-            return res.json({ 
-                success: true, 
-                data: [{ IdOrdemServico: 99999, Descricao: `OS MOCK FORCADA (Banco não encontrou OS para ID ${projId})` }] 
-            });
-        }
-
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[API] Error fetching ordens de servico for project:', error);
@@ -8766,11 +8804,12 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        const [osRows] = await conn.execute(`SELECT Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
+        const [osRows] = await conn.execute(`SELECT IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag, IdEmpresa, DescEmpresa, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
         if (osRows.length === 0) throw new Error('OS não encontrada');
         if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
             throw new Error('OS já liberada, não pode incluir itens');
         }
+        const osData = osRows[0];
 
         let adicionados = 0;
         
@@ -8857,6 +8896,16 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
 
             const cols = colsToCopy.filter(c => original[c] !== undefined);
             const vals = cols.map(c => {
+                if (c === 'IdProjeto') return osData.IdProjeto;
+                if (c === 'Projeto') return osData.Projeto;
+                if (c === 'IdTag') return osData.IdTag;
+                if (c === 'Tag') return osData.Tag;
+                if (c === 'DescTag') return osData.DescTag;
+                if (c === 'IdEmpresa') return osData.IdEmpresa;
+                if (c === 'DescEmpresa') return osData.DescEmpresa;
+                if (c === 'qtde') {
+                    return Number(original.qtde) || Number(original.QtdeTotal) || 1;
+                }
                 if (c === 'PesoUnitario') {
                     return pesoUnit;
                 }
@@ -8946,11 +8995,12 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
         conn = await pool.getConnection();
         await conn.beginTransaction();
 
-        const [osRows] = await conn.execute(`SELECT Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
+        const [osRows] = await conn.execute(`SELECT IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag, IdEmpresa, DescEmpresa, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
         if (osRows.length === 0) throw new Error('OS não encontrada');
         if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
             throw new Error('OS já liberada, não pode incluir materiais');
         }
+        const osData = osRows[0];
 
         // Helper para checar e criar colunas dinamicamente
         async function ensureColumns(tableName, columnsToEnsure) {
@@ -9080,8 +9130,16 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
             const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : (((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup) * fatorNum));
 
+            await ensureColumns('ordemservicoitem', [
+                { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
+                { name: 'TempoPadrao', type: 'DECIMAL(10,2) DEFAULT 0' },
+                { name: 'TotalTempo', type: 'DECIMAL(10,2) DEFAULT 0' },
+                { name: 'qtde', type: 'DECIMAL(10,2) DEFAULT 1' },
+                { name: 'Fator', type: 'INT DEFAULT 1' }
+            ]);
+
             const cols = [
-                'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal',
+                'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
                 'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
                 'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
                 'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
@@ -9090,11 +9148,11 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             ];
             
             const vals = [
-                osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum,
+                osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum, qtdeTotalNum,
                 acabamento, (pesoUnit * qtdeTotalNum), (areaUnit * qtdeTotalNum), mat.Espessura, mat.Altura, mat.Largura,
                 mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
-                osContext?.IdProjeto || null, osContext?.IdTag || null, osContext?.Projeto || null,
-                osContext?.Tag || null, osContext?.DescTag || null, osContext?.IdEmpresa || null, osContext?.DescEmpresa || null,
+                osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null, osData.Projeto || osContext?.Projeto || null,
+                osData.Tag || osContext?.Tag || null, osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null, osData.DescEmpresa || osContext?.DescEmpresa || null,
                 'Sistema', 'Sistema', new Date(), 'N', fatorNum,
                 itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
             ];
@@ -15151,161 +15209,6 @@ app.post('/api/plano-corte/:id/atualizar-arquivos', async (req, res) => {
 });
 
 // ============================================================================
-// SKILL: correçãoTotalExecutar
-// Varre de baixo para cima: Itens → OS → Tag → Projeto
-// Recalcula [setor]TotalExecutar em todos os níveis da hierarquia.
-// POST /api/admin/correcao-total-executar
-// Body (opcional): { IdProjeto: 10 }   → processa só esse projeto
-// Body vazio                            → processa todos os projetos
-// ============================================================================
-
-const SETORES_EXECUTAR = [
-    { txt: 'txtCorte',    executar: 'CorteTotalExecutar'    },
-    { txt: 'txtDobra',    executar: 'DobraTotalExecutar'    },
-    { txt: 'txtSolda',    executar: 'SoldaTotalExecutar'    },
-    { txt: 'txtPintura',  executar: 'PinturaTotalExecutar'  },
-    { txt: 'TxtMontagem', executar: 'MontagemTotalExecutar' },
-];
-
-async function corrigirTotalExecutar(dbPool, idProjeto = null) {
-    const conn = await dbPool.getConnection();
-    const log = [];
-    try {
-        let projetos;
-        if (idProjeto) {
-            const [rows] = await conn.execute(
-                `SELECT IdProjeto FROM projetos WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-                [idProjeto]
-            );
-            projetos = rows;
-        } else {
-            const [rows] = await conn.execute(
-                `SELECT IdProjeto FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY IdProjeto`
-            );
-            projetos = rows;
-        }
-
-        log.push(`[correcao] ${projetos.length} projeto(s) a processar`);
-        let totalOS = 0, totalTags = 0, totalProjetos = 0;
-
-        for (const { IdProjeto } of projetos) {
-            // NIVEL 1: Item -> OS
-            const [ordens] = await conn.execute(
-                `SELECT IdOrdemServico, IdTag
-                 FROM ordemservico
-                 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-                [IdProjeto]
-            );
-
-            for (const os of ordens) {
-                const selectParts = SETORES_EXECUTAR.map(s =>
-                    `COALESCE(SUM(CASE WHEN IFNULL(\`${s.txt}\`,'') = '1' THEN COALESCE(CAST(\`${s.executar}\` AS DECIMAL(18,4)), 0) ELSE 0 END), 0) AS \`${s.executar}\``
-                ).join(', ');
-
-                const [sums] = await conn.execute(
-                    `SELECT ${selectParts}
-                     FROM ordemservicoitem
-                     WHERE IdOrdemServico = ?
-                       AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-                    [os.IdOrdemServico]
-                );
-
-                const setParts = SETORES_EXECUTAR.map(s => `\`${s.executar}\` = ?`).join(', ');
-                const vals = SETORES_EXECUTAR.map(s => sums[0][s.executar]);
-
-                await conn.execute(
-                    `UPDATE ordemservico SET ${setParts} WHERE IdOrdemServico = ?`,
-                    [...vals, os.IdOrdemServico]
-                );
-                totalOS++;
-            }
-
-            // NIVEL 2: OS -> Tag
-            // Agrupa pelos IdTag que VÊEM DAS PRÓPRIAS OS (não enumera a tabela tags).
-            // Isso garante que a tag correta seja atualizada independente do IdProjeto na tabela tags.
-            const tagsDistintas = [...new Set(ordens.map(os => os.IdTag).filter(id => id != null))];
-
-            for (const idTag of tagsDistintas) {
-                const selectParts = SETORES_EXECUTAR.map(s =>
-                    `COALESCE(SUM(COALESCE(CAST(\`${s.executar}\` AS DECIMAL(18,4)), 0)), 0) AS \`${s.executar}\``
-                ).join(', ');
-
-                const [sums] = await conn.execute(
-                    `SELECT ${selectParts}
-                     FROM ordemservico
-                     WHERE IdTag = ?
-                       AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-                    [idTag]
-                );
-
-                const setParts = SETORES_EXECUTAR.map(s => `\`${s.executar}\` = ?`).join(', ');
-                const vals = SETORES_EXECUTAR.map(s => sums[0][s.executar]);
-
-                await conn.execute(
-                    `UPDATE tags SET ${setParts} WHERE IdTag = ?`,
-                    [...vals, idTag]
-                );
-                totalTags++;
-            }
-
-            // NIVEL 3: Tag -> Projeto
-            const selectParts = SETORES_EXECUTAR.map(s =>
-                `COALESCE(SUM(COALESCE(CAST(\`${s.executar}\` AS DECIMAL(18,4)), 0)), 0) AS \`${s.executar}\``
-            ).join(', ');
-
-            const [sums] = await conn.execute(
-                `SELECT ${selectParts}
-                 FROM tags
-                 WHERE IdProjeto = ?
-                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-                [IdProjeto]
-            );
-
-            const setParts = SETORES_EXECUTAR.map(s => `\`${s.executar}\` = ?`).join(', ');
-            const vals = SETORES_EXECUTAR.map(s => sums[0][s.executar]);
-
-            await conn.execute(
-                `UPDATE projetos SET ${setParts} WHERE IdProjeto = ?`,
-                [...vals, IdProjeto]
-            );
-            totalProjetos++;
-
-            log.push(`Projeto ${IdProjeto}: ${ordens.length} OS, ${tagsDistintas.length} tags atualizadas`);
-        }
-
-        log.push(`Concluido: OS=${totalOS} Tags=${totalTags} Projetos=${totalProjetos}`);
-        return { success: true, log, totalOS, totalTags, totalProjetos };
-
-    } catch (err) {
-        log.push(`ERRO: ${err.message}`);
-        console.error('[corrigirTotalExecutar]', err);
-        return { success: false, log, error: err.message };
-    } finally {
-        conn.release();
-    }
-}
-
-app.post('/api/admin/correcao-total-executar', async (req, res) => {
-    const dbPool = req.tenantDbPool || pool;
-    const { IdProjeto } = req.body || {};
-    const label = IdProjeto ? `projeto ${IdProjeto}` : 'todos os projetos';
-
-    console.log(`[corrigirTotalExecutar] Iniciando para ${label}...`);
-    const inicio = Date.now();
-
-    const resultado = await corrigirTotalExecutar(dbPool, IdProjeto || null);
-    const ms = Date.now() - inicio;
-
-    console.log(`[corrigirTotalExecutar] Finalizado em ${ms}ms. OS=${resultado.totalOS} Tags=${resultado.totalTags} Projetos=${resultado.totalProjetos}`);
-
-    if (resultado.success) {
-        res.json({ success: true, ms, ...resultado });
-    } else {
-        res.status(500).json({ success: false, ms, ...resultado });
-    }
-});
-
-// ============================================================================
 // HELPER CASCATA DE QUANTIDADES E PERCENTUAIS (OS -> TAG -> PROJETO)
 // ============================================================================
 async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
@@ -15313,14 +15216,40 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
     try {
         const [osInfo] = await connection.execute(`SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?`, [IdOrdemServico]);
         if (!osInfo || osInfo.length === 0) return;
+        const IdTag = osInfo[0].IdTag;
+        const IdProjeto = osInfo[0].IdProjeto;
+
+        // 0. Sincronizar Projeto, Tag, DescTag da OS com seus itens
+        await connection.execute(`
+            UPDATE ordemservicoitem oi
+            JOIN ordemservico os ON oi.IdOrdemServico = os.IdOrdemServico
+            SET 
+                oi.IdProjeto = os.IdProjeto,
+                oi.Projeto = os.Projeto,
+                oi.IdTag = os.IdTag,
+                oi.Tag = os.Tag,
+                oi.DescTag = os.DescTag,
+                oi.IdEmpresa = os.IdEmpresa,
+                oi.DescEmpresa = os.DescEmpresa
+            WHERE os.IdOrdemServico = ? AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')
+        `, [IdOrdemServico]);
+
         async function ensureTimeCols(table) {
             try {
                 const [cRows] = await connection.execute(`SHOW COLUMNS FROM ${table}`);
                 const exCols = cRows.map(r => r.Field.toLowerCase());
-                for (const col of ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo']) {
+                
+                const timeCols = ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo'];
+                const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+                for (const sec of sectorsList) {
+                    timeCols.push(`${sec}TempoSetup`, `${sec}TotalSetup`, `${sec}TempoPadrao`, `${sec}TotalPadrao`, `${sec}TotalTempo`, `${sec}DiasProducao`);
+                }
+
+                for (const col of timeCols) {
                     if (!exCols.includes(col.toLowerCase())) {
                         try {
-                            await connection.execute(`ALTER TABLE ${table} ADD COLUMN \`${col}\` INT NULL DEFAULT 0`);
+                            const colType = col.endsWith('DiasProducao') ? 'INT NULL DEFAULT 0' : 'DECIMAL(10,2) NULL DEFAULT 0';
+                            await connection.execute(`ALTER TABLE ${table} ADD COLUMN \`${col}\` ${colType}`);
                         } catch(e) {}
                     }
                 }
@@ -15334,7 +15263,8 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
         await connection.execute(`
             UPDATE ordemservico os
             SET 
-                QtdeTotalItens = (SELECT COALESCE(SUM(oi.QtdeTotal), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                QtdeTotalItens = (SELECT COALESCE(COUNT(*), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                QtdeTotalPecas = (SELECT COALESCE(SUM(oi.QtdeTotal), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 PesoTotal = (SELECT COALESCE(SUM(oi.Peso), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 AreaPinturaTotal = (SELECT COALESCE(SUM(oi.AreaPintura), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
@@ -15413,32 +15343,30 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
-                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSoldagem,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtMedicao,'')!='1' AND IFNULL(oi.txtAcabamento,'')!='1' AND IFNULL(oi.txtAprovacao,'')!='1' AND IFNULL(oi.txtIsometrico,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
+                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSolda,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtCorteaLaser,'')!='1' AND IFNULL(oi.txtPULSIONADEIRA,'')!='1' AND IFNULL(oi.txtGALVANIZAR,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
                             THEN oi.QtdeTotal
                             ELSE
                                 CASE WHEN LEAST(
                                     COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSoldagem, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtMedicao, '')='1' THEN oi.MEDICAOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtAcabamento, '')='1' THEN oi.ACABAMENTOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtAprovacao, '')='1' THEN oi.APROVAÇÃOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtIsometrico, '')='1' THEN oi.ISOMETRICOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.ENGENHARIATotalExecutado ELSE 999999999 END, 999999999)
+                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
                                 ) >= 999999999 THEN 0
                                 ELSE LEAST(
                                     COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSoldagem, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtMedicao, '')='1' THEN oi.MEDICAOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtAcabamento, '')='1' THEN oi.ACABAMENTOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtAprovacao, '')='1' THEN oi.APROVAÇÃOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtIsometrico, '')='1' THEN oi.ISOMETRICOTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.ENGENHARIATotalExecutado ELSE 999999999 END, 999999999)
+                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
                                 )
                                 END
                         END
@@ -15464,12 +15392,12 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
         await connection.execute(`
             UPDATE ordemservico os
             SET 
-                PercentualPecas = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.QtdePecasExecutadas / os.QtdeTotalItens) * 100, 2) ELSE 0 END,
-                CortePercentual = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.CorteTotalExecutado / os.QtdeTotalItens) * 100, 2) ELSE 0 END,
-                DobraPercentual = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.DobraTotalExecutado / os.QtdeTotalItens) * 100, 2) ELSE 0 END,
-                SoldaPercentual = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.SoldaTotalExecutado / os.QtdeTotalItens) * 100, 2) ELSE 0 END,
-                PinturaPercentual = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.PinturaTotalExecutado / os.QtdeTotalItens) * 100, 2) ELSE 0 END,
-                MontagemPercentual = CASE WHEN os.QtdeTotalItens > 0 THEN TRUNCATE((os.MontagemTotalExecutado / os.QtdeTotalItens) * 100, 2) ELSE 0 END
+                PercentualPecas = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.QtdePecasExecutadas / os.QtdeTotalPecas) * 100, 2) ELSE 0 END,
+                CortePercentual = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.CorteTotalExecutado / os.QtdeTotalPecas) * 100, 2) ELSE 0 END,
+                DobraPercentual = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.DobraTotalExecutado / os.QtdeTotalPecas) * 100, 2) ELSE 0 END,
+                SoldaPercentual = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.SoldaTotalExecutado / os.QtdeTotalPecas) * 100, 2) ELSE 0 END,
+                PinturaPercentual = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.PinturaTotalExecutado / os.QtdeTotalPecas) * 100, 2) ELSE 0 END,
+                MontagemPercentual = CASE WHEN os.QtdeTotalPecas > 0 THEN TRUNCATE((os.MontagemTotalExecutado / os.QtdeTotalPecas) * 100, 2) ELSE 0 END
             WHERE os.IdOrdemServico = ?
         `, [IdOrdemServico]);
 

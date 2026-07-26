@@ -155,7 +155,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
-  const fetchMaterialProcessos = async (cod: string) => {
+  const fetchMaterialProcessos = async (cod: string, forceRefresh = false) => {
     setLoadingProcessos(prev => ({ ...prev, [cod]: true }));
     try {
       const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
@@ -179,9 +179,9 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
         setSelectedItems(prev => {
           const item = prev[cod];
           if (!item) return prev;
-          const initialRecs: Record<string, { tempoSetup: number, tempoPadrao: number }> = { ...item.recursoTempos };
+          const initialRecs: Record<string, { tempoSetup: number, tempoPadrao: number }> = forceRefresh ? {} : { ...item.recursoTempos };
           list.forEach((p: any) => {
-            if (!initialRecs[p.key]) {
+            if (forceRefresh || !initialRecs[p.key]) {
               initialRecs[p.key] = {
                 tempoSetup: p.tempoSetup,
                 tempoPadrao: p.tempoPadrao
@@ -685,11 +685,11 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       <ModalMontagemProcessoFabricacao
         isOpen={!!montarRecursoCod}
         codmatfabricante={montarRecursoCod || undefined}
-        onClose={() => {
+        onClose={async () => {
           const cod = montarRecursoCod;
           setMontarRecursoCod(null);
           if (cod) {
-            fetchMaterialProcessos(cod);
+            await fetchMaterialProcessos(cod, true);
           }
         }}
       />
