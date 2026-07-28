@@ -1,3 +1,4 @@
+import SectorProductionModal from '../components/SectorProductionModal';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
@@ -141,7 +142,7 @@ const TAG_SECTORS = [
  fields: { pi: 'PlanejadoInicioGALVANIZAR', pf: 'PlanejadoFinalGALVANIZAR', ri: 'RealizadoInicioGALVANIZAR', rf: 'RealizadoFinalGALVANIZAR' } },
 ];
 
-export default function VisaoGeralProducaoPage() {
+export default function VisaoGeralProducao() {
  const [projetos, setProjetos] = useState<Projeto[]>([]); const [tags, setTags] = useState<Tag[]>([]); const [rncs, setRncs] = useState<Rnc[]>([]);
  const [load, setLoad] = useState(true); const [loadTags, setLoadTags] = useState(false); const [loadRncs, setLoadRncs] = useState(false);
  const [selProj, setSelProj] = useState<Projeto | null>(null);
@@ -625,8 +626,45 @@ export default function VisaoGeralProducaoPage() {
     };
   };
 
-  const checkSectorActive = (obj: any, key: string) => {
+  const getSectorPlanningDates = (obj: any, sectorKey: string) => {
+    if (!obj || typeof obj !== 'object') return { pi: '', pf: '', minProd: 0 };
+    const target = String(sectorKey || '').trim().toLowerCase();
+    let pi = '';
+    let pf = '';
+    let minProd = 0;
+
+    for (const k of Object.keys(obj)) {
+      const kLower = k.toLowerCase();
+      
+      if (!pi && kLower.startsWith('planejadoinicio')) {
+        const rest = kLower.replace('planejadoinicio', '');
+        if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+          if (obj[k]) pi = String(obj[k]);
+        }
+      }
+
+      if (!pf && kLower.startsWith('planejadofinal')) {
+        const rest = kLower.replace('planejadofinal', '');
+        if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+          if (obj[k]) pf = String(obj[k]);
+        }
+      }
+
+      if (kLower.endsWith('minprod')) {
+        const prefix = kLower.replace('minprod', '');
+        if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+          const val = parseInt(String(obj[k]), 10) || 0;
+          if (val > 0) minProd = val;
+        }
+      }
+    }
+
+    return { pi, pf, minProd };
+  };
+
+  const checkSectorActive = (obj: any, sectorKey: string): boolean => {
     if (!obj) return false;
+    
     const isTrue = (v: any) => {
       if (v === true || v === 1 || v === '1') return true;
       const s = String(v ?? '').trim().toUpperCase();
@@ -634,7 +672,11 @@ export default function VisaoGeralProducaoPage() {
       return true;
     };
 
-    switch (key) {
+    // Checar se há datas de planejamento ativas para este setor
+    const { pi, pf } = getSectorPlanningDates(obj, sectorKey);
+    if (pi || pf) return true;
+
+    switch (sectorKey) {
       case 'Corte':
         return isTrue(obj.txtCorte) || isTrue(obj.txtCORTE) || isTrue(obj.flagCorte) || toNum({val: obj.CorteTotalExecutado}) > 0 || toNum({val: obj.CorteTotalExecutar}) > 0;
       case 'Dobra':
@@ -654,15 +696,6 @@ export default function VisaoGeralProducaoPage() {
       default:
         return false;
     }
-  };
-
-  const getSectorPlanningDates = (obj: any, sectorKey: string) => {
-    if (!obj) return { pi: '', pf: '' };
-    const piKey = `PlanejadoInicio${sectorKey}`;
-    const pfKey = `PlanejadoFinal${sectorKey}`;
-    const pi = obj[piKey] ? String(obj[piKey]) : (obj[`pi${sectorKey}`] ? String(obj[`pi${sectorKey}`]) : '');
-    const pf = obj[pfKey] ? String(obj[pfKey]) : (obj[`pf${sectorKey}`] ? String(obj[`pf${sectorKey}`]) : '');
-    return { pi, pf };
   };
 
   const getItemActiveSectors = (item: any) => {
@@ -700,9 +733,9 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      const { pi, pf } = getSectorPlanningDates(item, s.key);
+      const { pi, pf, minProd } = getSectorPlanningDates(item, s.key);
       const dias = parseFloat(item[`${s.key}DiasProducao`] || item[`dias${s.key}`] || item[`Dias${s.key}`] || 0);
-      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
     });
   };
 
@@ -718,8 +751,8 @@ export default function VisaoGeralProducaoPage() {
       { key: 'Galvanizar', label: 'Galvanizar' },
     ];
 
-    const mapSector = new Map<string, { key: string, label: string, exec: number, aExec: number, active: boolean, dias: number, pi: string, pf: string }>();
-    SECTOR_ORDER.forEach(s => mapSector.set(s.key, { key: s.key, label: s.label, exec: 0, aExec: 0, active: false, dias: 0, pi: '', pf: '' }));
+    const mapSector = new Map<string, { key: string, label: string, exec: number, aExec: number, active: boolean, dias: number, pi: string, pf: string, minProd: number }>();
+    SECTOR_ORDER.forEach(s => mapSector.set(s.key, { key: s.key, label: s.label, exec: 0, aExec: 0, active: false, dias: 0, pi: '', pf: '', minProd: 0 }));
 
     items.forEach(item => {
       const itemSectors = getItemActiveSectors(item);
@@ -729,6 +762,7 @@ export default function VisaoGeralProducaoPage() {
           target.active = true;
           target.exec += s.exec;
           target.aExec += s.aExec;
+          target.minProd = (target.minProd || 0) + (s.minProd || 0);
           if (s.dias && !target.dias) target.dias = s.dias;
           if (s.pi && !target.pi) target.pi = s.pi;
           if (s.pf && !target.pf) target.pf = s.pf;
@@ -779,9 +813,9 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      const { pi, pf } = getSectorPlanningDates(t, s.key);
+      const { pi, pf, minProd } = getSectorPlanningDates(t, s.key);
       const dias = parseFloat(t[`${s.key}DiasProducao`] || t[`dias${s.key}`] || t[`Dias${s.key}`] || 0);
-      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
     });
   };
 
@@ -825,13 +859,21 @@ export default function VisaoGeralProducaoPage() {
           aExec = 0;
         }
       }
-      const { pi, pf } = getSectorPlanningDates(os, s.key);
+      const { pi, pf, minProd } = getSectorPlanningDates(os, s.key);
       const dias = parseFloat(os[`${s.key}DiasProducao`] || os[`dias${s.key}`] || os[`Dias${s.key}`] || 0);
-      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf };
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
     });
   };
 
-  const openTagSectorsModal = async (t: any) => {
+      const openTagSectorsModal = async (t: any) => {
+    const tagHeaderSectors = getTagSectors(t);
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
+      targetType: 'tag',
+      targetId: t.IdTag,
+      sectors: tagHeaderSectors
+    });
+
     let items = tagItemsCache[t.IdTag];
     if (!items || items.length === 0) {
       try {
@@ -844,14 +886,44 @@ export default function VisaoGeralProducaoPage() {
         console.error('Error fetching Tag items for sector modal:', e);
       }
     }
-    const activeSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : getTagSectors(t);
-    setSectorModal({
-      title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
-      sectors: activeSectors
-    });
+
+    if (items && items.length > 0) {
+      const itemSectors = aggregateItemsSectors(items);
+      const map = new Map<string, any>();
+      tagHeaderSectors.forEach(s => map.set(s.key, { ...s }));
+
+      itemSectors.forEach(s => {
+        const existing = map.get(s.key);
+        if (!existing) {
+          map.set(s.key, s);
+        } else {
+          if (!existing.pi && s.pi) existing.pi = s.pi;
+          if (!existing.pf && s.pf) existing.pf = s.pf;
+          if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
+          if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
+          if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
+        }
+      });
+
+      const mergedSectors = Array.from(map.values());
+      setSectorModal({
+        title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
+        targetType: 'tag',
+        targetId: t.IdTag,
+        sectors: mergedSectors
+      });
+    }
   };
 
   const openOsSectorsModal = async (os: any) => {
+    const osHeaderSectors = getOsSectors(os);
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
+      targetType: 'os',
+      targetId: os.IdOrdemServico,
+      sectors: osHeaderSectors
+    });
+
     let items = osModalItemsCache.current[os.IdOrdemServico] || expandedOsItems[os.IdOrdemServico];
     if (!items || items.length === 0) {
       try {
@@ -864,29 +936,36 @@ export default function VisaoGeralProducaoPage() {
         console.error('Error fetching OS items for sector modal:', e);
       }
     }
-    const itemSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : [];
-    const osHeaderSectors = getOsSectors(os);
 
-    const map = new Map<string, any>();
-    osHeaderSectors.forEach(s => map.set(s.key, s));
-    itemSectors.forEach(s => {
-      const existing = map.get(s.key);
-      if (!existing) {
-        map.set(s.key, s);
-      } else {
-        if (s.dias && !existing.dias) existing.dias = s.dias;
-        if (s.pi && !existing.pi) existing.pi = s.pi;
-        if (s.pf && !existing.pf) existing.pf = s.pf;
-      }
-    });
+    if (items && items.length > 0) {
+      const itemSectors = aggregateItemsSectors(items);
+      const map = new Map<string, any>();
+      osHeaderSectors.forEach(s => map.set(s.key, { ...s }));
 
-    const activeSectors = Array.from(map.values());
+      itemSectors.forEach(s => {
+        const existing = map.get(s.key);
+        if (!existing) {
+          map.set(s.key, s);
+        } else {
+          if (!existing.pi && s.pi) existing.pi = s.pi;
+          if (!existing.pf && s.pf) existing.pf = s.pf;
+          if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
+          if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
+          if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
+        }
+      });
 
-    setSectorModal({
-      title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
-      sectors: activeSectors
-    });
+      const mergedSectors = Array.from(map.values());
+      setSectorModal({
+        title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
+        targetType: 'os',
+        targetId: os.IdOrdemServico,
+        sectors: mergedSectors
+      });
+    }
   };
+
+
 
 
     
@@ -3073,167 +3152,11 @@ const salvarDatasBulkTags = async () => {
 
   {/* MODAL DE PRODUÇÃO POR SETORES DA TAG / OS / ITEM */}
   {sectorModal && (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
-        {/* MODAL HEADER */}
-        <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
-          <div className="flex items-center gap-2">
-            <Activity size={18} className="text-[#E0E800]" />
-            <h3 className="font-black text-xs uppercase tracking-wide">
-              {sectorModal.title}
-            </h3>
-          </div>
-          <button 
-            onClick={() => setSectorModal(null)} 
-            className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
-            title="Fechar"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* MODAL BODY */}
-        <div className="p-5 bg-slate-50/50">
-          {sectorModal.sectors.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
-              Nenhum recurso/setor ativo localizado.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-2.5 border-r border-slate-200">Setor / Recurso</th>
-                    <th className="px-4 py-2.5 text-center border-r border-slate-200 w-28">Executado</th>
-                    <th className="px-4 py-2.5 text-center border-r border-slate-200 w-28">A Executar</th>
-                    <th className="px-4 py-2.5 text-center w-48">Conclusão (%)</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {sectorModal.sectors.map(s => {
-                    const tot = s.exec + s.aExec;
-                    const calcPct = tot > 0 ? Math.min(100, Math.round((s.exec / tot) * 100)) : 0;
-                    return (
-                      <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-2.5 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-[#32423D] shrink-0" />
-                          <span>{s.label}</span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-bold text-emerald-700 border-r border-slate-100 bg-emerald-50/20 text-sm">
-                          {s.exec}
-                        </td>
-                        <td className="px-4 py-2.5 text-center font-bold text-amber-700 border-r border-slate-100 bg-amber-50/20 text-sm">
-                          {s.aExec}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <div className="flex items-center gap-2 px-1">
-                            <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden shadow-inner">
-                              <div 
-                                className={`h-full transition-all duration-300 ${calcPct === 100 ? 'bg-emerald-500' : 'bg-[#32423D]'}`} 
-                                style={{ width: `${calcPct}%` }} 
-                              />
-                            </div>
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded shrink-0 ${calcPct === 100 ? 'bg-emerald-100 text-emerald-800' : 'bg-sky-100 text-sky-800'}`}>
-                              {calcPct}%
-                            </span>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* MODAL FOOTER */}
-        <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
-          <button
-            onClick={() => setSectorModal(null)}
-            className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
-          >
-            Fechar
-          </button>
-        </div>
-      </div>
-    </div>
-  )}
-  {/* MODAL DE PRODUÇÃO POR SETORES DA TAG / OS / ITEM */}
-  {sectorModal && createPortal(
-    <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
-        {/* MODAL HEADER */}
-        <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
-          <div className="flex items-center gap-2">
-            <Activity size={18} className="text-[#E0E800]" />
-            <h3 className="font-black text-xs uppercase tracking-wide">
-              {sectorModal.title}
-            </h3>
-          </div>
-          <button 
-            onClick={() => setSectorModal(null)} 
-            className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
-            title="Fechar"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* MODAL BODY */}
-        <div className="p-5 bg-slate-50/50">
-          {sectorModal.sectors.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
-              Nenhum recurso/setor ativo localizado.
-            </div>
-          ) : (
-            <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-              <table className="w-full text-xs text-left border-collapse">
-                <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
-                  <tr>
-                    <th className="px-4 py-3 border-r border-slate-200 font-black text-slate-800">Recurso Ativo</th>
-                    <th className="px-4 py-3 text-center border-r border-slate-200 w-48 font-black text-slate-800">Dias p/ Produção do Item</th>
-                    <th className="px-4 py-3 text-center border-r border-slate-200 w-56 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 bg-white">
-                  {sectorModal.sectors.map(s => {
-                    const dateInterval = (s.pi || s.pf) ? `${s.pi || '—'} até ${s.pf || '—'}` : '—';
-                    const diasText = (s.dias !== undefined && s.dias !== null && s.dias > 0) ? `${s.dias} ${s.dias === 1 ? 'dia' : 'dias'}` : '1 dia';
-
-                    return (
-                      <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="px-4 py-3 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2 text-xs">
-                          <span className="w-2.5 h-2.5 rounded-full bg-[#32423D] shrink-0" />
-                          <span>{s.label}</span>
-                        </td>
-                        <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100 text-xs">
-                          {diasText}
-                        </td>
-                        <td className="px-4 py-3 text-center font-medium text-slate-700 border-r border-slate-100 text-xs whitespace-nowrap">
-                          {dateInterval}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-
-        {/* MODAL FOOTER */}
-        <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
-          <button
-            onClick={() => setSectorModal(null)}
-            className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
-          >
-            Fechar
-          </button>
-        </div>
-      </div>
-    </div>,
-    document.body
+    <SectorProductionModal
+      modalData={sectorModal}
+      onClose={() => setSectorModal(null)}
+      onSaved={() => fetchVisaoGeralData()}
+    />
   )}
   </div>
   );

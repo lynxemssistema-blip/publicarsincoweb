@@ -5,7 +5,8 @@ const compression = require('compression');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const app = express();
-const pool = require('./config/db');
+const db = require('./config/db');
+const pool = db;
 const tenantMiddleware = require('./middleware/tenant');
 
 function toIsoDate(val) {
@@ -2118,6 +2119,11 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     const { login, senha, password, banco } = req.body;
     const pwd = senha || password;
 
+    if (login && String(login).trim().toLowerCase() === 'admin') {
+        console.warn(`[AUTH_BLOCKED] Tentativa de login bloqueada para o usuário 'admin' a partir do IP: ${req.ip}`);
+        return res.status(403).json({ success: false, message: "Acesso não permitido para o usuário 'admin'. Utilize suas credenciais corporativas pessoais." });
+    }
+
     if (!login || !pwd) {
         return res.status(400).json({ success: false, message: 'Usuário e senha são obrigatórios' });
     }
@@ -3082,7 +3088,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         // Obter senha real caso a enviada seja placeholder ou vazia
         let senhaFinal = Senha;
         if (!Senha || Senha.trim() === '' || Senha === '••••••••') {
-            const [userRows] = await req.tenantDbPool.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
+            const [userRows] = await db.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
             if (userRows.length > 0) {
                 senhaFinal = userRows[0].Senha;
             }
@@ -3144,13 +3150,13 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
 
         // Sync delete to Central DB (async)
-        const [userRows] = await req.tenantDbPool.execute(
+        const [userRows] = await db.execute(
             'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [req.params.id]
         );
         if (userRows.length > 0) {
@@ -3448,7 +3454,7 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Atualiza QtdeOS e QtdeOSExecutadas em TODAS as tags de uma vez
-        const [result] = await queryPool.execute(`
+        const [result] = await db.execute(`
             UPDATE tags t
             SET
                 QtdeOS = (
@@ -4764,7 +4770,7 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Get projects with aggregated sector totals from their tags + RNC count
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT
                 p.IdProjeto, p.Projeto, p.DescProjeto, 
                 CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa,
@@ -4931,13 +4937,13 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
         // Build column list defensively — check if Observacao exists before using it
         let observacaoExpr = 'NULL AS Observacao';
         try {
-            const [cols] = await queryPool.execute(
+            const [cols] = await db.execute(
                 "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'Observacao'"
             );
             if (cols.length > 0) observacaoExpr = 'Observacao';
         } catch (_) { /* fallback to NULL */ }
 
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
                 (SELECT COUNT(*) FROM ordemservico os WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS QtdeOS,
@@ -5056,7 +5062,7 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await queryPool.execute(`
+        const [result] = await db.execute(`
             UPDATE tags 
             SET ProjetistaPlanejado = ?, 
                 PlanejadoInicioEngenharia = ?, 
@@ -5082,7 +5088,7 @@ app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await queryPool.execute(
+        const [result] = await db.execute(
             "UPDATE projetos SET Observacao = ? WHERE IdProjeto = ?",
             [observacao || '', id]
         );
@@ -5105,7 +5111,7 @@ app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await queryPool.execute(
+        const [result] = await db.execute(
             "UPDATE tags SET Observacao = ? WHERE IdTag = ?",
             [observacao || '', idTag]
         );
@@ -5132,7 +5138,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 
         // Fetch current tag to calculate balance
         const queryPool = req.tenantDbPool || pool;
-        const [tagRows] = await queryPool.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
+        const [tagRows] = await db.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
         if (tagRows.length === 0) {
             return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
         }
@@ -5146,7 +5152,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 
         const saldo = qtdeTag - liberada;
 
-        const [result] = await queryPool.execute(`
+        const [result] = await db.execute(`
             UPDATE tags 
             SET QtdeLiberada = ?, 
                 SaldoTag = ?
@@ -5173,7 +5179,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5181,7 +5187,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5189,7 +5195,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE idProjeto = ? AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5199,7 +5205,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         } else {
             if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag ÃƒÂ© obrigatÃƒÂ³rio para finalizar apenas uma.' });
             
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5207,7 +5213,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5215,7 +5221,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await queryPool.execute(`
+            await db.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5240,7 +5246,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
 app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT
                 t.IdTag, t.Tag, t.DescTag, t.Projeto, t.DescEmpresa, t.TipoProduto, t.DataPrevisao, t.ProjetistaPlanejado, t.CaminhoIsometrico,
                 t.PlanejadoInicioMedicao, t.PlanejadoFinalMedicao, t.RealizadoInicioMedicao, t.RealizadoFinalMedicao,
@@ -5336,7 +5342,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
         `;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await queryPool.execute(query, params);
+        const [result] = await db.execute(query, params);
 
         // ── PROPAGAR 4 DATAS DO SETOR PARA PROJETOS (com usuário responsável) ──
         // MIN para Início | MAX para Final | usuario = NomeCompleto do usuário logado
@@ -5371,7 +5377,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             if (camposSetor) {
                 // 1) Descobre os projetos afetados pelas tags alteradas
                 const phIds = idTags.map(() => '?').join(',');
-                const [tagProjRows] = await queryPool.execute(
+                const [tagProjRows] = await db.execute(
                     `SELECT DISTINCT IdProjeto FROM tags WHERE IdTag IN (${phIds})`, idTags
                 );
 
@@ -5381,7 +5387,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
 
                     // 2) Para cada um dos 4 campos do setor: recalcula MIN ou MAX nas tags
                     for (const { tag, proj, usu, fn } of camposSetor) {
-                        const [[aggRow]] = await queryPool.execute(`
+                        const [[aggRow]] = await db.execute(`
                             SELECT DATE_FORMAT(
                                 ${fn}(STR_TO_DATE(NULLIF(TRIM(\`${tag}\`),''), '%d/%m/%Y')),
                                 '%d/%m/%Y'
@@ -5400,7 +5406,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
                     }
 
                     paramsProjeto.push(IdProjeto);
-                    await queryPool.execute(
+                    await db.execute(
                         `UPDATE projetos SET ${setProjeto.join(', ')} WHERE IdProjeto = ?`,
                         paramsProjeto
                     );
@@ -5466,13 +5472,13 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await queryPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
         const filePath = `/uploads/isometricos/${file.filename}`;
 
-        await queryPool.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
+        await db.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico associado com sucesso.', data: { CaminhoIsometrico: filePath } });
     } catch (error) {
@@ -5487,11 +5493,11 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
         const { idTag } = req.params;
         const queryPool = req.tenantDbPool || pool;
         
-        const [rows] = await queryPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
-        const [tagRow] = await queryPool.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
+        const [tagRow] = await db.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
         const caminho = tagRow[0].CaminhoIsometrico;
 
         if (caminho) {
@@ -5501,7 +5507,7 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
             }
         }
 
-        await queryPool.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
+        await db.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico removido com sucesso.', data: { CaminhoIsometrico: null } });
     } catch (error) {
@@ -5515,7 +5521,7 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
 app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 Estatus,
@@ -5821,21 +5827,21 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
             const valFim = dataFim || '';
 
             const queryPool = req.tenantDbPool || pool;
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE tags 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE ordemservico 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE ordemservicoitem 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
@@ -5894,7 +5900,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Atualizar a TAG
-        await queryPool.execute(
+        await db.execute(
             `UPDATE tags SET ${field} = ? WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
             [dbValue, idTag]
         );
@@ -5934,13 +5940,13 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Fetch column lists for dynamic column checking
-        const [colsTag] = await queryPool.execute('SHOW COLUMNS FROM tags');
+        const [colsTag] = await db.execute('SHOW COLUMNS FROM tags');
         const tagColNames = colsTag.map(c => c.Field);
 
-        const [colsOS] = await queryPool.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await queryPool.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -5979,7 +5985,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 tagParams.push(pfDb, userName);
             }
 
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE tags SET ${tagSetClauses.join(', ')} WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [...tagParams, idTag]
             );
@@ -6002,7 +6008,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdTag = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idTag]
             );
@@ -6021,7 +6027,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await queryPool.execute(
+            const [result] = await db.execute(
                 `UPDATE ordemservicoitem osi
                  INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
                  SET ${osiSetClauses.join(', ')}
@@ -6068,10 +6074,10 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
 
         const queryPool = req.tenantDbPool || pool;
 
-        const [colsOS] = await queryPool.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await queryPool.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -6109,7 +6115,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await queryPool.execute(
+            await db.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdOrdemServico = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idOs]
             );
@@ -6128,7 +6134,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await queryPool.execute(
+            const [result] = await db.execute(
                 `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
                  WHERE IdOrdemServico = ?
                    AND ${exactOsiTxtFlag} = '1'
@@ -6153,7 +6159,7 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
 
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await queryPool.execute(
+        const [check] = await db.execute(
             `SELECT Finalizado FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
@@ -6171,22 +6177,22 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
 
         // 2. Finalizar em transaÃƒÂ§ÃƒÂ£o
         // projetos: DataFinalizado
-        await queryPool.execute(
+        await db.execute(
             `UPDATE projetos SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // tags: DataFinalizado
-        await queryPool.execute(
+        await db.execute(
             `UPDATE tags SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [userFinal, now, id]
         );
         // ordemservico: DataFinalizacao (diferente!)
-        await queryPool.execute(
+        await db.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // ordemservicoitem: DataFinalizado
-        await queryPool.execute(
+        await db.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='C', UsuarioFinalizado=?, DataFinalizado=?
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [userFinal, now, id]
@@ -6208,7 +6214,7 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
     try {
         // 1. Verificar se estÃƒÂ¡ finalizado (condiÃƒÂ§ÃƒÂ£o para cancelar)
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await queryPool.execute(
+        const [check] = await db.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
@@ -6224,22 +6230,22 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
 
         // 2. Desfazer finalizaÃƒÂ§ÃƒÂ£o em cascata (limpar campos)
         // projetos
-        await queryPool.execute(
+        await db.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
             [id]
         );
         // tags
-        await queryPool.execute(
+        await db.execute(
             `UPDATE tags SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [id]
         );
         // ordemservico
-        await queryPool.execute(
+        await db.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='', UsuarioFinalizado='', DataFinalizacao='' WHERE IdProjeto=?`,
             [id]
         );
         // ordemservicoitem
-        await queryPool.execute(
+        await db.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='', UsuarioFinalizado='', DataFinalizado=''
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [id]
@@ -8531,15 +8537,15 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
         // 1. Atualizar a TAG no MySQL
         valuesTag.push(tagId);
         const sqlTag = `UPDATE tags SET ${setClausesTag.join(', ')} WHERE IdTag = ?`;
-        await queryPool.execute(sqlTag, valuesTag);
+        await db.execute(sqlTag, valuesTag);
 
         // 2. Atualizar o PROJETO correspondente no MySQL
-        const [tagRows] = await queryPool.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
+        const [tagRows] = await db.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
         if (tagRows.length > 0 && tagRows[0].IdProjeto) {
             const idProjeto = tagRows[0].IdProjeto;
             valuesProj.push(idProjeto);
             const sqlProj = `UPDATE projetos SET ${setClausesProj.join(', ')} WHERE IdProjeto = ?`;
-            await queryPool.execute(sqlProj, valuesProj);
+            await db.execute(sqlProj, valuesProj);
         }
 
         res.json({ success: true, message: 'Datas de planejamento do Projeto e Tag salvas com sucesso no banco de dados.' });
@@ -8595,11 +8601,11 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
 
         valuesOS.push(tagId);
         const sqlOS = `UPDATE ordemservico SET ${setClausesOS.join(', ')} WHERE IdTag = ?`;
-        await queryPool.execute(sqlOS, valuesOS);
+        await db.execute(sqlOS, valuesOS);
 
         valuesItems.push(tagId);
         const sqlItems = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClausesItems.join(', ')} WHERE os.IdTag = ?`;
-        await queryPool.execute(sqlItems, valuesItems);
+        await db.execute(sqlItems, valuesItems);
 
         res.json({ success: true, message: 'Datas propagadas com sucesso para todas as OSs e Itens da Tag!' });
     } catch (error) {
@@ -8611,7 +8617,7 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
 app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT 
                 os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
                 os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
@@ -8649,7 +8655,7 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
 app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await queryPool.execute(`
+        const [rows] = await db.execute(`
             SELECT 
                 osi.*, osi.OrdemServicoItemFinalizado as Finalizado
             FROM ordemservicoitem osi
@@ -8672,7 +8678,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Fetch the project to get its "Projeto" name
-        const [projRows] = await queryPool.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
+        const [projRows] = await db.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
         const projName = projRows.length > 0 ? projRows[0].Projeto : null;
 
         // 2. Fetch the OSes matching either IdProjeto OR Projeto
@@ -8699,7 +8705,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
         sql += `) AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
                 ORDER BY IdOrdemServico`;
 
-        const [rows] = await queryPool.execute(sql, params);
+        const [rows] = await db.execute(sql, params);
         console.log(`[API] Returning ${rows.length} OSes for project ${projId} (Projeto Name: ${projName})`);
         
         res.json({ success: true, data: rows });
@@ -9207,6 +9213,74 @@ const setorColumns = {
 // Cache evita m�ltiplas consultas SHOW COLUMNS para o mesmo recurso.
 // -----------------------------------------------------------------------------
 const _setorConfigCache = {};
+
+
+/**
+ * Atualiza o campo [recurso]MinProd em forma de cascata nos 4 níveis hierárquicos:
+ * ordemservicoitem -> ordemservico -> tags -> projetos
+ */
+async function atualizarMinProdCascata(conn, idItem, processoKey, inputQty, operacao = 'ADD') {
+    try {
+        if (!idItem || !processoKey || !inputQty || inputQty <= 0) return;
+
+        let rawName = String(processoKey).trim();
+        let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+        if (rawName.toLowerCase() === 'montagem') recName = 'Montagem';
+        else if (rawName.toLowerCase() === 'corte') recName = 'Corte';
+        else if (rawName.toLowerCase() === 'dobra') recName = 'Dobra';
+        else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
+        else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
+        else if (rawName.toLowerCase() === 'galvanizar') recName = 'Galvanizar';
+        else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'Pulsionadeira';
+        else if (rawName.toLowerCase() === 'cortealaser') recName = 'CorteaLaser';
+
+        const minProdCol = `${recName}MinProd`;
+        const txtCol1 = `txt${recName}`;
+        const txtCol2 = `txt${rawName}`;
+
+        const [itemRows] = await conn.execute(
+            `SELECT osi.*, os.IdOrdemServico, os.IdTag, os.Tag, os.IdProjeto, os.Projeto
+             FROM ordemservicoitem osi
+             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+             WHERE osi.IdOrdemServicoItem = ?`,
+            [idItem]
+        );
+        if (!itemRows || itemRows.length === 0) return;
+        const item = itemRows[0];
+
+        const tempoPadrao = parseFloat(item[txtCol1] || item[txtCol2] || item[`txt${recName.toUpperCase()}`]) || 0;
+        const totalprod = Math.round(tempoPadrao * inputQty);
+
+        if (totalprod <= 0) return;
+
+        const valModifier = operacao === 'SUB' ? `- ${totalprod}` : `+ ${totalprod}`;
+
+        const queryItem = `UPDATE ordemservicoitem SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE IdOrdemServicoItem = ?`;
+        const queryOS   = `UPDATE ordemservico SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE IdOrdemServico = ?`;
+
+        await conn.execute(queryItem, [idItem]).catch(e => console.warn(`[MinProd Warning Item] ${e.message}`));
+
+        if (item.IdOrdemServico) {
+            await conn.execute(queryOS, [item.IdOrdemServico]).catch(e => console.warn(`[MinProd Warning OS] ${e.message}`));
+        }
+
+        if (item.IdTag) {
+            await conn.execute(`UPDATE tags SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE IdTag = ?`, [item.IdTag]).catch(e => console.warn(`[MinProd Warning Tag] ${e.message}`));
+        } else if (item.Tag) {
+            await conn.execute(`UPDATE tags SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE Tag = ?`, [item.Tag]).catch(e => console.warn(`[MinProd Warning Tag] ${e.message}`));
+        }
+
+        if (item.IdProjeto) {
+            await conn.execute(`UPDATE projetos SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE IdProjeto = ?`, [item.IdProjeto]).catch(e => console.warn(`[MinProd Warning Proj] ${e.message}`));
+        } else if (item.Projeto) {
+            await conn.execute(`UPDATE projetos SET \`${minProdCol}\` = GREATEST(0, COALESCE(\`${minProdCol}\`, 0) ${valModifier}) WHERE Projeto = ?`, [item.Projeto]).catch(e => console.warn(`[MinProd Warning Proj] ${e.message}`));
+        }
+
+        console.log(`[MinProd Cascata] ${operacao} | ${minProdCol} | Item=${idItem} | totalprod=${totalprod} (tempoPadrao=${tempoPadrao} * qtde=${inputQty})`);
+    } catch (err) {
+        console.error('[MinProd Cascata Erro]', err.message);
+    }
+}
 
 async function resolveSetorConfig(processo, conn) {
     const key = String(processo).trim().toUpperCase();
@@ -10056,6 +10130,105 @@ app.get('/api/apontamentos-parciais', async (req, res) => {
 });
 
 // POST: Registrar apontamento PARCIAL como excecao (aceita qualquer recurso sem validacao de setor)
+
+// POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
+
+// POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
+app.post('/api/salvar-setores-planejamento', async (req, res) => {
+    const { targetType, targetId, sectors } = req.body;
+
+    if (!targetType || !targetId || !Array.isArray(sectors)) {
+        return res.status(400).json({ success: false, message: 'Parâmetros targetType, targetId e sectors são obrigatórios.' });
+    }
+
+    const queryPool = req.tenantDbPool || pool;
+    const conn = await queryPool.getConnection();
+    try {
+        await conn.beginTransaction();
+
+        const formatBr = (val) => {
+            if (!val || val === '—') return null;
+            const str = String(val).trim();
+            if (str.includes('/')) return str;
+            if (str.includes('-')) {
+                const parts = str.split('T')[0].split('-');
+                if (parts.length === 3) {
+                    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+                }
+            }
+            return val;
+        };
+
+        const updateFieldsForEntity = async (table, idCol, idValue) => {
+            const updates = [];
+            const params = [];
+
+            for (const s of sectors) {
+                let rawName = String(s.key || s.label || '').trim();
+                let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                let diasName = recName;
+                if (rawName.toLowerCase() === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
+                else if (rawName.toLowerCase() === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
+                else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
+                else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
+                else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
+                else if (rawName.toLowerCase() === 'galvanizar') { recName = 'Galvanizar'; diasName = 'Galvanizar'; }
+                else if (rawName.toLowerCase() === 'pulsionadeira') { recName = 'Pulsionadeira'; diasName = 'Pulsionadeira'; }
+                else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
+
+                const colPi = `PlanejadoInicio${recName}`;
+                const colPf = `PlanejadoFinal${recName}`;
+                const colDias = `${diasName}DiasProducao`;
+
+                const brPi = formatBr(s.pi);
+                const brPf = formatBr(s.pf);
+                const valDias = parseInt(String(s.dias), 10) || 1;
+
+                updates.push(`\`${colPi}\` = ?`);
+                params.push(brPi);
+
+                updates.push(`\`${colPf}\` = ?`);
+                params.push(brPf);
+
+                try {
+                    updates.push(`\`${colDias}\` = ?`);
+                    params.push(valDias);
+                } catch (e) {}
+            }
+
+            if (updates.length > 0) {
+                params.push(idValue);
+                const sql = `UPDATE \`${table}\` SET ${updates.join(', ')} WHERE \`${idCol}\` = ?`;
+                await conn.execute(sql, params).catch(err => {
+                    console.warn(`[Save Sector Warning] ${err.message}`);
+                });
+            }
+        };
+
+        if (targetType === 'os') {
+            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', targetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', targetId);
+        } else if (targetType === 'tag') {
+            await updateFieldsForEntity('tags', 'IdTag', targetId);
+            await updateFieldsForEntity('ordemservico', 'IdTag', targetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdTag', targetId);
+        } else if (targetType === 'item') {
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', targetId);
+        }
+
+        await conn.commit();
+        console.log(`[Planejamento Setores] Salvo com sucesso para ${targetType} ID=${targetId} com ${sectors.length} setores.`);
+        res.json({ success: true, message: 'Planejamento de setores salvo com sucesso.' });
+    } catch (err) {
+        await conn.rollback();
+        console.error('[Planejamento Setores Error]', err);
+        res.status(500).json({ success: false, message: 'Erro ao salvar planejamento de setores: ' + err.message });
+    } finally {
+        conn.release();
+    }
+});
+
+
 app.post('/api/apontamento-parcial', async (req, res) => {
     const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor } = req.body;
 
@@ -11479,12 +11652,12 @@ app.post('/api/producao/reposicao', async (req, res) => {
 app.get('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         // Verifica se o banco ativo já tem configuração própria (ao menos 1 linha)
-        const [countRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
+        const [countRows] = await db.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
             // Banco ativo tem linha própria: usa o MenuStructure local
-            const [rows] = await req.tenantDbPool.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
+            const [rows] = await db.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
             if (rows.length > 0 && rows[0].MenuStructure) {
                 try {
                     const menu = JSON.parse(rows[0].MenuStructure);
@@ -11527,11 +11700,11 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         await ensureConfigColumns(req.tenantDbPool);
         const menuJson = JSON.stringify(menu);
-        const [rows] = await req.tenantDbPool.execute('SELECT id FROM configuracaosistema LIMIT 1');
+        const [rows] = await db.execute('SELECT id FROM configuracaosistema LIMIT 1');
         if (rows.length > 0) {
-            await req.tenantDbPool.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
+            await db.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
         } else {
-            await req.tenantDbPool.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
+            await db.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
         }
         console.log('[Config/Menu POST] Menu salvo localmente. Banco agora tem config própria.');
         res.json({ success: true });
@@ -11738,7 +11911,7 @@ app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 // GET /api/rnc/sectors - List all sectors from dedicated table
 app.get('/api/rnc/sectors', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT DISTINCT Setor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY Setor"
         );
         res.json({ success: true, data: rows.map(r => r.Setor) });
@@ -11805,7 +11978,7 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const { processofabricacao, CodigoProcessoFabricacao, Fabrica, DataLiberada, Setup, TempoPadrao } = req.body;
     try {
         // --- NEW VALIDATION ---
-        const [oldRows] = await req.tenantDbPool.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
+        const [oldRows] = await db.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
         if (oldRows.length > 0) {
             const oldProc = oldRows[0];
             const oldFabrica = oldProc.Fabrica || 'NAO';
@@ -11815,9 +11988,9 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
                 const procNameFormatado = (oldProc.processofabricacao || '').trim().replace(/\s+/g, '');
                 if (procNameFormatado) {
                     const colName = `txt${procNameFormatado}`;
-                    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
+                    const [cols] = await db.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
                     if (cols.length > 0) {
-                        const [usage] = await req.tenantDbPool.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
+                        const [usage] = await db.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
                         if (usage.length > 0) {
                             return res.status(400).json({ success: false, message: 'Não é possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
                         }
@@ -11845,7 +12018,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE processofabricacao SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProcessoFabricacao = ?",
             [nowFormat, usuario, id]
         );
@@ -11861,7 +12034,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
 // GET /api/setores - Listar todos os setores (usado na tela de Manutenção)
 app.get('/api/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT idSetor, Setor, DataLiberada, Fabrica, DataCriacao, CriadoPor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY idSetor DESC"
         );
         res.json({ success: true, data: rows });
@@ -11878,7 +12051,7 @@ app.post('/api/setores', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "INSERT INTO setor (Setor, Fabrica, DataLiberada, CriadoPor, DataCriacao) VALUES (?, ?, ?, ?, ?)",
             [Setor, Fabrica || 'NAO', DataLiberada || 'NAO', usuario, nowFormat]
         );
@@ -11894,7 +12067,7 @@ app.put('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Setor, Fabrica, DataLiberada } = req.body;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE setor SET Setor = ?, Fabrica = ?, DataLiberada = ? WHERE idSetor = ?",
             [Setor, Fabrica, DataLiberada, id]
         );
@@ -11912,7 +12085,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE setor SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE idSetor = ?",
             [nowFormat, usuario, id]
         );
@@ -11928,7 +12101,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
 // GET /api/motoristas - Listar todos os motoristas
 app.get('/api/motoristas', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT * FROM motorista WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Motorista"
         );
         res.json({ success: true, data: rows });
@@ -11954,7 +12127,7 @@ app.post('/api/motoristas', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "INSERT INTO motorista (Motorista, CNH, Categoria, Telefone, DataCadastro) VALUES (?, ?, ?, ?, ?)",
             [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, nowFormat]
         );
@@ -11970,7 +12143,7 @@ app.put('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Motorista, CNH, Categoria, Telefone, DataVencimentoCNH, ImagemCNH } = req.body;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE motorista SET Motorista = ?, CNH = ?, Categoria = ?, Telefone = ?, DataVencimentoCNH = ?, ImagemCNH = ? WHERE IdMotorista = ?",
               [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, ImagemCNH || null, id]
         );
@@ -11988,7 +12161,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE motorista SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMotorista = ?",
             [nowFormat, usuario, id]
         );
@@ -12005,7 +12178,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
 app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     try {
         // Auto-create table if not exists
-        await req.tenantDbPool.execute(`
+        await db.execute(`
             CREATE TABLE IF NOT EXISTS tipotransporte (
                 IdTipoTransporte INT AUTO_INCREMENT PRIMARY KEY,
                 TipoVeiculo VARCHAR(80) NOT NULL,
@@ -12016,7 +12189,7 @@ app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
                 UsuarioD_E_L_E_T_E VARCHAR(80) DEFAULT ''
             )
         `);
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT IdTipoTransporte, TipoVeiculo, Placa FROM tipotransporte WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoVeiculo"
         );
         res.json({ success: true, data: rows });
@@ -12035,7 +12208,7 @@ app.post('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        const [result] = await req.tenantDbPool.execute(
+        const [result] = await db.execute(
             "INSERT INTO tipotransporte (TipoVeiculo, Placa, DataCadastro) VALUES (?, ?, ?)",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), nowFormat]
         );
@@ -12054,7 +12227,7 @@ app.put('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Tipo de Veículo é obrigatório' });
     }
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE tipotransporte SET TipoVeiculo = ?, Placa = ? WHERE IdTipoTransporte = ?",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), id]
         );
@@ -12072,7 +12245,7 @@ app.delete('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await req.tenantDbPool.execute(
+        await db.execute(
             "UPDATE tipotransporte SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoTransporte = ?",
             [nowFormat, usuario, id]
         );
@@ -15497,7 +15670,7 @@ app.get('/fotosfuncionarios/:filename', tenantMiddleware, async (req, res) => {
     let baseDir = 'C:\\fotosfuncionarios';
     try {
         if (req.tenantDbPool) {
-            const [rows] = await req.tenantDbPool.execute('SELECT EnderecoSalvarCNHMotorista FROM configuracaosistema LIMIT 1');
+            const [rows] = await db.execute('SELECT EnderecoSalvarCNHMotorista FROM configuracaosistema LIMIT 1');
             if (rows.length > 0 && rows[0].EnderecoSalvarCNHMotorista) {
                 baseDir = rows[0].EnderecoSalvarCNHMotorista;
             }
@@ -16273,7 +16446,7 @@ app.get('/api/materiais/:id/arquivos', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT idArquivo, IdMaterial, NomeArquivo, TipoArquivo, Tamanho, DataCriacao, CriadoPor FROM material_arquivos WHERE IdMaterial = ? ORDER BY DataCriacao DESC",
             [id]
         );
@@ -16296,7 +16469,7 @@ app.post('/api/materiais/:id/arquivos', tenantMiddleware, uploadMemory.single('a
 
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await req.tenantDbPool.execute(
+        await db.execute(
             "INSERT INTO material_arquivos (IdMaterial, NomeArquivo, TipoArquivo, Tamanho, Dados, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [id, file.originalname, file.mimetype, file.size, file.buffer, nowFormat, usuario]
         );
@@ -16312,7 +16485,7 @@ app.get('/api/materiais/arquivos/:idArquivo/download', tenantMiddleware, async (
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await req.tenantDbPool.execute(
+        const [rows] = await db.execute(
             "SELECT NomeArquivo, TipoArquivo, Dados FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );
@@ -16336,7 +16509,7 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await req.tenantDbPool.execute(
+        await db.execute(
             "DELETE FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );

@@ -1,3 +1,4 @@
+import SectorProductionModal from '../components/SectorProductionModal';
 /* eslint-disable */
 import { createPortal } from 'react-dom';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -171,6 +172,43 @@ const SECTOR_RESOURCE_FIELDS = [
   { field: 'txtGALVANIZAR', key: 'Galvanizar', label: 'Galvanizar', order: 8 }
 ];
 
+
+const getSectorPlanningDatesInOS = (obj: any, sectorKey: string) => {
+  if (!obj || typeof obj !== 'object') return { pi: '', pf: '', minProd: 0 };
+  const target = String(sectorKey || '').trim().toLowerCase();
+  let pi = '';
+  let pf = '';
+  let minProd = 0;
+
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase();
+    
+    if (!pi && kLower.startsWith('planejadoinicio')) {
+      const rest = kLower.replace('planejadoinicio', '');
+      if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+        if (obj[k]) pi = String(obj[k]);
+      }
+    }
+
+    if (!pf && kLower.startsWith('planejadofinal')) {
+      const rest = kLower.replace('planejadofinal', '');
+      if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+        if (obj[k]) pf = String(obj[k]);
+      }
+    }
+
+    if (kLower.endsWith('minprod')) {
+      const prefix = kLower.replace('minprod', '');
+      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+        const val = parseInt(String(obj[k]), 10) || 0;
+        if (val > 0) minProd = val;
+      }
+    }
+  }
+
+  return { pi, pf, minProd };
+};
+
 const checkSectorActiveInOS = (obj: any, fieldName: string): boolean => {
   if (!obj) return false;
   const directVal = obj[fieldName];
@@ -197,14 +235,14 @@ const getOsHeaderActiveSectors = (os: any) => {
   if (!os) return [];
   return SECTOR_RESOURCE_FIELDS.filter(f => checkSectorActiveInOS(os, f.field)).map(f => {
     const diasKey = `${f.key}DiasProducao`;
-    const piKey = `PlanejadoInicio${f.key}`;
-    const pfKey = `PlanejadoFinal${f.key}`;
+    const { pi, pf, minProd } = getSectorPlanningDatesInOS(os, f.key);
     return {
       key: f.key,
       label: f.label,
-      dias: os[diasKey] || 0,
-      pi: os[piKey] || '',
-      pf: os[pfKey] || ''
+      dias: os[diasKey] || os[`dias${f.key}`] || 0,
+      pi,
+      pf,
+      minProd
     };
   });
 };
@@ -218,15 +256,23 @@ const aggregateItemsSectorsInOS = (items: any[]) => {
       if (checkSectorActiveInOS(item, f.field)) {
         if (!map.has(f.key)) {
           const diasKey = `${f.key}DiasProducao`;
-          const piKey = `PlanejadoInicio${f.key}`;
-          const pfKey = `PlanejadoFinal${f.key}`;
-          map.set(f.key, {
-            key: f.key,
-            label: f.label,
-            dias: item[diasKey] || 0,
-            pi: item[piKey] || '',
-            pf: item[pfKey] || ''
-          });
+          const { pi, pf, minProd } = getSectorPlanningDatesInOS(item, f.key);
+          const existing = map.get(f.key);
+          if (!existing) {
+            map.set(f.key, {
+              key: f.key,
+              label: f.label,
+              dias: item[diasKey] || item[`dias${f.key}`] || 0,
+              pi,
+              pf,
+              minProd
+            });
+          } else {
+            existing.minProd = (existing.minProd || 0) + (minProd || 0);
+            if (pi && !existing.pi) existing.pi = pi;
+            if (pf && !existing.pf) existing.pf = pf;
+          }
+
         }
       }
     });
@@ -3377,77 +3423,12 @@ function OrdemServicoContent() {
             </AnimatePresence>
         </div>
     );
-    {sectorModal && createPortal(
-      <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 z-[100] animate-in fade-in duration-200">
-        <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-150">
-          <div className="bg-[#32423D] px-5 py-3.5 flex items-center justify-between text-white shadow-md">
-            <div className="flex items-center gap-2">
-              <Activity size={18} className="text-[#E0E800]" />
-              <h3 className="font-black text-xs uppercase tracking-wide">
-                {sectorModal.title}
-              </h3>
-            </div>
-            <button 
-              onClick={() => setSectorModal(null)} 
-              className="text-slate-300 hover:text-white hover:bg-white/10 p-1 rounded-lg transition-colors"
-              title="Fechar"
-            >
-              <X size={18} />
-            </button>
-          </div>
-
-          <div className="p-5 bg-slate-50/50">
-            {sectorModal.sectors.length === 0 ? (
-              <div className="py-8 text-center text-slate-500 text-sm font-medium bg-white rounded-lg border border-slate-200 shadow-xs">
-                Nenhum recurso/setor ativo localizado.
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-sm">
-                <table className="w-full text-xs text-left border-collapse">
-                  <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
-                    <tr>
-                      <th className="px-4 py-3 border-r border-slate-200 font-black text-slate-800">Recurso Ativo</th>
-                      <th className="px-4 py-3 text-center border-r border-slate-200 w-48 font-black text-slate-800">Dias p/ Produção do Item</th>
-                      <th className="px-4 py-3 text-center border-r border-slate-200 w-56 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
-                    {sectorModal.sectors.map(s => {
-                      const dateInterval = (s.pi || s.pf) ? `${s.pi || '—'} até ${s.pf || '—'}` : '—';
-                      const diasText = (s.dias !== undefined && s.dias !== null && s.dias > 0) ? `${s.dias} ${s.dias === 1 ? 'dia' : 'dias'}` : '1 dia';
-
-                      return (
-                        <tr key={s.key} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-4 py-3 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2 text-xs">
-                            <span className="w-2.5 h-2.5 rounded-full bg-[#32423D] shrink-0" />
-                            <span>{s.label}</span>
-                          </td>
-                          <td className="px-4 py-3 text-center font-bold text-slate-700 border-r border-slate-100 text-xs">
-                            {diasText}
-                          </td>
-                          <td className="px-4 py-3 text-center font-medium text-slate-700 border-r border-slate-100 text-xs whitespace-nowrap">
-                            {dateInterval}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-slate-100 px-5 py-3 border-t border-slate-200 flex justify-end">
-            <button
-              onClick={() => setSectorModal(null)}
-              className="px-4 py-1.5 bg-[#32423D] hover:bg-[#25322E] text-white text-xs font-bold rounded-lg transition-colors shadow-xs"
-            >
-              Fechar
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
+    {sectorModal && (
+    <SectorProductionModal
+      modalData={sectorModal}
+      onClose={() => setSectorModal(null)}
+      onSaved={() => { if (typeof fetchOrdensServico === 'function') fetchOrdensServico(); }}
+    />
+  )}
 
 }
