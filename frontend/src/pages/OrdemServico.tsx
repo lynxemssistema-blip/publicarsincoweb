@@ -173,6 +173,30 @@ const SECTOR_RESOURCE_FIELDS = [
 ];
 
 
+const getSectorDiasProducao = (obj: any, sectorKey: string): number => {
+  if (!obj || typeof obj !== 'object') return 0;
+  const target = String(sectorKey || '').trim().toLowerCase();
+
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase();
+    if (kLower.endsWith('diasproducao')) {
+      const prefix = kLower.replace('diasproducao', '');
+      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+        const val = parseFloat(String(obj[k]));
+        if (!isNaN(val) && val > 0) return val;
+      }
+    }
+  }
+
+  const directVal = parseFloat(
+    obj[`${sectorKey}DiasProducao`] || 
+    obj[`dias${sectorKey}`] || 
+    obj[`Dias${sectorKey}`] || 
+    0
+  );
+  return isNaN(directVal) ? 0 : directVal;
+};
+
 const getSectorPlanningDatesInOS = (obj: any, sectorKey: string) => {
   if (!obj || typeof obj !== 'object') return { pi: '', pf: '', minProd: 0 };
   const target = String(sectorKey || '').trim().toLowerCase();
@@ -239,7 +263,7 @@ const getOsHeaderActiveSectors = (os: any) => {
     return {
       key: f.key,
       label: f.label,
-      dias: os[diasKey] || os[`dias${f.key}`] || 0,
+      dias: getSectorDiasProducao(os, f.key),
       pi,
       pf,
       minProd
@@ -324,31 +348,30 @@ function OrdemServicoContent() {
     const osModalItemsCache = useRef<Record<string | number, any[]>>({});
     
     const openOsSectorsModal = async (os: any) => {
-      let items = osModalItemsCache.current[os.IdOrdemServico];
-      if (!items || items.length === 0) {
-        try {
-          const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
-          if (r.success && r.data) {
-            items = r.data;
-            osModalItemsCache.current[os.IdOrdemServico] = r.data;
-          }
-        } catch (e) {
-          console.error('Error fetching OS items for sector modal:', e);
+      let items: any[] = [];
+      try {
+        const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+        if (r.success && r.data) {
+          items = r.data;
+          osModalItemsCache.current[os.IdOrdemServico] = r.data;
         }
+      } catch (e) {
+        console.error('Error fetching OS items for sector modal:', e);
       }
       const itemSect = (items && items.length > 0) ? aggregateItemsSectorsInOS(items) : [];
       const osHeaderSect = getOsHeaderActiveSectors(os);
 
       const secMap = new Map<string, any>();
-      osHeaderSect.forEach(s => secMap.set(s.key, s));
+      osHeaderSect.forEach(s => secMap.set(s.key, { ...s }));
       itemSect.forEach(s => {
         const existing = secMap.get(s.key);
         if (!existing) {
-          secMap.set(s.key, s);
+          secMap.set(s.key, { ...s });
         } else {
-          if (s.dias && !existing.dias) existing.dias = s.dias;
-          if (s.pi && !existing.pi) existing.pi = s.pi;
-          if (s.pf && !existing.pf) existing.pf = s.pf;
+          if (s.dias) existing.dias = s.dias;
+          if (s.pi && s.pi !== '—') existing.pi = s.pi;
+          if (s.pf && s.pf !== '—') existing.pf = s.pf;
+          if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
         }
       });
 
@@ -356,6 +379,8 @@ function OrdemServicoContent() {
 
       setSectorModal({
         title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
+        targetType: 'os',
+        targetId: os.IdOrdemServico,
         sectors: activeSectors
       });
     };
@@ -1735,6 +1760,8 @@ function OrdemServicoContent() {
                             >
                                 <Copy size={15} />
                             </button>
+
+
 
                             {os.OrdemServicoFinalizado !== 'C' && (
                                 <button 

@@ -143,8 +143,7 @@ app.use('/api/peca-manufaturada', pecaManufaturadaRoutes);
 app.get('/api/reposicao/itens', async (req, res) => {
     try {
         const query = `
-            SELECT 
-                IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
                 CodMatFabricante, DescResumo, DescDetal, Espessura, 
                 MaterialSW, EnderecoArquivo, EnderecoArquivoItemOrdemServico,
                 CriadoPor, DataCriacao, QtdeTotal, SetorReposicao, 
@@ -213,7 +212,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         // 1. Validar e capturar o Item
         const [items] = await connection.query(`
-            SELECT IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
                    sttxtCorte, IdOrdemservicoReposicao, IdOrdemServicoItemReposicao, IdPendenciaReposicao
             FROM ordemservicoitem 
             WHERE IdOrdemServicoItem = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*') FOR UPDATE
@@ -989,6 +988,7 @@ app.post('/api/romaneio/item/:idRomaneioItem/estorno', async (req, res) => {
         const novaQtdeRomaneio = qtdeAtual - qtde;
         const novoSaldo = saldoAtual + qtde;
         const now = getCurrentDateTimeBR();
+        const dateNow = getCurrentDateBR();
 
         // 3. Atualiza romaneioitem
         await conn.execute(
@@ -8637,6 +8637,10 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
                 os.PinturaTotalExecutar, os.PinturaTotalExecutado,
                 os.MontagemTotalExecutar, os.MontagemTotalExecutado,
                 os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
+                os.PlanejadoInicioCorte, os.PlanejadoFinalCorte,
+                os.PlanejadoInicioPULSIONADEIRA, os.PlanejadoFinalPULSIONADEIRA,
+                os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR,
+                
                 os.PulsionadeiraTotalExecutar, os.PulsionadeiraTotalExecutado,
                 os.GalvanizarTotalExecutar, os.GalvanizarTotalExecutado
             FROM ordemservico os
@@ -8692,6 +8696,15 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
                 MontagemTotalExecutar, MontagemTotalExecutado,
                 CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
                 PulsionadeiraTotalExecutar, PulsionadeiraTotalExecutado,
+                PlanejadoInicioCorte, PlanejadoFinalCorte,
+                PlanejadoInicioDobra, PlanejadoFinalDobra,
+                PlanejadoInicioSolda, PlanejadoFinalSolda,
+                PlanejadoInicioPintura, PlanejadoFinalPintura,
+                PlanejadoInicioMontagem, PlanejadoFinalMontagem,
+                PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser,
+                PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA,
+                PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR,
+                
                 GalvanizarTotalExecutar, GalvanizarTotalExecutado
             FROM ordemservico 
             WHERE (IdProjeto = ? `;
@@ -8718,8 +8731,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
 app.get('/api/ordemservico/:id/itens', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
-            SELECT 
-                IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
                 QtdeTotal, Peso, AreaPintura, Acabamento, Unidade,
                 Espessura, Altura, Largura,
                 CodMatFabricante, MaterialSW, EnderecoArquivo,
@@ -10134,7 +10146,7 @@ app.get('/api/apontamentos-parciais', async (req, res) => {
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
 
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
-app.post('/api/salvar-setores-planejamento', async (req, res) => {
+app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) => {
     const { targetType, targetId, sectors } = req.body;
 
     if (!targetType || !targetId || !Array.isArray(sectors)) {
@@ -10159,6 +10171,20 @@ app.post('/api/salvar-setores-planejamento', async (req, res) => {
             return val;
         };
 
+        const parseBrDate = (str) => {
+            if (!str || str === '—') return null;
+            const s = String(str).trim();
+            if (s.includes('/')) {
+                const p = s.split('/');
+                if (p.length === 3) return new Date(parseInt(p[2], 10), parseInt(p[1], 10) - 1, parseInt(p[0], 10));
+            }
+            if (s.includes('-')) {
+                const p = s.split('T')[0].split('-');
+                if (p.length === 3) return new Date(parseInt(p[0], 10), parseInt(p[1], 10) - 1, parseInt(p[2], 10));
+            }
+            return null;
+        };
+
         const updateFieldsForEntity = async (table, idCol, idValue) => {
             const updates = [];
             const params = [];
@@ -10172,8 +10198,8 @@ app.post('/api/salvar-setores-planejamento', async (req, res) => {
                 else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
                 else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
                 else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
-                else if (rawName.toLowerCase() === 'galvanizar') { recName = 'Galvanizar'; diasName = 'Galvanizar'; }
-                else if (rawName.toLowerCase() === 'pulsionadeira') { recName = 'Pulsionadeira'; diasName = 'Pulsionadeira'; }
+                else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
+                else if (rawName.toLowerCase() === 'pulsionadeira') { recName = 'PULSIONADEIRA'; diasName = 'Pulsionadeira'; }
                 else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                 const colPi = `PlanejadoInicio${recName}`;
@@ -10190,10 +10216,8 @@ app.post('/api/salvar-setores-planejamento', async (req, res) => {
                 updates.push(`\`${colPf}\` = ?`);
                 params.push(brPf);
 
-                try {
-                    updates.push(`\`${colDias}\` = ?`);
-                    params.push(valDias);
-                } catch (e) {}
+                updates.push(`\`${colDias}\` = ?`);
+                params.push(valDias);
             }
 
             if (updates.length > 0) {
@@ -10205,29 +10229,131 @@ app.post('/api/salvar-setores-planejamento', async (req, res) => {
             }
         };
 
+        const updateParentHierarchy = async (osId, tagId, projetoId) => {
+            const updateEntityRow = async (table, idCol, idVal) => {
+                if (!idVal) return;
+                const [rows] = await conn.execute(`SELECT * FROM \`${table}\` WHERE \`${idCol}\` = ?`, [idVal]).catch(() => [[]]);
+                if (!rows || rows.length === 0) return;
+                const parentRow = rows[0];
+
+                const updates = [];
+                const params = [];
+
+                for (const s of sectors) {
+                    let rawName = String(s.key || s.label || '').trim();
+                    let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
+                    if (rawName.toLowerCase() === 'montagem') recName = 'Montagem';
+                    else if (rawName.toLowerCase() === 'corte') recName = 'Corte';
+                    else if (rawName.toLowerCase() === 'dobra') recName = 'Dobra';
+                    else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
+                    else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
+                    else if (rawName.toLowerCase() === 'galvanizar') recName = 'GALVANIZAR';
+                    else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'PULSIONADEIRA';
+                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') recName = 'CorteaLaser';
+
+                    const colPi = `PlanejadoInicio${recName}`;
+                    const colPf = `PlanejadoFinal${recName}`;
+
+                    const itemPiBr = formatBr(s.pi);
+                    const itemPfBr = formatBr(s.pf);
+
+                    const itemPiDt = parseBrDate(itemPiBr);
+                    const itemPfDt = parseBrDate(itemPfBr);
+
+                    // Check Start Date: If item date is SMALLER (earlier) than parent date, update parent!
+                    if (itemPiBr && itemPiDt) {
+                        const parentPiBr = formatBr(parentRow[colPi]);
+                        const parentPiDt = parseBrDate(parentPiBr);
+
+                        if (!parentPiDt || itemPiDt < parentPiDt) {
+                            updates.push(`\`${colPi}\` = ?`);
+                            params.push(itemPiBr);
+                        }
+                    }
+
+                    // Check End Date: If item date is GREATER (later) than parent date, update parent!
+                    if (itemPfBr && itemPfDt) {
+                        const parentPfBr = formatBr(parentRow[colPf]);
+                        const parentPfDt = parseBrDate(parentPfBr);
+
+                        if (!parentPfDt || itemPfDt > parentPfDt) {
+                            updates.push(`\`${colPf}\` = ?`);
+                            params.push(itemPfBr);
+                        }
+                    }
+                }
+
+                if (updates.length > 0) {
+                    params.push(idVal);
+                    const sql = `UPDATE \`${table}\` SET ${updates.join(', ')} WHERE \`${idCol}\` = ?`;
+                    await conn.execute(sql, params).catch(err => {
+                        console.warn(`[Hierarchy Sector Rollup Warning] Table ${table}: ${err.message}`);
+                    });
+                    console.log(`[Hierarchy Sector Rollup] Updated ${table} (${idCol}=${idVal}) with ${updates.length} sector date fields.`);
+                }
+            };
+
+            if (osId) await updateEntityRow('ordemservico', 'IdOrdemServico', osId);
+            if (tagId) await updateEntityRow('tags', 'IdTag', tagId);
+            if (projetoId) await updateEntityRow('projetos', 'IdProjeto', projetoId);
+        };
+
         if (targetType === 'os') {
             await updateFieldsForEntity('ordemservico', 'IdOrdemServico', targetId);
             await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', targetId);
+
+            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [targetId]).catch(() => [[]]);
+            if (osRows && osRows[0]) {
+                await updateParentHierarchy(null, osRows[0].IdTag, osRows[0].IdProjeto);
+            }
         } else if (targetType === 'tag') {
             await updateFieldsForEntity('tags', 'IdTag', targetId);
             await updateFieldsForEntity('ordemservico', 'IdTag', targetId);
             await updateFieldsForEntity('ordemservicoitem', 'IdTag', targetId);
+
+            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [targetId]).catch(() => [[]]);
+            if (tagRows && tagRows[0]) {
+                await updateParentHierarchy(null, null, tagRows[0].IdProjeto);
+            }
         } else if (targetType === 'item') {
             await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', targetId);
+
+            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [targetId]).catch(() => [[]]);
+            if (itemRows && itemRows[0]) {
+                let osId = itemRows[0].IdOrdemServico;
+                let tagId = itemRows[0].IdTag;
+                let projetoId = itemRows[0].IdProjeto;
+
+                if (osId && (!tagId || !projetoId)) {
+                    const [osInfo] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [osId]).catch(() => [[]]);
+                    if (osInfo && osInfo[0]) {
+                        if (!tagId) tagId = osInfo[0].IdTag;
+                        if (!projetoId) projetoId = osInfo[0].IdProjeto;
+                    }
+                }
+
+                if (tagId && !projetoId) {
+                    const [tagInfo] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]).catch(() => [[]]);
+                    if (tagInfo && tagInfo[0]) {
+                        projetoId = tagInfo[0].IdProjeto;
+                    }
+                }
+
+                await updateParentHierarchy(osId, tagId, projetoId);
+            }
         }
 
         await conn.commit();
-        console.log(`[Planejamento Setores] Salvo com sucesso para ${targetType} ID=${targetId} com ${sectors.length} setores.`);
-        res.json({ success: true, message: 'Planejamento de setores salvo com sucesso.' });
-    } catch (err) {
+        console.log(`[Planejamento Setores] Salvo com sucesso para ${targetType} ID=${targetId} com ${sectors.length} setores e propagado na hierarquia`);
+        res.json({ success: true, message: 'Planejamento dos setores salvo com sucesso e propagado na hierarquia.' });
+    } catch (error) {
         await conn.rollback();
-        console.error('[Planejamento Setores Error]', err);
-        res.status(500).json({ success: false, message: 'Erro ao salvar planejamento de setores: ' + err.message });
+        console.error('[Planejamento Setores] Erro ao salvar:', error);
+        res.status(500).json({ success: false, message: 'Erro ao salvar planejamento dos setores: ' + error.message });
     } finally {
         conn.release();
     }
 });
-
 
 app.post('/api/apontamento-parcial', async (req, res) => {
     const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor } = req.body;
@@ -10487,6 +10613,7 @@ osi.*,
         for (const sName of setoresParaProcessar) {
             const sConfig = setorColumns[sName];
             const totalExecutadoDb = parseFloat(item[sConfig.total]) || 0;
+            const dateNow = getDateForSetor(sConfig);
             const statusAtual = item[sConfig.status];
 
             if (statusAtual === 'C' && !isMapa) continue;
@@ -10558,7 +10685,8 @@ osi.*,
             }
 
             const novoTotalExecutado = isMapa ? qtdeTotal : totalExecutadoDb + currentInputQty;
-            const novoTotalExecutar = isMapa ? qtdeTotal : capacidadeSetor; // NUNCA MOVIDO! Apenas preservado.
+            const totalExecutarAtualDb = parseFloat(item[sConfig.executar]) || (qtdeTotal - totalExecutadoDb);
+            const novoTotalExecutar = isMapa ? 0 : Math.max(0, totalExecutarAtualDb - currentInputQty); // NUNCA MOVIDO! Apenas preservado.
             const novoPercentual = isMapa ? 100 : (qtdeTotal > 0 ? Math.min(100, Math.round((novoTotalExecutado / qtdeTotal) * 100)) : 0);
             const finalizado = novoTotalExecutado >= qtdeTotal;
 
@@ -14263,7 +14391,7 @@ app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res)
 
         // 1. Busca dados do item
         const [[item]] = await connection.execute(
-            `SELECT IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
                     CorteTotalExecutado, CorteTotalExecutar, sttxtcorte,
                     txtDobra, txtSolda, txtPintura, txtMontagem, 
                     RealizadoInicioCorte, COALESCE(QtdeReposicao, 0) AS QtdeReposicao
@@ -14574,7 +14702,7 @@ app.post('/api/plano-corte/:id/liberar', async (req, res) => {
 
         // Busca todos itens da OS
         const [itens] = await connection.execute(
-            `SELECT IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
              FROM ordemservicoitem 
              WHERE idplanodecorte = ? AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')`,
             [id]
@@ -15288,7 +15416,7 @@ app.post('/api/plano-corte/:id/atualizar-arquivos', async (req, res) => {
 
         // 2. Buscar itens do plano (equivalente ao DGVItensPLanodeCorte)
         const [itens] = await connection.execute(`
-            SELECT IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
             FROM ordemservicoitem
             WHERE idplanodecorte = ?
               AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')
@@ -16302,7 +16430,7 @@ app.get('/api/manutencao/inspecionar-item', async (req, res) => {
     if (!id) return res.status(400).json({ success: false, message: 'Parametro id obrigatorio' });
     try {
         const [rows] = await pool.execute(
-            `SELECT IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
                     EnderecoArquivo, txtTipoDesenho, D_E_L_E_T_E, DescResumo
              FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`,
             [id]

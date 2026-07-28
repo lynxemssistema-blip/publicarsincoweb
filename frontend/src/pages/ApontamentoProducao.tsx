@@ -503,10 +503,10 @@ export default function ApontamentoProducaoPage() {
  const selectItem = async (item: ApontamentoItem) => {
  setSelectedItem(item);
  setItemDetails(null); // Clear previous details immediately
- setLoadingDetails(true);
+ setLoadingDetails(false);
  try {
  // Load full history for the item across ALL sectors
- const res = await fetch(`${API_BASE}/apontamento/item/${item.IdOrdemServicoItem}/all`);
+ const res = await fetch(`${API_BASE}/apontamento/item/${item.IdOrdemServicoItem}/all`, { headers: getAuthHeaders() });
  const json = await res.json();
  if (json.success) {
  setItemDetails(json.data);
@@ -520,32 +520,55 @@ export default function ApontamentoProducaoPage() {
 
 
  const openModal = useCallback(async (item: ApontamentoItem, targetSetor?: string) => {
- const activeSetor = targetSetor || setorAtivo;
- setSelectedItem(item);
- setModalSetor(activeSetor as Setor);
- setModalOpen(true);
- setLoadingDetails(true);
- setQtdeApontar('');
- setConfirmingMapa(false);
+    const activeSetor = targetSetor || setorAtivo;
+    const setorKey = String(activeSetor).toLowerCase();
+    const secFormatted = activeSetor.charAt(0).toUpperCase() + activeSetor.slice(1);
+    const secUpper = activeSetor.toUpperCase();
 
- try {
- const res = await fetch(`${API_BASE}/apontamento/item/${item.IdOrdemServicoItem}/${activeSetor}`);
- const json = await res.json();
- if (json.success) {
- setItemDetails(json.data);
- // For Mapa, default to QtdeTotal as requested
- if (activeSetor === 'mapa') {
- setQtdeApontar(String(item.QtdeTotal));
- } else {
- setQtdeApontar(String(json.data.qtdeFaltante));
- }
- }
- } catch {
- console.error('Error loading details:', err);
- } finally {
- setLoadingDetails(false);
- }
- }, [setorAtivo]);
+    const recExecutado = parseFloat(String(
+      item[`${secFormatted}TotalExecutado`] ?? 
+      item[`${secUpper}TotalExecutado`] ?? 
+      item.TotalExecutado ?? 
+      0
+    )) || 0;
+
+    const recExecutar = parseFloat(String(
+      item[`${secFormatted}TotalExecutar`] ?? 
+      item[`${secUpper}TotalExecutar`] ?? 
+      (parseFloat(String(item.QtdeTotal || 1)) - recExecutado)
+    )) || Math.max(0, parseFloat(String(item.QtdeTotal || 1)) - recExecutado);
+
+    const initialDetails = {
+      item: item,
+      historico: [],
+      totalProduzido: recExecutado,
+      qtdeFaltante: Math.max(0, recExecutar)
+    };
+    setSelectedItem(item);
+    setItemDetails(initialDetails);
+    setModalSetor(activeSetor as Setor);
+    setModalOpen(true);
+    setLoadingDetails(true);
+    setQtdeApontar(activeSetor === 'mapa' ? String(item.QtdeTotal) : String(Math.max(1, recExecutar)));
+    setConfirmingMapa(false);
+
+    try {
+      const res = await fetch(`${API_BASE}/apontamento/item/${item.IdOrdemServicoItem}/${activeSetor}`, { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setItemDetails(json.data);
+        if (activeSetor === 'mapa') {
+          setQtdeApontar(String(item.QtdeTotal));
+        } else {
+          setQtdeApontar(String(json.data.qtdeFaltante));
+        }
+      }
+    } catch (err) {
+      console.error('Error loading details:', err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  }, [setorAtivo]);
 
  // Submit apontamento
  const handleSubmit = async () => {
@@ -2063,7 +2086,53 @@ export default function ApontamentoProducaoPage() {
  </div>
  )}
 
- {/* Quantidade Input - Hidden in Mapa Mode */}
+ {/* INFORMÁÇÕES DE CAPACIDADE DIÁRIA E ACUMULADO MINPROD DO RECURSO */}
+          {modalSetor !== 'mapa' && itemDetails && (() => {
+            const setorKey = String(modalSetor).toLowerCase();
+            const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+            const secUpper = modalSetor.toUpperCase();
+
+            const minProdVal = parseFloat(String(
+              itemDetails[`${secFormatted}MinProd`] ?? 
+              itemDetails[`${secUpper}MinProd`] ?? 
+              itemDetails[`${modalSetor}MinProd`] ?? 
+              itemDetails.item?.[`${secFormatted}MinProd`] ?? 
+              itemDetails.item?.[`${secUpper}MinProd`] ?? 
+              0
+            )) || 0;
+
+            const limitesSalvos = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
+            const limiteDiarioVal = limitesSalvos[setorKey] ?? 500;
+
+            return (
+              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 my-2.5 flex items-center justify-between shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-[#32423D] text-[#E0E800] rounded-lg shadow-xs">
+                    <Clock size={16} />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                      Limite Diário ({secFormatted}):
+                    </span>
+                    <span className="text-xs font-black text-[#32423D]">
+                      {limiteDiarioVal} min
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
+                    Total Apontado ({secFormatted}MinProd):
+                  </span>
+                  <span className={`text-xs font-black ${minProdVal >= limiteDiarioVal ? 'text-red-600' : 'text-emerald-700'}`}>
+                    {minProdVal} min / {limiteDiarioVal} min
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Quantidade Input - Hidden in Mapa Mode */}
  {modalSetor !== 'mapa' && (
  <div className="pt-1">
  <div className="flex gap-2 items-center">
@@ -2090,22 +2159,7 @@ export default function ApontamentoProducaoPage() {
  placeholder="0"
  />
  </div>
- {itemDetails.qtdeFaltante > 0 && (
- <div className="flex gap-1 w-32 items-end pt-3">
- <button
- onClick={() => setQtdeApontar(String(itemDetails.qtdeFaltante))}
- className="flex-1 py-1 h-8 text-[9px] font-bold bg-[#E0E800]/30 text-[#32423D] rounded border border-blue-100 hover:bg-[#E0E800]/20 transition-colors whitespace-nowrap px-1"
- >
- Total ({itemDetails.qtdeFaltante})
- </button>
- <button
- onClick={() => setQtdeApontar('1')}
- className="flex-1 py-1 h-8 text-[9px] font-bold bg-gray-50 text-gray-600 rounded border border-gray-200 hover:bg-gray-100 transition-colors whitespace-nowrap px-1"
- >
- Unid (1)
- </button>
- </div>
- )}
+ 
  </div>
  </div>
  )}

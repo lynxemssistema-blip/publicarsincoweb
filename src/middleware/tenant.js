@@ -24,7 +24,8 @@ const tenantMiddleware = async (req, res, next) => {
         pathStr.includes('manutencao') ||
         pathStr.includes('acompanhamento') ||
         pathStr.includes('material') ||
-        pathStr.includes('ordemservico')
+        pathStr.includes('ordemservico') ||
+        pathStr.includes('salvar-setores-planejamento')
     ) {
         return next();
     }

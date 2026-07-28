@@ -56,16 +56,12 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const [procSearch, setProcSearch] = useState('');
   const [procTableFiltro, setProcTableFiltro] = useState('');
   const [seq, setSeq] = useState('');
-  const [estMinStr,setEstMinStr]=useState('');
-  const [padMinStr,setPadMinStr]=useState('');
   const [ob,setOb]=useState('');
   const [savingProc,setSavingProc]=useState(false);
   const [lastAutoSeq,setLastAutoSeq]=useState<number>(0);
   
   // Grid 2 Inline Edição
   const [editSq,setEditSq]=useState<number|null>(null);
-  const [inlineEstMin, setInlineEstMin] = useState('');
-  const [inlinePadMin, setInlinePadMin] = useState('');
   const [inlineOb, setInlineOb] = useState('');
   const [inlineSeq, setInlineSeq] = useState('');
 
@@ -243,14 +239,14 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     }
   };
 
-  const clearForm = () => { setSelId(''); setProcSearch(''); setSeq(''); setEstMinStr(''); setPadMinStr(''); setOb(''); };
+  const clearForm = () => { setSelId(''); setProcSearch(''); setSeq(''); setOb(''); };
   const nextSeq = () => lastAutoSeq + 10;
 
-    const saveProcs = async (newStaging: Proc[]) => {
+  const saveProcs = async (newStaging: Proc[]) => {
     if(!selMat1) return;
     setSavingProc(true);
     try{
-      const body={ processos:newStaging.map(s=>({IdProcesso:s.IdProcesso,SequenciaExecucao:s.seq,TempoEstimadoMin:s.estMin,TempoPadraoMin:s.padMin,Observacao:s.obs})),
+      const body={ processos:newStaging.map(s=>({IdProcesso:s.IdProcesso,SequenciaExecucao:s.seq,TempoEstimadoMin:null,TempoPadraoMin:null,Observacao:s.obs})),
         codmatFabricante:selMat1.CodMatFabricante, idMatriz, usuarioCriacao:uCriacao, replace:true };
       const r=await fetch(`${API}/material-processo`,{method:'POST',headers:{...authHdr(), 'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j=await r.json();
@@ -258,25 +254,21 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         setStaging(newStaging);
         fetchProcs(selMat1.CodMatFabricante);
       }
-      else showAlert('Erro: '+j.message, "error");
+      else alert('Erro: '+j.message);
     }finally{ setSavingProc(false); }
   };
 
   const handleAddProc = async () => {
     if (!selId) return;
     const tipo = tipos.find(t => t.IdProcessoFabricacao === selId);
-    const estMinV = estMinStr ? (parseInt(estMinStr) || null) : null;
-    const padMinV = padMinStr ? parseInt(padMinStr) : null;
-    if (padMinV == null) { showAlert('Tempo Padrão (min) obrigatório', 'error'); return; }
     
     const userTyped = seq.trim() !== '';
     const seqN = userTyped ? (parseInt(seq) || nextSeq()) : nextSeq();
 
-    
-    if (staging.some(s => s.seq === seqN)) { showAlert(`Sequência ${seqN} já existe`, 'error'); return; }
+    if (staging.some(s => s.seq === seqN)) { alert(`Sequência ${seqN} já existe`); return; }
     
     if (!userTyped) setLastAutoSeq(seqN);
-    const updated = [...staging, { seq: seqN, IdProcesso: Number(selId), nome: tipo?.ProcessoFabricacao || '', estMin: estMinV, padMin: padMinV, obs: ob }].sort((a, b) => a.seq - b.seq);
+    const updated = [...staging, { seq: seqN, IdProcesso: Number(selId), nome: tipo?.ProcessoFabricacao || '', estMin: null, padMin: null, obs: ob }].sort((a, b) => a.seq - b.seq);
     await saveProcs(updated);
     
     clearForm();
@@ -290,17 +282,12 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
   const startInlineEdit = (s: Proc) => {
     setEditSq(s.seq);
-    setInlineEstMin(s.estMin != null ? String(s.estMin) : '');
-    setInlinePadMin(s.padMin != null ? String(s.padMin) : '');
     setInlineOb(s.obs || '');
     setInlineSeq(String(s.seq));
   };
 
   const saveInlineEdit = async () => {
     if (editSq === null) return;
-    const estMinV = inlineEstMin ? (parseInt(inlineEstMin) || null) : null;
-    const padMinV = inlinePadMin ? parseInt(inlinePadMin) : null;
-    if (padMinV == null) { showAlert('Tempo Padrão (min) obrigatório', 'error'); return; }
 
     const newSeq = parseInt(inlineSeq);
     if (isNaN(newSeq) || newSeq <= 0) { alert('Sequência inválida'); return; }
@@ -309,7 +296,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     if (newSeq !== editSq && staging.some(p => p.seq === newSeq)) {
       isValid = false;
     } else {
-      const updated = staging.map(s => s.seq === editSq ? { ...s, seq: newSeq, estMin: estMinV, padMin: padMinV, obs: inlineOb } : s).sort((a, b) => a.seq - b.seq);
+      const updated = staging.map(s => s.seq === editSq ? { ...s, seq: newSeq, estMin: null, padMin: null, obs: inlineOb } : s).sort((a, b) => a.seq - b.seq);
       await saveProcs(updated);
     }
 
@@ -609,18 +596,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
              ) : (
                <div className="flex flex-col gap-2">
                  <div className="flex gap-2 items-end flex-wrap">
-                   <div className="flex flex-col flex-1 min-w-[120px]">
+                   <div className="flex flex-col flex-1 min-w-[130px]">
                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Recurso <span className="text-red-500">*</span></span>
                      <select value={selId} onChange={e => {
                          const val = e.target.value ? Number(e.target.value) : '';
                          setSelId(val);
-                         if (val !== '') {
-                           const proc = tipos.find(t => t.IdProcessoFabricacao === val);
-                           if (proc) {
-                             setEstMinStr(proc.Setup != null ? String(proc.Setup) : '');
-                             setPadMinStr(proc.TempoPadrao != null ? String(proc.TempoPadrao) : '');
-                           }
-                         } else { setEstMinStr(''); setPadMinStr(''); }
                        }}
                        className="px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500 bg-white">
                        <option value="">- Selecione -</option>
@@ -629,21 +609,13 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                    </div>
                    <div className="flex flex-col items-center shrink-0">
                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Seq.</span>
-                     <input type="number" min="1" step="1" value={seq} onChange={e=>setSeq(e.target.value)} placeholder={String(nextSeq())} className="w-12 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                     <input type="number" min="1" step="1" value={seq} onChange={e=>setSeq(e.target.value)} placeholder={String(nextSeq())} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
-                   <div className="flex flex-col items-center shrink-0">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Setup <span className="text-[7px] text-gray-400 lowercase">(min)</span></span>
-                     <input type="number" min="0" value={estMinStr} onChange={e=>setEstMinStr(e.target.value)} placeholder="0" className="w-12 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
-                   </div>
-                   <div className="flex flex-col items-center shrink-0">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Padrão <span className="text-red-500">*</span></span>
-                     <input type="number" min="0" value={padMinStr} onChange={e=>setPadMinStr(e.target.value)} placeholder="0" className="w-12 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
-                   </div>
-                   <div className="flex flex-col flex-1 min-w-[100px]">
+                   <div className="flex flex-col flex-1 min-w-[120px]">
                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Observação</span>
                      <input value={ob} onChange={e=>setOb(e.target.value)} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
-                   <button onClick={handleAddProc} disabled={!selId} className="flex items-center gap-1 h-6 px-2.5 bg-teal-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-teal-700 disabled:opacity-40 transition-colors">
+                   <button onClick={handleAddProc} disabled={!selId} className="flex items-center gap-1 h-6 px-3 bg-teal-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-teal-700 disabled:opacity-40 transition-colors">
                      <Plus size={12}/> Adicionar
                    </button>
                  </div>
@@ -665,13 +637,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
               <table className="w-full text-left">
                 <thead className="bg-white sticky top-0 shadow-sm z-10 border-b border-gray-200">
                   <tr>
-                    <th className="p-1.5 px-2 text-[9px] font-bold text-gray-500 uppercase tracking-wide w-8">Seq</th>
+                    <th className="p-1.5 px-2 text-[9px] font-bold text-gray-500 uppercase tracking-wide w-10 text-center">Seq</th>
                     <th className={colsCls}>
                       <div className="flex flex-col gap-1">
                         <span>Recurso</span>
                         <div className="relative"><input type="text" placeholder="Filtro..." value={procTableFiltro} onChange={e => setProcTableFiltro(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-teal-500 bg-white" />{procTableFiltro && <button onClick={()=>setProcTableFiltro('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th>
-                    <th className={`${colsCls} text-center w-14`}>Setup (m)</th>
-                    <th className={`${colsCls} text-center w-14`}>Padrão (m)</th>
                     <th className={colsCls}>Obs.</th>
                     <th className="p-1.5 px-2 w-14"></th>
                   </tr>
@@ -687,25 +657,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         )}
                       </td>
                       <td className={`${cellCls} font-semibold text-[#32423D]`}>{s.nome}</td>
-                      <td className="p-1.5 px-2 text-center">
-                        {editSq === s.seq ? (
-                          <input type="number" min="0" value={inlineEstMin} onChange={e=>setInlineEstMin(e.target.value)} className="w-12 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
-                        ) : (
-                          <span className="text-[10px] text-gray-600 font-mono">{fmtMin(s.estMin)}</span>
-                        )}
-                      </td>
-                      <td className="p-1.5 px-2 text-center">
-                        {editSq === s.seq ? (
-                          <input type="number" min="0" value={inlinePadMin} onChange={e=>setInlinePadMin(e.target.value)} className="w-12 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
-                        ) : (
-                          <span className="text-[10px] text-gray-600 font-mono font-bold">{fmtMin(s.padMin)}</span>
-                        )}
-                      </td>
                       <td className="p-1.5 px-2">
                         {editSq === s.seq ? (
                           <input value={inlineOb} onChange={e=>setInlineOb(e.target.value)} className="w-full px-1.5 py-0.5 text-[10px] border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white shadow-inner" />
                         ) : (
-                          <span className="text-[10px] text-gray-500 truncate max-w-[100px] block" title={s.obs||''}>{s.obs||'-'}</span>
+                          <span className="text-[10px] text-gray-500 truncate max-w-[140px] block" title={s.obs||''}>{s.obs||'-'}</span>
                         )}
                       </td>
                       <td className="p-1.5 px-1 text-right whitespace-nowrap">

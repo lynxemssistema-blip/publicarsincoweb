@@ -224,6 +224,7 @@ export default function VisaoGeralProducao() {
   const osModalItemsCache = useRef<Record<string | number, any[]>>({});
   const [sectorModal, setSectorModal] = useState<{ title: string; sectors: { key: string; label: string; exec: number; aExec: number }[] } | null>(null);
   const [expandedTagsOs, setExpandedTagsOs] = useState<{ [key: number]: Record<string, unknown>[] | null }>({});
+  const [showSearchFilters, setShowSearchFilters] = useState<boolean>(true);
   const [expandedOsItems, setExpandedOsItems] = useState<{ [key: string]: Record<string, unknown>[] | null }>({});
   const [expandedTagSectors, setExpandedTagSectors] = useState<{ [key: number]: boolean }>({});
   const [expandedOsSectors, setExpandedOsSectors] = useState<{ [key: string]: boolean }>({});
@@ -544,17 +545,14 @@ export default function VisaoGeralProducao() {
   
   const toggleOsItemExpansion = async (idOs: string | number) => {
     if (expandedOsItems[idOs] !== undefined && expandedOsItems[idOs] !== null) {
-      setExpandedOsItems(prev => {
-        const next = { ...prev };
-        delete next[idOs];
-        return next;
-      });
+      setExpandedOsItems({});
       return;
     }
     try {
       const r = await (await fetch(`${API_BASE}/ordemservico/${idOs}/itens`)).json();
       if (r.success) {
-        setExpandedOsItems(prev => ({ ...prev, [idOs]: r.data }));
+        // Limpa a OS selecionada anteriormente e exibe apenas a nova OS selecionada
+        setExpandedOsItems({ [idOs]: r.data });
       }
     } catch (e) {
       console.error(e);
@@ -626,7 +624,31 @@ export default function VisaoGeralProducao() {
     };
   };
 
-  const getSectorPlanningDates = (obj: any, sectorKey: string) => {
+  const getSectorDiasProducao = (obj: any, sectorKey: string): number => {
+  if (!obj || typeof obj !== 'object') return 0;
+  const target = String(sectorKey || '').trim().toLowerCase();
+
+  for (const k of Object.keys(obj)) {
+    const kLower = k.toLowerCase();
+    if (kLower.endsWith('diasproducao')) {
+      const prefix = kLower.replace('diasproducao', '');
+      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+        const val = parseFloat(String(obj[k]));
+        if (!isNaN(val) && val > 0) return val;
+      }
+    }
+  }
+
+  const directVal = parseFloat(
+    obj[`${sectorKey}DiasProducao`] || 
+    obj[`dias${sectorKey}`] || 
+    obj[`Dias${sectorKey}`] || 
+    0
+  );
+  return isNaN(directVal) ? 0 : directVal;
+};
+
+const getSectorPlanningDates = (obj: any, sectorKey: string) => {
     if (!obj || typeof obj !== 'object') return { pi: '', pf: '', minProd: 0 };
     const target = String(sectorKey || '').trim().toLowerCase();
     let pi = '';
@@ -734,8 +756,8 @@ export default function VisaoGeralProducao() {
         }
       }
       const { pi, pf, minProd } = getSectorPlanningDates(item, s.key);
-      const dias = parseFloat(item[`${s.key}DiasProducao`] || item[`dias${s.key}`] || item[`Dias${s.key}`] || 0);
-      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
+      const dias = getSectorDiasProducao(item, s.key);
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd, qtdeTotal: itemQty, totalExecutado: exec, totalExecutar: aExec };
     });
   };
 
@@ -814,7 +836,7 @@ export default function VisaoGeralProducao() {
         }
       }
       const { pi, pf, minProd } = getSectorPlanningDates(t, s.key);
-      const dias = parseFloat(t[`${s.key}DiasProducao`] || t[`dias${s.key}`] || t[`Dias${s.key}`] || 0);
+      const dias = getSectorDiasProducao(t, s.key);
       return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
     });
   };
@@ -860,110 +882,114 @@ export default function VisaoGeralProducao() {
         }
       }
       const { pi, pf, minProd } = getSectorPlanningDates(os, s.key);
-      const dias = parseFloat(os[`${s.key}DiasProducao`] || os[`dias${s.key}`] || os[`Dias${s.key}`] || 0);
+      const dias = getSectorDiasProducao(os, s.key);
       return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
     });
   };
 
       const openTagSectorsModal = async (t: any) => {
+    let items: any[] = [];
+    try {
+      const r = await (await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+      if (r.success && r.data && r.data.length > 0) {
+        items = r.data;
+        setTagItemsCache(prev => ({ ...prev, [t.IdTag]: r.data }));
+      }
+    } catch (e) {
+      console.error('Error fetching Tag items for sector modal:', e);
+    }
+
     const tagHeaderSectors = getTagSectors(t);
+    const itemSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : [];
+
+    const map = new Map<string, any>();
+    tagHeaderSectors.forEach(s => map.set(s.key, { ...s }));
+
+    itemSectors.forEach(s => {
+      const existing = map.get(s.key);
+      if (!existing) {
+        map.set(s.key, { ...s });
+      } else {
+        if (s.dias) existing.dias = s.dias;
+        if (s.pi && s.pi !== '—') existing.pi = s.pi;
+        if (s.pf && s.pf !== '—') existing.pf = s.pf;
+        if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
+        if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
+        if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
+      }
+    });
+
+    const mergedSectors = Array.from(map.values());
     setSectorModal({
       title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
       targetType: 'tag',
       targetId: t.IdTag,
-      sectors: tagHeaderSectors
+      sectors: mergedSectors
     });
-
-    let items = tagItemsCache[t.IdTag];
-    if (!items || items.length === 0) {
-      try {
-        const r = await (await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/itens`)).json();
-        if (r.success && r.data && r.data.length > 0) {
-          items = r.data;
-          setTagItemsCache(prev => ({ ...prev, [t.IdTag]: r.data }));
-        }
-      } catch (e) {
-        console.error('Error fetching Tag items for sector modal:', e);
-      }
-    }
-
-    if (items && items.length > 0) {
-      const itemSectors = aggregateItemsSectors(items);
-      const map = new Map<string, any>();
-      tagHeaderSectors.forEach(s => map.set(s.key, { ...s }));
-
-      itemSectors.forEach(s => {
-        const existing = map.get(s.key);
-        if (!existing) {
-          map.set(s.key, s);
-        } else {
-          if (!existing.pi && s.pi) existing.pi = s.pi;
-          if (!existing.pf && s.pf) existing.pf = s.pf;
-          if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
-          if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
-          if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
-        }
-      });
-
-      const mergedSectors = Array.from(map.values());
-      setSectorModal({
-        title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
-        targetType: 'tag',
-        targetId: t.IdTag,
-        sectors: mergedSectors
-      });
-    }
   };
 
   const openOsSectorsModal = async (os: any) => {
+    let items: any[] = [];
+    try {
+      const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+      if (r.success && r.data) {
+        items = r.data;
+        osModalItemsCache.current[os.IdOrdemServico] = r.data;
+      }
+    } catch (e) {
+      console.error('Error fetching OS items for sector modal:', e);
+    }
+
     const osHeaderSectors = getOsSectors(os);
+    const itemSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : [];
+
+    const map = new Map<string, any>();
+    osHeaderSectors.forEach(s => map.set(s.key, { ...s }));
+
+    itemSectors.forEach(s => {
+      const existing = map.get(s.key);
+      if (!existing) {
+        map.set(s.key, { ...s });
+      } else {
+        if (s.dias) existing.dias = s.dias;
+        if (s.pi && s.pi !== '—') existing.pi = s.pi;
+        if (s.pf && s.pf !== '—') existing.pf = s.pf;
+        if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
+        if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
+        if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
+      }
+    });
+
+    const mergedSectors = Array.from(map.values());
     setSectorModal({
       title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
       targetType: 'os',
       targetId: os.IdOrdemServico,
-      sectors: osHeaderSectors
+      sectors: mergedSectors
     });
-
-    let items = osModalItemsCache.current[os.IdOrdemServico] || expandedOsItems[os.IdOrdemServico];
-    if (!items || items.length === 0) {
-      try {
-        const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
-        if (r.success && r.data) {
-          items = r.data;
-          osModalItemsCache.current[os.IdOrdemServico] = r.data;
-        }
-      } catch (e) {
-        console.error('Error fetching OS items for sector modal:', e);
-      }
-    }
-
-    if (items && items.length > 0) {
-      const itemSectors = aggregateItemsSectors(items);
-      const map = new Map<string, any>();
-      osHeaderSectors.forEach(s => map.set(s.key, { ...s }));
-
-      itemSectors.forEach(s => {
-        const existing = map.get(s.key);
-        if (!existing) {
-          map.set(s.key, s);
-        } else {
-          if (!existing.pi && s.pi) existing.pi = s.pi;
-          if (!existing.pf && s.pf) existing.pf = s.pf;
-          if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
-          if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
-          if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
-        }
-      });
-
-      const mergedSectors = Array.from(map.values());
-      setSectorModal({
-        title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
-        targetType: 'os',
-        targetId: os.IdOrdemServico,
-        sectors: mergedSectors
-      });
-    }
   };
+
+  const openItemSectorsModal = async (item: any) => {
+    let freshItem = item;
+    try {
+      const r = await (await fetch(`${API_BASE}/ordemservico/${item.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+      if (r.success && r.data) {
+        const found = r.data.find((i: any) => String(i.IdOrdemServicoItem) === String(item.IdOrdemServicoItem));
+        if (found) freshItem = found;
+      }
+    } catch (e) {
+      console.error('Error fetching fresh item for sector modal:', e);
+    }
+
+    const activeSectors = getItemActiveSectors(freshItem);
+    setSectorModal({
+      title: `Produção por Setor/Recurso (Item #${item.IdOrdemServicoItem} — ${freshItem.DescResumo || item.DescResumo || 'Sem descrição'})`,
+      targetType: 'item',
+      targetId: item.IdOrdemServicoItem,
+      sectors: activeSectors
+    });
+  };
+
 
 
 
@@ -1022,6 +1048,8 @@ export default function VisaoGeralProducao() {
       const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
       if (r.success) {
         setExpandedTagsOs(prev => ({ ...prev, [idTag]: r.data }));
+        setExpandedOsItems({});
+        setShowSearchFilters(false);
       }
     } catch (e) {
       console.error(e);
@@ -2112,93 +2140,106 @@ const salvarDatasBulkTags = async () => {
  </div>
  
  <div className="flex items-center gap-2 flex-wrap">
- <div className="flex items-center gap-1.5">
- <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Entrada:</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataEntradaIni} onChange={e => setFDataEntradaIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataEntradaIni && (
- <button onClick={() => setFDataEntradaIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataEntradaFim} onChange={e => setFDataEntradaFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataEntradaFim && (
- <button onClick={() => setFDataEntradaFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- </div>
- <div className="flex items-center gap-1.5">
- <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Prev:</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataPrevIni} onChange={e => setFDataPrevIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataPrevIni && (
- <button onClick={() => setFDataPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataPrevFim} onChange={e => setFDataPrevFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataPrevFim && (
- <button onClick={() => setFDataPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- </div>
- <div className="bg-white rounded-lg border border-slate-200 flex items-center px-2 py-1.5 shadow-sm w-40">
- <Search size={14} className="text-slate-400 mr-2 shrink-0" />
- <div className="relative flex items-center w-full">
- <input type="text" placeholder="Buscar Tag..." value={fTag} onChange={e => setFTag(e.target.value)} className="pr-6 bg-transparent border-none outline-none text-xs text-slate-700 w-full font-medium" />
- {fTag && (
- <button onClick={() => setFTag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- </div>
- <div className="flex items-center gap-1.5">
- <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Plan:</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataPlanIni} onChange={e => setFDataPlanIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataPlanIni && (
- <button onClick={() => setFDataPlanIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
- <div className="relative flex items-center w-full">
- <input type="date" value={fDataPlanFim} onChange={e => setFDataPlanFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
- {fDataPlanFim && (
- <button onClick={() => setFDataPlanFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
-</div>
- </div>
- {(fTag || fDataEntradaIni || fDataEntradaFim || fDataPrevIni || fDataPrevFim || fDataPlanIni || fDataPlanFim) && (
- <button onClick={() => { setFTag(''); setFDataEntradaIni(''); setFDataEntradaFim(''); setFDataPrevIni(''); setFDataPrevFim(''); setFDataPlanIni(''); setFDataPlanFim(''); }} className="bg-slate-100 border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0" title="Limpar filtros">
- <X size={14} /> <span>Limpar</span>
- </button>
- )}
- <div className="h-6 w-px bg-slate-300 hidden sm:block shrink-0"></div>
- <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
- <button onClick={() => setViewModeTags('detailed')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'detailed' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
- <LayoutGrid size={12} /> Detalhado
- </button>
- <button onClick={() => setViewModeTags('list')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
- <List size={12} /> Lista Limpa
- </button>
- </div>
- 
- <button onClick={() => setShowDetailsModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-2 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0">
+  {showSearchFilters && (
+    <>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Entrada:</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataEntradaIni} onChange={e => setFDataEntradaIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataEntradaIni && (
+            <button onClick={() => setFDataEntradaIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataEntradaFim} onChange={e => setFDataEntradaFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataEntradaFim && (
+            <button onClick={() => setFDataEntradaFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Prev:</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataPrevIni} onChange={e => setFDataPrevIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataPrevIni && (
+            <button onClick={() => setFDataPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataPrevFim} onChange={e => setFDataPrevFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataPrevFim && (
+            <button onClick={() => setFDataPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="bg-white rounded-lg border border-slate-200 flex items-center px-2 py-1.5 shadow-sm w-40">
+        <Search size={14} className="text-slate-400 mr-2 shrink-0" />
+        <div className="relative flex items-center w-full">
+          <input type="text" placeholder="Buscar Tag..." value={fTag} onChange={e => setFTag(e.target.value)} className="pr-6 bg-transparent border-none outline-none text-xs text-slate-700 w-full font-medium" />
+          {fTag && (
+            <button onClick={() => setFTag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center gap-1.5">
+        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest whitespace-nowrap">Plan:</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataPlanIni} onChange={e => setFDataPlanIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataPlanIni && (
+            <button onClick={() => setFDataPlanIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+        <span className="text-[9px] text-slate-400 font-black uppercase">até</span>
+        <div className="relative flex items-center w-full">
+          <input type="date" value={fDataPlanFim} onChange={e => setFDataPlanFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
+          {fDataPlanFim && (
+            <button onClick={() => setFDataPlanFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      </div>
+      {(fTag || fDataEntradaIni || fDataEntradaFim || fDataPrevIni || fDataPrevFim || fDataPlanIni || fDataPlanFim) && (
+        <button onClick={() => { setFTag(''); setFDataEntradaIni(''); setFDataEntradaFim(''); setFDataPrevIni(''); setFDataPrevFim(''); setFDataPlanIni(''); setFDataPlanFim(''); }} className="bg-slate-100 border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0" title="Limpar filtros">
+          <X size={14} /> <span>Limpar</span>
+        </button>
+      )}
+      <div className="h-6 w-px bg-slate-300 hidden sm:block shrink-0"></div>
+      <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
+        <button onClick={() => setViewModeTags('detailed')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'detailed' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <LayoutGrid size={12} /> Detalhado
+        </button>
+        <button onClick={() => setViewModeTags('list')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+          <List size={12} /> Lista Limpa
+        </button>
+      </div>
+    </>
+  )}
+
+  <button 
+    onClick={() => setShowSearchFilters(prev => !prev)} 
+    className="bg-white border border-slate-300 hover:bg-slate-100 p-2 rounded-lg text-slate-700 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0"
+    title={showSearchFilters ? "Ocultar dados de pesquisa" : "Exibir dados de pesquisa"}
+  >
+    <Search size={14} className="text-[#32423D]" />
+    <span>{showSearchFilters ? 'Ocultar Pesquisa' : 'Exibir Pesquisa'}</span>
+  </button>
+
+  <button onClick={() => setShowDetailsModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-2 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0">
  <X size={14} /> Fechar
  </button>
  </div>
@@ -2304,17 +2345,7 @@ const salvarDatasBulkTags = async () => {
                       <CheckCircle size={11} /> Finalizar
                     </button>
                   )}
-                  <button 
-                    type="button"
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      openTagSectorsModal(t);
-                    }}
-                    className="px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800"
-                    title="Exibir Produção dos Setores / Recursos desta Tag"
-                  >
-                    <Activity size={11} /> Prod. Setores
-                  </button>
+
                 </div>
               </div>
 
@@ -2830,7 +2861,6 @@ const salvarDatasBulkTags = async () => {
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center">Peças Exec.</th>
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center">Tot. Peças</th>
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center w-24">Status</th>
-                        <th className="px-2 py-1.5 border-b border-slate-300 text-center w-28">Opções</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -2873,19 +2903,6 @@ const salvarDatasBulkTags = async () => {
                                 {os.OrdemServicoFinalizado === 'C' ? 'Finalizada' : 'Aberta'}
                               </span>
                             </td>
-                            <td className="px-2 py-2 text-center w-28">
-                              <button
-                                type="button"
-                                onClick={(e) => { 
-                                  e.stopPropagation(); 
-                                  openOsSectorsModal(os);
-                                }}
-                                className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800"
-                                title="Exibir Produção dos Setores / Recursos desta OS"
-                              >
-                                <Activity size={10} /> Prod. Setores
-                              </button>
-                            </td>
                           </tr>
                           {/* ROW EXPANSIVEL DE SETORES DA OS */}
                           {expandedOsSectors[os.IdOrdemServico] && (() => {
@@ -2893,7 +2910,7 @@ const salvarDatasBulkTags = async () => {
 
                             return (
                               <tr>
-                                <td colSpan={12} className="p-0 border-b border-slate-200">
+                                <td colSpan={11} className="p-0 border-b border-slate-200">
                                   <div className="p-3 bg-[#eaf4f0] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
                                     <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#32423D]/20">
                                       <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
@@ -2945,14 +2962,14 @@ const salvarDatasBulkTags = async () => {
                           {/* ROW EXPANSIVEL DE ITENS DA OS */}
                           {expandedOsItems[os.IdOrdemServico] && (
                             <tr>
-                              <td colSpan={12} className="p-0 border-b border-slate-200">
+                              <td colSpan={11} className="p-0 border-b border-slate-200">
                                 <div className="px-0 py-3 bg-[#f0f4f8] shadow-inner border-y border-[#dbeafe]">
-                                  <h5 className="text-[11px] font-bold text-slate-800 mb-2 flex items-center gap-2 px-3">
+                                  <h5 className="text-[11px] font-extrabold text-sky-900 mb-2 flex items-center gap-2 px-3 tracking-wide">
                                     <List size={12} className="text-[#3b82f6]" /> Itens da OS: {os.IdOrdemServico}
                                   </h5>
                                   <div className="overflow-x-auto rounded border border-slate-300">
                                     <table className="w-full text-[9px] text-left whitespace-nowrap">
-                                      <thead className="bg-[#e2e8f0] text-slate-700 uppercase font-bold tracking-wider text-[8.5px]">
+                                      <thead className="bg-sky-100/90 text-sky-950 uppercase font-extrabold tracking-wider text-[8.5px] border-b border-sky-200">
                                          <tr>
                                            <th className="px-2 py-1 border-b border-slate-300">Resumo / Detalhado</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Cód. Mat.</th>
@@ -2973,7 +2990,7 @@ const salvarDatasBulkTags = async () => {
                                       <tbody className="divide-y divide-slate-200 bg-white">
                                         {expandedOsItems[os.IdOrdemServico].map((item: any) => (
                                           <React.Fragment key={item.IdOrdemServicoItem}>
-                                            <tr className="hover:bg-slate-50">
+                                            <tr className="bg-[#f7fbff] hover:bg-sky-100/70 transition-colors border-b border-sky-100/60">
                                               <td className="px-2 py-1.5 border-r border-slate-100">
                                                 <div className="font-bold text-slate-800" title={item.DescResumo}>{item.DescResumo || '—'}</div>
                                                 <div className="text-[8px] text-slate-500 line-clamp-1" title={item.DescDetal}>{item.DescDetal || '—'}</div>
@@ -3015,11 +3032,7 @@ const salvarDatasBulkTags = async () => {
                                                     type="button"
                                                     onClick={(e) => { 
                                                       e.stopPropagation(); 
-                                                      const activeSectors = getItemActiveSectors(item);
-                                                      setSectorModal({
-                                                        title: `Produção por Setor/Recurso (Item #${item.IdOrdemServicoItem} — ${item.DescResumo || 'Sem descrição'})`,
-                                                        sectors: activeSectors
-                                                      });
+                                                      openItemSectorsModal(item);
                                                     }}
                                                     className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
                                                     title="Exibir Produção dos Setores / Recursos deste Item"
@@ -3155,7 +3168,12 @@ const salvarDatasBulkTags = async () => {
     <SectorProductionModal
       modalData={sectorModal}
       onClose={() => setSectorModal(null)}
-      onSaved={() => fetchVisaoGeralData()}
+      onSaved={() => {
+        osModalItemsCache.current = {};
+        setTagItemsCache({});
+        setExpandedOsItems({});
+        fetchVisaoGeralData();
+      }}
     />
   )}
   </div>

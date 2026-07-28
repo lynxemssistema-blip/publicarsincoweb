@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ArrowUp, ArrowDown } from 'lucide-react';
+import { X, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Calendar } from 'lucide-react';
 
 interface SectorProductionModalProps {
   modalData: {
@@ -13,12 +13,29 @@ interface SectorProductionModalProps {
   onSave?: (updatedSectors: any[]) => void;
 }
 
+const getAuthHeaders = (): Record<string, string> => {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const token = localStorage.getItem('token') || localStorage.getItem('sincoweb_token');
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const tenant = localStorage.getItem('tenant_domain') || localStorage.getItem('sincoweb_tenant');
+  if (tenant) {
+    headers['x-tenant-domain'] = tenant;
+  }
+  return headers;
+};
+
 export default function SectorProductionModal({ modalData, onClose, onSave }: SectorProductionModalProps) {
   if (!modalData) return null;
 
   const [calcMode, setCalcMode] = useState<'auto' | 'manual'>('auto');
+  const [autoDirection, setAutoDirection] = useState<'progressive' | 'regressive'>('progressive');
+  const [targetDeadlineIso, setTargetDeadlineIso] = useState<string>('');
+  const [excludeWeekendsHolidays, setExcludeWeekendsHolidays] = useState<boolean>(false);
   const [sectors, setSectors] = useState<any[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   const parseDateStr = (str?: string | null): Date | null => {
@@ -80,6 +97,155 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return `${yyyy}-${mm}-${dd}`;
   };
 
+  const isWeekendOrHoliday = (date: Date, exclude: boolean): boolean => {
+    if (!exclude) return false;
+    const day = date.getDay();
+    if (day === 0 || day === 6) return true;
+
+    const m = date.getMonth() + 1;
+    const d = date.getDate();
+    const fixed = ['1-1', '4-21', '5-1', '9-7', '10-12', '11-2', '11-15', '11-20', '12-25'];
+    return fixed.includes(`${m}-${d}`);
+  };
+
+  const addBusinessDays = (startIso: string, daysCount: number, exclude: boolean): string => {
+    const dt = parseDateStr(startIso);
+    if (!dt) return startIso;
+    while (exclude && isWeekendOrHoliday(dt, true)) {
+      dt.setDate(dt.getDate() + 1);
+    }
+    let added = 1;
+    while (added < daysCount) {
+      dt.setDate(dt.getDate() + 1);
+      if (!isWeekendOrHoliday(dt, exclude)) {
+        added++;
+      }
+    }
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const subtractBusinessDays = (endIso: string, daysCount: number, exclude: boolean): string => {
+    const dt = parseDateStr(endIso);
+    if (!dt) return endIso;
+    while (exclude && isWeekendOrHoliday(dt, true)) {
+      dt.setDate(dt.getDate() - 1);
+    }
+    let subbed = 1;
+    while (subbed < daysCount) {
+      dt.setDate(dt.getDate() - 1);
+      if (!isWeekendOrHoliday(dt, exclude)) {
+        subbed++;
+      }
+    }
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getNextBusinessDay = (isoStr: string, exclude: boolean): string => {
+    const dt = parseDateStr(isoStr);
+    if (!dt) return isoStr;
+    dt.setDate(dt.getDate() + 1);
+    while (exclude && isWeekendOrHoliday(dt, true)) {
+      dt.setDate(dt.getDate() + 1);
+    }
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const getPreviousBusinessDay = (isoStr: string, exclude: boolean): string => {
+    const dt = parseDateStr(isoStr);
+    if (!dt) return isoStr;
+    dt.setDate(dt.getDate() - 1);
+    while (exclude && isWeekendOrHoliday(dt, true)) {
+      dt.setDate(dt.getDate() - 1);
+    }
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const recalculateAutomaticChain = (
+    list: any[],
+    direction: 'progressive' | 'regressive' = autoDirection,
+    deadlineIso: string = targetDeadlineIso,
+    excludeWH: boolean = excludeWeekendsHolidays
+  ): any[] => {
+    const updated = list.map(item => ({ ...item }));
+    if (updated.length === 0) return updated;
+
+    if (direction === 'progressive') {
+      for (let i = 0; i < updated.length; i++) {
+        const curr = updated[i];
+        const dias = Math.max(1, parseInt(String(curr.dias), 10) || 1);
+        curr.dias = dias;
+
+        if (i === 0) {
+          if (curr.pi) {
+            const isoPi = toIsoInput(curr.pi);
+            if (isoPi) {
+              const endIso = addBusinessDays(isoPi, dias, excludeWH);
+              curr.pi = toBrDisplay(isoPi);
+              curr.pf = toBrDisplay(endIso);
+            }
+          }
+        } else {
+          const prev = updated[i - 1];
+          if (prev && prev.pf) {
+            const prevPfIso = toIsoInput(prev.pf);
+            if (prevPfIso) {
+              const nextPiIso = getNextBusinessDay(prevPfIso, excludeWH);
+              const nextPfIso = addBusinessDays(nextPiIso, dias, excludeWH);
+              curr.pi = toBrDisplay(nextPiIso);
+              curr.pf = toBrDisplay(nextPfIso);
+            }
+          }
+        }
+      }
+    } else {
+      let currentEndIso = deadlineIso;
+      if (!currentEndIso && updated[updated.length - 1]?.pf) {
+        currentEndIso = toIsoInput(updated[updated.length - 1].pf);
+      }
+      if (!currentEndIso) {
+        currentEndIso = toIsoInput(new Date().toISOString());
+      }
+
+      for (let i = updated.length - 1; i >= 0; i--) {
+        const curr = updated[i];
+        const dias = Math.max(1, parseInt(String(curr.dias), 10) || 1);
+        curr.dias = dias;
+
+        if (i === updated.length - 1) {
+          const pfIso = currentEndIso;
+          const piIso = subtractBusinessDays(pfIso, dias, excludeWH);
+          curr.pf = toBrDisplay(pfIso);
+          curr.pi = toBrDisplay(piIso);
+        } else {
+          const nextRes = updated[i + 1];
+          if (nextRes && nextRes.pi) {
+            const nextPiIso = toIsoInput(nextRes.pi);
+            if (nextPiIso) {
+              const pfIso = getPreviousBusinessDay(nextPiIso, excludeWH);
+              const piIso = subtractBusinessDays(pfIso, dias, excludeWH);
+              curr.pf = toBrDisplay(pfIso);
+              curr.pi = toBrDisplay(piIso);
+            }
+          }
+        }
+      }
+    }
+
+    return updated;
+  };
+
   const calcDaysBetween = (startIso: string, endIso: string): number => {
     const d1 = parseDateStr(startIso);
     const d2 = parseDateStr(endIso);
@@ -88,51 +254,21 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
   };
 
-  const recalculateAutomaticChain = (list: any[], fromIdx: number = 0): any[] => {
-    const updated = list.map(item => ({ ...item }));
-    for (let i = Math.max(0, fromIdx); i < updated.length; i++) {
-      const curr = updated[i];
-      const dias = Math.max(1, parseInt(String(curr.dias), 10) || 1);
-      curr.dias = dias;
+  
 
-      if (i === 0) {
-        if (curr.pi) {
-          const isoPi = toIsoInput(curr.pi);
-          if (isoPi) {
-            const newPfIso = addDaysToIso(isoPi, dias - 1);
-            curr.pf = toBrDisplay(newPfIso);
-          }
-        }
-      } else {
-        const prev = updated[i - 1];
-        if (prev && prev.pf) {
-          const prevPfIso = toIsoInput(prev.pf);
-          if (prevPfIso) {
-            const nextPiIso = addDaysToIso(prevPfIso, 1);
-            const nextPfIso = addDaysToIso(nextPiIso, dias - 1);
-            curr.pi = toBrDisplay(nextPiIso);
-            curr.pf = toBrDisplay(nextPfIso);
-          }
-        }
-      }
-    }
-    return updated;
-  };
-
-  // Requirement #3: Do NOT recalculate dates automatically when modal is displayed!
+  // Exibe diretamente as datas de inicio e fim de cada recurso ativo da OS sem calculos encadeados
   useEffect(() => {
     if (modalData && modalData.sectors) {
       const initial = modalData.sectors.map(s => {
-        const displayPi = toBrDisplay(s.pi);
-        const displayPf = toBrDisplay(s.pf);
-        const calculatedDays = (displayPi && displayPf) ? calcDaysBetween(toIsoInput(displayPi), toIsoInput(displayPf)) : Math.max(1, parseInt(String(s.dias), 10) || 1);
-
         return {
           ...s,
-          dias: calculatedDays,
-          pi: displayPi,
-          pf: displayPf,
-          minProd: parseInt(String(s.minProd || 0), 10) || 0
+          dias: Math.max(1, parseInt(String(s.dias), 10) || 1),
+          pi: toBrDisplay(s.pi),
+          pf: toBrDisplay(s.pf),
+          minProd: parseInt(String(s.minProd || 0), 10) || 0,
+          qtdeTotal: parseFloat(String(s.qtdeTotal ?? s.itemQty ?? 0)) || 0,
+          totalExecutado: parseFloat(String(s.totalExecutado ?? s.exec ?? 0)) || 0,
+          totalExecutar: parseFloat(String(s.totalExecutar ?? s.aExec ?? 0)) || 0
         };
       });
 
@@ -149,7 +285,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     list.splice(targetIdx, 0, moved);
 
     if (calcMode === 'auto') {
-      setSectors(recalculateAutomaticChain(list, Math.min(index, targetIdx)));
+      setSectors(recalculateAutomaticChain(list, 0));
     } else {
       setSectors(list);
     }
@@ -173,27 +309,18 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     const [moved] = list.splice(draggedIndex, 1);
     list.splice(targetIndex, 0, moved);
 
-    const fromIdx = Math.min(draggedIndex, targetIndex);
     setDraggedIndex(null);
-
     if (calcMode === 'auto') {
-      setSectors(recalculateAutomaticChain(list, fromIdx));
+      setSectors(recalculateAutomaticChain(list, 0));
     } else {
       setSectors(list);
     }
   };
 
   const handleDiasChange = (index: number, newDias: number) => {
-    const list = [...sectors];
-    const d = Math.max(1, newDias || 1);
-    list[index].dias = d;
-
-    if (list[index].pi) {
-      const isoPi = toIsoInput(list[index].pi);
-      if (isoPi) {
-        list[index].pf = toBrDisplay(addDaysToIso(isoPi, d - 1));
-      }
-    }
+    const list = sectors.map(s => ({ ...s }));
+    const diasVal = Math.max(1, newDias || 1);
+    list[index].dias = diasVal;
 
     if (calcMode === 'auto') {
       setSectors(recalculateAutomaticChain(list, index));
@@ -202,17 +329,17 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     }
   };
 
-  const handlePiChange = (index: number, newPiBr: string) => {
-    const list = [...sectors];
+      const handlePiChange = (index: number, newPiBr: string) => {
+    const list = sectors.map(s => ({ ...s }));
     list[index].pi = newPiBr;
 
-    const isoPi = toIsoInput(newPiBr);
-    const isoPf = toIsoInput(list[index].pf);
-    if (isoPi && isoPf) {
-      list[index].dias = calcDaysBetween(isoPi, isoPf);
-    }
-
     if (calcMode === 'auto') {
+      const isoPi = toIsoInput(newPiBr);
+      if (isoPi) {
+        const dias = Math.max(1, parseInt(String(list[index].dias), 10) || 1);
+        const newPfIso = addDaysToIso(isoPi, dias - 1);
+        list[index].pf = toBrDisplay(newPfIso);
+      }
       setSectors(recalculateAutomaticChain(list, index));
     } else {
       setSectors(list);
@@ -220,20 +347,29 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   };
 
   const handlePfChange = (index: number, newPfBr: string) => {
-    const list = [...sectors];
+    const list = sectors.map(s => ({ ...s }));
     list[index].pf = newPfBr;
 
-    const isoPi = toIsoInput(list[index].pi);
-    const isoPf = toIsoInput(newPfBr);
-    if (isoPi && isoPf) {
-      list[index].dias = calcDaysBetween(isoPi, isoPf);
-    }
-
     if (calcMode === 'auto') {
-      setSectors(recalculateAutomaticChain(list, index));
+      setSectors(recalculateAutomaticChain(list, index + 1));
     } else {
       setSectors(list);
     }
+  };
+
+  const handleDirectionChange = (direction: 'progressive' | 'regressive') => {
+    setAutoDirection(direction);
+    setSectors(prev => recalculateAutomaticChain(prev, direction, targetDeadlineIso, excludeWeekendsHolidays));
+  };
+
+  const handleDeadlineDateChange = (isoDate: string) => {
+    setTargetDeadlineIso(isoDate);
+    setSectors(prev => recalculateAutomaticChain(prev, 'regressive', isoDate, excludeWeekendsHolidays));
+  };
+
+  const handleExcludeWeekendsToggle = (checked: boolean) => {
+    setExcludeWeekendsHolidays(checked);
+    setSectors(prev => recalculateAutomaticChain(prev, autoDirection, targetDeadlineIso, checked));
   };
 
   const handleModeToggle = (mode: 'auto' | 'manual') => {
@@ -243,13 +379,18 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     }
   };
 
+  
+  const handleRowClick = (idx: number) => {
+    setActiveDragIndex(prev => prev === idx ? null : idx);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
       if (modalData.targetType && modalData.targetId) {
         const res = await fetch('/api/salvar-setores-planejamento', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: getAuthHeaders(),
           body: JSON.stringify({
             targetType: modalData.targetType,
             targetId: modalData.targetId,
@@ -291,34 +432,92 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
         </div>
 
         {/* MODE TOGGLE BAR */}
-        <div className="bg-slate-100/90 px-5 py-2.5 border-b border-slate-200 flex items-center justify-between">
-          <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-            Modo de Cálculo de Datas:
-          </span>
-          <div className="flex items-center bg-white p-1 rounded-lg border border-slate-300 shadow-xs gap-1">
-            <button
-              type="button"
-              onClick={() => handleModeToggle('auto')}
-              className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
-                calcMode === 'auto'
-                  ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <span>⚡ Processo Automático</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => handleModeToggle('manual')}
-              className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
-                calcMode === 'manual'
-                  ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              <span>📝 Processo Manual</span>
-            </button>
+        <div className="bg-slate-100/90 px-5 py-2.5 border-b border-slate-200 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+              Modo de Cálculo de Datas:
+            </span>
+            <div className="flex items-center bg-white p-1 rounded-lg border border-slate-300 shadow-xs gap-1">
+              <button
+                type="button"
+                onClick={() => handleModeToggle('auto')}
+                className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
+                  calcMode === 'auto'
+                    ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span>⚡ Processo Automático</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeToggle('manual')}
+                className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
+                  calcMode === 'manual'
+                    ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                }`}
+              >
+                <span>📝 Processo Manual</span>
+              </button>
+            </div>
           </div>
+
+          {/* PAINEL DE SUB-OPÇÕES DO PROCESSO AUTOMÁTICO */}
+          {calcMode === 'auto' && (
+            <div className="bg-white/90 border border-emerald-300 rounded-lg p-2.5 flex flex-wrap items-center justify-between gap-2.5 animate-in fade-in duration-150 shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-slate-700 uppercase text-[10px] tracking-wider">Ordem:</span>
+                <div className="inline-flex rounded-md p-0.5 bg-slate-100 border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => handleDirectionChange('progressive')}
+                    className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold flex items-center gap-1 transition-all ${
+                      autoDirection === 'progressive'
+                        ? 'bg-[#32423D] text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <TrendingUp size={11} /> 1 - Progressivo (Início → Fim)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDirectionChange('regressive')}
+                    className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold flex items-center gap-1 transition-all ${
+                      autoDirection === 'regressive'
+                        ? 'bg-[#32423D] text-white shadow-xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <TrendingDown size={11} /> 2 - Regressivo (Data Limite Final → Início)
+                  </button>
+                </div>
+              </div>
+
+              {autoDirection === 'regressive' && (
+                <div className="flex items-center gap-1.5 bg-amber-50 px-2 py-0.5 border border-amber-300 rounded shadow-xs">
+                  <Calendar size={12} className="text-amber-600 shrink-0" />
+                  <span className="font-bold text-slate-800 text-[10px]">Data Limite Final:</span>
+                  <input
+                    type="date"
+                    value={targetDeadlineIso}
+                    onChange={(e) => handleDeadlineDateChange(e.target.value)}
+                    className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-extrabold text-slate-900 text-[11px] focus:border-[#32423D] outline-none cursor-pointer"
+                  />
+                </div>
+              )}
+
+              <label className="flex items-center gap-1.5 cursor-pointer font-extrabold text-slate-700 hover:text-slate-900 select-none">
+                <input
+                  type="checkbox"
+                  checked={excludeWeekendsHolidays}
+                  onChange={(e) => handleExcludeWeekendsToggle(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
+                />
+                <span className="text-[10.5px]">Excluir Sábados, Domingos e Feriados</span>
+              </label>
+            </div>
+          )}
         </div>
 
         {/* MODAL BODY */}
@@ -333,9 +532,12 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
                     <th className="px-3 py-2.5 border-r border-slate-200 font-black text-slate-800">Recurso Ativo (Posição)</th>
-                    <th className="px-3 py-2.5 text-center border-r border-slate-200 w-36 font-black text-slate-800">Dias p/ Produção</th>
+                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Qtd. Total Peças</th>
+                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total Executado</th>
+                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total a Executar</th>
+                    <th className="px-3 py-2.5 text-center border-r border-slate-200 w-32 font-black text-slate-800">Dias p/ Produção</th>
                     <th className="px-3 py-2.5 text-center border-r border-slate-200 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
-                    <th className="px-3 py-2.5 text-center w-32 font-black text-slate-800">MinProd (Acumulado)</th>
+                    <th className="px-3 py-2.5 text-center w-28 font-black text-slate-800">Minutos Prod</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -343,11 +545,19 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                     return (
                       <tr 
                         key={s.key || idx} 
-                        draggable
+                        draggable={activeDragIndex === idx}
+                        onClick={() => handleRowClick(idx)}
                         onDragStart={(e) => handleDragStart(e, idx)}
                         onDragOver={handleDragOver}
-                        onDrop={(e) => handleDrop(e, idx)}
-                        className={`hover:bg-slate-50/90 transition-colors cursor-move ${draggedIndex === idx ? 'bg-amber-50 opacity-60 border-2 border-dashed border-amber-400' : ''}`}
+                        onDrop={(e) => {
+                          handleDrop(e, idx);
+                          setActiveDragIndex(null);
+                        }}
+                        className={`transition-all cursor-pointer ${
+                          activeDragIndex === idx || draggedIndex === idx
+                            ? 'bg-amber-50/80 border-2 border-dashed border-amber-500 shadow-md ring-1 ring-amber-400'
+                            : 'hover:bg-slate-50/90 border-b border-slate-100'
+                        }`}
                       >
                         {/* COLUNA 1: RECURSO ATIVO + ARRASTAR */}
                         <td className="px-3 py-2 font-bold text-slate-800 border-r border-slate-100 uppercase text-xs">
@@ -378,6 +588,21 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           </div>
                         </td>
 
+                        {/* COLUNA: QTD TOTAL PEÇAS */}
+                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-slate-800 text-xs">
+                          {s.qtdeTotal ?? s.itemQty ?? 0}
+                        </td>
+
+                        {/* COLUNA: TOTAL EXECUTADO */}
+                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-emerald-600 text-xs">
+                          {s.totalExecutado ?? s.exec ?? 0}
+                        </td>
+
+                        {/* COLUNA: TOTAL A EXECUTAR */}
+                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-amber-600 text-xs">
+                          {s.totalExecutar ?? s.aExec ?? 0}
+                        </td>
+
                         {/* COLUNA 2: DIAS P/ PRODUÇÃO DO ITEM */}
                         <td className="px-3 py-2 text-center border-r border-slate-100">
                           <div className="flex items-center justify-center gap-1">
@@ -385,6 +610,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                               type="number"
                               min="1"
                               value={s.dias || 1}
+                              onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleDiasChange(idx, parseInt(e.target.value, 10) || 1)}
                               className="w-16 px-2 py-1 text-center font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] text-xs"
                             />
@@ -428,7 +654,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           <div className="flex items-center justify-center">
                             <input
                               type="text"
-                              value={`${s.minProd || 0} min`}
+                              value={s.minProd || 0}
                               disabled
                               readOnly
                               title="Minutos de Produção Apontados Acumulados (Campo de Somente Leitura)"
