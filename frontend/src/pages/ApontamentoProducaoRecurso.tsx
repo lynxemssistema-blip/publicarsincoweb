@@ -2088,218 +2088,163 @@ useEffect(() => {
  )}
  </div>
 
- {modalSetor !== 'mapa' && (
- <div className="bg-[#E0E800]/20 border border-blue-100 rounded-lg py-1 px-2 flex items-center justify-between shadow-sm">
- <div className="flex items-center gap-2">
- <span className="w-7 h-7 rounded-lg bg-white flex items-center justify-center text-[#32423D] shadow-sm">
- <Settings2 size={14} />
- </span>
- <span className="text-xs font-black text-blue-800 uppercase tracking-tighter">Próximo Setor:</span>
- </div>
- <span className="text-xs font-black text-blue-900 bg-white px-2 py-1 rounded shadow-sm border border-blue-100 uppercase tracking-wider">
-  {(() => {
- const sequence = [
-  { id: 'engenharia', field: 'txtENGENHARIA', label: 'Engenharia' },
-  { id: 'isometrico', field: 'txtISOMETRICO', label: 'Isométrico' },
-  { id: 'medicao', field: 'txtMEDICAO', label: 'Medição' },
-  { id: 'corte', field: 'txtCorte', label: 'Corte' },
-  { id: 'cortealaser', field: 'txtCorteaLaser', label: 'Corte a Laser' },
-  { id: 'pulsionadeira', field: 'txtPULSIONADEIRA', label: 'Pulsionadeira' },
-  { id: 'puncionadeira', field: 'txtPUNCIONADEIRA', label: 'Puncionadeira' },
-  { id: 'usinagem', field: 'txtUsinagem', label: 'Usinagem' },
-  { id: 'dobra', field: 'txtDobra', label: 'Dobra' },
-  { id: 'caldeiraria', field: 'txtCALDEIRARIA', label: 'Caldeiraria' },
-  { id: 'serralheria', field: 'txtSERRALHERIA', label: 'Serralheria' },
-  { id: 'solda', field: 'txtSolda', label: 'Solda' },
-  { id: 'galvanizar', field: 'txtGALVANIZAR', label: 'Galvanizar' },
-  { id: 'pintura', field: 'txtPintura', label: 'Pintura' },
-  { id: 'acabamento', field: 'txtACABAMENTO', label: 'Acabamento' },
-  { id: 'montagem', field: 'TxtMontagem', label: 'Montagem' },
-  { id: 'aprovacao', field: 'txtAPROVACAO', label: 'Aprovação' }
- ];
- const currentIndex = sequence.findIndex(s => s.id === String(modalSetor).toLowerCase());
- if (currentIndex === -1) return '-';
- for (let i = currentIndex + 1; i < sequence.length; i++) {
-   const target = sequence[i];
-   const itemAny = itemDetails.item as any;
-   const val1 = String(itemAny[target.field] || '').trim().toUpperCase();
-   const val2 = String(itemAny[target.field.toLowerCase()] || '').trim().toUpperCase();
-   const isSt = String(itemAny[`st${target.field}`] || '').trim();
-   if (val1 === '1' || val2 === '1' || val1 === 'S' || val2 === 'S' || isSt === '1') {
-     return target.label;
-   }
- }
- return 'Finalizado';
- })()}
- </span>
- </div>
- )}
+          {/* ═══════════════════════════════════════════════
+              CARD 1 — Progresso do Item + Próximo Setor
+          ═══════════════════════════════════════════════ */}
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+            {/* Linha: Progresso */}
+            <div className="px-3 pt-2.5 pb-1.5">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Progresso do Item</span>
+                <span className="text-[11px] font-black text-[#32423D]">
+                  {itemDetails.totalProduzido} / {itemDetails.item.QtdeTotal}
+                  <span className="ml-2 text-[9px] text-gray-400">({Math.round((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100)}% concluído)</span>
+                </span>
+              </div>
+              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${getProgressColor((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100)}`}
+                  style={{ width: `${Math.min((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100, 100)}%` }}
+                />
+              </div>
+              <div className="mt-1 text-[9px] font-bold text-red-400">
+                Faltam <span className="text-red-500 font-black">{itemDetails.qtdeFaltante}</span> unidades
+              </div>
+            </div>
 
- {/* Progress */}
- <div className="bg-[#E0E800]/5 rounded-lg p-2 border border-[#E0E800]/20">
- <div className="flex justify-between mb-1">
- <span className="text-[10px] font-black text-gray-500 uppercase">Progresso do Item</span>
- <span className="text-[11px] font-black text-[#32423D]">
- {itemDetails.totalProduzido} / {itemDetails.item.QtdeTotal}
- </span>
- </div>
- <div className="h-2 bg-gray-200 rounded-full overflow-hidden shadow-inner">
- <div
- className={`h-full rounded-full transition-all shadow-sm ${getProgressColor((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100)}`}
- style={{ width: `${Math.min((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100, 100)}%` }}
- />
- </div>
- <div className="mt-1.5 text-[10px] font-bold text-gray-400 flex items-center justify-between">
- <span>Faltam <span className="text-red-500">{itemDetails.qtdeFaltante}</span> unidades</span>
- <span className="text-[#32423D] bg-[#E0E800]/20 px-1 rounded">{Math.round((itemDetails.totalProduzido / (itemDetails.item.QtdeTotal || 1)) * 100)}% concluído</span>
- </div>
- </div>
+            {/* Divisor + Próximo Setor (só quando não é MAPA) */}
+            {modalSetor !== 'mapa' && (
+              <div className="border-t border-gray-100 px-3 py-2 flex items-center justify-between bg-[#E0E800]/10">
+                <div className="flex items-center gap-1.5">
+                  <Settings2 size={12} className="text-[#32423D]" />
+                  <span className="text-[10px] font-black text-gray-500 uppercase tracking-wider">Próximo Setor</span>
+                </div>
+                <span className="text-[10px] font-black text-[#32423D] bg-white border border-[#E0E800]/60 px-2 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
+                  {(() => {
+                    const sequence = [
+                      { id: 'engenharia', field: 'txtENGENHARIA', label: 'Engenharia' },
+                      { id: 'isometrico', field: 'txtISOMETRICO', label: 'Isométrico' },
+                      { id: 'medicao', field: 'txtMEDICAO', label: 'Medição' },
+                      { id: 'corte', field: 'txtCorte', label: 'Corte' },
+                      { id: 'cortealaser', field: 'txtCorteaLaser', label: 'Corte a Laser' },
+                      { id: 'pulsionadeira', field: 'txtPULSIONADEIRA', label: 'Pulsionadeira' },
+                      { id: 'puncionadeira', field: 'txtPUNCIONADEIRA', label: 'Puncionadeira' },
+                      { id: 'usinagem', field: 'txtUsinagem', label: 'Usinagem' },
+                      { id: 'dobra', field: 'txtDobra', label: 'Dobra' },
+                      { id: 'caldeiraria', field: 'txtCALDEIRARIA', label: 'Caldeiraria' },
+                      { id: 'serralheria', field: 'txtSERRALHERIA', label: 'Serralheria' },
+                      { id: 'solda', field: 'txtSolda', label: 'Solda' },
+                      { id: 'galvanizar', field: 'txtGALVANIZAR', label: 'Galvanizar' },
+                      { id: 'pintura', field: 'txtPintura', label: 'Pintura' },
+                      { id: 'acabamento', field: 'txtACABAMENTO', label: 'Acabamento' },
+                      { id: 'montagem', field: 'TxtMontagem', label: 'Montagem' },
+                      { id: 'aprovacao', field: 'txtAPROVACAO', label: 'Aprovação' }
+                    ];
+                    const currentIndex = sequence.findIndex(s => s.id === String(modalSetor).toLowerCase());
+                    if (currentIndex === -1) return '-';
+                    for (let i = currentIndex + 1; i < sequence.length; i++) {
+                      const target = sequence[i];
+                      const itemAny = itemDetails.item as any;
+                      const val1 = String(itemAny[target.field] || '').trim().toUpperCase();
+                      const val2 = String(itemAny[target.field.toLowerCase()] || '').trim().toUpperCase();
+                      if (val1 === '1' || val2 === '1' || val1 === 'S' || val2 === 'S') return target.label;
+                    }
+                    return 'Finalizado ✓';
+                  })()}
+                </span>
+              </div>
+            )}
+          </div>
 
- {/* Mapa Awareness & Confirmation */}
- {modalSetor === 'mapa' && (
- <div className="rounded-lg p-5 border bg-[#E0E800]/20 border-blue-200 shadow-sm">
- <div className="flex items-center gap-3 mb-3">
- <div className="w-10 h-10 rounded-full bg-[#32423D] text-white flex items-center justify-center shadow-md">
- <CheckCircle size={24} />
- </div>
- <div>
- <h3 className="text-xs font-bold text-blue-900 uppercase">
- Finalização Total (MAPA)
- </h3>
- <p className="text-xs text-[#32423D]">
- Confirme para concluir todos os setores deste item.
- </p>
- </div>
- </div>
-
- <div className="bg-white/60 rounded-md p-3 mb-4">
- <p className="text-xs text-blue-800 font-medium mb-2">
- Ações automáticas:
- </p>
- <ul className="text-[11px] text-[#32423D] space-y-1 ml-4 list-disc">
- <li>Aplica <strong>{itemDetails.item.QtdeTotal}</strong> em todos os setores</li>
- <li>Zera o "Saldo a Executar" geral</li>
- <li>Marca o Item como <strong>CONCLUÍDO (C)</strong></li>
- </ul>
- </div>
-
- <div className="flex flex-wrap gap-1.5 opacity-60">
- {['CORTE', 'DOBRA', 'SOLDA', 'PINTURA', 'MONTAGEM'].map(s => (
- <span key={s} className="px-1.5 py-0.5 bg-blue-100 border border-blue-200 rounded text-[9px] font-bold text-[#32423D]">
- {s}
- </span>
- ))}
- </div>
- </div>
- )}
-
- {/* INFORMÁÇÕES DE CAPACIDADE DIÁRIA E ACUMULADO MINPROD DO RECURSO */}
+          {/* ═══════════════════════════════════════════════
+              CARD 2 — Capacidade + Tempos de Produção
+          ═══════════════════════════════════════════════ */}
           {modalSetor !== 'mapa' && itemDetails && (() => {
             const setorKey = String(modalSetor).toLowerCase();
             const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
             const secUpper = modalSetor.toUpperCase();
 
             const minProdVal = parseFloat(String(
-              itemDetails[`${secFormatted}MinProd`] ?? 
-              itemDetails[`${secUpper}MinProd`] ?? 
-              itemDetails[`${modalSetor}MinProd`] ?? 
-              itemDetails.item?.[`${secFormatted}MinProd`] ?? 
-              itemDetails.item?.[`${secUpper}MinProd`] ?? 
+              itemDetails[`${secFormatted}MinProd`] ??
+              itemDetails[`${secUpper}MinProd`] ??
+              itemDetails[`${modalSetor}MinProd`] ??
+              itemDetails.item?.[`${secFormatted}MinProd`] ??
+              itemDetails.item?.[`${secUpper}MinProd`] ??
               0
             )) || 0;
 
             const limitesSalvos = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
             const limiteDiarioVal = limitesSalvos[setorKey] ?? 500;
 
-            return (
-              <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 my-2.5 flex items-center justify-between shadow-xs">
-                <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-[#32423D] text-[#E0E800] rounded-lg shadow-xs">
-                    <Clock size={16} />
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-                      Limite Diário ({secFormatted}):
-                    </span>
-                    <span className="text-xs font-black text-[#32423D]">
-                      {limiteDiarioVal} min
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
-                    Total Apontado ({secFormatted}MinProd):
-                  </span>
-                  <span className={`text-xs font-black ${minProdVal >= limiteDiarioVal ? 'text-red-600' : 'text-emerald-700'}`}>
-                    {minProdVal} min / {limiteDiarioVal} min
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* TEMPOS DE PRODUÇÃO DO ITEM */}
-          {itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            const qtdeTotalItem = parseFloat(String(itemDetails.item.QtdeTotal)) || 0;
-
-            // Lista de todos os prefixos possíveis de recursos (capitalizados como no banco)
-            const PREFIXOS_RECURSOS = [
-              'Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem',
-              'Galvanizar', 'Pulsionadeira', 'CorteaLaser', 'Engenharia'
-            ];
-
-            // Determina o prefixo pelo setor atual; se for MAPA, busca o recurso de origem via ref
-            let prefixoAlvo = '';
-            if (modalSetor !== 'mapa') {
-              // Setor direto: capitaliza o modalSetor
-              prefixoAlvo = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
-            } else if (recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa') {
-              // Usa ref capturada ao abrir o modal
-              prefixoAlvo = recursoOrigemRef.current.charAt(0).toUpperCase() + recursoOrigemRef.current.slice(1);
-            }
-
-            // Tenta o prefixo alvo primeiro; se não tiver dados, varre todos os prefixos
-            let tempoSetup = 0, tempoPadrao = 0, tempoTotalDB = 0, prefixoUsado = '';
-            const candidatos = prefixoAlvo
-              ? [prefixoAlvo, ...PREFIXOS_RECURSOS.filter(p => p !== prefixoAlvo)]
-              : PREFIXOS_RECURSOS;
-
+            const PREFIXOS_RECURSOS = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'Galvanizar', 'Pulsionadeira', 'CorteaLaser', 'Engenharia'];
+            let prefixoAlvo = modalSetor !== 'mapa' ? (modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1)) : (recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa' ? recursoOrigemRef.current.charAt(0).toUpperCase() + recursoOrigemRef.current.slice(1) : '');
+            let tempoSetup = 0, tempoPadrao = 0, tempoTotalDB = 0;
+            const candidatos = prefixoAlvo ? [prefixoAlvo, ...PREFIXOS_RECURSOS.filter(p => p !== prefixoAlvo)] : PREFIXOS_RECURSOS;
             for (const pref of candidatos) {
               const s = parseFloat(String(itemAny[`${pref}TempoSetup`] ?? 0)) || 0;
               const p = parseFloat(String(itemAny[`${pref}TempoPadrao`] ?? 0)) || 0;
               const t = parseFloat(String(itemAny[`${pref}TotalTempo`] ?? 0)) || 0;
-              if (s > 0 || p > 0 || t > 0) {
-                tempoSetup = s; tempoPadrao = p; tempoTotalDB = t;
-                prefixoUsado = pref;
-                break;
-              }
+              if (s > 0 || p > 0 || t > 0) { tempoSetup = s; tempoPadrao = p; tempoTotalDB = t; break; }
             }
-
-            // Fallback para campos globais se ainda sem dados
             if (tempoSetup === 0 && tempoPadrao === 0) {
               tempoSetup  = parseFloat(String(itemAny.TempoSetup  ?? 0)) || 0;
               tempoPadrao = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
               tempoTotalDB = parseFloat(String(itemAny.TotalTempo ?? 0)) || 0;
-              prefixoUsado = 'Global';
             }
-
+            const qtdeTotalItem = parseFloat(String(itemDetails.item.QtdeTotal)) || 0;
             const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
+            const capacidadePercent = limiteDiarioVal > 0 ? Math.min((minProdVal / limiteDiarioVal) * 100, 100) : 0;
+            const sobrando = limiteDiarioVal - minProdVal;
 
             return (
-              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-2 grid grid-cols-3 gap-2 text-center">
-                <div>
-                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Setup</span>
-                  <span className="text-xs font-black text-amber-800">{tempoSetup} min</span>
+              <div className="rounded-xl border border-amber-200 bg-white shadow-sm overflow-hidden">
+                {/* Topo: Limite Diário ↔ barra ↔ Total Apontado */}
+                <div className="px-3 pt-2.5 pb-2 flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="p-1.5 bg-[#32423D] text-[#E0E800] rounded-lg">
+                      <Clock size={13} />
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Limite Diário</div>
+                      <div className="text-xs font-black text-[#32423D]">{limiteDiarioVal} min</div>
+                    </div>
+                  </div>
+
+                  <div className="flex-1 mx-1">
+                    <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${capacidadePercent >= 100 ? 'bg-red-500' : capacidadePercent >= 80 ? 'bg-amber-400' : 'bg-emerald-500'}`}
+                        style={{ width: `${capacidadePercent}%` }}
+                      />
+                    </div>
+                    <div className="text-[8px] text-center text-gray-400 mt-0.5">
+                      {sobrando > 0 ? `${sobrando} min livres` : 'Limite atingido'}
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <div className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Apontado</div>
+                    <div className={`text-xs font-black ${minProdVal >= limiteDiarioVal ? 'text-red-600' : 'text-emerald-700'}`}>
+                      {minProdVal} / {limiteDiarioVal} min
+                    </div>
+                  </div>
                 </div>
-                <div className="border-l border-r border-amber-200">
-                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Padrão / Peça</span>
-                  <span className="text-xs font-black text-amber-800">{tempoPadrao} min</span>
-                </div>
-                <div>
-                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Total Produção</span>
-                  <span className="text-xs font-black text-amber-800">{tempoTotal.toFixed(1)} min</span>
+
+                {/* Grade de Tempos — Setup | Padrão/Peça | Total */}
+                <div className="border-t border-amber-100 grid grid-cols-3 divide-x divide-amber-100">
+                  <div className="px-2 py-2 text-center">
+                    <div className="text-[9px] font-black text-amber-400 uppercase tracking-wider">Setup (A)</div>
+                    <div className="text-sm font-black text-amber-800 mt-0.5">{tempoSetup}<span className="text-[9px] text-amber-400 ml-0.5">min</span></div>
+                  </div>
+                  <div className="px-2 py-2 text-center bg-amber-50/60">
+                    <div className="text-[9px] font-black text-amber-400 uppercase tracking-wider">Padrão / Peça (B)</div>
+                    <div className="text-sm font-black text-amber-800 mt-0.5">{tempoPadrao}<span className="text-[9px] text-amber-400 ml-0.5">min</span></div>
+                  </div>
+                  <div className="px-2 py-2 text-center">
+                    <div className="text-[9px] font-black text-amber-400 uppercase tracking-wider">Total Produção (C)</div>
+                    <div className="text-sm font-black text-amber-800 mt-0.5">{tempoTotal.toFixed(1)}<span className="text-[9px] text-amber-400 ml-0.5">min</span></div>
+                  </div>
                 </div>
               </div>
             );
