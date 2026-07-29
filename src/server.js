@@ -9845,7 +9845,17 @@ app.get('/api/apontamento/:setor', async (req, res) => {
                 osi.SoldaTotalExecutado,
                 osi.PinturaTotalExecutado,
                 osi.MontagemTotalExecutado,
-                osi.ProdutoPrincipal as IsProdutoPrincipal
+                osi.ProdutoPrincipal as IsProdutoPrincipal,
+                osi.TempoSetup, osi.TempoPadrao, osi.TotalTempo,
+                osi.CorteTempoSetup, osi.CorteTempoPadrao, osi.CorteTotalTempo,
+                osi.DobraTempoSetup, osi.DobraTempoPadrao, osi.DobraTotalTempo,
+                osi.SoldaTempoSetup, osi.SoldaTempoPadrao, osi.SoldaTotalTempo,
+                osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
+                osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
+                osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
+                osi.PulsionadeiraTempoSetup, osi.PulsionadeiraTempoPadrao, osi.PulsionadeiraTotalTempo,
+                osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
+                osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto

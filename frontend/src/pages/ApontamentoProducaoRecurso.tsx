@@ -2241,39 +2241,50 @@ useEffect(() => {
           {/* TEMPOS DE PRODUÇÃO DO ITEM */}
           {itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            // Usa o recurso de origem via ref (síncrono, sem delay de estado)
-            const recursoRef = (modalSetor === 'mapa' && recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa')
-              ? recursoOrigemRef.current
-              : (modalSetor === 'mapa' ? '' : modalSetor);
-            const secFormatted = recursoRef ? recursoRef.charAt(0).toUpperCase() + recursoRef.slice(1) : '';
-            const secUpper = recursoRef ? recursoRef.toUpperCase() : '';
-
-            // Busca Setup: campo é GalvanizarTempoSetup (secFormatted)
-            const tempoSetup = parseFloat(String(
-              itemAny[`${secFormatted}TempoSetup`] ??
-              itemAny[`${secUpper}TempoSetup`] ??
-              itemAny.TempoSetup ?? 0
-            )) || 0;
-
-            // Busca Padrão: campo é GalvanizarTempoPadrao (secFormatted)
-            const tempoPadrao = parseFloat(String(
-              itemAny[`${secFormatted}TempoPadrao`] ??
-              itemAny[`${secUpper}TempoPadrao`] ??
-              itemAny.TempoPadrao ?? 0
-            )) || 0;
-
             const qtdeTotalItem = parseFloat(String(itemDetails.item.QtdeTotal)) || 0;
 
-            // Usa TotalTempo do banco se disponível (já calculado corretamente)
-            // Fórmula: (QtdeTotal × TempoPadrao) + TempoSetup
-            const tempoTotalDB = parseFloat(String(
-              itemAny[`${secFormatted}TotalTempo`] ??
-              itemAny[`${secUpper}TotalTempo`] ??
-              itemAny.TotalTempo ?? 0
-            )) || 0;
-            const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
+            // Lista de todos os prefixos possíveis de recursos (capitalizados como no banco)
+            const PREFIXOS_RECURSOS = [
+              'Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem',
+              'Galvanizar', 'Pulsionadeira', 'CorteaLaser', 'Engenharia'
+            ];
 
-            // Sempre exibe o bloco (mesmo com 0, para o usuário saber que não há tempo cadastrado)
+            // Determina o prefixo pelo setor atual; se for MAPA, busca o recurso de origem via ref
+            let prefixoAlvo = '';
+            if (modalSetor !== 'mapa') {
+              // Setor direto: capitaliza o modalSetor
+              prefixoAlvo = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+            } else if (recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa') {
+              // Usa ref capturada ao abrir o modal
+              prefixoAlvo = recursoOrigemRef.current.charAt(0).toUpperCase() + recursoOrigemRef.current.slice(1);
+            }
+
+            // Tenta o prefixo alvo primeiro; se não tiver dados, varre todos os prefixos
+            let tempoSetup = 0, tempoPadrao = 0, tempoTotalDB = 0, prefixoUsado = '';
+            const candidatos = prefixoAlvo
+              ? [prefixoAlvo, ...PREFIXOS_RECURSOS.filter(p => p !== prefixoAlvo)]
+              : PREFIXOS_RECURSOS;
+
+            for (const pref of candidatos) {
+              const s = parseFloat(String(itemAny[`${pref}TempoSetup`] ?? 0)) || 0;
+              const p = parseFloat(String(itemAny[`${pref}TempoPadrao`] ?? 0)) || 0;
+              const t = parseFloat(String(itemAny[`${pref}TotalTempo`] ?? 0)) || 0;
+              if (s > 0 || p > 0 || t > 0) {
+                tempoSetup = s; tempoPadrao = p; tempoTotalDB = t;
+                prefixoUsado = pref;
+                break;
+              }
+            }
+
+            // Fallback para campos globais se ainda sem dados
+            if (tempoSetup === 0 && tempoPadrao === 0) {
+              tempoSetup  = parseFloat(String(itemAny.TempoSetup  ?? 0)) || 0;
+              tempoPadrao = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
+              tempoTotalDB = parseFloat(String(itemAny.TotalTempo ?? 0)) || 0;
+              prefixoUsado = 'Global';
+            }
+
+            const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
 
             return (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-2 grid grid-cols-3 gap-2 text-center">
