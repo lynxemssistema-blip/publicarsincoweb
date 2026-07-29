@@ -2236,11 +2236,11 @@ useEffect(() => {
           })()}
 
           {/* TEMPOS DE PRODUÇÃO DO ITEM */}
-          {modalSetor !== 'mapa' && itemDetails && (() => {
+          {itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            // Nome capitalizado: 'galvanizar' → 'Galvanizar', 'pulsionadeira' → 'Pulsionadeira'
-            const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
-            const secUpper = modalSetor.toUpperCase();
+            // Para modo 'mapa', usa dados globais do item; para setor específico, busca por prefixo
+            const secFormatted = (modalSetor === 'mapa') ? '' : modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+            const secUpper = (modalSetor === 'mapa') ? '' : modalSetor.toUpperCase();
 
             // Busca Setup: campo é GalvanizarTempoSetup (secFormatted)
             const tempoSetup = parseFloat(String(
@@ -2267,7 +2267,7 @@ useEffect(() => {
             )) || 0;
             const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
 
-            if (tempoSetup === 0 && tempoPadrao === 0) return null; // não mostra se não há tempos cadastrados
+            // Sempre exibe o bloco (mesmo com 0, para o usuário saber que não há tempo cadastrado)
 
             return (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-2 grid grid-cols-3 gap-2 text-center">
