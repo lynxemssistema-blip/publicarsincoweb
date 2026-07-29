@@ -398,6 +398,16 @@ function OrdemServicoContent() {
     // ============================================================
     const [pendenciaModalOpen, setPendenciaModalOpen] = useState(false);
     const [selectedItemRnc, setSelectedItemRnc] = useState<OrdemServicoItem & { IdOrdemServico?: number } | null>(null);
+
+    // ============================================================
+    // Estados do Modal Manutenção de Tempos de Produção
+    // ============================================================
+    const [tempoModalOpen, setTempoModalOpen] = useState(false);
+    const [tempoModalItem, setTempoModalItem] = useState<OrdemServicoItem & { IdOrdemServico?: number } | null>(null);
+    const [tempoSetupEdit, setTempoSetupEdit] = useState('');
+    const [tempoPadraoEdit, setTempoPadraoEdit] = useState('');
+    const [tempoSaving, setTempoSaving] = useState(false);
+
     const [idRncEdicao, setIdRncEdicao] = useState<number | null>(null);
     const [descricaoPendencia, setDescricaoPendencia] = useState('');
     const [setorResponsavel, setSetorResponsavel] = useState('');
@@ -510,6 +520,57 @@ function OrdemServicoContent() {
             }
         } catch (err: any) {
             addToast({ type: 'error', title: 'Erro', message: 'Erro de comunicação com servidor.' });
+        }
+    };
+
+    // ============================================================
+    // Handlers do Modal Manutenção de Tempos de Produção
+    // ============================================================
+    const handleOpenTempoModal = (e: React.MouseEvent, item: OrdemServicoItem & { IdOrdemServico?: number }) => {
+        e.stopPropagation();
+        const itemAny = item as any;
+        setTempoModalItem(item);
+        setTempoSetupEdit(String(itemAny.TempoSetup ?? ''));
+        setTempoPadraoEdit(String(itemAny.TempoPadrao ?? ''));
+        setTempoModalOpen(true);
+    };
+
+    const handleSaveTempos = async () => {
+        if (!tempoModalItem) return;
+        setTempoSaving(true);
+        try {
+            const itemAny = tempoModalItem as any;
+            const setup = parseFloat(tempoSetupEdit) || 0;
+            const padrao = parseFloat(tempoPadraoEdit) || 0;
+            const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
+            const totalTempo = (qtde * padrao) + setup; // C = (QtdeTotal × B) + A
+
+            const res = await fetch(`${API_BASE}/ordemservicoitem/${tempoModalItem.IdOrdemServicoItem}/tempos`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ TempoSetup: setup, TempoPadrao: padrao, TotalTempo: totalTempo })
+            });
+            const data = await res.json();
+            if (data.success) {
+                addToast({ type: 'success', title: 'Tempos atualizados', message: `Setup: ${setup}min | Padrão: ${padrao}min | Total: ${totalTempo.toFixed(1)}min` });
+                // Atualiza o item local sem refetch
+                setOrdensItens(prev => {
+                    const osId = tempoModalItem.IdOrdemServico!;
+                    const updatedItems = (prev[osId] || []).map(i =>
+                        i.IdOrdemServicoItem === tempoModalItem.IdOrdemServicoItem
+                            ? { ...i, TempoSetup: setup, TempoPadrao: padrao, TotalTempo: totalTempo } as any
+                            : i
+                    );
+                    return { ...prev, [osId]: updatedItems };
+                });
+                setTempoModalOpen(false);
+            } else {
+                addToast({ type: 'error', title: 'Erro', message: data.message || 'Erro ao salvar tempos.' });
+            }
+        } catch (err) {
+            addToast({ type: 'error', title: 'Erro', message: 'Erro de comunicação ao salvar tempos.' });
+        } finally {
+            setTempoSaving(false);
         }
     };
 
@@ -2215,6 +2276,15 @@ function OrdemServicoContent() {
                                                     <ShieldAlert size={14} />
                                                 </button>
 
+                                                {/* Botão Manutenção de Tempos de Produção */}
+                                                <button
+                                                    onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
+                                                    className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
+                                                    title="Manutenção de Tempos de Produção"
+                                                >
+                                                    <Clock size={14} />
+                                                </button>
+
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
                                                     <button
                                                         onClick={(e) => handleDeleteItem(e, item, os.IdOrdemServico)}
@@ -3102,6 +3172,111 @@ function OrdemServicoContent() {
             )}
 
             {/* ============================================================ */}
+            {/* ============================================================ */}
+            {/* Modal Manutenção de Tempos de Produção                       */}
+            {/* ============================================================ */}
+            <AnimatePresence>
+                {tempoModalOpen && tempoModalItem && (() => {
+                    const setup = parseFloat(tempoSetupEdit) || 0;
+                    const padrao = parseFloat(tempoPadraoEdit) || 0;
+                    const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
+                    const totalTempo = (qtde * padrao) + setup;
+                    return (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                            onClick={(e) => { if (e.target === e.currentTarget) setTempoModalOpen(false); }}
+                        >
+                            <motion.div
+                                initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
+                                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                            >
+                                {/* Header */}
+                                <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <Clock size={20} className="text-white" />
+                                        <div>
+                                            <h2 className="text-white font-black text-base">Tempos de Produção</h2>
+                                            <p className="text-blue-200 text-xs">{tempoModalItem.CodMatFabricante} — {(tempoModalItem as any).DescResumo || ''}</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setTempoModalOpen(false)} className="text-white/70 hover:text-white">
+                                        <X size={18} />
+                                    </button>
+                                </div>
+
+                                {/* Body */}
+                                <div className="p-6 space-y-4">
+                                    <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
+                                        <strong>Qtde Total:</strong> {qtde} peças
+                                        &nbsp;|&nbsp;
+                                        <strong>Fórmula:</strong> C = (Qtde × B) + A
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* A — TempoSetup */}
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-500 uppercase mb-1">
+                                                (A) Tempo Setup <span className="text-blue-400">min</span>
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.5"
+                                                value={tempoSetupEdit}
+                                                onChange={e => setTempoSetupEdit(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                placeholder="0"
+                                            />
+                                        </div>
+
+                                        {/* B — TempoPadrao */}
+                                        <div>
+                                            <label className="block text-xs font-black text-gray-500 uppercase mb-1">
+                                                (B) Tempo Padrão <span className="text-blue-400">min/peça</span>
+                                            </label>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.5"
+                                                value={tempoPadraoEdit}
+                                                onChange={e => setTempoPadraoEdit(e.target.value)}
+                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                placeholder="0"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* C — TotalTempo (calculado automaticamente) */}
+                                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl px-4 py-3 text-center">
+                                        <div className="text-xs font-black text-blue-400 uppercase tracking-wider mb-1">(C) Total Produção = ({qtde} × {padrao}) + {setup}</div>
+                                        <div className="text-3xl font-black text-blue-700">{totalTempo.toFixed(1)} <span className="text-lg">min</span></div>
+                                    </div>
+                                </div>
+
+                                {/* Footer */}
+                                <div className="px-6 pb-6 flex gap-3">
+                                    <button
+                                        onClick={() => setTempoModalOpen(false)}
+                                        className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 font-black hover:bg-gray-50 transition-colors"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        onClick={handleSaveTempos}
+                                        disabled={tempoSaving}
+                                        className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                    >
+                                        {tempoSaving ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}
+                                        {tempoSaving ? 'Salvando...' : 'Salvar Tempos'}
+                                    </button>
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    );
+                })()}
+            </AnimatePresence>
+
             {/* Modal Gerar Pendência (RNC) - idêntico ao ApontamentoProducao  */}
             {/* ============================================================ */}
             <AnimatePresence>

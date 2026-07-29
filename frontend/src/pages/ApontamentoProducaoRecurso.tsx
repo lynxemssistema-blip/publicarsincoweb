@@ -2304,37 +2304,60 @@ useEffect(() => {
             );
           })()}
 
-          {/* Quantidade Input - Hidden in Mapa Mode */}
- {modalSetor !== 'mapa' && (
- <div className="pt-1">
- <div className="flex gap-2 items-center">
- <div className="flex-1">
- <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">
- Quantidade a Produzir (Faltam {itemDetails.qtdeFaltante})
- </label>
- <input
- type="number"
- min="1"
- max={itemDetails.qtdeFaltante}
- value={qtdeApontar}
- onChange={(e) => {
-  let val = e.target.value;
-  if (val !== '') {
-    const num = parseInt(val) || 0;
-    const max = itemDetails?.qtdeFaltante || 0;
-    if (num > max) val = String(max);
-    else if (num < 0) val = '0';
-  }
-  setQtdeApontar(val);
-}}
- className="w-full px-2 py-1 text-base font-black text-center rounded-lg border border-gray-200 hover:border-[#32423D]/40 focus:border-[#32423D] focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-800 h-8"
- placeholder="0"
- />
- </div>
- 
- </div>
- </div>
- )}
+          {/* Quantidade Input + Tempo Calculado - Hidden in Mapa Mode */}
+          {modalSetor !== 'mapa' && itemDetails && (() => {
+            const itemAny = itemDetails.item as any;
+            // Detecta tempoPadrao do setor ativo (mesmo lógica do bloco de tempos acima)
+            const PREFIXOS_Q = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Pulsionadeira','CorteaLaser','Engenharia'];
+            let tPadrao = 0;
+            const prefQ = modalSetor !== 'mapa' ? modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1) : '';
+            const candidatosQ = prefQ ? [prefQ, ...PREFIXOS_Q.filter(p => p !== prefQ)] : PREFIXOS_Q;
+            for (const pref of candidatosQ) {
+              const p = parseFloat(String(itemAny[`${pref}TempoPadrao`] ?? 0)) || 0;
+              if (p > 0) { tPadrao = p; break; }
+            }
+            const qtdeNum = parseFloat(qtdeApontar) || 0;
+            const tempoCalculado = (qtdeNum * tPadrao).toFixed(1);
+
+            return (
+              <div className="pt-1">
+                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">
+                  Quantidade a Produzir (Faltam {itemDetails.qtdeFaltante})
+                </label>
+                <div className="flex gap-2 items-center">
+                  {/* Input compacto */}
+                  <div className="w-28">
+                    <input
+                      type="number"
+                      min="1"
+                      max={itemDetails.qtdeFaltante}
+                      value={qtdeApontar}
+                      onChange={(e) => {
+                        let val = e.target.value;
+                        if (val !== '') {
+                          const num = parseInt(val) || 0;
+                          const max = itemDetails?.qtdeFaltante || 0;
+                          if (num > max) val = String(max);
+                          else if (num < 0) val = '0';
+                        }
+                        setQtdeApontar(val);
+                      }}
+                      className="w-full px-2 py-1 text-base font-black text-center rounded-lg border border-gray-200 hover:border-[#32423D]/40 focus:border-[#32423D] focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-800 h-8"
+                      placeholder="0"
+                    />
+                  </div>
+                  {/* Tempo calculado em tempo real */}
+                  {tPadrao > 0 && (
+                    <div className="flex-1 flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 h-8">
+                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-wider whitespace-nowrap">⏱ Tempo estimado:</span>
+                      <span className="text-sm font-black text-blue-700 ml-auto">{tempoCalculado} min</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
 
  {/* Histórico */}
  {itemDetails.historico.length > 0 && (

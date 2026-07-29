@@ -10624,7 +10624,10 @@ osi.*,
         const qtdeTotal = parseFloat(item.QtdeTotal) || 0;
 
         const setoresParaProcessar = isMapa
-            ? ['corte', 'dobra', 'solda', 'pintura', 'montagem']
+            // MAPA: processa todos os setores com txt=1 no item (dinâmico, inclui galvanizar etc.)
+            ? Object.entries(setorColumns)
+                .filter(([sKey, sCfg]) => sCfg.txt && NULLIF_TRIM(item[sCfg.txt]) === '1')
+                .map(([sKey]) => sKey)
             : [setorAtivo];
 
         if (setoresParaProcessar.length === 0) {
@@ -10642,7 +10645,7 @@ osi.*,
         for (const sName of setoresParaProcessar) {
             const sConfig = setorColumns[sName];
             const totalExecutadoDb = parseFloat(item[sConfig.total]) || 0;
-            const dateNow = getDateForSetor(sConfig);
+            const dateNow = getDateForSetor(sName); // CORRIGIDO: passa sName (string), nao sConfig (objeto)
             const statusAtual = item[sConfig.status];
 
             if (statusAtual === 'C' && !isMapa) continue;
@@ -13616,6 +13619,40 @@ app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
         res.status(500).json({ success: false, message: err.message });
     } finally {
         if (connection) connection.release();
+    }
+});
+
+// ============================================================
+// PUT /api/ordemservicoitem/:id/tempos - Manutencao de Tempos de Producao
+// ============================================================
+app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { TempoSetup, TempoPadrao, TotalTempo } = req.body;
+
+        if (isNaN(parseFloat(TempoSetup)) || isNaN(parseFloat(TempoPadrao))) {
+            return res.status(400).json({ success: false, message: 'TempoSetup e TempoPadrao são obrigatórios e devem ser numéricos.' });
+        }
+
+        const setup  = parseFloat(TempoSetup)  || 0;
+        const padrao = parseFloat(TempoPadrao) || 0;
+        const total  = parseFloat(TotalTempo)  || 0;
+
+        const dbPool = req.tenantDbPool || pool;
+        await dbPool.execute(
+            `UPDATE ordemservicoitem
+                SET TempoSetup  = ?,
+                    TempoPadrao = ?,
+                    TotalTempo  = ?
+              WHERE IdOrdemServicoItem = ?`,
+            [setup, padrao, total, id]
+        );
+
+        console.log(`[API] Tempos atualizados para item ${id}: setup=${setup}, padrao=${padrao}, total=${total}`);
+        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.' });
+    } catch (err) {
+        console.error('[API] Erro ao atualizar tempos:', err.message);
+        return res.status(500).json({ success: false, message: err.message });
     }
 });
 
