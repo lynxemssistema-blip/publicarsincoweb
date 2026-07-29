@@ -704,6 +704,8 @@ useEffect(() => {
  const isTotal = modalSetor === 'mapa' || (qProduzir === itemDetails.qtdeFaltante && itemDetails.totalProduzido === 0);
  const finalQtde = isTotal ? itemDetails.qtdeFaltante : qProduzir;
  const finalTipoApontamento = isTotal ? 'Total' : 'Parcial';
+ const limitesSalvosPost = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
+ const limiteDiarioPost = limitesSalvosPost[String(modalSetor).toLowerCase()] ?? 500;
 
  const res = await fetch(`${API_BASE}/apontamento`, {
  method: 'POST',
@@ -715,6 +717,7 @@ useEffect(() => {
  RecursoOrigem: recursoOrigemRef.current || '', // informa qual recurso estava ativo ao abrir MAPA
  QtdeProduzida: finalQtde,
  TipoApontamento: finalTipoApontamento,
+ LimiteDiario: limiteDiarioPost, // campo auxiliar diário — validado no backend
  CriadoPor: (user as any)?.NomeCompleto || (user as any)?.name || 'Sistema'
  })
  });
@@ -2216,7 +2219,10 @@ useEffect(() => {
             const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
             const secUpper = modalSetor.toUpperCase();
 
+            // Campo auxiliar diário (retornado pelo backend) — minutos produzidos HOJE
+            // Fallback para MinProd histórico do banco caso dailyMinProd não esteja disponível
             const minProdVal = parseFloat(String(
+              (itemDetails as any).dailyMinProd ??               // campo auxiliar diário (memória no server)
               itemDetails[`${secFormatted}MinProd`] ??
               itemDetails[`${secUpper}MinProd`] ??
               itemDetails[`${modalSetor}MinProd`] ??

@@ -9,6 +9,38 @@ const db = require('./config/db');
 const pool = db;
 const tenantMiddleware = require('./middleware/tenant');
 
+// ─── CAMPO AUXILIAR DIÁRIO (em memória, por banco) ───────────────────────────
+// Chave: "{dbName}_{IdOrdemServicoItem}_{setor}_{YYYY-MM-DD}"
+// Valor: minutos acumulados e APROVADOS hoje para este item/setor/banco
+// Reset automático: novo dia = nova chave = valor 0 automaticamente
+const dailyMinProdMap = new Map();
+
+/**
+ * Obtém os minutos acumulados hoje para um item/setor/banco.
+ * @param {string} dbName  - Nome do banco do tenant (ex: "lynxlocal")
+ * @param {number} idItem  - IdOrdemServicoItem
+ * @param {string} setor   - Nome do setor em lowercase (ex: "galvanizar")
+ * @returns {number} minutos já acumulados hoje (0 se é o primeiro do dia)
+ */
+function getDailyAccumulated(dbName, idItem, setor) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = `${dbName}_${idItem}_${setor}_${today}`;
+    return dailyMinProdMap.get(key) || 0;
+}
+
+/**
+ * Incrementa o acumulado diário após um apontamento aprovado.
+ */
+function addDailyAccumulated(dbName, idItem, setor, minutos) {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${dbName}_${idItem}_${setor}_${today}`;
+    const prev = dailyMinProdMap.get(key) || 0;
+    dailyMinProdMap.set(key, prev + minutos);
+    console.log(`[DailyMinProd] ${key} → ${prev} + ${minutos} = ${prev + minutos} min`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 function toIsoDate(val) {
     if (!val || typeof val !== 'string') return null;
     val = val.trim();
@@ -10119,13 +10151,19 @@ WHERE osi.IdOrdemServicoItem = ?
             ? item.QtdeTotal - totalExecutado
             : parseFloat(item.TotalExecutar);
 
+        // Campo auxiliar diário — lido da memória (por banco + item + setor + data)
+        const dbNameDet = (req.tenantUser && req.tenantUser.dbName) || process.env.DB_NAME || 'default';
+        const processoNorm = processo.toLowerCase();
+        const dailyMinProd = getDailyAccumulated(dbNameDet, id, processoNorm);
+
         const responseData = {
             item: item,
             historico: historicoRows,
             totalProduzido: totalExecutado,
-            qtdeFaltante: Math.min(item.QtdeTotal - totalExecutado, Math.max(0, totalExecutar))
+            qtdeFaltante: Math.min(item.QtdeTotal - totalExecutado, Math.max(0, totalExecutar)),
+            dailyMinProd  // minutos acumulados HOJE no campo auxiliar (começa em 0 a cada novo dia)
         };
-        console.log(`[API] Sending details for item ${id}`);
+        console.log(`[API] Sending details for item ${id} | dailyMinProd(${processoNorm})=${dailyMinProd}`);
         res.json({
             success: true,
             data: responseData
@@ -10573,7 +10611,7 @@ app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
 
 // POST: Registrar apontamento de produção
 app.post('/api/apontamento', async (req, res) => {
-    const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, TipoApontamento, CriadoPor } = req.body;
+    const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, TipoApontamento, CriadoPor, LimiteDiario } = req.body;
 
     if (!IdOrdemServicoItem || !Processo || !QtdeProduzida) {
         return res.status(400).json({
@@ -10597,6 +10635,67 @@ app.post('/api/apontamento', async (req, res) => {
     if (!isMapa && !setorColumns[setorAtivo]) {
         return res.status(400).json({ success: false, message: 'Processo inválido' });
     }
+
+    // ─── VALIDAÇÃO DO LIMITE DIÁRIO (campo auxiliar em memória) ───────────────
+    // Só valida setores diretos (não MAPA genérico sem recursoOrigem definido)
+    const setorParaValidar = !isMapa ? setorAtivo : (isMapaEspecial ? recursoOrigem : null);
+    const dbName = (req.tenantUser && req.tenantUser.dbName) || process.env.DB_NAME || 'default';
+
+    if (setorParaValidar && LimiteDiario !== undefined && LimiteDiario !== null) {
+        const limiteDiario = parseFloat(LimiteDiario) || 0;
+        if (limiteDiario > 0) {
+            // Busca tempoPadrao/setup do item diretamente (leitura rápida, sem transação)
+            try {
+                const [quickRows] = await pool.execute(
+                    `SELECT GalvanizarTempoPadrao, GalvanizarTempoSetup,
+                            PulsionadeiraTempoPadrao, PulsionadeiraTempoSetup,
+                            CorteaLaserTempoPadrao, CorteaLaserTempoSetup,
+                            CorteTempoPadrao, CorteTempoSetup,
+                            DobraTempoPadrao, DobraTempoSetup,
+                            SoldaTempoPadrao, SoldaTempoSetup,
+                            PinturaTempoPadrao, PinturaTempoSetup,
+                            MontagemTempoPadrao, MontagemTempoSetup,
+                            TempoPadrao, TempoSetup
+                     FROM ordemservicoitem WHERE IdOrdemServicoItem = ? LIMIT 1`,
+                    [IdOrdemServicoItem]
+                );
+
+                if (quickRows.length > 0) {
+                    const qi = quickRows[0];
+                    const cap = setorParaValidar.charAt(0).toUpperCase() + setorParaValidar.slice(1);
+                    // Mapa de nome especial para prefixo da coluna
+                    const PREFIXO_MAP = { galvanizar: 'Galvanizar', pulsionadeira: 'Pulsionadeira', cortealaser: 'CorteaLaser' };
+                    const pref = PREFIXO_MAP[setorParaValidar] || cap;
+                    const tPadrao = parseFloat(qi[`${pref}TempoPadrao`] || qi.TempoPadrao) || 0;
+                    const tSetup  = parseFloat(qi[`${pref}TempoSetup`]  || qi.TempoSetup)  || 0;
+
+                    const acumuladoHoje = getDailyAccumulated(dbName, IdOrdemServicoItem, setorParaValidar);
+                    const tempoEste = (inputQty * tPadrao) + (acumuladoHoje === 0 ? tSetup : 0);
+                    const totalComEste = acumuladoHoje + tempoEste;
+
+                    console.log(`[DailyMinProd] Validação: acumulado=${acumuladoHoje} + este=${tempoEste.toFixed(1)} = ${totalComEste.toFixed(1)} | limite=${limiteDiario}`);
+
+                    if (totalComEste > limiteDiario) {
+                        return res.status(400).json({
+                            success: false,
+                            limiteDiarioExcedido: true,
+                            message: `Limite diário excedido para o setor ${setorParaValidar.toUpperCase()}. ` +
+                                     `Já produzido hoje: ${acumuladoHoje} min. ` +
+                                     `Este apontamento adicionaria ${tempoEste.toFixed(1)} min. ` +
+                                     `Total: ${totalComEste.toFixed(1)} min vs limite de ${limiteDiario} min.`,
+                            acumuladoHoje,
+                            tempoEste: parseFloat(tempoEste.toFixed(1)),
+                            limiteDiario
+                        });
+                    }
+                }
+            } catch (validErr) {
+                // Falha na validação: loga mas não bloqueia (segurança operacional)
+                console.error('[DailyMinProd] Erro na validação prévia:', validErr.message);
+            }
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
 
     const conn = await pool.getConnection();
     try {
@@ -10797,6 +10896,14 @@ osi.*,
             updateItemQuery += ` WHERE IdOrdemServicoItem = ?`;
             updateItemParams.push(IdOrdemServicoItem);
             await conn.execute(updateItemQuery, updateItemParams);
+
+            // ── Registrar no campo auxiliar diário (memória) ──────────────────
+            // tempoApontamentoDb = qtde × tempoPadrao (calculado acima)
+            // se for o primeiro do dia (acumulado=0), inclui setup
+            const acumDiarioAtual = getDailyAccumulated(dbName, IdOrdemServicoItem, sName);
+            const tempoParaMapDiario = tempoApontamentoDb + (acumDiarioAtual === 0 ? tempoSetupDb : 0);
+            addDailyAccumulated(dbName, IdOrdemServicoItem, sName, tempoParaMapDiario);
+            // ──────────────────────────────────────────────────────────────────
 
             // 6. Cascading Totals e Percentuais Dinâmicos (HIERARQUIA: Item -> OS -> Tag -> Projeto)
             // Utilizando o helper centralizado garantimos que QtdePecasExecutadas e Setores também recalculem em tempo real
