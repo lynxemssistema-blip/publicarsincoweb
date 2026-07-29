@@ -576,15 +576,16 @@ useEffect(() => {
     const secUpper = activeSetor.toUpperCase();
 
     const recExecutado = parseFloat(String(
-      item[`${secFormatted}TotalExecutado`] ?? 
-      item[`${secUpper}TotalExecutado`] ?? 
-      item.TotalExecutado ?? 
+      item[`${secFormatted}TotalExecutado`] ??   // 'GalvanizarTotalExecutado'
+      item[`${secUpper}TotalExecutado`] ??        // 'GALVANIZARTotalExecutado' ← retornado pela API
+      (item as any).QtdeProduzidaSetor ??          // alias genérico da query de listagem
       0
     )) || 0;
 
     const recExecutar = parseFloat(String(
-      item[`${secFormatted}TotalExecutar`] ?? 
-      item[`${secUpper}TotalExecutar`] ?? 
+      item[`${secFormatted}TotalExecutar`] ??    // 'GalvanizarTotalExecutar'
+      item[`${secUpper}TotalExecutar`] ??         // 'GALVANIZARTotalExecutar' ← retornado pela API
+      (item as any).TotalExecutar ??               // alias genérico da query de listagem
       (parseFloat(String(item.QtdeTotal || 1)) - recExecutado)
     )) || Math.max(0, parseFloat(String(item.QtdeTotal || 1)) - recExecutado);
 
