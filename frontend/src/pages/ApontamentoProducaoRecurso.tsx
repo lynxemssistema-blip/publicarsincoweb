@@ -2235,6 +2235,58 @@ useEffect(() => {
             );
           })()}
 
+          {/* TEMPOS DE PRODUÇÃO DO ITEM */}
+          {modalSetor !== 'mapa' && itemDetails && (() => {
+            const itemAny = itemDetails.item as any;
+            // Nome capitalizado: 'galvanizar' → 'Galvanizar', 'pulsionadeira' → 'Pulsionadeira'
+            const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+            const secUpper = modalSetor.toUpperCase();
+
+            // Busca Setup: campo é GalvanizarTempoSetup (secFormatted)
+            const tempoSetup = parseFloat(String(
+              itemAny[`${secFormatted}TempoSetup`] ??
+              itemAny[`${secUpper}TempoSetup`] ??
+              itemAny.TempoSetup ?? 0
+            )) || 0;
+
+            // Busca Padrão: campo é GalvanizarTempoPadrao (secFormatted)
+            const tempoPadrao = parseFloat(String(
+              itemAny[`${secFormatted}TempoPadrao`] ??
+              itemAny[`${secUpper}TempoPadrao`] ??
+              itemAny.TempoPadrao ?? 0
+            )) || 0;
+
+            const qtdeTotalItem = parseFloat(String(itemDetails.item.QtdeTotal)) || 0;
+
+            // Usa TotalTempo do banco se disponível (já calculado corretamente)
+            // Fórmula: (QtdeTotal × TempoPadrao) + TempoSetup
+            const tempoTotalDB = parseFloat(String(
+              itemAny[`${secFormatted}TotalTempo`] ??
+              itemAny[`${secUpper}TotalTempo`] ??
+              itemAny.TotalTempo ?? 0
+            )) || 0;
+            const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
+
+            if (tempoSetup === 0 && tempoPadrao === 0) return null; // não mostra se não há tempos cadastrados
+
+            return (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 my-2 grid grid-cols-3 gap-2 text-center">
+                <div>
+                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Setup</span>
+                  <span className="text-xs font-black text-amber-800">{tempoSetup} min</span>
+                </div>
+                <div className="border-l border-r border-amber-200">
+                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Padrão / Peça</span>
+                  <span className="text-xs font-black text-amber-800">{tempoPadrao} min</span>
+                </div>
+                <div>
+                  <span className="text-[9px] font-black text-amber-500 uppercase tracking-wider block">Total Produção</span>
+                  <span className="text-xs font-black text-amber-800">{tempoTotal.toFixed(1)} min</span>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Quantidade Input - Hidden in Mapa Mode */}
  {modalSetor !== 'mapa' && (
  <div className="pt-1">

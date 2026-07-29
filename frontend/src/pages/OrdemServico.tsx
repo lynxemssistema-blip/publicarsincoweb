@@ -871,10 +871,9 @@ function OrdemServicoContent() {
         const toggleOS = useCallback(async (osId: number) => {
         setSelectedOSId(osId);
         setSelectedItemIds(new Set()); // reset selection when changing OS
-        if (!ordensItens[osId]) {
-            fetchItens(osId);
-        }
-    }, [ordensItens, fetchItens]);
+        // Always fetch fresh – garante que novos itens adicionados sejam exibidos imediatamente
+        fetchItens(osId);
+    }, [fetchItens]);
 
     const loadMore = useCallback(() => {
         if (pagination?.hasMore && !loadingMore) {
@@ -1690,7 +1689,7 @@ function OrdemServicoContent() {
                             <div className="text-lg font-bold text-primary flex items-center justify-end gap-2">
                                 OS {os.IdOrdemServico}
                                 <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full border border-yellow-200" title="Fator Multiplicador">
-                                    Fator {os.Fator || 1}
+                                    Fator {os.Fator != null ? os.Fator : '?'}
                                 </span>
                             </div>
                         </div>
@@ -1929,6 +1928,7 @@ function OrdemServicoContent() {
                                             planejadoFim={(os as any)[s.planFimOS]}
                                             realizadoInicio={(os as any)[s.realInicioOS]}
                                             realizadoFim={(os as any)[s.realFimOS]}
+                                            forceShow={true}
                                         />
                                     ))}
                                     <SetorDatas nome="Acabamento" planejadoInicio={(os as any).PlanejadoInicioACABAMENTO} planejadoFim={(os as any).PlanejadoFinalACABAMENTO} realizadoInicio={(os as any).RealizadoInicioACABAMENTO} realizadoFim={(os as any).RealizadoFinalACABAMENTO} />
@@ -3032,8 +3032,8 @@ function OrdemServicoContent() {
         osId={showModalIncluirItens.IdOrdemServico}
         osContext={showModalIncluirItens}
         onSuccess={() => {
-            setShowModalIncluirItens(null);
-            // Will fetch itens in OrdemServico when closed by user
+            // Force-refresh the item list for this OS so newly added items appear immediately
+            fetchItens(showModalIncluirItens.IdOrdemServico);
         }}
         token={token}
     />

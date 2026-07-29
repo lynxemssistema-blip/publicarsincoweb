@@ -535,9 +535,9 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                     <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Qtd. Total Peças</th>
                     <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total Executado</th>
                     <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total a Executar</th>
+                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Min. Prod</th>
                     <th className="px-3 py-2.5 text-center border-r border-slate-200 w-32 font-black text-slate-800">Dias p/ Produção</th>
-                    <th className="px-3 py-2.5 text-center border-r border-slate-200 font-black text-slate-800">Intervalo de Datas p/ Produção</th>
-                    <th className="px-3 py-2.5 text-center w-28 font-black text-slate-800">Minutos Prod</th>
+                    <th className="px-3 py-2.5 text-center font-black text-slate-800">Intervalo de Datas p/ Produção</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
@@ -603,6 +603,20 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           {s.totalExecutar ?? s.aExec ?? 0}
                         </td>
 
+                        {/* COLUNA: MINPROD ACUMULADO */}
+                        <td className="px-3 py-2 text-center border-r border-slate-100">
+                          <span
+                            title="Minutos de Produção Apontados Acumulados"
+                            className={`inline-block px-2 py-0.5 rounded text-xs font-black ${
+                              (s.minProd || 0) > 0
+                                ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                : 'bg-slate-100 text-slate-400 border border-slate-200'
+                            }`}
+                          >
+                            {s.minProd || 0} min
+                          </span>
+                        </td>
+
                         {/* COLUNA 2: DIAS P/ PRODUÇÃO DO ITEM */}
                         <td className="px-3 py-2 text-center border-r border-slate-100">
                           <div className="flex items-center justify-center gap-1">
@@ -649,19 +663,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           </div>
                         </td>
 
-                        {/* COLUNA 4: MINPROD ACUMULADO (SOMENTE LEITURA - NÃO EDITÁVEL) */}
-                        <td className="px-3 py-2 text-center">
-                          <div className="flex items-center justify-center">
-                            <input
-                              type="text"
-                              value={s.minProd || 0}
-                              disabled
-                              readOnly
-                              title="Minutos de Produção Apontados Acumulados (Campo de Somente Leitura)"
-                              className="w-24 px-2 py-1 text-center font-black text-slate-700 bg-slate-100/90 border border-slate-200 rounded text-xs cursor-not-allowed select-none shadow-inner"
-                            />
-                          </div>
-                        </td>
+
                       </tr>
                     );
                   })}

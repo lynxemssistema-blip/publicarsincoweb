@@ -726,10 +726,12 @@ export default function ConfiguracaoPage() {
      />
    </div>
  </div>
-  <div className="mt-6 flex justify-end">
-  <button onClick={handleSaveRegras} className="flex items-center gap-2 bg-[#32423D] text-[#E0E800] px-2 py-1 rounded-lg font-bold hover:bg-[#2a3833] transition-colors shadow-lg shadow-[#32423D]/20">
-  <Save size={15} /> Salvar Regras
-  </button>
+
+  {/* Salvar Regras - bottom of all rule settings */}
+  <div className="mt-6 mb-2 flex justify-end">
+    <button onClick={handleSaveRegras} className="flex items-center gap-2 bg-[#32423D] text-[#E0E800] px-4 py-2 rounded-lg font-bold hover:bg-[#2a3833] transition-colors shadow-lg shadow-[#32423D]/20">
+      <Save size={15} /> Salvar Regras
+    </button>
   </div>
 
   {/* CARD: Limites de Tempo Diário de Produção por Setor/Recurso */}

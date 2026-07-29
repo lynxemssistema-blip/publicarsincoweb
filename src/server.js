@@ -139,7 +139,7 @@ app.use('/api/blockset', blocksetRoutes);
 app.locals.pool = pool;
 app.use('/api/peca-manufaturada', pecaManufaturadaRoutes);
 
-// ReposiÃƒÂ§ÃƒÂ£o Routes
+// Reposià§ão Routes
 app.get('/api/reposicao/itens', async (req, res) => {
     try {
         const query = `
@@ -161,8 +161,8 @@ app.get('/api/reposicao/itens', async (req, res) => {
         console.log(`[DEBUG REPOSICAO] tenantId was unused | rows.length: ${rows.length}`);
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('Erro ao buscar itens de reposiÃƒÂ§ÃƒÂ£o:', error);
-        res.status(500).json({ success: false, message: 'Erro interno no servidor ao buscar reposiÃƒÂ§ÃƒÂ£o.' });
+        console.error('Erro ao buscar itens de reposià§ão:', error);
+        res.status(500).json({ success: false, message: 'Erro interno no servidor ao buscar reposià§ão.' });
     }
 });
 
@@ -204,7 +204,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
         const { IdOrdemServicoItem, quantidadeApontada } = req.body;
         
         if (!IdOrdemServicoItem || !quantidadeApontada || quantidadeApontada <= 0) {
-            return res.status(400).json({ success: false, message: 'Dados invÃƒÂ¡lidos para o apontamento.' });
+            return res.status(400).json({ success: false, message: 'Dados inválidos para o apontamento.' });
         }
 
         connection = await pool.getConnection();
@@ -220,14 +220,14 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         if (items.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ success: false, message: 'PeÃƒÂ§a de reposiÃƒÂ§ÃƒÂ£o nÃƒÂ£o localizada.' });
+            return res.status(404).json({ success: false, message: 'Peà§a de reposià§ão não localizada.' });
         }
 
         const item = items[0];
         
         if (item.sttxtCorte === 'C') {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Este item de reposiÃƒÂ§ÃƒÂ£o jÃƒÂ¡ estÃƒÂ¡ concluÃƒÂ­do.' });
+            return res.status(400).json({ success: false, message: 'Este item de reposià§ão já está concluà­do.' });
         }
 
         const atualExecutado = Number(item.cortetotalexecutado) || 0;
@@ -236,7 +236,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         if (quantidadeApontada > limiteMaximo) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: `A quantidade informada excede o limite restante de reposiÃƒÂ§ÃƒÂ£o (${limiteMaximo}).` });
+            return res.status(400).json({ success: false, message: `A quantidade informada excede o limite restante de reposià§ão (${limiteMaximo}).` });
         }
 
         const novoCorteExecutado = atualExecutado + Number(quantidadeApontada);
@@ -276,7 +276,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         // 4. Fechar RNC automaticamente caso 100% reposto
         if (novoCorteExecutado === qtdeTotal && item.IdPendenciaReposicao) {
-            const descFinalizacao = `RNC AutomÃƒÂ¡tica  - Encerramento do Pedido de ReposiÃƒÂ§ÃƒÂ£o de PeÃƒÂ§a da OS: ${item.IdOrdemServico} Item: ${item.IdOrdemServicoItemReposicao || ''} Concluido , Excluindo da Lista de PendÃƒÂªncia`;
+            const descFinalizacao = `RNC Automática  - Encerramento do Pedido de Reposià§ão de Peà§a da OS: ${item.IdOrdemServico} Item: ${item.IdOrdemServicoItemReposicao || ''} Concluido , Excluindo da Lista de Pendàªncia`;
             
             await connection.query(`
                 UPDATE ordemservicoitempendencia
@@ -288,16 +288,16 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
                     Estatus = 'FINALIZADA'
                 WHERE IdOrdemServicoItemPendencia = ?
             `, [
-                usuarioLogado, dataAtual, descFinalizacao, usuarioLogado, 'ProduÃƒÂ§ÃƒÂ£o', item.IdPendenciaReposicao
+                usuarioLogado, dataAtual, descFinalizacao, usuarioLogado, 'Produà§ão', item.IdPendenciaReposicao
             ]);
         }
 
         await connection.commit();
-        res.json({ success: true, message: 'PeÃƒÂ§as repostas apontadas com sucesso!' });
+        res.json({ success: true, message: 'Peà§as repostas apontadas com sucesso!' });
 
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('Erro na transaction do Apontamento de ReposiÃƒÂ§ÃƒÂ£o:', error);
+        console.error('Erro na transaction do Apontamento de Reposià§ão:', error);
         res.status(500).json({ success: false, message: 'Erro interno ao processar apontamento.' });
     } finally {
         if (connection) connection.release();
@@ -361,15 +361,15 @@ const limparDiretorio = (diretorio) => {
                 fs.rmSync(filePath, { recursive: true, force: true });
             }
         }
-        console.log(`[File] DiretÃ¯Â¿Â½rio limpo: ${diretorio}`);
+        console.log(`[File] Diretório limpo: ${diretorio}`);
     } catch (err) {
-        console.error(`[File] Erro ao limpar diretÃ¯Â¿Â½rio ${diretorio}:`, err);
+        console.error(`[File] Erro ao limpar diretório ${diretorio}:`, err);
     }
 };
 
 const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
     try {
-        console.log(`[Excel] Iniciando exportaÃ¯Â¿Â½Ã¯Â¿Â½o padrÃ¯Â¿Â½o do Romaneio #${idRomaneio}`);
+        console.log(`[Excel] Iniciando exportação padr?o do Romaneio #${idRomaneio}`);
 
         // 1. Buscar Caminhos e Template
         const [configRows] = await pool.execute(
@@ -381,7 +381,7 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
             `SELECT * FROM romaneio WHERE idRomaneio = ?`,
             [idRomaneio]
         );
-        if (romRows.length === 0) throw new Error('Romaneio nÃ¯Â¿Â½o encontrado');
+        if (romRows.length === 0) throw new Error('Romaneio não encontrado');
         const romData = romRows[0];
 
         // 2. Buscar Itens
@@ -399,16 +399,16 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
             await workbook.xlsx.readFile(templatePath);
             worksheet = workbook.getWorksheet(1);
         } else {
-            console.warn(`[Excel] Template nÃ¯Â¿Â½o encontrado em ${templatePath}. Criando novo.`);
+            console.warn(`[Excel] Template não encontrado em ${templatePath}. Criando novo.`);
             worksheet = workbook.addWorksheet('Romaneio');
         }
 
-        // 4. Preencher CabeÃ¯Â¿Â½alho (PadrÃ¯Â¿Â½o Legado)
+        // 4. Preencher Cabe?alho (Padr?o Legado)
         const paddedId = idRomaneio.toString().padStart(5, '0');
         const fullAddress = [
             romData.EnviadoPara,
             `RUA: ${romData.endereco || ''}`,
-            `NÃ¯Â¿Â½: ${romData.numero || ''}`,
+            `N?: ${romData.numero || ''}`,
             `BAIRRO: ${romData.bairro || ''}`,
             `COMPLEMENTO: ${romData.complemento || ''}`,
             `CIDADE: ${romData.cidade || ''}`,
@@ -429,7 +429,7 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
         worksheet.getCell('M10').value = romData.PlacaVeiculo || '';
         worksheet.getCell('O12').value = romData.ObservacaoTransporte || '';
 
-        // 5. Preencher Itens (ComeÃ¯Â¿Â½a na linha 18)
+        // 5. Preencher Itens (Come?a na linha 18)
         items.forEach((item, idx) => {
             const rowIdx = 18 + idx;
 
@@ -451,13 +451,13 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
             worksheet.getCell(`W${rowIdx}`).value = item.Situacao || '';
 
             // Se quisermos copiar o estilo da linha 17 (como no VB.NET)
-            // No ExcelJS nÃ¯Â¿Â½o existe um "CopyRange" direto tÃ¯Â¿Â½o simples, 
-            // mas podemos tentar manter os estilos se o template jÃ¯Â¿Â½ tiver a linha formatada.
+            // No ExcelJS não existe um "CopyRange" direto t?o simples, 
+            // mas podemos tentar manter os estilos se o template já tiver a linha formatada.
         });
 
         // 6. Salvar
         if (!romData.ENDERECORomaneio) {
-            throw new Error('DiretÃ¯Â¿Â½rio do Romaneio nÃ¯Â¿Â½o configurado no banco de dados.');
+            throw new Error('Diretório do Romaneio não configurado no banco de dados.');
         }
 
         const fileName = `Romaneio_${paddedId}_${new Date().getTime()}.xlsx`;
@@ -486,11 +486,11 @@ app.get('/api/romaneio/download-excel/:id', async (req, res) => {
             [id]
         );
 
-        if (rows.length === 0) return res.status(404).send('Romaneio nÃ¯Â¿Â½o encontrado');
+        if (rows.length === 0) return res.status(404).send('Romaneio não encontrado');
         const dir = rows[0].ENDERECORomaneio;
 
         if (!dir || !fs.existsSync(dir)) {
-            return res.status(404).send('DiretÃ¯Â¿Â½rio de arquivos nÃ¯Â¿Â½o encontrado');
+            return res.status(404).send('Diretório de arquivos não encontrado');
         }
 
         // Find the most recent xlsx file in that directory starting with Romaneio_
@@ -521,11 +521,11 @@ app.post('/api/romaneio/open-folder/:id', async (req, res) => {
             [id]
         );
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Romaneio não encontrado' });
         const dir = rows[0].ENDERECORomaneio;
 
         if (!dir || !fs.existsSync(dir)) {
-            return res.status(404).json({ success: false, message: 'DiretÃ¯Â¿Â½rio nÃ¯Â¿Â½o existe no servidor' });
+            return res.status(404).json({ success: false, message: 'Diretório não existe no servidor' });
         }
 
         // Open Explorer on Windows using 'start' which is more robust
@@ -664,7 +664,7 @@ app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching v-itens-projeto-aberto:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar itens disponÃ¯Â¿Â½veis.' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar itens disponíveis.' });
     }
 });
 
@@ -677,7 +677,7 @@ app.get('/api/romaneio/:id', async (req, res) => {
             [id]
         );
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado' });
+            return res.status(404).json({ success: false, message: 'Romaneio não encontrado' });
         }
         res.json({ success: true, data: rows[0] });
     } catch (error) {
@@ -692,7 +692,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
     const { IdOrdemServicoItem, qtde, usuario } = req.body;
 
     if (!IdOrdemServicoItem || !qtde || qtde <= 0) {
-        return res.status(400).json({ success: false, message: 'Dados invÃ¯Â¿Â½lidos para inclusÃ¯Â¿Â½o.' });
+        return res.status(400).json({ success: false, message: 'Dados inválidos para inclusão.' });
     }
 
     try {
@@ -703,7 +703,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         );
 
         if (viewRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Item nÃ¯Â¿Â½o encontrado ou jÃ¯Â¿Â½ finalizado.' });
+            return res.status(404).json({ success: false, message: 'Item não encontrado ou já finalizado.' });
         }
 
         const item = viewRows[0];
@@ -712,7 +712,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         if (qtde > saldoDisponivel) {
             return res.status(400).json({
                 success: false,
-                message: `Quantidade solicitada (${qtde}) Ã¯Â¿Â½ maior que o saldo disponÃ¯Â¿Â½vel (${saldoDisponivel}).`
+                message: `Quantidade solicitada (${qtde}) ? maior que o saldo disponível (${saldoDisponivel}).`
             });
         }
 
@@ -833,13 +833,13 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
 
         if (rows.length === 0 || !rows[0].EnderecoArquivo) {
             console.warn(`[FILES] No EnderecoArquivo found for Item: ${idRomaneioItem}`);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o associado a este item.' });
+            return res.status(404).json({ success: false, message: 'Arquivo não associado a este item.' });
         }
 
         const originalEndereco = rows[0].EnderecoArquivo;
         let endereco = originalEndereco;
 
-        // NormalizaÃ¯Â¿Â½Ã¯Â¿Â½o baseada na lÃ¯Â¿Â½gica VB.NET original
+        // Normalização baseada na l?gica VB.NET original
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
             endereco = endereco.split(ext).join(".PDF");
@@ -865,13 +865,13 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
             console.error(`[FILES] File NOT found: ${endereco}`);
             res.status(404).json({
                 success: false,
-                message: `Arquivo PDF nÃ¯Â¿Â½o encontrado. Favor verificar se o caminho estÃ¯Â¿Â½ acessÃ¯Â¿Â½vel: ${endereco}`,
+                message: `Arquivo PDF não encontrado. Favor verificar se o caminho est? acess?vel: ${endereco}`,
                 path: endereco
             });
         }
     } catch (error) {
         console.error('[FILES] Fatal error opening PDF:', error);
-        res.status(500).json({ success: false, message: 'Erro ao processar solicitaÃ¯Â¿Â½Ã¯Â¿Â½o do desenho.' });
+        res.status(500).json({ success: false, message: 'Erro ao processar solicitação do desenho.' });
     }
 });
 
@@ -891,7 +891,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
 
         if (rows.length === 0 || !rows[0].EnderecoArquivo) {
             console.warn(`[FILES] No EnderecoArquivo found for Item: ${idRomaneioItem}`);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o associado a este item.' });
+            return res.status(404).json({ success: false, message: 'Arquivo não associado a este item.' });
         }
 
         const endereco = rows[0].EnderecoArquivo;
@@ -912,7 +912,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
             console.error(`[FILES] 3D File NOT found: ${endereco}`);
             res.status(404).json({
                 success: false,
-                message: `Arquivo original nÃ¯Â¿Â½o encontrado no servidor: ${endereco}`,
+                message: `Arquivo original não encontrado no servidor: ${endereco}`,
                 path: endereco
             });
         }
@@ -1114,7 +1114,7 @@ app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', async (req, res) => 
 
 app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
     const { idRomaneioItem } = req.params;
-    const { usuario } = req.query; // Pega o usuÃ¯Â¿Â½rio da query string ou header se disponÃ¯Â¿Â½vel
+    const { usuario } = req.query; // Pega o usuário da query string ou header se disponível
     const connection = await pool.getConnection();
 
     console.log(`[DELETE] Request to delete Item: ${idRomaneioItem} by User: ${usuario}`);
@@ -1122,7 +1122,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // 1. Validar se o item existe e obter dados bÃ¯Â¿Â½sicos
+        // 1. Validar se o item existe e obter dados b?sicos
         const [itemRows] = await connection.execute(
             "SELECT IdRomaneio, IDOrdemServicoITEM, qtdeUsuario FROM romaneioitem WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
@@ -1130,7 +1130,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (itemRows.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ success: false, message: 'Item nÃ¯Â¿Â½o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Item não encontrado.' });
         }
 
         const item = itemRows[0];
@@ -1146,7 +1146,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (controleRows[0].total > 0) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'JÃ¯Â¿Â½ existe retorno deste Item, nÃ¯Â¿Â½o pode ser excluÃ¯Â¿Â½do.' });
+            return res.status(400).json({ success: false, message: 'Já existe retorno deste Item, não pode ser excluído.' });
         }
 
         // 3. Validar Bloqueio (Status do Romaneio - Liberado)
@@ -1157,7 +1157,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (romaneioRows.length > 0 && romaneioRows[0].Liberado === 'S') {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Este Romaneio jÃ¯Â¿Â½ estÃ¯Â¿Â½ Liberado e nÃ¯Â¿Â½o permite exclusÃ¯Â¿Â½o de itens.' });
+            return res.status(400).json({ success: false, message: 'Este Romaneio já est? Liberado e não permite exclusão de itens.' });
         }
 
         // 4. Soft Delete do Item
@@ -1166,7 +1166,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
             [usuario || 'Sistema', idRomaneioItem]
         );
 
-        // 5. Atualizar Saldo na Ordem de ServiÃ¯Â¿Â½o (ordemservicoitem)
+        // 5. Atualizar Saldo na Ordem de Serviço (ordemservicoitem)
         const [osItemRows] = await connection.execute(
             "SELECT RomaneioTotalEnviado, RomaneioSaldoEnviar FROM ordemservicoitem WHERE IdOrdemServicoItem = ?",
             [idOSItem]
@@ -1220,7 +1220,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         await connection.commit();
         console.log(`[DELETE] Item ${idRomaneioItem} deleted successfully.`);
-        res.json({ success: true, message: 'Item excluÃ¯Â¿Â½do com sucesso e saldos atualizados.' });
+        res.json({ success: true, message: 'Item excluído com sucesso e saldos atualizados.' });
 
     } catch (error) {
         await connection.rollback();
@@ -1326,7 +1326,7 @@ app.post('/api/romaneio', async (req, res) => {
             conn.release(); // Important to release before returning
             return res.status(400).json({
                 success: false,
-                message: `Caminho raiz nÃ¯Â¿Â½o encontrado: ${rootPath}. Verifique a configuraÃ¯Â¿Â½Ã¯Â¿Â½o do sistema.`
+                message: `Caminho raiz não encontrado: ${rootPath}. Verifique a configuração do sistema.`
             });
         }
 
@@ -1437,7 +1437,7 @@ app.delete('/api/romaneio/:id', async (req, res) => {
             "UPDATE romaneio SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ? WHERE idRomaneio = ?",
             [getCurrentDateTimeBR(), id]
         );
-        res.json({ success: true, message: 'Romaneio excluÃ¯Â¿Â½do com sucesso' });
+        res.json({ success: true, message: 'Romaneio excluído com sucesso' });
     } catch (error) {
         console.error('Error deleting romaneio:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir romaneio' });
@@ -1449,7 +1449,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
     const { id } = req.params;
     const { action, usuario } = req.body;
     if (!action) {
-        return res.status(400).json({ success: false, message: 'AÃ¯Â¿Â½Ã¯Â¿Â½o nÃ¯Â¿Â½o especificada.' });
+        return res.status(400).json({ success: false, message: 'A??o não especificada.' });
     }
 
     let updateQuery = "";
@@ -1477,7 +1477,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                         console.log(`[Validation] Bloqueio registrar ID ${id}: Motorista=${r.NomeMotorista}, Data=${r.DataEnvio}`);
                         return res.status(400).json({
                             success: false,
-                            message: `Este Romaneio jÃ¯Â¿Â½ possui registro de envio e nÃ¯Â¿Â½o pode ser alterado. (Motorista: ${r.NomeMotorista || 'N/A'} | Data: ${r.DataEnvio || 'N/A'}). O processo foi finalizado.`
+                            message: `Este Romaneio já possui registro de envio e não pode ser alterado. (Motorista: ${r.NomeMotorista || 'N/A'} | Data: ${r.DataEnvio || 'N/A'}). O processo foi finalizado.`
                         });
                     }
                 }
@@ -1520,9 +1520,9 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                     // Actually, user said mandatory. So if no data, we should probably fail or assume it's a pre-check.
                     // But for safety, I'll keep the old one OR duplicate. 
                     // Let's assume frontend WILL send data. If not, it might be a simple status change? 
-                    // No, "os novos campos tambem serÃ¯Â¿Â½o obrigatorios".
+                    // No, "os novos campos tambem ser?o obrigatorios".
                     if (!req.body.dadosEnvio) {
-                        return res.status(400).json({ success: false, message: 'Dados do transporte sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios para registrar.' });
+                        return res.status(400).json({ success: false, message: 'Dados do transporte s?o obrigatórios para registrar.' });
                     }
                 }
                 break;
@@ -1535,19 +1535,19 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 );
 
                 if (currentRows.length === 0) {
-                    return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado.' });
+                    return res.status(404).json({ success: false, message: 'Romaneio não encontrado.' });
                 }
 
                 const current = currentRows[0];
 
                 // Validation 1: Check if soft deleted
                 if (current.D_E_L_E_T_E === '*') {
-                    return res.status(400).json({ success: false, message: 'NÃ¯Â¿Â½o Ã¯Â¿Â½ possÃ¯Â¿Â½vel liberar um romaneio excluÃ¯Â¿Â½do.' });
+                    return res.status(400).json({ success: false, message: 'Não ? possível liberar um romaneio excluído.' });
                 }
 
                 // Validation 2: Check if already finalized
                 if (current.Estatus === 'F') {
-                    return res.status(400).json({ success: false, message: 'Romaneio jÃ¯Â¿Â½ finalizado. NÃ¯Â¿Â½o Ã¯Â¿Â½ possÃ¯Â¿Â½vel liberar.' });
+                    return res.status(400).json({ success: false, message: 'Romaneio já finalizado. Não ? possível liberar.' });
                 }
 
                 // Validation 3: Check if registered (Motorista and Date)
@@ -1557,7 +1557,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
                 // Validation 4: Check if already released (Condition 1)
                 if (current.Liberado === 'S') {
-                    return res.status(400).json({ success: false, message: 'O romaneio jÃ¯Â¿Â½ consta como Liberado. O processo nÃ¯Â¿Â½o pode ser repetido.' });
+                    return res.status(400).json({ success: false, message: 'O romaneio já consta como Liberado. O processo não pode ser repetido.' });
                 }
 
                 // Validation 5: Check if there are items (Condition 2)
@@ -1567,7 +1567,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 );
 
                 if (itemRows[0].count === 0) {
-                    return res.status(400).json({ success: false, message: 'O romaneio nÃ¯Â¿Â½o possui itens vinculados. LiberaÃ¯Â¿Â½Ã¯Â¿Â½o interrompida. Por favor, adicione itens antes de prosseguir.' });
+                    return res.status(400).json({ success: false, message: 'O romaneio não possui itens vinculados. Liberação interrompida. Por favor, adicione itens antes de prosseguir.' });
                 }
 
                 // Proceed with update
@@ -1583,8 +1583,8 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 );
 
                 if (abortRows.length === 0) {
-                    console.log(`[Action] ERRO: Romaneio #${id} nÃ¯Â¿Â½o localizado no banco de dados para cancelar liberaÃ¯Â¿Â½Ã¯Â¿Â½o.`);
-                    return res.status(404).json({ success: false, message: `Romaneio #${id} nÃ¯Â¿Â½o encontrado no banco de dados.` });
+                    console.log(`[Action] ERRO: Romaneio #${id} não localizado no banco de dados para cancelar liberação.`);
+                    return res.status(404).json({ success: false, message: `Romaneio #${id} não encontrado no banco de dados.` });
                 }
 
                 const abort = abortRows[0];
@@ -1597,21 +1597,21 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 const abortLiberado = getAbortVal(abort, 'Liberado');
                 const abortEstatus = getAbortVal(abort, 'Estatus');
 
-                console.log(`[Action] Cancelar LiberaÃ¯Â¿Â½Ã¯Â¿Â½o ID: ${id} | Estatus: "${abortEstatus}" | Liberado: "${abortLiberado}"`);
+                console.log(`[Action] Cancelar Liberação ID: ${id} | Estatus: "${abortEstatus}" | Liberado: "${abortLiberado}"`);
 
                 // STRICT VALIDATION
                 if (abortEstatus === 'F') {
-                    return res.status(400).json({ success: false, message: `O Romaneio #${id} jÃ¯Â¿Â½ estÃ¯Â¿Â½ FINALIZADO e nÃ¯Â¿Â½o pode ser cancelado.` });
+                    return res.status(400).json({ success: false, message: `O Romaneio #${id} já est? FINALIZADO e não pode ser cancelado.` });
                 }
 
                 if (abortLiberado !== 'S') {
-                    return res.status(400).json({ success: false, message: `O Romaneio #${id} nÃ¯Â¿Â½o consta como liberado (Status DB: "${abortLiberado}"). LiberaÃ¯Â¿Â½Ã¯Â¿Â½o nÃ¯Â¿Â½o pode ser cancelada.` });
+                    return res.status(400).json({ success: false, message: `O Romaneio #${id} não consta como liberado (Status DB: "${abortLiberado}"). Liberação não pode ser cancelada.` });
                 }
 
                 // 2. Perform cleanup if released
                 if (abort.ENDERECORomaneio) {
                     const pdfPath = path.join(abort.ENDERECORomaneio, 'PDF');
-                    console.log(`[Action] Limpando diretÃ¯Â¿Â½rio de PDFs: ${pdfPath}`);
+                    console.log(`[Action] Limpando diretório de PDFs: ${pdfPath}`);
                     limparDiretorio(pdfPath);
                 }
 
@@ -1661,7 +1661,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 break;
 
             case 'atualizar':
-                // For now, maybe just update status to 'Atualizado'? Or just a touch? 
+                // For now, maybe just update status to 'Atualizado'é Or just a touch? 
                 // "Atualizar Docs" might imply checking files on disk. For now, let's just log it.
                 // Keeping status as is or setting to 'Docs Atualizados' if desired.
                 // Let's keep it simple: just return success for now or update a timestamp.
@@ -1687,7 +1687,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 }
 
             default:
-                return res.status(400).json({ success: false, message: 'AÃ¯Â¿Â½Ã¯Â¿Â½o invÃ¯Â¿Â½lida.' });
+                return res.status(400).json({ success: false, message: 'A??o inválida.' });
         }
 
         const [result] = await pool.execute(updateQuery, params);
@@ -1699,7 +1699,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
         }
 
         if (result.affectedRows > 0) {
-            let successMessage = `AÃ¯Â¿Â½Ã¯Â¿Â½o '${action}' realizada com sucesso!`;
+            let successMessage = `A??o '${action}' realizada com sucesso!`;
             if (action === 'liberar') {
                 successMessage = excelResult?.success
                     ? `Romaneio liberado e Excel gerado com sucesso: ${excelResult.fileName}`
@@ -1711,12 +1711,12 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 excel: excelResult
             });
         } else {
-            res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado.' });
+            res.status(404).json({ success: false, message: 'Romaneio não encontrado.' });
         }
 
     } catch (error) {
         console.error(`Error performing action ${action} on romaneio ${id}:`, error);
-        res.status(500).json({ success: false, message: 'Erro ao processar aÃ¯Â¿Â½Ã¯Â¿Â½o.' });
+        res.status(500).json({ success: false, message: 'Erro ao processar ação.' });
     }
 });
 
@@ -1777,8 +1777,8 @@ app.get('/api/romaneio-retorno/history/:idRomaneioItem', async (req, res) => {
         );
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('[RETORNO] Erro ao buscar histÃ¯Â¿Â½rico:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar histÃ¯Â¿Â½rico do item.' });
+        console.error('[RETORNO] Erro ao buscar histórico:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar histórico do item.' });
     }
 });
 
@@ -1797,13 +1797,13 @@ app.post('/api/romaneio-retorno/process', async (req, res) => {
         );
 
         if (itemRows.length === 0) {
-            throw new Error('Item do romaneio nÃ¯Â¿Â½o encontrado.');
+            throw new Error('Item do romaneio não encontrado.');
         }
 
         const item = itemRows[0];
         const novaQtdeRetorno = (Number(item.QtdeTotalRetorno) || 0) + Number(qtdeRetorno);
 
-        // 2. Inserir no histÃ¯Â¿Â½rico (romaneioitemcontrole)
+        // 2. Inserir no histórico (romaneioitemcontrole)
         await connection.execute(
             `INSERT INTO romaneioitemcontrole (
                 IdRomaneioItem, IDOrdemServicoITEM, QtdeIdentificadores, DataCriacao, 
@@ -1893,7 +1893,7 @@ app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
         );
 
         if (ctrlRows.length === 0) {
-            throw new Error('Registro de histÃ¯Â¿Â½rico nÃ¯Â¿Â½o encontrado.');
+            throw new Error('Registro de histórico não encontrado.');
         }
 
         const ctrl = ctrlRows[0];
@@ -2010,7 +2010,7 @@ app.post('/api/romaneio-retorno/estorno/:idControle', async (req, res) => {
     }
 });
 
-// ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o do Sistema (Admin only)
+// Configuração do Sistema (Admin only)
 const configuracaoSistemaRouter = require('./routes/configuracao-sistema');
 app.use('/api/configuracao-sistema', configuracaoSistemaRouter);
 
@@ -2300,7 +2300,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
             // Check if Superadmin in central DB
             const isSuper = await isUserSuperadmin(login);
-            // Admin em lynxlocal (fallback local) é considerado superadmin nativo do sistema
+            // Admin em lynxlocal (fallback local) ? considerado superadmin nativo do sistema
             const isLocalAdmin = login.toLowerCase() === 'admin';
             const isSuperFinal = isSuper || isLocalAdmin;
 
@@ -2424,7 +2424,7 @@ app.post('/api/admin/login', async (req, res) => {
 app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
     const { dbName } = req.body;
     if (!dbName) {
-        return res.status(400).json({ success: false, message: 'dbName ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'dbName à© obrigatà³rio' });
     }
 
     const authHeader = req.headers['authorization'];
@@ -2450,7 +2450,7 @@ app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
         return res.json({ success: true, token });
     } catch (err) {
         console.error('[ADMIN IMPERSONATE] Token error:', err);
-        return res.status(401).json({ success: false, message: 'Token de superadmin invÃƒÂ¡lido' });
+        return res.status(401).json({ success: false, message: 'Token de superadmin inválido' });
     }
 });
 
@@ -2481,7 +2481,7 @@ app.post('/api/superadmin/switch-db', async (req, res) => {
 
         const { dbName } = req.body;
         if (!dbName) {
-            return res.status(400).json({ success: false, message: 'dbName é obrigatório.' });
+            return res.status(400).json({ success: false, message: 'dbName ? obrigatório.' });
         }
 
         // Validate that the target DB exists and is active
@@ -2958,7 +2958,7 @@ async function syncUserToCentral(userData, tenantDbHost = null, tenantDbName = n
     }
 }
 
-// --- CRUD: UsuÃ¯Â¿Â½rio (with Central Sync) ---
+// --- CRUD: Usu?rio (with Central Sync) ---
 
 // LIST All Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
@@ -2972,7 +2972,7 @@ app.get('/api/usuario', tenantMiddleware, async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching usuarios:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar usuÃ¯Â¿Â½rios' });
+        res.status(500).json({ success: false, message: 'Erro ao listar usuários' });
     }
 });
 
@@ -2986,11 +2986,11 @@ app.get('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'UsuÃ¯Â¿Â½rio nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Usu?rio não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching usuario:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar usuÃ¯Â¿Â½rio' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar usuário' });
     }
 });
 
@@ -3479,7 +3479,7 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
         res.status(500).json({ success: false, message: e.message });
     }
 });
-// --- CRUD: Pessoa JurÃ¯Â¿Â½dica ---
+// --- CRUD: Pessoa Jur?dica ---
 
 // LIST (Read All)
 app.get('/api/pj', async (req, res) => {
@@ -3504,7 +3504,7 @@ app.get('/api/pj/options', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching pj options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de fornecedor' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de fornecedor' });
     }
 });
 
@@ -3518,7 +3518,7 @@ app.get('/api/pj/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Registro nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Registro não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching PJ:', error);
@@ -3551,7 +3551,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
     const data = req.body;
 
     if (!data.RazaoSocial) {
-        return res.status(400).json({ success: false, message: 'RazÃ¯Â¿Â½o Social Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Raz?o Social ? obrigatória' });
     }
 
     // Basic Server-Side Validation
@@ -3559,12 +3559,12 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
     if (data.Cnpj) {
         const cnpjClean = data.Cnpj.replace(/[^\d]+/g, '');
         if (cnpjClean.length !== 14) {
-            return res.status(400).json({ success: false, message: 'CNPJ deve conter 14 dÃ¯Â¿Â½gitos.' });
+            return res.status(400).json({ success: false, message: 'CNPJ deve conter 14 d?gitos.' });
         }
     }
     // Validate Email regex
     if (data.Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.Email)) {
-        return res.status(400).json({ success: false, message: 'Formato de e-mail invÃ¯Â¿Â½lido.' });
+        return res.status(400).json({ success: false, message: 'Formato de e-mail inválido.' });
     }
 
     try {
@@ -3588,7 +3588,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
 
                 columns.push(col);
                 values.push(val);
-                placeholders.push('?');
+                placeholders.push('é');
             }
         });
 
@@ -3596,12 +3596,12 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
         if (req.file) {
             columns.push('EnderecoLogo');
             values.push('/uploads/' + req.file.filename);
-            placeholders.push('?');
+            placeholders.push('é');
         }
 
         // Metadata
         const now = getCurrentDateTimeBR();
-        columns.push('DtCad'); values.push(now); placeholders.push('?');
+        columns.push('DtCad'); values.push(now); placeholders.push('é');
 
         const sql = `INSERT INTO pessoajuridica (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
 
@@ -3675,7 +3675,7 @@ app.delete('/api/pj/:id', async (req, res) => {
             "UPDATE pessoajuridica SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdPessoa = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Registro excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Registro excluído' });
     } catch (error) {
         console.error('Error deleting PJ:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -3706,7 +3706,7 @@ app.get('/api/medida/options', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching medida options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de unidade' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de unidade' });
     }
 });
 
@@ -3720,7 +3720,7 @@ app.get('/api/medida/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Unidade de medida nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Unidade de medida não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching medida:', error);
@@ -3733,11 +3733,11 @@ app.post('/api/medida', async (req, res) => {
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
     if (!TipoMedida) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida ? obrigatório' });
     }
 
     if (TipoMedida.length > 3) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no mÃ¯Â¿Â½ximo 3 caracteres' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no m?ximo 3 caracteres' });
     }
 
     try {
@@ -3759,11 +3759,11 @@ app.put('/api/medida/:id', async (req, res) => {
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
     if (!TipoMedida) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida ? obrigatório' });
     }
 
     if (TipoMedida.length > 3) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no mÃ¯Â¿Â½ximo 3 caracteres' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no m?ximo 3 caracteres' });
     }
 
     try {
@@ -3788,14 +3788,14 @@ app.delete('/api/medida/:id', async (req, res) => {
             "UPDATE medida SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMedida = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Unidade de medida excluÃ¯Â¿Â½da' });
+        res.json({ success: true, message: 'Unidade de medida excluída' });
     } catch (error) {
         console.error('Error deleting medida:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
     }
 });
 
-// --- CRUD: FamÃ¯Â¿Â½lia ---
+// --- CRUD: Fam?lia ---
 
 // LIST (Read All)
 app.get('/api/familia', async (req, res) => {
@@ -3806,7 +3806,7 @@ app.get('/api/familia', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching familia list:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar famÃ¯Â¿Â½lias' });
+        res.status(500).json({ success: false, message: 'Erro ao listar fam?lias' });
     }
 });
 
@@ -3819,7 +3819,7 @@ app.get('/api/familia/options', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching familia options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de famÃ¯Â¿Â½lia' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de fam?lia' });
     }
 });
 
@@ -3833,11 +3833,11 @@ app.get('/api/familia/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'FamÃ¯Â¿Â½lia nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Fam?lia não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching familia:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar famÃ¯Â¿Â½lia' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar fam?lia' });
     }
 });
 
@@ -3846,11 +3846,11 @@ app.post('/api/familia', async (req, res) => {
     const { DescFamilia, IdEmpresa } = req.body;
 
     if (!DescFamilia) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o da famÃ¯Â¿Â½lia Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o da fam?lia ? obrigatória' });
     }
 
     if (DescFamilia.length > 50) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 50 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 50 caracteres' });
     }
 
     try {
@@ -3859,7 +3859,7 @@ app.post('/api/familia', async (req, res) => {
             'INSERT INTO familia (DescFamilia, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?)',
             [DescFamilia.trim(), IdEmpresa || null, now, getCtxNomeCompleto()]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia cadastrada com sucesso', id: result.insertId });
+        res.json({ success: true, message: 'Fam?lia cadastrada com sucesso', id: result.insertId });
     } catch (error) {
         console.error('Error creating familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao cadastrar: ' + error.message });
@@ -3872,11 +3872,11 @@ app.put('/api/familia/:id', async (req, res) => {
     const { DescFamilia, IdEmpresa } = req.body;
 
     if (!DescFamilia) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o da famÃ¯Â¿Â½lia Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o da fam?lia ? obrigatória' });
     }
 
     if (DescFamilia.length > 50) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 50 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 50 caracteres' });
     }
 
     try {
@@ -3884,7 +3884,7 @@ app.put('/api/familia/:id', async (req, res) => {
             'UPDATE familia SET DescFamilia = ?, IdEmpresa = ? WHERE IdFamilia = ?',
             [DescFamilia.trim(), IdEmpresa || null, id]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia atualizada com sucesso' });
+        res.json({ success: true, message: 'Fam?lia atualizada com sucesso' });
     } catch (error) {
         console.error('Error updating familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
@@ -3901,7 +3901,7 @@ app.delete('/api/familia/:id', async (req, res) => {
             "UPDATE familia SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdFamilia = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia excluÃ¯Â¿Â½da' });
+        res.json({ success: true, message: 'Fam?lia excluída' });
     } catch (error) {
         console.error('Error deleting familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -3932,7 +3932,7 @@ app.get('/api/acabamento/options', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching acabamento options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de acabamento' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de acabamento' });
     }
 });
 
@@ -3946,7 +3946,7 @@ app.get('/api/acabamento/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Acabamento nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Acabamento não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching acabamento:', error);
@@ -3959,11 +3959,11 @@ app.post('/api/acabamento', async (req, res) => {
     const { DescAcabamento, IdEmpresa } = req.body;
 
     if (!DescAcabamento) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o do acabamento Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o do acabamento ? obrigatória' });
     }
 
     if (DescAcabamento.length > 200) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 200 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 200 caracteres' });
     }
 
     try {
@@ -3985,11 +3985,11 @@ app.put('/api/acabamento/:id', async (req, res) => {
     const { DescAcabamento, IdEmpresa } = req.body;
 
     if (!DescAcabamento) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o do acabamento Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o do acabamento ? obrigatória' });
     }
 
     if (DescAcabamento.length > 200) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 200 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 200 caracteres' });
     }
 
     try {
@@ -4014,7 +4014,7 @@ app.delete('/api/acabamento/:id', async (req, res) => {
             "UPDATE acabamento SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IDAcabamento = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Acabamento excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Acabamento excluído' });
     } catch (error) {
         console.error('Error deleting acabamento:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4085,7 +4085,7 @@ app.get('/api/material/busca-cod', async (req, res) => {
 });
 
 
-// BUSCA LIVRE (Por cÃ³digo ou descriÃ§Ã£o)
+// BUSCA LIVRE (Por código ou descrição)
 app.get('/api/material/busca-livre', async (req, res) => {
     try {
         const search = req.query.q || '';
@@ -4167,7 +4167,7 @@ app.get('/api/material/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Material nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Material não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching material:', error);
@@ -4180,7 +4180,7 @@ app.post('/api/material', async (req, res) => {
     const data = req.body;
 
     if (!data.CodMatFabricante) {
-        return res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'C?digo do material ? obrigatório' });
     }
 
     try {
@@ -4222,7 +4222,7 @@ app.post('/api/material', async (req, res) => {
     } catch (error) {
         console.error('Error creating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material jÃ¯Â¿Â½ existe' });
+            res.status(400).json({ success: false, message: 'C?digo do material já existe' });
         } else {
             res.status(500).json({ success: false, message: 'Erro ao cadastrar: ' + error.message });
         }
@@ -4235,7 +4235,7 @@ app.put('/api/material/:id', async (req, res) => {
     const data = req.body;
 
     if (!data.CodMatFabricante) {
-        return res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'C?digo do material ? obrigatório' });
     }
 
     try {
@@ -4278,7 +4278,7 @@ app.put('/api/material/:id', async (req, res) => {
     } catch (error) {
         console.error('Error updating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material jÃ¯Â¿Â½ existe' });
+            res.status(400).json({ success: false, message: 'C?digo do material já existe' });
         } else {
             res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
         }
@@ -4295,7 +4295,7 @@ app.delete('/api/material/:id', async (req, res) => {
             "UPDATE material SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMaterial = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Material excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Material excluído' });
     } catch (error) {
         console.error('Error deleting material:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4470,7 +4470,7 @@ app.get('/api/projeto/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Projeto nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Projeto não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching projeto:', error);
@@ -4482,7 +4482,7 @@ app.get('/api/projeto/:id', async (req, res) => {
 app.post('/api/projeto', async (req, res) => {
     const data = req.body;
     if (!data.Projeto) {
-        return res.status(400).json({ success: false, message: 'Nome do projeto ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'Nome do projeto à© obrigatà³rio' });
     }
 
     try {
@@ -4510,7 +4510,7 @@ app.post('/api/projeto', async (req, res) => {
                 fs.mkdirSync(path.join(EnderecoProjeto, '00-Projeto'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '01-Tags'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '02-Isometrico'));
-                fs.mkdirSync(path.join(EnderecoProjeto, '03-MediÃƒÂ§ÃƒÂ£o'));
+                fs.mkdirSync(path.join(EnderecoProjeto, '03-Medià§ão'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '04-Qualidade'));
             }
         } catch (dirError) {
@@ -4555,7 +4555,7 @@ app.put('/api/projeto/:id', async (req, res) => {
     const data = req.body;
 
     if (!data.Projeto) {
-        return res.status(400).json({ success: false, message: 'Nome do projeto ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'Nome do projeto à© obrigatà³rio' });
     }
 
     try {
@@ -4632,7 +4632,7 @@ app.put('/api/projeto/:id', async (req, res) => {
                 data.TelefoneEntrega || null,
                 data.HrEntrega || null,
                 data.EnderecoEntrega || null,
-                // CobranÃƒÂ§a
+                // Cobranà§a
                 data.ClienteCobranca || null,
                 data.CnpjCobranca || null,
                 data.ContatoCobranca || null,
@@ -4685,7 +4685,7 @@ app.delete('/api/projeto/:id', async (req, res) => {
             "UPDATE projetos SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProjeto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Projeto excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Projeto excluído' });
     } catch (error) {
         console.error('Error deleting projeto:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4896,7 +4896,7 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
             LIMIT 300
         `);
 
-        console.log(`[VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: ${req.tenantDb}. Rows found: ${rows.length}`);
+        console.log(`[Visão Geral Produà§ão] Query executada para tenant: ${req.tenantDb}. Rows found: ${rows.length}`);
 
         /* Compute percentages in JS to avoid division-by-zero in SQL */
         const pctNormal = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
@@ -5058,7 +5058,7 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
         const { projetistaPlanejado, planejadoInicioEngenharia, planejadoFinalEngenharia, usuario } = req.body;
         
         if (!projetistaPlanejado || !planejadoInicioEngenharia || !planejadoFinalEngenharia) {
-            return res.status(400).json({ success: false, message: 'Todos os campos sÃƒÂ£o obrigatÃƒÂ³rios: Projetista, InÃƒÂ­cio e Fim.' });
+            return res.status(400).json({ success: false, message: 'Todos os campos são obrigatà³rios: Projetista, Inà­cio e Fim.' });
         }
 
         const queryPool = req.tenantDbPool || pool;
@@ -5071,7 +5071,7 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
         `, [projetistaPlanejado, planejadoInicioEngenharia, planejadoFinalEngenharia, req.params.idTag]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
+            return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         }
 
         res.json({ success: true, message: 'Projetista e datas de engenharia atualizados com sucesso.' });
@@ -5094,13 +5094,13 @@ app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
         );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
 
-        res.json({ success: true, message: 'ObservaÃƒÂ§ÃƒÂ£o atualizada com sucesso.' });
+        res.json({ success: true, message: 'Observaà§ão atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating project observation:', error);
-        res.status(500).json({ success: false, message: 'Erro ao atualizar observaÃƒÂ§ÃƒÂ£o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao atualizar observaà§ão: ' + error.message });
     }
 });
 
@@ -5133,21 +5133,21 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
         const { qtdeLiberada, usuario } = req.body;
         
         if (qtdeLiberada === undefined || qtdeLiberada === null) {
-            return res.status(400).json({ success: false, message: 'A Quantidade Liberada ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'A Quantidade Liberada à© obrigatà³ria.' });
         }
 
         // Fetch current tag to calculate balance
         const queryPool = req.tenantDbPool || pool;
         const [tagRows] = await db.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
         if (tagRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
+            return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         }
         
         const qtdeTag = parseFloat(tagRows[0].QtdeTag) || 0;
         const liberada = parseFloat(qtdeLiberada) || 0;
         
         if (liberada > qtdeTag) {
-            return res.status(400).json({ success: false, message: `Quantidade liberada (${liberada}) nÃƒÂ£o pode ser maior que a Quantidade da Tag (${qtdeTag}).` });
+            return res.status(400).json({ success: false, message: `Quantidade liberada (${liberada}) não pode ser maior que a Quantidade da Tag (${qtdeTag}).` });
         }
 
         const saldo = qtdeTag - liberada;
@@ -5172,7 +5172,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         const { idProjeto, idTag, finalizarTodas, usuario } = req.body;
         
         if (!idProjeto || !usuario) {
-            return res.status(400).json({ success: false, message: 'Projeto e UsuÃƒÂ¡rio sÃƒÂ£o obrigatÃƒÂ³rios.' });
+            return res.status(400).json({ success: false, message: 'Projeto e Usuário são obrigatà³rios.' });
         }
 
         const dataLocal = new Date().toLocaleDateString('pt-BR');
@@ -5203,7 +5203,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
         } else {
-            if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag ÃƒÂ© obrigatÃƒÂ³rio para finalizar apenas uma.' });
+            if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag à© obrigatà³rio para finalizar apenas uma.' });
             
             await db.execute(`
                 UPDATE tags 
@@ -5332,7 +5332,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nenhum dado fornecido para atualização.' });
         }
 
-        const placeholders = idTags.map(() => '?').join(',');
+        const placeholders = idTags.map(() => 'é').join(',');
         params.push(...idTags);
 
         const query = `
@@ -5376,7 +5376,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             const camposSetor = SETOR_MAP_LOTE[setor];
             if (camposSetor) {
                 // 1) Descobre os projetos afetados pelas tags alteradas
-                const phIds = idTags.map(() => '?').join(',');
+                const phIds = idTags.map(() => 'é').join(',');
                 const [tagProjRows] = await db.execute(
                     `SELECT DISTINCT IdProjeto FROM tags WHERE IdTag IN (${phIds})`, idTags
                 );
@@ -5682,7 +5682,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
             }
         }
 
-        res.json({ success: true, message: idRnc ? 'PendÃƒÂªncia salva com sucesso!' : 'PendÃƒÂªncia criada com sucesso!' });
+        res.json({ success: true, message: idRnc ? 'Pendàªncia salva com sucesso!' : 'Pendàªncia criada com sucesso!' });
     } catch (error) {
         console.error('Error saving visao-geral pendencia:', error);
         res.status(500).json({ success: false, message: 'Erro ao salvar: ' + error.message });
@@ -5694,9 +5694,9 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
     const id = req.params.id;
     const { usuarioFin, dataFin, setorFin, descFin, idProjeto } = req.body;
     
-    // idProjeto nÃƒÂ£o ÃƒÂ© mais obrigatÃƒÂ³rio pois Tarefas podem ser genÃƒÂ©ricas (sem vinculo de projeto)
+    // idProjeto não à© mais obrigatà³rio pois Tarefas podem ser genà©ricas (sem vinculo de projeto)
     if (!usuarioFin || !dataFin || !setorFin) {
-        return res.status(400).json({ success: false, message: 'Faltam dados de finalizaÃƒÂ§ÃƒÂ£o' });
+        return res.status(400).json({ success: false, message: 'Faltam dados de finalizaà§ão' });
     }
 
     let dtFinFormatada = '';
@@ -5710,7 +5710,7 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
                 dtFinFormatada = dataFin;
             }
         } else {
-            // Provavelmente jÃƒÂ¡ veio formatada (ex: 19/03/2026) da funÃƒÂ§ÃƒÂ£o isoToBr do frontend
+            // Provavelmente já veio formatada (ex: 19/03/2026) da funà§ão isoToBr do frontend
             dtFinFormatada = dataFin;
         }
     }
@@ -5742,7 +5742,7 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
             }
         }
 
-        res.json({ success: true, message: 'PendÃƒÂªncia finalizada' });
+        res.json({ success: true, message: 'Pendàªncia finalizada' });
     } catch (e) {
         console.error('Finalizar erro:', e);
         res.status(500).json({ success: false, message: 'Erro no servidor' });
@@ -5756,7 +5756,7 @@ app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
         const { dataPrevisao, atualizarTags } = req.body;
 
         if (!dataPrevisao) {
-            return res.status(400).json({ success: false, message: 'Data de previsÃƒÂ£o ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'Data de previsão à© obrigatà³ria.' });
         }
 
         await pool.executeOnDefault(
@@ -5771,21 +5771,21 @@ app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
             );
         }
 
-        res.json({ success: true, message: 'Data de previsÃƒÂ£o atualizada com sucesso.' });
+        res.json({ success: true, message: 'Data de previsão atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating DataPrevisao:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar data: ' + error.message });
     }
 });
 
-// PUT: Atualizar DataPrevisao de uma Tag especÃƒÂ­fica
+// PUT: Atualizar DataPrevisao de uma Tag especà­fica
 app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
     try {
         const { idTag } = req.params;
         const { dataPrevisao } = req.body;
 
         if (!dataPrevisao) {
-            return res.status(400).json({ success: false, message: 'Data de previsÃƒÂ£o ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'Data de previsão à© obrigatà³ria.' });
         }
 
         await pool.executeOnDefault(
@@ -5793,7 +5793,7 @@ app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
             [dataPrevisao, idTag]
         );
 
-        res.json({ success: true, message: 'Data de previsÃƒÂ£o da tag atualizada com sucesso.' });
+        res.json({ success: true, message: 'Data de previsão da tag atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating Tag DataPrevisao:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar data da tag: ' + error.message });
@@ -5857,7 +5857,7 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
     }
 });
 
-// PUT: Atualizar data planejada de um setor de uma Tag especÃƒÂ­fica
+// PUT: Atualizar data planejada de um setor de uma Tag especà­fica
 app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
     try {
         const { idTag } = req.params;
@@ -6164,18 +6164,18 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
             [id]
         );
         if (!check.length) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
         if (check[0].Finalizado && check[0].Finalizado.trim() !== '') {
             return res.status(400).json({
                 success: false,
-                message: `Este projeto jÃƒÂ¡ estÃƒÂ¡ finalizado (status: "${check[0].Finalizado}"). Nenhuma alteraÃƒÂ§ÃƒÂ£o foi realizada.`
+                message: `Este projeto já está finalizado (status: "${check[0].Finalizado}"). Nenhuma alteraà§ão foi realizada.`
             });
         }
 
         const now = getCurrentDateTimeBR();
 
-        // 2. Finalizar em transaÃƒÂ§ÃƒÂ£o
+        // 2. Finalizar em transaà§ão
         // projetos: DataFinalizado
         await db.execute(
             `UPDATE projetos SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=?`,
@@ -6205,30 +6205,30 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
     }
 });
 
-// POST: Cancelar FinalizaÃƒÂ§ÃƒÂ£o do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
+// POST: Cancelar Finalizaà§ão do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
 app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userCancel = usuario || 'Sistema';
 
     try {
-        // 1. Verificar se estÃƒÂ¡ finalizado (condiÃƒÂ§ÃƒÂ£o para cancelar)
+        // 1. Verificar se está finalizado (condià§ão para cancelar)
         const queryPool = req.tenantDbPool || pool;
         const [check] = await db.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
         if (!check.length) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
         if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
             return res.status(400).json({
                 success: false,
-                message: `O projeto "${check[0].Projeto}" nÃƒÂ£o estÃƒÂ¡ finalizado. Nenhuma alteraÃƒÂ§ÃƒÂ£o foi realizada.`
+                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteraà§ão foi realizada.`
             });
         }
 
-        // 2. Desfazer finalizaÃƒÂ§ÃƒÂ£o em cascata (limpar campos)
+        // 2. Desfazer finalizaà§ão em cascata (limpar campos)
         // projetos
         await db.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
@@ -6251,10 +6251,10 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
             [id]
         );
 
-        res.json({ success: true, message: `FinalizaÃƒÂ§ÃƒÂ£o cancelada com sucesso por ${userCancel}.` });
+        res.json({ success: true, message: `Finalizaà§ão cancelada com sucesso por ${userCancel}.` });
     } catch (error) {
         console.error('Error cancelling finalization:', error);
-        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaÃƒÂ§ÃƒÂ£o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaà§ão: ' + error.message });
     }
 });
 
@@ -6268,13 +6268,13 @@ app.post('/api/projeto/:id/open-folder', async (req, res) => {
         );
 
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
         }
 
         const endereco = rows[0].EnderecoProjeto;
 
         if (!endereco) {
-            return res.status(400).json({ success: false, message: 'Projeto nÃƒÂ£o possui um endereÃƒÂ§o de pasta configurado.' });
+            return res.status(400).json({ success: false, message: 'Projeto não possui um endereà§o de pasta configurado.' });
         }
 
         const { exec } = require('child_process');
@@ -6309,7 +6309,7 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
             return res.json({
                 success: false,
                 liberavel: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
@@ -6327,7 +6327,7 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
             return res.json({
                 success: false,
                 liberavel: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
@@ -6364,7 +6364,7 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         if (tagCount === 0) {
             return res.json({
                 success: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
@@ -6382,7 +6382,7 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         if (osCount === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
@@ -6460,7 +6460,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
         const tagDescStatus = descStatus; // 'Cancelado' | 'Parado' | 'Ativo'
 
         // ─── Cascata: Ordens de Serviço ───────────────────────────────────────
-        // Estatus é varchar(45) — mapear para valores legíveis
+        // Estatus ? varchar(45) — mapear para valores legíveis
         const osEstatusMap = { CA: 'Cancelado', PA: 'Parado', AT: 'Ativo' };
         const osEstatus = osEstatusMap[status] ?? 'Ativo';
 
@@ -6521,7 +6521,7 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
         if (apontRows[0].count > 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Não é possível cancelar a liberação: este projeto já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).` 
+                message: `Não ? possível cancelar a liberação: este projeto já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).` 
             });
         }
 
@@ -6530,7 +6530,7 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
         if (osRows[0].count > 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Não é possível cancelar a liberação: existem ${osRows[0].count} Ordens de Serviço vinculadas a este projeto.` 
+                message: `Não ? possível cancelar a liberação: existem ${osRows[0].count} Ordens de Serviço vinculadas a este projeto.` 
             });
         }
 
@@ -6582,7 +6582,7 @@ app.get('/api/tag/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Tag nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Tag não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching tag:', error);
@@ -6649,7 +6649,7 @@ app.put('/api/tag/:id', async (req, res) => {
     const data = req.body;
 
     if (!data.Tag) {
-        return res.status(400).json({ success: false, message: 'Tag Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Tag ? obrigatória' });
     }
 
     try {
@@ -6732,7 +6732,7 @@ app.get('/api/tipoproduto/options', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tipoproduto options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao carregar opÃ¯Â¿Â½Ã¯Â¿Â½es' });
+        res.status(500).json({ success: false, message: 'Erro ao carregar op??es' });
     }
 });
 
@@ -6762,7 +6762,7 @@ app.get('/api/tipoproduto/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'NÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching tipoproduto:', error);
@@ -6775,7 +6775,7 @@ app.post('/api/tipoproduto', async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
     }
 
     try {
@@ -6796,7 +6796,7 @@ app.put('/api/tipoproduto/:id', async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
     }
 
     try {
@@ -6821,7 +6821,7 @@ app.delete('/api/tipoproduto/:id', async (req, res) => {
             "UPDATE tipoproduto SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoProduto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Tipo excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Tipo excluído' });
     } catch (error) {
         console.error('Error deleting tipoproduto:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -6829,12 +6829,12 @@ app.delete('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // --- Rota para servir PDFs de caminhos locais ---
-// Esta rota permite abrir PDFs que estÃ¯Â¿Â½o em pastas do sistema de arquivos
+// Esta rota permite abrir PDFs que est?o em pastas do sistema de arquivos
 app.get('/api/pdf', async (req, res) => {
     const filePath = req.query.path;
 
     if (!filePath) {
-        return res.status(400).json({ success: false, message: 'Caminho do arquivo nÃ¯Â¿Â½o informado' });
+        return res.status(400).json({ success: false, message: 'Caminho do arquivo não informado' });
     }
 
     try {
@@ -6846,7 +6846,7 @@ app.get('/api/pdf', async (req, res) => {
             normalizedPath = normalizedPath.substring(8);
         }
 
-        // Troca extensÃ¯Â¿Â½o para .pdf se necessÃ¯Â¿Â½rio
+        // Troca extens?o para .pdf se necess?rio
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
             normalizedPath = normalizedPath.split(ext).join('.pdf');
@@ -6854,13 +6854,13 @@ app.get('/api/pdf', async (req, res) => {
 
         // Verifica se o arquivo existe
         if (!fs.existsSync(normalizedPath)) {
-            console.error('Arquivo nÃ¯Â¿Â½o encontrado:', normalizedPath);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o encontrado: ' + normalizedPath });
+            console.error('Arquivo não encontrado:', normalizedPath);
+            return res.status(404).json({ success: false, message: 'Arquivo não encontrado: ' + normalizedPath });
         }
 
-        // Verifica se Ã¯Â¿Â½ realmente um PDF
+        // Verifica se ? realmente um PDF
         if (!normalizedPath.toLowerCase().endsWith('.pdf')) {
-            return res.status(400).json({ success: false, message: 'Apenas arquivos PDF sÃ¯Â¿Â½o permitidos' });
+            return res.status(400).json({ success: false, message: 'Apenas arquivos PDF s?o permitidos' });
         }
 
         // Define headers e envia o arquivo
@@ -6882,7 +6882,7 @@ app.get('/api/download', async (req, res) => {
     const type = req.query.type; // 'dxf' or 'sldprt'
 
     if (!filePath || !type) {
-        return res.status(400).json({ success: false, message: 'Caminho do arquivo ou tipo nÃ¯Â¿Â½o informado' });
+        return res.status(400).json({ success: false, message: 'Caminho do arquivo ou tipo não informado' });
     }
 
     try {
@@ -6892,7 +6892,7 @@ app.get('/api/download', async (req, res) => {
             normalizedPath = normalizedPath.substring(8);
         }
 
-        // Troca extensÃ¯Â¿Â½o para o tipo solicitado
+        // Troca extens?o para o tipo solicitado
         const targetExt = type.toLowerCase() === 'sldprt' ? '.SLDPRT' : '.DXF';
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
@@ -6900,15 +6900,15 @@ app.get('/api/download', async (req, res) => {
         });
 
         if (!fs.existsSync(normalizedPath)) {
-            // Tenta com extensÃ¯Â¿Â½o em minÃ¯Â¿Â½scula como fallback
+            // Tenta com extens?o em min?scula como fallback
             const lowerExt = targetExt.toLowerCase();
             const altPath = normalizedPath.replace(/\.[^.]+$/, lowerExt);
 
             if (fs.existsSync(altPath)) {
                 normalizedPath = altPath;
             } else {
-                console.error('Arquivo para download nÃ¯Â¿Â½o encontrado:', normalizedPath);
-                return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o encontrado: ' + normalizedPath });
+                console.error('Arquivo para download não encontrado:', normalizedPath);
+                return res.status(404).json({ success: false, message: 'Arquivo não encontrado: ' + normalizedPath });
             }
         }
 
@@ -6929,9 +6929,9 @@ app.get('/api/download', async (req, res) => {
     }
 });
 
-// --- Ordens de ServiÃ¯Â¿Â½o (Somente Leitura) ---
+// --- Ordens de Serviço (Somente Leitura) ---
 
-// OPTIONS: Lista de Projetos Ã¯Â¿Â½nicos para dropdown
+// OPTIONS: Lista de Projetos únicos para dropdown
 app.get('/api/ordemservico/projetos', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
@@ -6947,7 +6947,7 @@ app.get('/api/ordemservico/projetos', async (req, res) => {
     }
 });
 
-// OPTIONS: Lista de Tags Ã¯Â¿Â½nicas para dropdown
+// OPTIONS: Lista de Tags únicas para dropdown
 app.get('/api/ordemservico/tags', async (req, res) => {
     try {
         const projeto = req.query.projeto;
@@ -6970,7 +6970,7 @@ app.get('/api/ordemservico/tags', async (req, res) => {
     }
 });
 
-// SEARCH: Busca global em itens por cÃ¯Â¿Â½digo do documento/desenho
+// SEARCH: Busca global em itens por código do documento/desenho
 
 // OPTIONS: Lista de Projetos para Clonagem
 app.get('/api/ordemservico/projetos-clonagem', async (req, res) => {
@@ -7064,7 +7064,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
     }
 });
 
-// LIST Ordens de ServiÃ¯Â¿Â½o com paginaÃ¯Â¿Â½Ã¯Â¿Â½o e filtros
+// LIST Ordens de Serviço com paginação e filtros
 app.get('/api/ordemservico', async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -7141,7 +7141,7 @@ app.get('/api/ordemservico', async (req, res) => {
         );
         const total = countResult[0].total;
 
-        // Query com paginaÃ§Ã£o e calculo dinÃ¢mico de itens e percentuais
+        // Query com paginação e calculo dinÃ¢mico de itens e percentuais
         const [rows] = await pool.execute(`
             SELECT 
                 os.IdOrdemServico, os.Projeto, os.Tag, os.DescTag, os.Descricao,
@@ -7162,7 +7162,10 @@ app.get('/api/ordemservico', async (req, res) => {
                 os.PlanejadoInicioMontagem, os.PlanejadoFinalMontagem, os.RealizadoInicioMontagem, os.RealizadoFinalMontagem,
                 os.PlanejadoInicioENGENHARIA, os.PlanejadoFinalENGENHARIA, os.RealizadoInicioENGENHARIA, os.RealizadoFinalENGENHARIA,
                 os.PlanejadoInicioACABAMENTO, os.PlanejadoFinalACABAMENTO, os.RealizadoInicioACABAMENTO, os.RealizadoFinalACABAMENTO,
-                os.EnderecoOrdemServico, os.NumeroOPOmie
+                os.PlanejadoInicioPULSIONADEIRA, os.PlanejadoFinalPULSIONADEIRA, os.RealizadoInicioPULSIONADEIRA, os.RealizadoFinalPULSIONADEIRA,
+                os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR, os.RealizadoInicioGALVANIZAR, os.RealizadoFinalGALVANIZAR,
+                os.PlanejadoInicioCorteaLaser, os.PlanejadoFinalCorteaLaser, os.RealizadoInicioCorteaLaser, os.RealizadoFinalCorteaLaser,
+                os.EnderecoOrdemServico, os.NumeroOPOmie, os.Fator
             FROM ordemservico os
             WHERE ${whereClause}
             ORDER BY os.IdOrdemServico DESC
@@ -7239,7 +7242,7 @@ app.get('/api/ordemservico', async (req, res) => {
     }
 });
 
-// GET ONE Ordem de ServiÃ¯Â¿Â½o
+// GET ONE Ordem de Serviço
 app.get('/api/ordemservico/:id', async (req, res) => {
     try {
         const [rows] = await pool.execute(`
@@ -7274,7 +7277,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
 
             res.json({ success: true, data: os });
         } else {
-            res.status(404).json({ success: false, message: 'OS nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'OS não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching ordemservico:', error);
@@ -7282,7 +7285,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
     }
 });
 
-// LIST Itens de uma Ordem de ServiÃ¯Â¿Â½o
+// LIST Itens de uma Ordem de Serviço
 
 
 // ---------------------------------------------------------
@@ -7298,14 +7301,14 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         const [rows] = await connection.query('SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada.' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
 
         if (rows[0].OrdemServicoFinalizado === 'C') {
-            return res.status(400).json({ success: false, message: 'O.S. jÃƒÂ¡ Finalizada' });
+            return res.status(400).json({ success: false, message: 'O.S. já Finalizada' });
         }
 
         const dataatual = formatBR(new Date(), true);
@@ -7325,7 +7328,7 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
             WHERE IdOrdemServico = ?
         `, [IdOrdemServico]);
 
-        return res.json({ success: true, message: 'Processo FinalizaÃƒÂ§ÃƒÂ£o ConcluÃƒÂ­do' });
+        return res.json({ success: true, message: 'Processo Finalizaà§ão Concluà­do' });
 
     } catch (e) {
         console.error(e);
@@ -7335,7 +7338,7 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
     }
 });
 
-// NOVA ROTA: Excluir/Cancelar Ordem de ServiÃƒÂ§o
+// NOVA ROTA: Excluir/Cancelar Ordem de Serviço
 // ---------------------------------------------------------
 
 // ---------------------------------------------------------
@@ -7347,14 +7350,14 @@ app.post('/api/ordemservico/cancelar-finalizacao', tenantMiddleware, async (req,
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         const [rows] = await connection.query('SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada.' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
 
         if (rows[0].OrdemServicoFinalizado !== 'C') {
-            return res.status(400).json({ success: false, message: 'NÃƒÂ£o HÃƒÂ¡ itens para continuar processo (OS nÃƒÂ£o finalizada).' });
+            return res.status(400).json({ success: false, message: 'Não Há itens para continuar processo (OS não finalizada).' });
         }
 
         try {
@@ -7367,7 +7370,7 @@ app.post('/api/ordemservico/cancelar-finalizacao', tenantMiddleware, async (req,
         
         await connection.query('UPDATE ordemservicoitem SET ORDEMSERVICOITEMFINALIZADO = "" WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        return res.json({ success: true, message: 'Processo de cancelamento da FinalizaÃƒÂ§ÃƒÂ£o Executado' });
+        return res.json({ success: true, message: 'Processo de cancelamento da Finalizaà§ão Executado' });
 
     } catch (e) {
         console.error(e);
@@ -7386,7 +7389,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
 
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico é obrigatório' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ? obrigatório' });
 
         // 1. Verificar se a OS existe e está liberada
         const [osRows] = await connection.query(
@@ -7410,7 +7413,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
         if (apontRows[0].count > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Não é possível cancelar a liberação: esta OS já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).`
+                message: `Não ? possível cancelar a liberação: esta OS já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).`
             });
         }
 
@@ -7472,7 +7475,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
 // ---------------------------------------------------------
 
 // ---------------------------------------------------------
-// NOVA ROTA: Criar CÃƒÂ³pia da Ordem de ServiÃƒÂ§o (Etapa 9)
+// NOVA ROTA: Criar Cà³pia da Ordem de Serviço (Etapa 9)
 // ---------------------------------------------------------
 app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
     let connection;
@@ -7480,27 +7483,27 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, novoFator, usuarioNome, novoIdProjeto, novoIdTag, novaDescricao } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico de origem ÃƒÂ© obrigatÃƒÂ³rio' });
-        if (!novoIdProjeto || !novoIdTag) return res.status(400).json({ success: false, message: 'Projeto e Tag de destino sÃƒÂ£o obrigatÃƒÂ³rios' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico de origem à© obrigatà³rio' });
+        if (!novoIdProjeto || !novoIdTag) return res.status(400).json({ success: false, message: 'Projeto e Tag de destino são obrigatà³rios' });
         
         const fator = isNaN(parseInt(novoFator)) || parseInt(novoFator) <= 0 ? 1 : parseInt(novoFator);
         const criador = getCtxNomeCompleto() !== 'Sistema' ? getCtxNomeCompleto() : (usuarioNome || 'Sistema Web');
 
         // 1. Obter a O.S Original
         const [origOS] = await connection.query('SELECT * FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S de origem nÃƒÂ£o encontrada' });
+        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S de origem não encontrada' });
         const os = origOS[0];
 
         // 2. Obter Dados do Novo Projeto e Nova Tag
         const [rowProjeto] = await connection.query('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [novoIdProjeto]);
-        if (rowProjeto.length === 0) return res.status(404).json({ success: false, message: 'Projeto de destino nÃƒÂ£o encontrado' });
+        if (rowProjeto.length === 0) return res.status(404).json({ success: false, message: 'Projeto de destino não encontrado' });
         const { Projeto: nomeProjeto } = rowProjeto[0];
 
         const [rowTag] = await connection.query('SELECT Tag, DescTag, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag FROM tags WHERE IdTag = ?', [novoIdTag]);
-        if (rowTag.length === 0) return res.status(404).json({ success: false, message: 'Tag de destino nÃƒÂ£o encontrada' });
+        if (rowTag.length === 0) return res.status(404).json({ success: false, message: 'Tag de destino não encontrada' });
         const { Tag: nomeTag, DescTag: descTagDestino, DataPrevisao: dataPrevTag } = rowTag[0];
 
-        // 3. Inserir Header (Mestre) Limpando VariÃƒÂ¡veis de Estado
+        // 3. Inserir Header (Mestre) Limpando Variáveis de Estado
         const queryInsertMestre = `
             INSERT INTO ordemservico (
                 IdProjeto, Projeto, IdTag, Tag, DescTag, Descricao, fator, EnderecoOrdemServico, 
@@ -7523,7 +7526,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
 
         const novoId = resultInsert.insertId;
 
-        // Tentar formatar DiretÃƒÂ³rio fisÃƒÂ­co
+        // Tentar formatar Diretà³rio fisà­co
         let newEndereco = os.EnderecoOrdemServico;
         if (newEndereco) {
             const format5 = (num) => String(num).padStart(5, '0');
@@ -7546,7 +7549,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
                     await fsp.mkdir(p.join(newEndereco, sd), { recursive: true }).catch(() => {});
                 }
             } catch (e) {
-                console.log('[CloneOS] Pasta de rede inacesÃƒÂ­vel:', e.message);
+                console.log('[CloneOS] Pasta de rede inacesà­vel:', e.message);
             }
         }
 
@@ -7626,13 +7629,13 @@ app.post('/api/ordemservico/numero-op', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, NumeroOPOmie } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         await connection.query('UPDATE ordemservico SET NumeroOPOmie = ? WHERE IdOrdemServico = ?', [NumeroOPOmie || '', IdOrdemServico]);
         
         await connection.query('UPDATE ordemservicoitem SET NumeroOpOmie = ? WHERE IdOrdemServico = ?', [NumeroOPOmie || '', IdOrdemServico]);
 
-        return res.json({ success: true, message: 'NÃƒÂºmero da OP do OMIE atualizado com sucesso!' });
+        return res.json({ success: true, message: 'Nàºmero da OP do OMIE atualizado com sucesso!' });
 
     } catch (e) {
         console.error("Erro ao atualizar Numero OP Omie:", e);
@@ -7648,7 +7651,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, Usuario } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         // Validação adicional: Bloqueio de O.S Finalizada
         const [osStatus] = await connection.query(`SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?`, [IdOrdemServico]);
@@ -7656,7 +7659,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
             return res.status(400).json({ success: false, message: 'A OS Não pode ser excluída pois já encontra-se finalizada/concluída.' });
         }
 
-        // ValidaÃƒÂ§ÃƒÂ£o idÃƒÂªntica ao VB.NET: verificar se hÃƒÂ¡ execuÃƒÂ§ÃƒÂ£o ou plano de corte
+        // Validaà§ão idàªntica ao VB.NET: verificar se há execuà§ão ou plano de corte
         const [rows] = await connection.query(`
             SELECT 
                 count(idplanodecorte) +
@@ -7674,7 +7677,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         }
 
         if (totalExecutado > 0) {
-            // Busca apenas os planos de corte para listar na mensagem, caso haja para exibiÃƒÂ§ÃƒÂ£o de detalhes
+            // Busca apenas os planos de corte para listar na mensagem, caso haja para exibià§ão de detalhes
             const [planoRows] = await connection.query(`
                 SELECT idplanodecorte, CodMatFabricante
                 FROM ordemservicoitem 
@@ -7688,7 +7691,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
 
             return res.status(400).json({
                 success: false, 
-                message: `A OS Numero: ${IdOrdemServico} contÃƒÂ©m processos em andamento, por este motivo nÃƒÂ£o pode ser cancelada. Ver plano(s) de corte:${MsgDetalhes}`
+                message: `A OS Numero: ${IdOrdemServico} contà©m processos em andamento, por este motivo não pode ser cancelada. Ver plano(s) de corte:${MsgDetalhes}`
             });
         }
 
@@ -7703,7 +7706,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         `, [executor, dataatual, IdOrdemServico]);
 
         if (updateOS.affectedRows === 0) {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada ou jÃƒÂ¡ excluÃƒÂ­da.' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço não encontrada ou já excluà­da.' });
         }
 
         // Realiza o "Soft Delete" na tabela ordemservicoitem
@@ -7716,7 +7719,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         // Aqui executamos o Recalculo para subtrair os totais cascateados
         await recalcularQuantidadesTotais(IdOrdemServico, connection);
 
-        return res.json({ success: true, message: 'Ordem de serviÃƒÂ§o excluÃƒÂ­da com sucesso.' });
+        return res.json({ success: true, message: 'Ordem de servià§o excluà­da com sucesso.' });
 
     } catch (e) {
         console.error(e);
@@ -7736,7 +7739,7 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
         const IdOrdemServico = req.params.id;
 
         const [origOS] = await connection.query('SELECT * FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S nÃƒÂ£o encontrada' });
+        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S não encontrada' });
         const os = origOS[0];
 
         const db = require('./config/db');
@@ -7747,22 +7750,22 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
         
         let templatePath = '';
 
-        // Tenta buscar da configuracaosistema primeiro (prioridade mÃ¡xima)
+        // Tenta buscar da configuracaosistema primeiro (prioridade máxima)
         const [configRows] = await connection.query("SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelOrdemServico'");
         if (configRows.length > 0 && configRows[0].valor && fs.existsSync(configRows[0].valor)) {
             templatePath = configRows[0].valor;
         } else {
-            // LÃ³gica dinÃ¢mica baseada no tenant (banco ativo)
-            const BASE_DRIVE_PATH = 'G:\\Meu Drive\\ConfiguraÃ§Ãµes';
+            // Lógica dinÃ¢mica baseada no tenant (banco ativo)
+            const BASE_DRIVE_PATH = 'G:\\Meu Drive\\ConfiguraçÃµes';
             let tenantFolder = null;
 
-            // PossÃ­veis nomes da pasta do cliente no Google Drive
+            // Possíveis nomes da pasta do cliente no Google Drive
             const possibleFolderNames = [
                 dbName, 
                 dbName.charAt(0).toUpperCase() + dbName.slice(1).toLowerCase(), 
                 dbName.toUpperCase(),
                 'Configuracao' + dbName,
-                'ConfiguraÃ§Ã£o' + dbName,
+                'Configuração' + dbName,
                 'Configuracao' + dbName.charAt(0).toUpperCase() + dbName.slice(1).toLowerCase()
             ];
 
@@ -7775,16 +7778,16 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
             }
 
             if (!tenantFolder) {
-                // Caso nÃ£o encontre pasta especÃ­fica, tenta fallback para lynxlocal
+                // Caso não encontre pasta específica, tenta fallback para lynxlocal
                 if (dbName === 'lynxlocal' || dbName === 'Lynx') {
-                    const lynxPath = 'G:\\Meu Drive\\Estrutura padrÃ£o Lynx\\023-SGQ\\023-001-FORMULARIOS\\Templat-OS-Rev03.xlsx';
+                    const lynxPath = 'G:\\Meu Drive\\Estrutura padrão Lynx\\023-SGQ\\023-001-FORMULARIOS\\Templat-OS-Rev03.xlsx';
                     if (fs.existsSync(lynxPath)) {
                         templatePath = lynxPath;
                     } else {
-                        return res.status(400).json({ success: false, message: 'Template Excel do Lynx nÃ£o encontrado.' });
+                        return res.status(400).json({ success: false, message: 'Template Excel do Lynx não encontrado.' });
                     }
                 } else {
-                    return res.status(400).json({ success: false, message: `Pasta de configuraÃ§Ã£o nÃ£o encontrada para o banco: ${dbName}` });
+                    return res.status(400).json({ success: false, message: `Pasta de configuração não encontrada para o banco: ${dbName}` });
                 }
             } else {
                 // Procurar pelo arquivo de template de OS dentro da pasta do tenant
@@ -7889,7 +7892,7 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
 
         const destPath = os.EnderecoOrdemServico;
         if (!destPath || !fs.existsSync(destPath)) {
-            return res.status(400).json({ success: false, message: 'DiretÃƒÂ³rio final da OS nÃƒÂ£o existe: ' + destPath });
+            return res.status(400).json({ success: false, message: 'Diretà³rio final da OS não existe: ' + destPath });
         }
 
         const fileName = `OS_${osString}.xlsx`;
@@ -7905,10 +7908,10 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
             console.error('Falha ao abrir explorer:', e);
         }
 
-        return res.json({ success: true, message: 'RelatÃƒÂ³rio Excel gerado com sucesso.', file: finalFile });
+        return res.json({ success: true, message: 'Relatà³rio Excel gerado com sucesso.', file: finalFile });
 
     } catch (e) {
-        console.error("Erro na geraÃƒÂ§ÃƒÂ£o de Excel:", e);
+        console.error("Erro na geraà§ão de Excel:", e);
         res.status(500).json({ success: false, message: e.message });
     } finally {
         if (connection) connection.release();
@@ -7924,11 +7927,11 @@ app.post('/api/ordemservico/atualizar-arquivos', tenantMiddleware, async (req, r
         const { IdOrdemServico } = req.body;
 
         const [osRows] = await connection.query('SELECT EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS nÃƒÂ£o encontrada.' });
+        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS não encontrada.' });
         
         const os = osRows[0];
         if (os.Liberado_Engenharia === 'S') {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o jÃƒÂ¡ Liberada para ProduÃƒÂ§ÃƒÂ£o, nÃƒÂ£o pode mais ser modificada!' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço já Liberada para Produà§ão, não pode mais ser modificada!' });
         }
 
         const diretorio = os.EnderecoOrdemServico;
@@ -7963,7 +7966,7 @@ app.post('/api/ordemservico/atualizar-arquivos', tenantMiddleware, async (req, r
                 
                 let origem = item.EnderecoArquivo;
                 
-                // Adapta extensÃƒÂµes
+                // Adapta extensàµes
                 const extsToReplace = ['.SLDPRT', '.SLDASM', '.ASM', '.PSM', '.PAR'];
                 for (const ext of extsToReplace) {
                     const re = new RegExp(ext.replace('.', '\.'), 'i');
@@ -8031,21 +8034,21 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
 
         const fator = parseFloat(FatorMultiplicador);
         if (isNaN(fator) || fator <= 0) {
-            return res.status(400).json({ success: false, message: 'Fator invÃƒÂ¡lido' });
+            return res.status(400).json({ success: false, message: 'Fator inválido' });
         }
 
         const [osRows] = await connection.query('SELECT IdTag, EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS nÃƒÂ£o encontrada.' });
+        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS não encontrada.' });
         
         const os = osRows[0];
         if (os.Liberado_Engenharia === 'S') {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o jÃƒÂ¡ Liberada para ProduÃƒÂ§ÃƒÂ£o, nÃƒÂ£o pode mais ser modificada!' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço já Liberada para Produà§ão, não pode mais ser modificada!' });
         }
 
         // Verifica ITENS
         const [itemRows] = await connection.query('SELECT IdOrdemServicoItem, Qtde, AreaPintura, Peso FROM ordemservicoitem WHERE IdOrdemServico = ?', [IdOrdemServico]);
         if (itemRows.length === 0) {
-            return res.status(400).json({ success: false, message: 'NÃƒÂ£o hÃƒÂ¡ itens a serem alterados!' });
+            return res.status(400).json({ success: false, message: 'Não há itens a serem alterados!' });
         }
 
         for (const item of itemRows) {
@@ -8243,8 +8246,8 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
     const { IdOrdemServico, IdTag, IdProjeto, Fator, EnderecoOrdemServico, TipoLiberacao } = req.body;
     let connection;
     try {
-        if (!IdOrdemServico || !Fator || !EnderecoOrdemServico || !TipoLiberacao) {
-            return res.status(400).json({ success: false, message: 'ParÃƒÂ¢metros obrigatÃƒÂ³rios ausentes.' });
+        if (!IdOrdemServico || !Fator || !TipoLiberacao) {
+            return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes: IdOrdemServico, Fator e TipoLiberacao são necessários.' });
         }
 
         connection = await pool.getConnection();
@@ -8257,10 +8260,10 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
         );
         if (produtoPrincipal.length === 0) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Verifique se hÃƒÂ¡ um produto principal para a Ordem de ServiÃƒÂ§o cadastrado.' });
+            return res.status(400).json({ success: false, message: 'Verifique se há um produto principal para a Ordem de Serviço cadastrado.' });
         }
 
-        // 2. Limpar DiretÃƒÂ³rios e Copiar Arquivos
+        // 2. Limpar Diretà³rios e Copiar Arquivos
         const [items] = await connection.execute(
             `SELECT EnderecoArquivo FROM ordemservicoitem WHERE IdOrdemServico = ? AND EnderecoArquivo IS NOT NULL AND EnderecoArquivo != ''`,
             [IdOrdemServico]
@@ -8394,7 +8397,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
                 await workbook.xlsx.writeFile(excelPath);
             }
         } catch (excelErr) {
-            console.error('Erro ao gerar Excel de liberaÃƒÂ§ÃƒÂ£o:', excelErr);
+            console.error('Erro ao gerar Excel de liberaà§ão:', excelErr);
         }
 
         await connection.commit();
@@ -8470,7 +8473,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
     } catch (err) {
         if (connection) await connection.rollback();
         console.error('Erro ao liberar OS:', err);
-        res.status(500).json({ success: false, message: 'Erro interno ao liberar Ordem de ServiÃƒÂ§o.' });
+        res.status(500).json({ success: false, message: 'Erro interno ao liberar Ordem de Serviço.' });
     } finally {
         if (connection) connection.release();
     }
@@ -8789,7 +8792,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
         const params = [];
 
         if (codigosInOS.length > 0) {
-            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'?').join(',')}) `;
+            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'é').join(',')}) `;
             params.push(...codigosInOS);
         }
 
@@ -8960,7 +8963,7 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
                 ) VALUES (
                     ?, 'Sistema', 'Sistema', NOW(),
                     'N',
-                    ${cols.map(()=>'?').join(', ')}
+                    ${cols.map(()=>'é').join(', ')}
                 )
             `;
             
@@ -9128,7 +9131,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                     const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
                     const rTotalPadrao = rPadrao * qtdeTotalNum;
                     const rTotalSetup = rSetup;
-                    const rTotalTempo = ((rPadrao * qtdeTotalNum) + rSetup) * fatorNum;
+                    const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup; // Fórmula: (qtde × padrão) + setup
                     const rDiasProd = rTotalTempo > 0 ? Math.max(1, Math.ceil(rTotalTempo / 480)) : 0;
 
                     colunasDinamicasVals[`${secKey}TempoSetup`] = rSetup;
@@ -9146,7 +9149,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
 
             const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
             const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
-            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : (((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup) * fatorNum));
+            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup)); // Fórmula sem Fator
 
             await ensureColumns('ordemservicoitem', [
                 { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
@@ -9182,7 +9185,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             
             const sqlInsert = `
                 INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
-                VALUES (${cols.map(()=>'?').join(', ')})
+                VALUES (${cols.map(()=>'é').join(', ')})
             `;
             
             const [insertRes] = await conn.execute(sqlInsert, vals);
@@ -9194,7 +9197,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
         await recalcularQuantidadesTotais(osId, conn);
 
         await conn.commit();
-        res.json({ success: true, message: `${adicionados} materiais incluÃ­dos com sucesso!`, adicionados });
+        res.json({ success: true, message: `${adicionados} materiais incluídos com sucesso!`, adicionados });
     } catch (e) {
         if (conn) await conn.rollback();
         console.error(e);
@@ -9204,7 +9207,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
     }
 });
 
-// --- Apontamento de ProduÃ¯Â¿Â½Ã¯Â¿Â½o ---
+// --- Apontamento de Produ??o ---
 
 // Mapeamento de setores para colunas
 const setorColumns = {
@@ -9420,7 +9423,7 @@ async function inicializarPrimeiroSetor(conn, id) {
     }
 }
 
-// GET: Mapa da ProduÃ¯Â¿Â½Ã¯Â¿Â½o - visÃ¯Â¿Â½o geral de todos os processos
+// GET: Mapa da Produ??o - vis?o geral de todos os processos
 app.get('/api/apontamento/mapa/producao', async (req, res) => {
     const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -10036,10 +10039,23 @@ SELECT
     osi.EnderecoArquivoItemOrdemServico,
     osi.QtdeTotal,
     osi.Peso,
+    osi.Fator,
     osi.txtCorte,
     osi.txtSolda,
     osi.txtPintura,
     osi.TxtMontagem,
+    osi.TempoSetup,
+    osi.TempoPadrao,
+    osi.TotalTempo,
+    osi.CorteTempoSetup, osi.CorteTempoPadrao, osi.CorteTotalTempo,
+    osi.DobraTempoSetup, osi.DobraTempoPadrao, osi.DobraTotalTempo,
+    osi.SoldaTempoSetup, osi.SoldaTempoPadrao, osi.SoldaTotalTempo,
+    osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
+    osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
+    osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
+    osi.PulsionadeiraTempoSetup, osi.PulsionadeiraTempoPadrao, osi.PulsionadeiraTotalTempo,
+    osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
+    osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo,
     osi.${setorConfig.percentual} as PercentualSetor,
     osi.${setorConfig.total} as TotalExecutado,
     osi.${setorConfig.executar} as TotalExecutar,
@@ -10442,7 +10458,7 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         let nextSectorName = null;
 
         if (currentPosInStatic >= 0) {
-            // Recurso é estático — usa sequência conhecida
+            // Recurso ? estático — usa sequência conhecida
             for (let i = currentPosInStatic + 1; i < allSectorKeys.length; i++) {
                 const checkConfig = setorColumns[allSectorKeys[i]];
                 if (checkConfig && checkConfig.txt && NULLIF_TRIM(item[checkConfig.txt]) === '1') {
@@ -10453,7 +10469,7 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         } else {
             // Recurso dinâmico — busca próxima coluna txt* = '1' no item após o atual
             // Como não há ordem definida, apenas logamos sem propagar
-            console.log(`[RECURSO_DINAMICO] Recurso '${processoKey}' é dinâmico — propagação de saldo para próximo setor não aplicada.`);
+            console.log(`[RECURSO_DINAMICO] Recurso '${processoKey}' ? dinâmico — propagação de saldo para próximo setor não aplicada.`);
         }
 
         if (nextSectorName) {
@@ -10573,8 +10589,11 @@ app.post('/api/apontamento', async (req, res) => {
         await conn.beginTransaction();
 
         const now = getCurrentDateTimeBR();
-        // Helper: escolhe formato conforme tipo da coluna no banco
-        const getDateForSetor = (sConfig) => (sConfig && sConfig.dateType === 'date') ? getCurrentDateSQL() : getCurrentDateBR();
+        const dateSQL = getCurrentDateSQL(); // YYYY-MM-DD for DATE-type columns
+        // Helper: date format depends on column type in DB
+        // galvanizar and pulsionadeira have DATE columns for Realizado* fields
+        const DATE_SETOR_KEYS = new Set(['galvanizar', 'pulsionadeira', 'cortealaser']);
+        const getDateForSetor = (sName) => DATE_SETOR_KEYS.has(sName) ? dateSQL : now;
 
         // 1. Fetch item and details
         const [itemRows] = await conn.execute(`
@@ -10623,7 +10642,7 @@ osi.*,
             // If not Mapa and no quantity to process, skip
             if (!isMapa && currentInputQty <= 0) continue;
 
-            // Determinar se este é o primeiro setor ativo do item na cadeia produtiva
+            // Determinar se este ? o primeiro setor ativo do item na cadeia produtiva
             let isFirstActiveSector = true;
             const currentIndexInSequence = sequence.indexOf(sName);
             for (let i = 0; i < currentIndexInSequence; i++) {
@@ -10660,7 +10679,7 @@ osi.*,
                 const currentIndex = sequence.indexOf(sName);
                 if (currentIndex > 0) {
                     let prevSectorName = null;
-                    // Procurar o setor anterior que é ativado para este item
+                    // Procurar o setor anterior que ? ativado para este item
                     for (let i = currentIndex - 1; i >= 0; i--) {
                         const checkSName = sequence[i];
                         const checkConfig = setorColumns[checkSName];
@@ -10677,7 +10696,7 @@ osi.*,
 
                         if (novoTotalTentativa > prevTotalExecutado) {
                             await conn.rollback();
-                            const msg = `Não é aceito apontar produção no setor '${sName.charAt(0).toUpperCase() + sName.slice(1)}' pois o setor anterior '${prevSectorName.charAt(0).toUpperCase() + prevSectorName.slice(1)}' possui apenas ${prevTotalExecutado} unidades concluídas.`;
+                            const msg = `Não ? aceito apontar produção no setor '${sName.charAt(0).toUpperCase() + sName.slice(1)}' pois o setor anterior '${prevSectorName.charAt(0).toUpperCase() + prevSectorName.slice(1)}' possui apenas ${prevTotalExecutado} unidades concluídas.`;
                             return res.status(400).json({ success: false, message: msg });
                         }
                     }
@@ -10708,18 +10727,19 @@ osi.*,
             const updateItemParams = [novoTotalExecutado, novoTotalExecutar, novoPercentual, (finalizado || isMapa) ? 'C' : '', req_idmatriz];
 
             // 5a. Realizado INICIO: gravar no item se for o primeiro apontamento do setor (campo NULL)
+            const dateForThisSetor = getDateForSetor(sName);
             if (!item[sConfig.inicio]) {
                 updateItemQuery += `, ${sConfig.inicio} = ?, ${sConfig.userInicio} = ?`;
-                updateItemParams.push(dateNow, CriadoPor || 'Sistema');
+                updateItemParams.push(dateForThisSetor, CriadoPor || 'Sistema');
             }
 
             // 5b. Realizado FINAL: gravar no item quando todas as peças do setor forem produzidas
             if (finalizado || isMapa) {
                 updateItemQuery += `, ${sConfig.final} = ?, ${sConfig.userFinal} = ?`;
-                updateItemParams.push(dateNow, CriadoPor || 'Sistema');
+                updateItemParams.push(dateForThisSetor, CriadoPor || 'Sistema');
                 if (sName === 'montagem') {
                     updateItemQuery += `, DataFinalMontagem = ?`;
-                    updateItemParams.push(dateNow);
+                    updateItemParams.push(dateForThisSetor);
                 }
             }
 
@@ -10751,13 +10771,15 @@ osi.*,
             // 6. Cascading Totals e Percentuais Dinâmicos (HIERARQUIA: Item -> OS -> Tag -> Projeto)
             // Utilizando o helper centralizado garantimos que QtdePecasExecutadas e Setores também recalculem em tempo real
             await recalcularQuantidadesTotais(item.IdOrdemServico, conn);
+            // 6b. Atualizar MinProd acumulado do recurso em cascata (Item -> OS -> Tag -> Projeto)
+            await atualizarMinProdCascata(conn, IdOrdemServicoItem, sName, currentInputQty, 'ADD');
 
             // 6a. Cascatear Realizado INICIO para OS / Tag / Projeto (somente se campo ainda NULL)
             if (!item[sConfig.inicio]) {
                 // OS: setar inicio se ainda nulo
                 await conn.execute(
                     `UPDATE ordemservico SET ${sConfig.inicio} = ? WHERE IdOrdemServico = ? AND (${sConfig.inicio} IS NULL OR ${sConfig.inicio} = '')`,
-                    [dateNow, item.IdOrdemServico]
+                    [dateForThisSetor, item.IdOrdemServico]
                 );
                 // Tag: setar inicio se ainda nulo
                 if (item.IdTag) {
@@ -11051,6 +11073,8 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 
         // Cascatear as alterações da remoção (percentuais dinâmicos da OS/TAG/PROJETO)
         await recalcularQuantidadesTotais(IdOrdemServico, pool);
+        // Subtrair MinProd acumulado do recurso (estorno)
+        await atualizarMinProdCascata(pool, IdOrdemServicoItem, Processo, QtdeProduzida, 'SUB');
 
         res.json({ success: true, message: 'Apontamento estornado com sucesso' });
     } catch (error) {
@@ -11090,7 +11114,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
         res.json({ success: true, stats });
     } catch (error) {
         console.error('Error fetching dashboard stats:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar estatÃ¯Â¿Â½sticas' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar estat?sticas' });
     }
 });
 
@@ -11211,7 +11235,7 @@ async function ensureConfigColumns(poolRef) {
 
 // GET /api/config - Funciona em QUALQUER banco ativo
 // COPY-ON-FIRST-READ: Se o banco ativo não tiver config própria, retorna a do lynxlocal como template.
-// O vínculo é quebrado na primeira escrita (PUT /api/config ou POST /api/config/menu).
+// O vínculo ? quebrado na primeira escrita (PUT /api/config ou POST /api/config/menu).
 app.get('/api/config', tenantMiddleware, async (req, res) => {
     try {
         await ensureConfigColumns(pool);
@@ -11313,18 +11337,18 @@ app.post('/api/config/validar-caminho', tenantMiddleware, async (req, res) => {
     try {
         if (!caminho) return res.json({ success: false, message: 'Caminho não fornecido' });
         
-        // Verifica se é um diretório acessível
+        // Verifica se ? um diretório acessível
         const stats = require('fs').statSync(caminho, { throwIfNoEntry: false });
         if (!stats) {
             // Tenta criar se não existe
             require('fs').mkdirSync(caminho, { recursive: true });
         } else if (!stats.isDirectory()) {
-            return res.json({ success: false, message: 'O caminho existe mas não é uma pasta' });
+            return res.json({ success: false, message: 'O caminho existe mas não ? uma pasta' });
         }
         
         return res.json({ success: true, message: 'Caminho válido e acessível' });
     } catch (error) {
-        return res.json({ success: false, message: 'O caminho especificado é inválido ou você não tem permissão de acesso.' });
+        return res.json({ success: false, message: 'O caminho especificado ? inválido ou você não tem permissão de acesso.' });
     }
 });
 
@@ -11391,7 +11415,7 @@ app.get('/api/config/setores', async (req, res) => {
     }
 });
 
-// GET /api/config/usuarios - Retornar UsuÃ¯Â¿Â½rios (Colaboradores)
+// GET /api/config/usuarios - Retornar Usu?rios (Colaboradores)
 app.get('/api/config/usuarios', async (req, res) => {
     try {
         const [rows] = await pool.execute("SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto");
@@ -11413,12 +11437,12 @@ app.get('/api/config/tipostarefa', async (req, res) => {
     }
 });
 
-// POST /api/producao/pendencia - Gerar PendÃ¯Â¿Â½ncia (AÃ¯Â¿Â½Ã¯Â¿Â½o 2)
+// POST /api/producao/pendencia - Gerar Pend?ncia (A??o 2)
 app.post('/api/producao/pendencia', async (req, res) => {
     const data = req.body;
 
     if (!data.idOrdemServicoItem || !data.descricaoPendencia) {
-        return res.status(400).json({ success: false, message: 'ID do item e descriÃ¯Â¿Â½Ã¯Â¿Â½o sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios.' });
+        return res.status(400).json({ success: false, message: 'ID do item e descri??o s?o obrigatórios.' });
     }
 
     const conn = await pool.getConnection();
@@ -11469,7 +11493,7 @@ app.post('/api/producao/pendencia', async (req, res) => {
             ];
             await conn.execute(sqlUpdateFinalizar, paramsFinalizar);
             await conn.commit();
-            return res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia finalizada com sucesso!' });
+            return res.json({ success: true, message: 'Pend?ncia finalizada com sucesso!' });
         } else if (data.idOrdemServicoItemPendencia) {
             const sqlUpdate = `
                 UPDATE ordemservicoitempendencia
@@ -11495,7 +11519,7 @@ app.post('/api/producao/pendencia', async (req, res) => {
             ];
             await conn.execute(sqlUpdate, paramsUpdate);
             await conn.commit();
-            return res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia atualizada com sucesso!' });
+            return res.json({ success: true, message: 'Pend?ncia atualizada com sucesso!' });
         }
 
         const sqlInsert = `
@@ -11534,18 +11558,18 @@ app.post('/api/producao/pendencia', async (req, res) => {
         await conn.execute(sqlInsert, params);
 
         await conn.commit();
-        res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia gerada com sucesso!' });
+        res.json({ success: true, message: 'Pend?ncia gerada com sucesso!' });
 
     } catch (error) {
         if (conn) await conn.rollback();
         console.error('[POST /api/producao/pendencia] Error:', error);
-        res.status(500).json({ success: false, message: 'Erro ao gerar pendÃ¯Â¿Â½ncia.' });
+        res.status(500).json({ success: false, message: 'Erro ao gerar pend?ncia.' });
     } finally {
         if (conn) conn.release();
     }
 });
 
-// GET /api/producao/pendencias/historico - Listar pendÃ¯Â¿Â½ncias vinculadas a um item (por CodMatFabricante)
+// GET /api/producao/pendencias/historico - Listar pend?ncias vinculadas a um item (por CodMatFabricante)
 app.get('/api/producao/pendencias/historico', async (req, res) => {
     console.log('[DEBUG] GET /historico - REACHED ROUTE!');
     try {
@@ -11610,17 +11634,17 @@ app.get('/api/producao/pendencias/historico', async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching RNC history:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar histÃ¯Â¿Â½rico' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar histórico' });
     }
 });
 
-// POST /api/producao/reposicao - Gerar ReposiÃ¯Â¿Â½Ã¯Â¿Â½o
+// POST /api/producao/reposicao - Gerar Reposi??o
 app.post('/api/producao/reposicao', async (req, res) => {
     console.log('[POST /api/producao/reposicao] req.body chamado com:', req.body);
     const { idOrdemServicoItem, qtdeReposicao, motivo, usuario } = req.body;
 
     if (!idOrdemServicoItem || !qtdeReposicao || qtdeReposicao <= 0) {
-        return res.status(400).json({ success: false, message: 'ID do item e quantidade vÃ¯Â¿Â½lida sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios.' });
+        return res.status(400).json({ success: false, message: 'ID do item e quantidade v?lida s?o obrigatórios.' });
     }
 
     const conn = await pool.getConnection();
@@ -11638,23 +11662,23 @@ app.post('/api/producao/reposicao', async (req, res) => {
 
         if (itemRows.length === 0) {
             await conn.rollback();
-            return res.status(404).json({ success: false, message: 'Item original nÃ¯Â¿Â½o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Item original não encontrado.' });
         }
 
         const itemPai = itemRows[0];
         const qtdeAtualReposicao = Number(itemPai.QtdeReposicao) || 0;
         const novaQtdeReposicao = qtdeAtualReposicao + Number(qtdeReposicao);
 
-        // 2. Atualizar quantidade de reposiÃ¯Â¿Â½Ã¯Â¿Â½o no item pai original
+        // 2. Atualizar quantidade de reposi??o no item pai original
         await conn.execute(
             `UPDATE ordemservicoitem SET QtdeReposicao = ? WHERE IdOrdemServicoItem = ?`,
             [novaQtdeReposicao, idOrdemServicoItem].map(p => p === undefined ? '' : p)
         );
 
-        // 3. Preparar inserÃ¯Â¿Â½Ã¯Â¿Â½o do Item de ReposiÃ¯Â¿Â½Ã¯Â¿Â½o Pai
+        // 3. Preparar inser??o do Item de Reposi??o Pai
         // Clonar dados do pai ajustando QtdeTotal, Reposicao e campos de status
         const pesoOriginal = parseFloat(itemPai.Peso?.toString().replace(',', '.') || '0');
-        // Peso original da peÃ¯Â¿Â½a ou proporcional - VB.NET usa PesoUnitario * entrada. Mas QtdeTotal original do BD jÃ¯Â¿Â½ armazena Qtde do pai.
+        // Peso original da pe?a ou proporcional - VB.NET usa PesoUnitario * entrada. Mas QtdeTotal original do BD já armazena Qtde do pai.
         // Vamos usar o PesoUnitario calculado se existir ou proporcional.
 
         let pesoUnitario = parseFloat(itemPai.PesoUnitario?.toString().replace(',', '.') || '0');
@@ -11667,7 +11691,7 @@ app.post('/api/producao/reposicao', async (req, res) => {
         const novoAreaPinturaUnitario = parseFloat(itemPai.AreaPinturaUnitario?.toString().replace(',', '.') || '0');
         const novaAreaPinturaTotal = novoAreaPinturaUnitario * novoQtdeTotal;
 
-        // Limpar status de execuÃ¯Â¿Â½Ã¯Â¿Â½o dos diversos setores conforme o VB
+        // Limpar status de execu??o dos diversos setores conforme o VB
         const sqlInsertPai = `
             INSERT INTO ordemservicoitem (
                 IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag,
@@ -11773,7 +11797,7 @@ app.post('/api/producao/reposicao', async (req, res) => {
 
         // Criar a pendencia para o item na rotina do VB.NET 
         // MontarPendenciaReposicao(dgvItemOrdemservico)
-        // Optamos por simular o log mÃ¯Â¿Â½nimo na ordemservicoitempendencia ou ordemservicoitemcontrole
+        // Optamos por simular o log m?nimo na ordemservicoitempendencia ou ordemservicoitemcontrole
         await conn.execute(
             `INSERT INTO ordemservicoitemcontrole (
                 IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor, DataCriacao, D_E_L_E_T_E, DescricaoEstorno
@@ -11782,18 +11806,18 @@ app.post('/api/producao/reposicao', async (req, res) => {
         );
 
         await conn.commit();
-        res.json({ success: true, message: `ReposiÃ¯Â¿Â½Ã¯Â¿Â½o gerada com sucesso! ${novoQtdeTotal} itens clonados para a nova reposiÃ¯Â¿Â½Ã¯Â¿Â½o.` });
+        res.json({ success: true, message: `Reposi??o gerada com sucesso! ${novoQtdeTotal} itens clonados para a nova reposi??o.` });
 
     } catch (error) {
         if (conn) await conn.rollback();
         console.error('[API] Error in POST /api/producao/reposicao:', error);
-        res.status(500).json({ success: false, message: 'Erro ao gerar reposiÃ¯Â¿Â½Ã¯Â¿Â½o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao gerar reposi??o: ' + error.message });
     } finally {
         if (conn) conn.release();
     }
 });
 
-// ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o - UPDATE
+// Configuração - UPDATE
 // MENU CONFIGURATION
 // GET Menu Structure
 // COPY-ON-FIRST-READ: Se o banco ativo não tiver menu próprio, retorna o menu do lynxlocal como template.
@@ -11863,7 +11887,7 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
     }
 });
 
-// --- CRUD: UsuÃ¯Â¿Â½rios ---
+// --- CRUD: Usu?rios ---
 
 // LIST Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
@@ -11922,11 +11946,11 @@ app.get('/api/usuario/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'UsuÃ¯Â¿Â½rio nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Usu?rio não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching user:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar usuÃ¯Â¿Â½rio' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar usuário' });
     }
 });
 
@@ -12141,7 +12165,7 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
                     if (cols.length > 0) {
                         const [usage] = await db.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
                         if (usage.length > 0) {
-                            return res.status(400).json({ success: false, message: 'Não é possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
+                            return res.status(400).json({ success: false, message: 'Não ? possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
                         }
                     }
                 }
@@ -12352,7 +12376,7 @@ app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
 app.post('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     const { TipoVeiculo, Placa } = req.body;
     if (!TipoVeiculo || !TipoVeiculo.trim()) {
-        return res.status(400).json({ success: false, message: 'Tipo de Veículo é obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo de Veículo ? obrigatório' });
     }
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
@@ -12373,7 +12397,7 @@ app.put('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { TipoVeiculo, Placa } = req.body;
     if (!TipoVeiculo || !TipoVeiculo.trim()) {
-        return res.status(400).json({ success: false, message: 'Tipo de Veículo é obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo de Veículo ? obrigatório' });
     }
     try {
         await db.execute(
@@ -12554,7 +12578,7 @@ v.IdRomaneioItem,
             `, [req.params.idRomaneioItem]);
 
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Item do romaneio nÃ¯Â¿Â½o encontrado' });
+            return res.status(404).json({ success: false, message: 'Item do romaneio não encontrado' });
         }
         res.json({ success: true, data: rows[0] });
     } catch (error) {
@@ -12596,7 +12620,7 @@ WHERE(v.D_E_L_E_T_E IS NULL OR v.D_E_L_E_T_E = '')
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error listing RNCs:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar pendÃ¯Â¿Â½ncias' });
+        res.status(500).json({ success: false, message: 'Erro ao listar pend?ncias' });
     }
 });
 
@@ -12616,14 +12640,14 @@ app.post('/api/rnc', async (req, res) => {
             );
             if (check.length > 0 && check[0].Estatus === 'FINALIZADA') {
                 await connection.rollback();
-                return res.status(400).json({ success: false, message: 'PendÃ¯Â¿Â½ncia jÃ¯Â¿Â½ Finalizada!' });
+                return res.status(400).json({ success: false, message: 'Pend?ncia já Finalizada!' });
             }
         }
 
         // 2. Validate mandatory Sector
         if (!data.setorResponsavel) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Informe Setor ResponsÃ¯Â¿Â½vel pela PendÃ¯Â¿Â½ncia!' });
+            return res.status(400).json({ success: false, message: 'Informe Setor Respons?vel pela Pend?ncia!' });
         }
 
         const nowFormatted = getCurrentDateTimeBR();
@@ -12876,9 +12900,9 @@ app.post('/api/admin/db/test', authenticateAdmin, async (req, res) => {
     try {
         const success = await pool.testConnection(config);
         if (success) {
-            res.json({ success: true, message: 'ConexÃ¯Â¿Â½o bem-sucedida! O banco de dados estÃ¯Â¿Â½ acessÃ¯Â¿Â½vel.' });
+            res.json({ success: true, message: 'Conex?o bem-sucedida! O banco de dados est? acess?vel.' });
         } else {
-            res.status(400).json({ success: false, message: 'Falha na conexÃ¯Â¿Â½o. Verifique os dados.' });
+            res.status(400).json({ success: false, message: 'Falha na conex?o. Verifique os dados.' });
         }
     } catch (error) {
         res.status(500).json({ success: false, message: 'Erro ao conectar: ' + error.message });
@@ -12892,7 +12916,7 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
         // 1. Update runtime pool
         const initialized = pool.initPool(newConfig);
         if (!initialized) {
-            throw new Error('Falha ao inicializar o pool com as novas configuraÃ¯Â¿Â½Ã¯Â¿Â½es.');
+            throw new Error('Falha ao inicializar o pool com as novas configurações.');
         }
 
         // 2. Update .env file persistently
@@ -12945,11 +12969,11 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
         fs.writeFileSync(envPath, newLines.join('\n'));
         console.log('[API] .env file updated with new DB config');
 
-        res.json({ success: true, message: 'ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o salva e aplicada com sucesso!' });
+        res.json({ success: true, message: 'Configuração salva e aplicada com sucesso!' });
 
     } catch (error) {
         console.error('Error saving DB config:', error);
-        res.status(500).json({ success: false, message: 'Erro ao salvar configuraÃ¯Â¿Â½Ã¯Â¿Â½o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao salvar configuração: ' + error.message });
     }
 });
 
@@ -13022,7 +13046,7 @@ app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
         let { caminho, tipo } = req.query;
 
         if (!caminho) {
-            return res.status(400).json({ success: false, message: 'Caminho nÃƒÂ£o informado' });
+            return res.status(400).json({ success: false, message: 'Caminho não informado' });
         }
 
         if (tipo === 'pdf' || tipo === 'dxf') {
@@ -13055,7 +13079,7 @@ app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
 app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
     try {
         const { idTag } = req.query;
-        if (!idTag) return res.status(400).json({ success: false, message: 'IdTag nÃƒÂ£o informado' });
+        if (!idTag) return res.status(400).json({ success: false, message: 'IdTag não informado' });
 
         const [rows] = await pool.execute("SELECT CaminhoIsometrico FROM tags WHERE idtag = ?", [idTag]);
         
@@ -13065,15 +13089,15 @@ app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
                 const { exec } = require('child_process');
                 exec(`start "" "${endereco}"`, (error) => {
                     if (error) {
-                        return res.status(500).json({ success: false, message: 'Erro ao executar isomÃƒÂ©trico' });
+                        return res.status(500).json({ success: false, message: 'Erro ao executar isomà©trico' });
                     }
-                    res.json({ success: true, message: 'IsomÃƒÂ©trico aberto com sucesso' });
+                    res.json({ success: true, message: 'Isomà©trico aberto com sucesso' });
                 });
             } else {
                 res.status(404).json({ success: false, message: 'Arquivo referenciado na base de dados não existe!!' });
             }
         } else {
-            res.status(404).json({ success: false, message: 'Nenhum caminho isomÃƒÂ©trico encontrado para esta Tag.' });
+            res.status(404).json({ success: false, message: 'Nenhum caminho isomà©trico encontrado para esta Tag.' });
         }
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
@@ -13125,7 +13149,7 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
     }
 
     if (!idOrdemServicoItem || !qtdeNum || qtdeNum <= 0) {
-        return res.status(400).json({ success: false, message: 'Dados invÃƒÂ¡lidos.' });
+        return res.status(400).json({ success: false, message: 'Dados inválidos.' });
     }
 
     let connection;
@@ -13137,9 +13161,9 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
 
         let qtdExpedidaGeral = 0;
 
-        // 4 e 5: a quantidade digitada serÃƒÂ¡ acrescida ao campo de total de expediÃƒÂ§ÃƒÂ£o
-        // Se na primeira atualizaÃƒÂ§ÃƒÂ£o a data de realizado inicio estiver vazia, atualizar.
-        // 6: Se qtde entrada + total expediÃƒÂ§ÃƒÂ£o == qtde total, atualizar realizado final.
+        // 4 e 5: a quantidade digitada será acrescida ao campo de total de expedià§ão
+        // Se na primeira atualizaà§ão a data de realizado inicio estiver vazia, atualizar.
+        // 6: Se qtde entrada + total expedià§ão == qtde total, atualizar realizado final.
 
         const tabelas = [
             { 
@@ -13233,7 +13257,7 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
         res.json({ success: true, message: 'Apontamento registrado com sucesso.' });
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('Erro ao apontar expediÃƒÂ§ÃƒÂ£o:', error);
+        console.error('Erro ao apontar expedià§ão:', error);
         res.status(500).json({ success: false, message: 'Erro interno ao salvar.' });
     } finally {
         if (connection) connection.release();
@@ -13252,20 +13276,20 @@ app.post('/api/tarefas/exportar-excel', async (req, res) => {
         const templatePath = configRows.length > 0 ? configRows[0].valor : null;
 
         if (!templatePath || !fs.existsSync(templatePath)) {
-            console.warn(`[Excel] Planilha template nÃƒÂ£o encontrada: ${templatePath}`);
-            return res.status(400).json({ success: false, message: 'A planilha template nÃƒÂ£o foi encontrada no caminho configurado.' });
+            console.warn(`[Excel] Planilha template não encontrada: ${templatePath}`);
+            return res.status(400).json({ success: false, message: 'A planilha template não foi encontrada no caminho configurado.' });
         }
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(templatePath);
         const worksheet = workbook.getWorksheet(1); // Pega a primeira aba
         
-        // CabeÃƒÂ§alho (BH2 = Data, BH3 = Usuario)
+        // Cabeà§alho (BH2 = Data, BH3 = Usuario)
         const nowFormatted = new Date().toLocaleDateString('pt-BR');
         worksheet.getCell('BH2').value = nowFormatted;
         worksheet.getCell('BH3').value = usuario || 'Sistema';
 
-        // Linha 12 tem a formataÃƒÂ§ÃƒÂ£o base, copiamos os valores a partir da linha 13
+        // Linha 12 tem a formataà§ão base, copiamos os valores a partir da linha 13
         tarefas.forEach((t, idx) => {
             const rowIdx = idx + 13;
             worksheet.getCell(`A${rowIdx}`).value = (t.idRnc || '').toString().trim().toUpperCase();
@@ -13294,12 +13318,12 @@ app.post('/api/tarefas/exportar-excel', async (req, res) => {
         
         await workbook.xlsx.write(res);
         res.end();
-        console.log(`[Excel] RelatÃƒÂ³rio de tarefas gerado e baixado (${tarefas?.length || 0} itens)`);
+        console.log(`[Excel] Relatà³rio de tarefas gerado e baixado (${tarefas?.length || 0} itens)`);
 
     } catch (error) {
         console.error('[Excel Tarefas] Erro ao exportar:', error);
         if (!res.headersSent) {
-            res.status(500).json({ success: false, message: 'Erro ao gerar relatÃƒÂ³rio Excel: ' + error.message });
+            res.status(500).json({ success: false, message: 'Erro ao gerar relatà³rio Excel: ' + error.message });
         }
     }
 });
@@ -13432,7 +13456,7 @@ app.get('/api/ordemservicoitem/check-file', (req, res) => {
     }
 });
 
-// Sem autenticaÃƒÂ§ÃƒÂ£o obrigatÃƒÂ³ria para facilitar window.open em nova guia. Ideal: usar tokens em querystring se necessÃƒÂ¡rio.
+// Sem autenticaà§ão obrigatà³ria para facilitar window.open em nova guia. Ideal: usar tokens em querystring se necessário.
 app.get('/api/pdf', (req, res) => {
     try {
         const { path: filePath } = req.query;
@@ -13468,15 +13492,63 @@ app.get('/api/download', (req, res) => {
             const stream = fs.createReadStream(resolvedPath);
             stream.pipe(res);
         } else {
-            res.status(404).send('<script>alert("Arquivo nÃƒÂ£o encontrado!"); window.close();</script>');
+            res.status(404).send('<script>alert("Arquivo não encontrado!"); window.close();</script>');
         }
     } catch (err) {
         res.status(500).send(err.message);
     }
 });
 
-// --- ÃƒÂcone 5: Excluir linha OS ---
+// --- àcone 5: Excluir linha OS ---
+// --- Toggle Produto Principal ---
+app.post('/api/ordemservicoitem/:id/toggle-principal', async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const { marcar, idOrdemServico } = req.body;
+
+        if (!id || idOrdemServico === undefined) {
+            return res.status(400).json({ success: false, message: 'IdOrdemServicoItem e idOrdemServico são obrigatórios.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        if (marcar) {
+            // Clear any existing Produto Principal for this OS first
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = NULL WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [idOrdemServico]
+            );
+            // Mark the selected item as Produto Principal
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = 'SIM' WHERE IdOrdemServicoItem = ?`,
+                [id]
+            );
+        } else {
+            // Unmark Produto Principal
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = NULL WHERE IdOrdemServicoItem = ?`,
+                [id]
+            );
+        }
+
+        await connection.commit();
+        return res.json({
+            success: true,
+            message: marcar ? 'Item marcado como Produto Principal.' : 'Produto Principal desmarcado.'
+        });
+    } catch (error) {
+        if (connection) { try { await connection.rollback(); } catch (e) {} }
+        console.error('[API] Error toggle-principal:', error);
+        return res.status(500).json({ success: false, message: 'Erro ao atualizar Produto Principal.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
+
     let connection = null;
     try {
         const { IdOrdemServicoItem, Fator } = req.body;
@@ -13680,7 +13752,7 @@ app.get('/api/teste-final-montagem/itens', async (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// TESTE FINAL MONTAGEM Ã¢â‚¬â€ LanÃƒÂ§ar quantidade testada
+// TESTE FINAL MONTAGEM Ã¢â‚¬â€ Lanà§ar quantidade testada
 // ----------------------------------------------------------------------------
 app.post('/api/teste-final-montagem/lancar', async (req, res) => {
     let connection = null;
@@ -13693,7 +13765,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
         const entrada = Number(entradaRaw);
 
         if (!IdOrdemServicoItem || !entrada) {
-            return res.status(400).json({ success: false, message: 'ParÃƒÂ¢metros invÃƒÂ¡lidos.' });
+            return res.status(400).json({ success: false, message: 'Parà¢metros inválidos.' });
         }
 
         // 1. Buscar dados atuais do item
@@ -13705,14 +13777,14 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
             [IdOrdemServicoItem]
         );
 
-        if (!item) return res.status(404).json({ success: false, message: 'Item nÃƒÂ£o encontrado.' });
+        if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-        // 2. ValidaÃƒÂ§ÃƒÂµes
+        // 2. Validaà§àµes
         if (item.OrdemServicoItemFinalizado === 'C') {
-            return res.json({ success: false, message: 'Item jÃƒÂ¡ finalizado!' });
+            return res.json({ success: false, message: 'Item já finalizado!' });
         }
         if (item.sttxtMontagem === 'C') {
-            return res.json({ success: false, message: 'Item jÃƒÂ¡ finalizado no setor de Montagem!' });
+            return res.json({ success: false, message: 'Item já finalizado no setor de Montagem!' });
         }
 
         // Tag finalizada?
@@ -13721,7 +13793,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                 'SELECT Finalizado FROM tags WHERE idtag = ? LIMIT 1', [IdTag]
             );
             if (tagRow && tagRow.Finalizado && tagRow.Finalizado !== '') {
-                return res.json({ success: false, message: 'Tag jÃƒÂ¡ Finalizada!' });
+                return res.json({ success: false, message: 'Tag já Finalizada!' });
             }
         }
 
@@ -13730,7 +13802,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
 
         // Validar entrada
         if (isNaN(entrada) || entrada <= 0 || entrada > qtdeTotal) {
-            return res.json({ success: false, message: 'Valor informado invÃƒÂ¡lido!' });
+            return res.json({ success: false, message: 'Valor informado inválido!' });
         }
 
         const novoExecutado = executadoAtual + entrada;
@@ -13755,7 +13827,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                 [novoExecutado, agora, agoraData, IdOrdemServicoItem]
             );
 
-            // Preencher inÃƒÂ­cio se vazio
+            // Preencher inà­cio se vazio
             if (!item.RealizadoInicioMontagem) {
                 await connection.execute(
                     `UPDATE ordemservicoitem SET RealizadoInicioMontagem = ? WHERE IdOrdemServicoItem = ?`,
@@ -13806,7 +13878,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                     );
                 }
 
-                // Verificar se todos itens da OS foram concluÃƒÂ­dos
+                // Verificar se todos itens da OS foram concluà­dos
                 const [[countRow]] = await connection.execute(
                     `SELECT COUNT(IdOrdemServicoItem) as pendentes FROM ordemservicoitem
                      WHERE IdOrdemServico = ?
@@ -14498,7 +14570,7 @@ app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res)
                 QtdeTotal, QtdeProduzida, QtdeFaltante, CriadoPor, DataCriacao, Situacao, TipoApontamento, txtCorte
             ) VALUES (?, ?, 0, 'CORTE', ?, ?, ?, ?, ?, 'LANCAMENTO', ?, ?)`,
             [item.IdOrdemServico, id, qtdeTotal, qtd, novoExecutar, usuario, agoraFull, tipoAppEnv, qtd]
-        ); // Nota: QtdeProduzida é a diferença (qtd) e txtCorte foi unificado
+        ); // Nota: QtdeProduzida ? a diferença (qtd) e txtCorte foi unificado
 
         // 4. Propaga para próximo setor
         let proximoCol = null;
@@ -15052,7 +15124,7 @@ app.post('/api/plano-corte/remover-item', async (req, res) => {
 
         const itemData = statusRows[0];
         if (itemData.Enviadocorte === 'S' || itemData.Concluido === 'S' || itemData.Concluido === 'C') {
-            return res.status(403).json({ success: false, message: 'Não é possível remover itens de um plano já enviado ou concluído.' });
+            return res.status(403).json({ success: false, message: 'Não ? possível remover itens de um plano já enviado ou concluído.' });
         }
 
         // 2. Desvincular item do plano
@@ -16072,7 +16144,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
         let tagFilter = `IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
         const tagParams = [id];
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
+            tagFilter += ` AND IdTag IN (${tagIds.map(() => 'é').join(',')})`;
             tagParams.push(...tagIds);
         }
         const [tagsRows] = await connection.execute(
@@ -16089,7 +16161,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
             const params = [];
 
             Object.keys(normalizedData).forEach(key => {
-                // Verifica se é campo de Realizado
+                // Verifica se ? campo de Realizado
                 const setorConf = SETORES_REALIZADO.find(s => s.realFields.includes(key));
                 if (setorConf) {
                     // Tag já tem PlanejadoInicio? ou payload está enviando o PlanejadoInicio deste setor?

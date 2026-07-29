@@ -77,6 +77,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [totalAdded, setTotalAdded] = useState(0);
   const [montarRecursoCod, setMontarRecursoCod] = useState<string | null>(null);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   const fetchExistingOsCodigos = async () => {
     try {
@@ -291,6 +292,25 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   };
 
   const handleSubmit = async () => {
+    setValidationError(null);
+
+    // Validação: cada item deve ter pelo menos 1 recurso ativo
+    const semRecurso = Object.keys(selectedItems).filter(cod => {
+      const procs = itemProcessos[cod];
+      return !procs || procs.length === 0;
+    });
+
+    if (semRecurso.length > 0) {
+      const nomes = semRecurso.map(cod => {
+        const mat = searchResults.find(m => m.CodMatFabricante === cod);
+        return mat ? `${cod} – ${mat.DescResumo}` : cod;
+      });
+      setValidationError(
+        `Os seguintes materiais não possuem nenhum recurso/processo cadastrado e não podem ser incluídos:\n• ${nomes.join('\n• ')}\n\nCadastre ao menos 1 recurso via "Montar Recursos" antes de confirmar.`
+      );
+      return;
+    }
+
     const itensArray = Object.keys(selectedItems).map(cod => {
       const item = selectedItems[cod];
       const qtde = Math.max(1, parseInt(String(item.qtde), 10) || 1);
@@ -410,6 +430,25 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
           <div className="flex items-center gap-2 bg-emerald-50 border-b border-emerald-200 px-4 py-2 text-emerald-700 text-xs font-medium">
             <CheckCircle size={14} className="shrink-0" />
             {successMsg}
+          </div>
+        )}
+
+        {/* Banner de erro de validação */}
+        {validationError && (
+          <div className="bg-red-50 border-b border-red-300 px-4 py-3 flex gap-3 items-start">
+            <span className="text-red-500 text-lg leading-none shrink-0">🚫</span>
+            <div className="flex-1">
+              <p className="text-red-700 font-bold text-xs mb-1">Inclusão bloqueada — recursos ausentes</p>
+              <pre className="text-red-600 text-[10.5px] whitespace-pre-wrap font-medium leading-relaxed">{validationError}</pre>
+            </div>
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              className="text-red-400 hover:text-red-600 transition-colors shrink-0 mt-0.5"
+              title="Fechar aviso"
+            >
+              <X size={14} />
+            </button>
           </div>
         )}
 
