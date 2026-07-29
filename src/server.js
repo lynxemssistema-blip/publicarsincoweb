@@ -10898,18 +10898,25 @@ osi.*,
             }
 
             // 8. Update tagcontrole
-            if (item.IdTag) {
-                const setorCap = sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase();
+            // Mapa de setores -> nome da coluna EXATO em tagcontrole (apenas setores que têm colunas)
+            const TAGCONTROLE_SETOR_MAP = {
+                'corte': 'Corte', 'dobra': 'Dobra', 'solda': 'Solda', 'pintura': 'Pintura',
+                'montagem': 'Montagem', 'medicao': 'MEDICAO', 'isometrico': 'ISOMETRICO',
+                'engenharia': 'ENGENHARIA', 'acabamento': 'ACABAMENTO', 'aprovacao': 'APROVACAO'
+            };
+            if (item.IdTag && TAGCONTROLE_SETOR_MAP[sName]) {
+                const setorCap = TAGCONTROLE_SETOR_MAP[sName]; // nome exato da coluna
                 const dateCol = `RealizadoFinal${setorCap}Controle`;
                 const userCol = `UsuarioRealizadoFinal${setorCap}Controle`;
                 const [tcRows] = await conn.execute('SELECT IdTagControle FROM tagcontrole WHERE IdTag = ? LIMIT 1', [item.IdTag]);
                 if (tcRows.length > 0) {
-                    await conn.execute(`UPDATE tagcontrole SET ${dateCol} = ?, ${userCol} = ? WHERE IdTagControle = ?`, [dateNow, CriadoPor || 'Sistema', tcRows[0].IdTagControle]);
+                    await conn.execute(`UPDATE tagcontrole SET \`${dateCol}\` = ?, \`${userCol}\` = ? WHERE IdTagControle = ?`, [dateNow, CriadoPor || 'Sistema', tcRows[0].IdTagControle]);
                 } else {
-                    await conn.execute(`INSERT INTO tagcontrole(IdTag, Tag, IdProjeto, Projeto, ${dateCol}, ${userCol}, DataControle) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+                    await conn.execute(`INSERT INTO tagcontrole(IdTag, Tag, IdProjeto, Projeto, \`${dateCol}\`, \`${userCol}\`, DataControle) VALUES(?, ?, ?, ?, ?, ?, ?)`,
                         [item.IdTag, item.Tag, item.IdProjeto, item.Projeto, dateNow, CriadoPor || 'Sistema', dateNow]);
                 }
             }
+            // Setores especiais (galvanizar, pulsionadeira, cortealaser etc.) não têm colunas em tagcontrole — log omitido
 
             // 8.5 Incrementar saldo do próximo setor (Fluxo Push)
             if (currentInputQty > 0 && (TipoApontamento !== 'Parcial')) {

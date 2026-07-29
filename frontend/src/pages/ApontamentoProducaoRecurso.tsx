@@ -2203,52 +2203,62 @@ useEffect(() => {
             const atLimite = minProdVal >= limiteDiarioVal;
 
             return (
-              <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-3 py-2 flex items-center gap-0">
+              <div className="rounded-xl border border-amber-200 bg-white shadow-sm px-2 py-1.5 flex items-stretch gap-0">
 
-                {/* Ícone + Limite Diário */}
-                <div className="flex items-center gap-1.5 shrink-0 pr-3">
-                  <div className="p-1 bg-[#32423D] text-[#E0E800] rounded-md">
-                    <Clock size={11} />
+                {/* LADO ESQUERDO — Recurso + Limite + Apontado (mais espaço) */}
+                <div className="flex items-center gap-2 pr-2 flex-[2] min-w-0">
+                  {/* Ícone */}
+                  <div className="p-1 bg-[#32423D] text-[#E0E800] rounded-md shrink-0">
+                    <Clock size={12} />
                   </div>
-                  <div>
-                    <div className="text-[8px] font-black text-gray-400 uppercase tracking-wider leading-none">Limite</div>
-                    <div className="text-[11px] font-black text-[#32423D] leading-tight">{limiteDiarioVal}<span className="text-[8px] text-gray-400 ml-0.5">min</span></div>
-                  </div>
-                </div>
-
-                {/* Apontado — logo ao lado */}
-                <div className="shrink-0 pr-3">
-                  <div className="text-[8px] font-black text-gray-400 uppercase tracking-wider leading-none">Apontado</div>
-                  <div className={`text-[11px] font-black leading-tight ${atLimite ? 'text-red-600' : 'text-emerald-700'}`}>
-                    {minProdVal}<span className="text-gray-400 font-normal">/{limiteDiarioVal}</span><span className="text-[8px] text-gray-400 ml-0.5">min</span>
-                  </div>
-                </div>
-
-                {/* Divisor */}
-                <div className="w-px h-6 bg-amber-200 shrink-0 mx-2" />
-
-                {/* Setup (A) */}
-                <div className="flex-1 text-center border-r border-amber-100 pr-2">
-                  <div className="text-[8px] font-black text-amber-400 uppercase tracking-wider leading-none">Setup (A)</div>
-                  <div className="text-sm font-black text-amber-800 leading-tight mt-0.5">
-                    {tempoSetup}<span className="text-[8px] text-amber-400 ml-0.5">min</span>
+                  <div className="min-w-0">
+                    {/* Nome do recurso em destaque */}
+                    <div className="text-[10px] font-black text-[#32423D] uppercase tracking-wide leading-none truncate">
+                      {(modalSetor !== 'mapa' ? modalSetor : (recursoOrigemRef.current || modalSetor)).toUpperCase()}
+                    </div>
+                    {/* Limite e Apontado na mesma sub-linha */}
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-[8px] text-gray-400 font-black uppercase">Lim.</span>
+                      <span className="text-[10px] font-black text-[#32423D]">{limiteDiarioVal}<span className="text-[7px] text-gray-400 ml-0.5">min</span></span>
+                      <span className="text-gray-300">·</span>
+                      <span className="text-[8px] text-gray-400 font-black uppercase">Apont.</span>
+                      <span className={`text-[10px] font-black ${atLimite ? 'text-red-600' : 'text-emerald-700'}`}>
+                        {minProdVal}<span className="text-gray-400 font-normal text-[7px]">/{limiteDiarioVal}min</span>
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                {/* Padrão / Peça (B) */}
-                <div className="flex-1 text-center border-r border-amber-100 px-2">
-                  <div className="text-[8px] font-black text-amber-400 uppercase tracking-wider leading-none">Padrão/Peça (B)</div>
-                  <div className="text-sm font-black text-amber-800 leading-tight mt-0.5">
-                    {tempoPadrao}<span className="text-[8px] text-amber-400 ml-0.5">min</span>
-                  </div>
-                </div>
+                {/* Divisor vertical */}
+                <div className="w-px bg-amber-200 shrink-0 mx-1.5 self-stretch" />
 
-                {/* Total Produção (C) */}
-                <div className="flex-1 text-center pl-2">
-                  <div className="text-[8px] font-black text-amber-500 uppercase tracking-wider leading-none">Total Prod. (C)</div>
-                  <div className="text-sm font-black text-amber-800 leading-tight mt-0.5">
-                    {tempoTotal.toFixed(1)}<span className="text-[8px] text-amber-400 ml-0.5">min</span>
+                {/* LADO DIREITO — Tempos compactos: Setup | Padrão | Total (flex-[3]) */}
+                <div className="flex-[3] flex items-center divide-x divide-amber-100">
+
+                  {/* Setup (A) */}
+                  <div className="flex-1 text-center px-1">
+                    <div className="text-[7px] font-black text-amber-400 uppercase tracking-wider leading-none">Setup (A)</div>
+                    <div className="text-xs font-black text-amber-800 leading-tight mt-0.5">
+                      {tempoSetup}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
+                    </div>
                   </div>
+
+                  {/* Padrão / Peça (B) */}
+                  <div className="flex-1 text-center px-1">
+                    <div className="text-[7px] font-black text-amber-400 uppercase tracking-wider leading-none">Pad./Peça (B)</div>
+                    <div className="text-xs font-black text-amber-800 leading-tight mt-0.5">
+                      {tempoPadrao}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
+                    </div>
+                  </div>
+
+                  {/* Total Produção (C) */}
+                  <div className="flex-1 text-center px-1">
+                    <div className="text-[7px] font-black text-amber-500 uppercase tracking-wider leading-none">Total (C)</div>
+                    <div className="text-xs font-black text-amber-800 leading-tight mt-0.5">
+                      {tempoTotal.toFixed(1)}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
+                    </div>
+                  </div>
+
                 </div>
 
               </div>
