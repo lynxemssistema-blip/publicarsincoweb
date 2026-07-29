@@ -243,7 +243,7 @@ useEffect(() => {
  const [submitting, setSubmitting] = useState(false);
  const [confirmingMapa, setConfirmingMapa] = useState(false);
  const [modalSetor, setModalSetor] = useState<any>('mapa');
- const [recursoOrigem, setRecursoOrigem] = useState<string>(''); // recurso ativo quando modal abre (mesmo em MAPA)
+ const recursoOrigemRef = useRef<string>(''); // useRef: sync, sem delay de re-render
  const [historyModalOpen, setHistoryModalOpen] = useState(false);
 
  // Reposicao Modal
@@ -597,8 +597,8 @@ useEffect(() => {
     setSelectedItem(item);
     setItemDetails(initialDetails);
     setModalSetor(activeSetor as Setor);
-    // Guarda o recurso de origem (setorAtivo antes de trocar para 'mapa')
-    setRecursoOrigem(activeSetor === 'mapa' ? setorAtivo : activeSetor);
+    // Guarda o recurso de origem (setorAtivo antes de trocar para 'mapa') - useRef para garantir valor síncrono
+    recursoOrigemRef.current = (activeSetor === 'mapa' ? setorAtivo : activeSetor);
     setModalOpen(true);
     setLoadingDetails(true);
     setQtdeApontar(activeSetor === 'mapa' ? String(item.QtdeTotal) : String(Math.max(1, recExecutar)));
@@ -2241,9 +2241,9 @@ useEffect(() => {
           {/* TEMPOS DE PRODUÇÃO DO ITEM */}
           {itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            // Usa o recurso de origem (ex: 'galvanizar') mesmo quando modalSetor === 'mapa'
-            const recursoRef = (modalSetor === 'mapa' && recursoOrigem && recursoOrigem !== 'mapa')
-              ? recursoOrigem
+            // Usa o recurso de origem via ref (síncrono, sem delay de estado)
+            const recursoRef = (modalSetor === 'mapa' && recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa')
+              ? recursoOrigemRef.current
               : (modalSetor === 'mapa' ? '' : modalSetor);
             const secFormatted = recursoRef ? recursoRef.charAt(0).toUpperCase() + recursoRef.slice(1) : '';
             const secUpper = recursoRef ? recursoRef.toUpperCase() : '';
