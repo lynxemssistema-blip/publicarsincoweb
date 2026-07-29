@@ -243,6 +243,7 @@ useEffect(() => {
  const [submitting, setSubmitting] = useState(false);
  const [confirmingMapa, setConfirmingMapa] = useState(false);
  const [modalSetor, setModalSetor] = useState<any>('mapa');
+ const [recursoOrigem, setRecursoOrigem] = useState<string>(''); // recurso ativo quando modal abre (mesmo em MAPA)
  const [historyModalOpen, setHistoryModalOpen] = useState(false);
 
  // Reposicao Modal
@@ -596,6 +597,8 @@ useEffect(() => {
     setSelectedItem(item);
     setItemDetails(initialDetails);
     setModalSetor(activeSetor as Setor);
+    // Guarda o recurso de origem (setorAtivo antes de trocar para 'mapa')
+    setRecursoOrigem(activeSetor === 'mapa' ? setorAtivo : activeSetor);
     setModalOpen(true);
     setLoadingDetails(true);
     setQtdeApontar(activeSetor === 'mapa' ? String(item.QtdeTotal) : String(Math.max(1, recExecutar)));
@@ -2238,9 +2241,12 @@ useEffect(() => {
           {/* TEMPOS DE PRODUÇÃO DO ITEM */}
           {itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            // Para modo 'mapa', usa dados globais do item; para setor específico, busca por prefixo
-            const secFormatted = (modalSetor === 'mapa') ? '' : modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
-            const secUpper = (modalSetor === 'mapa') ? '' : modalSetor.toUpperCase();
+            // Usa o recurso de origem (ex: 'galvanizar') mesmo quando modalSetor === 'mapa'
+            const recursoRef = (modalSetor === 'mapa' && recursoOrigem && recursoOrigem !== 'mapa')
+              ? recursoOrigem
+              : (modalSetor === 'mapa' ? '' : modalSetor);
+            const secFormatted = recursoRef ? recursoRef.charAt(0).toUpperCase() + recursoRef.slice(1) : '';
+            const secUpper = recursoRef ? recursoRef.toUpperCase() : '';
 
             // Busca Setup: campo é GalvanizarTempoSetup (secFormatted)
             const tempoSetup = parseFloat(String(
