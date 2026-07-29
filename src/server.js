@@ -10871,14 +10871,31 @@ osi.*,
             }
 
             // 7. Log de apontamento
-            // Usa sConfig.txt para obter o nome EXATO da coluna no banco (ex: txtGALVANIZAR, txtPULSIONADEIRA)
-            const txtSetor = sConfig.txt; // era: `txt${sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase()}` → gerava txtGalvanizar incorreto
+            // A tabela ordemservicoitemcontrole só tem colunas txt para setores padrão:
+            // txtCorte, txtDobra, txtSolda, txtPintura, txtMontagem, txtAlmoxarifado, txtMEDICAO, txtISOMETRICO, txtENGENHARIA, txtACABAMENTO, txtAPROVACAO
+            // Setores especiais (galvanizar, pulsionadeira, cortealaser) NÃO têm coluna txt — inserimos sem ela.
+            const CONTROLE_TXT_COLS = new Set([
+                'txtCorte', 'txtDobra', 'txtSolda', 'txtPintura', 'txtMontagem',
+                'txtAlmoxarifado', 'txtMEDICAO', 'txtISOMETRICO', 'txtENGENHARIA',
+                'txtACABAMENTO', 'txtAPROVACAO'
+            ]);
+            const txtSetor = sConfig.txt; // nome exato da coluna (ex: txtGALVANIZAR, txtCorte)
             const tipoAppEnv = TipoApontamento || 'Total';
-            await conn.execute(`
-                INSERT INTO ordemservicoitemcontrole(
-                    IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, \`${txtSetor}\`, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
-            `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            const txtColExists = CONTROLE_TXT_COLS.has(txtSetor);
+            if (txtColExists) {
+                await conn.execute(`
+                    INSERT INTO ordemservicoitemcontrole(
+                        IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, \`${txtSetor}\`, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            } else {
+                // Setor especial (galvanizar, pulsionadeira, etc.): não há coluna txt — registra sem ela
+                await conn.execute(`
+                    INSERT INTO ordemservicoitemcontrole(
+                        IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            }
 
             // 8. Update tagcontrole
             if (item.IdTag) {
