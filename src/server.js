@@ -10871,11 +10871,12 @@ osi.*,
             }
 
             // 7. Log de apontamento
-            const txtSetor = `txt${sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase()}`;
+            // Usa sConfig.txt para obter o nome EXATO da coluna no banco (ex: txtGALVANIZAR, txtPULSIONADEIRA)
+            const txtSetor = sConfig.txt; // era: `txt${sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase()}` → gerava txtGalvanizar incorreto
             const tipoAppEnv = TipoApontamento || 'Total';
             await conn.execute(`
                 INSERT INTO ordemservicoitemcontrole(
-                    IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, ${txtSetor}, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
+                    IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, \`${txtSetor}\`, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
                 ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
             `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
 
