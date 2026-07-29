@@ -10581,6 +10581,10 @@ app.post('/api/apontamento', async (req, res) => {
 
     const isMapa = Processo.toLowerCase() === 'mapa';
     const setorAtivo = !isMapa ? Processo.toLowerCase() : null;
+    // RecursoOrigem: quando MAPA é clicado na página de recurso especial (galvanizar etc.)
+    // o frontend envia o recurso de origem para apontarmos apenas aquele setor
+    const recursoOrigem = req.body.RecursoOrigem ? req.body.RecursoOrigem.toLowerCase() : null;
+    const isMapaEspecial = isMapa && recursoOrigem && setorColumns[recursoOrigem] && recursoOrigem !== 'mapa';
 
     if (!isMapa && !setorColumns[setorAtivo]) {
         return res.status(400).json({ success: false, message: 'Processo inválido' });
@@ -10623,12 +10627,17 @@ osi.*,
         const item = itemRows[0];
         const qtdeTotal = parseFloat(item.QtdeTotal) || 0;
 
-        const setoresParaProcessar = isMapa
-            // MAPA: processa todos os setores com txt=1 no item (dinâmico, inclui galvanizar etc.)
-            ? Object.entries(setorColumns)
-                .filter(([sKey, sCfg]) => sCfg.txt && NULLIF_TRIM(item[sCfg.txt]) === '1')
-                .map(([sKey]) => sKey)
-            : [setorAtivo];
+        const MAPA_SEQUENCE_SAFE = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
+        const setoresParaProcessar = isMapaEspecial
+            // MAPA especial: recurso não-padrão (galvanizar, pulsionadeira etc.) - apontar só este setor
+            ? [recursoOrigem]
+            : isMapa
+                // MAPA padrão: somente os 5 setores seguros que têm colunas em OS/Tags/Projetos, filtrados por txt=1
+                ? MAPA_SEQUENCE_SAFE.filter(sKey => {
+                    const sCfg = setorColumns[sKey];
+                    return sCfg && sCfg.txt && NULLIF_TRIM(item[sCfg.txt]) === '1';
+                  })
+                : [setorAtivo];
 
         if (setoresParaProcessar.length === 0) {
             await conn.rollback();

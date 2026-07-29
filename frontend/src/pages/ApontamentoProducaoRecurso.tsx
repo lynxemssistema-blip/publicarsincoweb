@@ -662,9 +662,10 @@ useEffect(() => {
  IdOrdemServicoItem: selectedItem.IdOrdemServicoItem,
  IdOrdemServico: selectedItem.IdOrdemServico,
  Processo: modalSetor,
+ RecursoOrigem: recursoOrigemRef.current || '', // informa qual recurso estava ativo ao abrir MAPA
  QtdeProduzida: finalQtde,
  TipoApontamento: finalTipoApontamento,
- CriadoPor: 'Edson' // Temporário, aguardando refatoração de AuthContext nesta página
+ CriadoPor: (user as any)?.NomeCompleto || (user as any)?.name || 'Sistema'
  })
  });
 
@@ -2304,10 +2305,9 @@ useEffect(() => {
             );
           })()}
 
-          {/* Quantidade Input + Tempo Calculado - Hidden in Mapa Mode */}
+          {/* ─── LINHA DE AÇÃO INTEGRADA: Qtde + Tempo + Botões ─── */}
           {modalSetor !== 'mapa' && itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            // Detecta tempoPadrao do setor ativo (mesmo lógica do bloco de tempos acima)
             const PREFIXOS_Q = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Pulsionadeira','CorteaLaser','Engenharia'];
             let tPadrao = 0;
             const prefQ = modalSetor !== 'mapa' ? modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1) : '';
@@ -2320,43 +2320,96 @@ useEffect(() => {
             const tempoCalculado = (qtdeNum * tPadrao).toFixed(1);
 
             return (
-              <div className="pt-1">
-                <label className="block text-[10px] font-black text-gray-400 uppercase mb-1">
-                  Quantidade a Produzir (Faltam {itemDetails.qtdeFaltante})
+              <div className="pt-1 pb-1">
+                <label className="block text-[9px] font-black text-gray-400 uppercase mb-1">
+                  Qtde a Produzir — Faltam {itemDetails.qtdeFaltante}
                 </label>
-                <div className="flex gap-2 items-center">
-                  {/* Input compacto */}
-                  <div className="w-28">
-                    <input
-                      type="number"
-                      min="1"
-                      max={itemDetails.qtdeFaltante}
-                      value={qtdeApontar}
-                      onChange={(e) => {
-                        let val = e.target.value;
-                        if (val !== '') {
-                          const num = parseInt(val) || 0;
-                          const max = itemDetails?.qtdeFaltante || 0;
-                          if (num > max) val = String(max);
-                          else if (num < 0) val = '0';
-                        }
-                        setQtdeApontar(val);
-                      }}
-                      className="w-full px-2 py-1 text-base font-black text-center rounded-lg border border-gray-200 hover:border-[#32423D]/40 focus:border-[#32423D] focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all bg-white text-gray-800 h-8"
-                      placeholder="0"
-                    />
-                  </div>
-                  {/* Tempo calculado em tempo real */}
+                <div className="flex gap-1.5 items-center">
+                  {/* Qtde: input compacto */}
+                  <input
+                    type="number"
+                    min="1"
+                    max={itemDetails.qtdeFaltante}
+                    value={qtdeApontar}
+                    onChange={(e) => {
+                      let val = e.target.value;
+                      if (val !== '') {
+                        const num = parseInt(val) || 0;
+                        const max = itemDetails?.qtdeFaltante || 0;
+                        if (num > max) val = String(max);
+                        else if (num < 0) val = '0';
+                      }
+                      setQtdeApontar(val);
+                    }}
+                    className="w-16 px-1 py-1.5 text-sm font-black text-center rounded-lg border border-gray-300 focus:border-[#32423D] focus:outline-none focus:ring-1 focus:ring-blue-200 bg-white"
+                    placeholder="0"
+                  />
+
+                  {/* Tempo estimado: badge compacto */}
                   {tPadrao > 0 && (
-                    <div className="flex-1 flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 h-8">
-                      <span className="text-[9px] font-black text-blue-400 uppercase tracking-wider whitespace-nowrap">⏱ Tempo estimado:</span>
-                      <span className="text-sm font-black text-blue-700 ml-auto">{tempoCalculado} min</span>
+                    <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1.5 text-xs shrink-0">
+                      <span className="text-blue-400 font-black">⏱</span>
+                      <span className="font-black text-blue-700">{tempoCalculado}<span className="text-[9px] text-blue-400 ml-0.5">min</span></span>
                     </div>
                   )}
+
+                  {/* Botão Cancelar */}
+                  <button
+                    onClick={() => setModalOpen(false)}
+                    className="flex-1 py-1.5 rounded-lg border border-gray-200 text-gray-600 text-xs font-black hover:bg-gray-100 transition-colors"
+                  >
+                    Cancelar
+                  </button>
+
+                  {/* Botão Confirmar */}
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleSubmit}
+                    disabled={submitting || (!qtdeApontar || parseInt(qtdeApontar) <= 0)}
+                    className={`flex-[2] py-1.5 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 transition-colors ${
+                      submitting || (!qtdeApontar || parseInt(qtdeApontar) <= 0)
+                        ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        : `${setorInfo.color} text-white shadow-sm`
+                    }`}
+                  >
+                    {submitting ? (
+                      <><Loader2 size={12} className="animate-spin" /> Processando...</>
+                    ) : (
+                      <><CheckCircle size={12} /> Confirmar Apontamento</>
+                    )}
+                  </motion.button>
                 </div>
               </div>
             );
           })()}
+
+          {/* Linha de ação para modo MAPA */}
+          {modalSetor === 'mapa' && (
+            <div className="flex gap-1.5 pt-1 pb-1">
+              <button
+                onClick={() => setModalOpen(false)}
+                className="flex-1 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-black hover:bg-gray-100 transition-colors"
+              >
+                Cancelar
+              </button>
+              <motion.button
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={handleSubmit}
+                disabled={submitting}
+                className={`flex-[2] py-2 rounded-lg text-xs font-black flex items-center justify-center gap-1.5 ${
+                  submitting ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-[#32423D] text-white shadow-sm'
+                }`}
+              >
+                {submitting ? (
+                  <><Loader2 size={12} className="animate-spin" /> Processando...</>
+                ) : (
+                  <><CheckCircle size={12} /> Sim, Finalizar Tudo</>
+                )}
+              </motion.button>
+            </div>
+          )}
 
 
  {/* Histórico */}
@@ -2378,43 +2431,6 @@ useEffect(() => {
  )}
  </div>
  ) : null}
- </div>
-
- {/* Modal Footer */}
- <div className="px-2 py-0.5 bg-gray-50 flex gap-3">
- <button
- onClick={() => setModalOpen(false)}
- className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100"
- >
- Cancelar
- </button>
- <motion.button
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- onClick={handleSubmit}
- disabled={submitting || (modalSetor !== 'mapa' && (!qtdeApontar || parseInt(qtdeApontar) <= 0))}
- className={`flex-1 py-2.5 rounded-lg font-medium flex items-center justify-center gap-2 ${submitting || (modalSetor !== 'mapa' && (!qtdeApontar || parseInt(qtdeApontar) <= 0))
- ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
- : modalSetor === 'mapa' ? 'bg-[#32423D] text-white shadow-lg' : `${setorInfo.color} text-white`
- }`}
- >
- {submitting ? (
- <>
- <Loader2 size={14} className="animate-spin" />
- Processando...
- </>
- ) : modalSetor === 'mapa' ? (
- <>
- <CheckCircle size={14} />
- Sim, Finalizar Tudo
- </>
- ) : (
- <>
- <CheckCircle size={14} />
- Confirmar Apontamento
- </>
- )}
- </motion.button>
  </div>
  </motion.div>
  </motion.div>
