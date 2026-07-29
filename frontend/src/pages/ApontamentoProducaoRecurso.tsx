@@ -643,6 +643,55 @@ useEffect(() => {
  return;
  }
 
+ // ── VALIDAÇÃO DE LIMITE DIÁRIO DE MINUTOS ──────────────────────────────
+ if (modalSetor !== 'mapa' && itemDetails) {
+   const setorKey = String(modalSetor).toLowerCase();
+   const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+   const secUpper = modalSetor.toUpperCase();
+   const itemAny = itemDetails.item as any;
+
+   // Calcula tempoPadrão do setor ativo
+   const PREFIXOS_V = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Pulsionadeira','CorteaLaser','Engenharia'];
+   let tPadraoV = 0, tSetupV = 0;
+   const prefV = secFormatted;
+   const candidatesV = [prefV, ...PREFIXOS_V.filter(p => p !== prefV)];
+   for (const p of candidatesV) {
+     const tp = parseFloat(String(itemAny[`${p}TempoPadrao`] ?? 0)) || 0;
+     const ts = parseFloat(String(itemAny[`${p}TempoSetup`] ?? 0)) || 0;
+     if (tp > 0 || ts > 0) { tPadraoV = tp; tSetupV = ts; break; }
+   }
+   if (tPadraoV === 0) tPadraoV = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
+   if (tSetupV === 0) tSetupV = parseFloat(String(itemAny.TempoSetup ?? 0)) || 0;
+
+   // MinProd acumulado atual do setor
+   const minProdAtual = parseFloat(String(
+     itemDetails[`${secFormatted}MinProd`] ??
+     itemDetails[`${secUpper}MinProd`] ??
+     itemDetails[`${modalSetor}MinProd`] ??
+     itemDetails.item?.[`${secFormatted}MinProd`] ??
+     itemDetails.item?.[`${secUpper}MinProd`] ?? 0
+   )) || 0;
+
+   // Tempo estimado deste apontamento (setup só se for o primeiro, i.e. minProdAtual === 0)
+   const tempoEsteApont = (qProduzir * tPadraoV) + (minProdAtual === 0 ? tSetupV : 0);
+
+   // Limite diário configurado
+   const limitesSalvos = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
+   const limiteDiarioV = limitesSalvos[setorKey] ?? 500;
+   const totalComEsteApont = minProdAtual + tempoEsteApont;
+
+   if (limiteDiarioV > 0 && totalComEsteApont > limiteDiarioV) {
+     addToast({
+       type: 'error',
+       title: 'Limite Diário Excedido',
+       message: `O tempo de produção deste apontamento (${tempoEsteApont.toFixed(1)} min) somado ao já apontado hoje (${minProdAtual} min) totaliza ${totalComEsteApont.toFixed(1)} min, ultrapassando o limite diário de ${limiteDiarioV} min para o setor ${modalSetor.toUpperCase()}. Reduza a quantidade ou ajuste o limite nas configurações.`,
+       duration: 9000
+     });
+     return;
+   }
+ }
+ // ─────────────────────────────────────────────────────────────────────────
+
  // Mapa Confirmation Step
  if (modalSetor === 'mapa' && !confirmingMapa) {
  setConfirmingMapa(true);
