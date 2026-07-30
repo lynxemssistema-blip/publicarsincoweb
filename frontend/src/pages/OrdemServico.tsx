@@ -407,6 +407,44 @@ function OrdemServicoContent() {
     const [tempoSetupEdit, setTempoSetupEdit] = useState('');
     const [tempoPadraoEdit, setTempoPadraoEdit] = useState('');
     const [tempoSaving, setTempoSaving] = useState(false);
+    // Per-resource tempo state: { [setorKey]: { setup: string, padrao: string } }
+    const [recursoTemposEdit, setRecursoTemposEdit] = useState<Record<string, { setup: string; padrao: string; seq?: string; IdProcesso?: number }>>({});
+    // Snapshot dos recursos ao abrir o modal (para calcular adicionados/removidos ao salvar)
+    const [recursoTemposOriginal, setRecursoTemposOriginal] = useState<Record<string, { setup: string; padrao: string }>>({});
+    // Lista dinâmica de processos com Fabrica = 'SIM' buscada do backend
+    const [processosFabricaSIM, setProcessosFabricaSIM] = useState<{ key: string; label: string }[]>([]);
+    const [materialProcessos, setMaterialProcessos] = useState<{ IdProcesso: number; key: string; sequencia: number }[]>([]);
+    const [draggedResource, setDraggedResource] = useState<string | null>(null);
+    const [dragOverResource, setDragOverResource] = useState<string | null>(null);
+
+    // Mapa de setores para campos de tempo por recurso
+    const SETOR_TEMPO_PREFIXO: Record<string, string> = {
+        corte:        'Corte',
+        dobra:        'Dobra',
+        solda:        'Solda',
+        pintura:      'Pintura',
+        montagem:     'Montagem',
+        cortealasar:  'CorteaLaser',
+        pulsionadeira:'Pulsionadeira',
+        galvanizar:   'Galvanizar',
+    };
+
+    // Converte nome de processo (da tabela processofabricacao) em { key, label }
+    const mapProcessNameToKey = (name: string): { key: string; label: string } => {
+        const norm = (name || '').trim().toUpperCase().replace(/\s+/g, '');
+        if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return { key: 'cortealasar', label: name };
+        if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA'))                      return { key: 'pulsionadeira', label: name };
+        if (norm.includes('GALVANIZAR'))   return { key: 'galvanizar',   label: name };
+        if (norm.includes('ENGENHARIA'))   return { key: 'engenharia',   label: name };
+        if (norm.includes('CORTE'))        return { key: 'corte',        label: name };
+        if (norm.includes('DOBRA'))        return { key: 'dobra',        label: name };
+        if (norm.includes('SOLDA'))        return { key: 'solda',        label: name };
+        if (norm.includes('PINTURA'))      return { key: 'pintura',      label: name };
+        if (norm.includes('MONTAGEM'))     return { key: 'montagem',     label: name };
+        const cleanKey = (name || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '') || 'processo';
+        return { key: cleanKey, label: name };
+    };
+
 
     const [idRncEdicao, setIdRncEdicao] = useState<number | null>(null);
     const [descricaoPendencia, setDescricaoPendencia] = useState('');
@@ -451,17 +489,23 @@ function OrdemServicoContent() {
     const formatDateBR = (dateStr?: string) => {
         if (!dateStr || dateStr === '-') return '-';
         try {
+            // Ja esta no formato dd/mm/aaaa
             if (/^\d{2}\/\d{2}\/\d{4}/.test(dateStr)) return dateStr.split(' ')[0];
+            // Formato ISO YYYY-MM-DD (evita offset de fuso)
+            const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+            // Outros formatos via Date
             const date = new Date(dateStr);
             if (isNaN(date.getTime())) return dateStr;
-            const day = String(date.getDate()).padStart(2, '0');
+            const day   = String(date.getDate()).padStart(2, '0');
             const month = String(date.getMonth() + 1).padStart(2, '0');
-            const year = date.getFullYear();
+            const year  = date.getFullYear();
             return `${day}/${month}/${year}`;
         } catch {
             return dateStr;
         }
     };
+
 
     const handleOpenFile = async (e: React.MouseEvent, path: string, type: 'pdf' | 'dxf' | 'sldprt') => {
         e.stopPropagation();
@@ -526,44 +570,188 @@ function OrdemServicoContent() {
     // ============================================================
     // Handlers do Modal Manutenção de Tempos de Produção
     // ============================================================
-    const handleOpenTempoModal = (e: React.MouseEvent, item: OrdemServicoItem & { IdOrdemServico?: number }) => {
+    const handleOpenTempoModal = async (e: React.MouseEvent, item: OrdemServicoItem & { IdOrdemServico?: number }) => {
         e.stopPropagation();
         const itemAny = item as any;
         setTempoModalItem(item);
         setTempoSetupEdit(String(itemAny.TempoSetup ?? ''));
         setTempoPadraoEdit(String(itemAny.TempoPadrao ?? ''));
+        // Inicializar tempos por recurso para setores ativos (txtField === '1')
+        const recursoInit: Record<string, { setup: string; padrao: string; seq?: string; IdProcesso?: number }> = {};
+        for (const [secKey, pref] of Object.entries(SETOR_TEMPO_PREFIXO)) {
+            const txtFields: Record<string, string> = {
+                corte: 'txtCorte', dobra: 'txtDobra', solda: 'txtSolda', pintura: 'txtPintura',
+                montagem: 'TxtMontagem', cortealasar: 'txtCorteaLaser',
+                pulsionadeira: 'txtPULSIONADEIRA', galvanizar: 'txtGALVANIZAR',
+                engenharia: 'txtEngenharia',
+            };
+            const txtKey = txtFields[secKey];
+            if (txtKey && String(itemAny[txtKey] ?? '') === '1') {
+                // Usar valor do BD (pode ser vazio/nulo); sem fallback para evitar mostrar 0 falso
+                const rawSetup  = itemAny[`${pref}TempoSetup`];
+                const rawPadrao = itemAny[`${pref}TempoPadrao`];
+                const rawSeq    = itemAny[`${pref}Sequencia`];
+                recursoInit[secKey] = {
+                    setup:  (rawSetup  != null && rawSetup  !== '') ? String(rawSetup)  : '',
+                    padrao: (rawPadrao != null && rawPadrao !== '') ? String(rawPadrao) : '',
+                    seq:    (rawSeq != null && rawSeq !== '') ? String(rawSeq) : '',
+                };
+            }
+        }
+        setRecursoTemposEdit(recursoInit);
+        setRecursoTemposOriginal({ ...recursoInit }); // snapshot para comparação ao salvar
+
+        // Buscar materialProcessos da engenharia
+        try {
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const codmat = itemAny.CodMatFabricante || '';
+            if (codmat) {
+                const rMat = await fetch(`${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codmat)}`, {
+                    headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
+                    cache: 'no-store'
+                });
+                const jMat = await rMat.json();
+                if (jMat.success && Array.isArray(jMat.data)) {
+                    const matList = jMat.data.map((row: any) => ({
+                        IdProcesso: row.IdProcesso,
+                        key: mapProcessNameToKey(row.NomeProcesso).key,
+                        sequencia: row.SequenciaExecucao
+                    }));
+                    setMaterialProcessos(matList);
+                    
+                    // Enriquecer recursoTemposEdit com sequências e IdProcesso caso faltem
+                    setRecursoTemposEdit(prev => {
+                        const novo = { ...prev };
+                        let mudou = false;
+                        for (const [key, vals] of Object.entries(novo)) {
+                            const mat = matList.find(m => m.key === key);
+                            if (mat) {
+                                if (vals.IdProcesso !== mat.IdProcesso) {
+                                    novo[key] = { ...novo[key], IdProcesso: mat.IdProcesso };
+                                    mudou = true;
+                                }
+                                if (!vals.seq && mat.sequencia != null) {
+                                    novo[key] = { ...novo[key], seq: String(mat.sequencia) };
+                                    mudou = true;
+                                }
+                            }
+                        }
+                        return mudou ? novo : prev;
+                    });
+
+                } else {
+                    setMaterialProcessos([]);
+                }
+            } else {
+                setMaterialProcessos([]);
+            }
+        } catch (err) {
+            console.warn('[handleOpenTempoModal] falha ao buscar processos do material:', err);
+            setMaterialProcessos([]);
+        }
+
+        // Buscar processos com Fabrica = 'SIM' do backend
+        try {
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const r = await fetch(`${API_BASE}/peca-manufaturada/processos`, {
+                headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
+                cache: 'no-store'
+            });
+            const json = await r.json();
+            if (json.success && Array.isArray(json.data)) {
+                // Converte nomes do banco em { key, label } deduplicated by key
+                const seen = new Set<string>();
+                const lista: { key: string; label: string }[] = [];
+                for (const row of json.data) {
+                    const name = row.ProcessoFabricacao || '';
+                    const mapped = mapProcessNameToKey(name);
+                    if (!seen.has(mapped.key)) {
+                        seen.add(mapped.key);
+                        lista.push({ key: mapped.key, label: name });
+                    }
+                }
+                setProcessosFabricaSIM(lista);
+            }
+        } catch (err) {
+            console.warn('[handleOpenTempoModal] falha ao buscar processos Fabrica=SIM:', err);
+        }
+
         setTempoModalOpen(true);
     };
+
 
     const handleSaveTempos = async () => {
         if (!tempoModalItem) return;
         setTempoSaving(true);
         try {
             const itemAny = tempoModalItem as any;
-            const setup = parseFloat(tempoSetupEdit) || 0;
-            const padrao = parseFloat(tempoPadraoEdit) || 0;
             const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
-            const totalTempo = (qtde * padrao) + setup; // C = (QtdeTotal × B) + A
+            const hasRecursos = Object.keys(recursoTemposEdit).length > 0;
+
+            let setup  = 0;
+            let padrao = 0;
+            let totalTempo = 0;
+
+            if (hasRecursos) {
+                // Calcular globais como soma dos recursos
+                for (const v of Object.values(recursoTemposEdit)) {
+                    const s = parseFloat(v.setup)  || 0;
+                    const p = parseFloat(v.padrao) || 0;
+                    setup  += s;
+                    padrao += p;
+                    totalTempo += (qtde * p) + s;
+                }
+            } else {
+                setup      = parseFloat(tempoSetupEdit) || 0;
+                padrao     = parseFloat(tempoPadraoEdit) || 0;
+                totalTempo = (qtde * padrao) + setup;
+            }
+
+            // Converter recursoTemposEdit para formato esperado pelo backend
+            const recursoTemposPayload = hasRecursos
+                ? Object.fromEntries(Object.entries(recursoTemposEdit).map(([k, v]) => [
+                    k, { setup: parseFloat(v.setup) || 0, padrao: parseFloat(v.padrao) || 0, seq: v.seq || '', IdProcesso: v.IdProcesso }
+                ]))
+                : undefined;
+
+            // Calcular quais recursos foram adicionados e quais foram removidos
+            const currentKeys  = new Set(Object.keys(recursoTemposEdit));
+            const originalKeys = new Set(Object.keys(recursoTemposOriginal));
+            const addRecursos    = [...currentKeys].filter(k => !originalKeys.has(k));
+            const removeRecursos = [...originalKeys].filter(k => !currentKeys.has(k));
+
+            // Montar osContext para propagar flags nas tabelas pai
+            const osCtx = {
+                IdTag:     (tempoModalItem as any).IdTag     || null,
+                IdProjeto: (tempoModalItem as any).IdProjeto || null,
+            };
 
             const res = await fetch(`${API_BASE}/ordemservicoitem/${tempoModalItem.IdOrdemServicoItem}/tempos`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ TempoSetup: setup, TempoPadrao: padrao, TotalTempo: totalTempo })
+                body: JSON.stringify({
+                    TempoSetup: setup,
+                    TempoPadrao: padrao,
+                    TotalTempo: totalTempo,
+                    QtdeTotal: qtde,
+                    recursoTempos: recursoTemposPayload,
+                    addRecursos:    addRecursos.length    > 0 ? addRecursos    : undefined,
+                    removeRecursos: removeRecursos.length > 0 ? removeRecursos : undefined,
+                    osContext: osCtx
+                })
             });
             const data = await res.json();
             if (data.success) {
                 addToast({ type: 'success', title: 'Tempos atualizados', message: `Setup: ${setup}min | Padrão: ${padrao}min | Total: ${totalTempo.toFixed(1)}min` });
-                // Atualiza o item local sem refetch
-                setOrdensItens(prev => {
-                    const osId = tempoModalItem.IdOrdemServico!;
-                    const updatedItems = (prev[osId] || []).map(i =>
-                        i.IdOrdemServicoItem === tempoModalItem.IdOrdemServicoItem
-                            ? { ...i, TempoSetup: setup, TempoPadrao: padrao, TotalTempo: totalTempo } as any
-                            : i
-                    );
-                    return { ...prev, [osId]: updatedItems };
-                });
-                setTempoModalOpen(false);
+
+                // Atualizar snapshot para a próxima comparação de add/remove
+                setRecursoTemposOriginal({ ...recursoTemposEdit });
+
+                // Refetch completo dos itens da OS para refletir novos recursos/flags txt* na tela
+                const osId = tempoModalItem.IdOrdemServico!;
+                if (osId) await fetchItens(osId);
+
+                // Modal permanece aberto — usuário escolhe quando sair clicando em "Cancelar"
             } else {
                 addToast({ type: 'error', title: 'Erro', message: data.message || 'Erro ao salvar tempos.' });
             }
@@ -573,6 +761,7 @@ function OrdemServicoContent() {
             setTempoSaving(false);
         }
     };
+
 
     const handleDeleteItem = async (e: React.MouseEvent, item: OrdemServicoItem, osId: number) => {
         e.stopPropagation();
@@ -913,7 +1102,11 @@ function OrdemServicoContent() {
     const fetchItens = useCallback(async (osId: number) => {
         setLoadingItens(prev => new Set(prev).add(osId));
         try {
-            const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens`);
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens?t=${Date.now()}`, {
+                headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
+                cache: 'no-store'
+            });
             const json = await res.json();
             if (json.success) {
                 setOrdensItens(prev => ({ ...prev, [osId]: json.data }));
@@ -927,7 +1120,7 @@ function OrdemServicoContent() {
                 return next;
             });
         }
-    }, []);
+    }, [token]);
 
         const toggleOS = useCallback(async (osId: number) => {
         setSelectedOSId(osId);
@@ -1049,6 +1242,34 @@ function OrdemServicoContent() {
     };
 
     const handleLiberarOS = async (os: OrdemServico) => {
+        // ── Verificação antecipada: o Projeto deve estar liberado (Liberado = 'S') ──
+        if (os.IdProjeto) {
+            try {
+                const tkn = token || localStorage.getItem('sinco_token') || '';
+                const rPrj = await fetch(`${API_BASE}/projeto/${os.IdProjeto}`, {
+                    headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
+                });
+                const jPrj = await rPrj.json();
+                const proj = jPrj.data || jPrj;
+                const projLiberado = String(proj?.liberado || proj?.Liberado || '').trim().toUpperCase();
+                const nomeProjeto = proj?.Projeto || os.Projeto || `ID ${os.IdProjeto}`;
+                if (projLiberado !== 'S') {
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Atenção',
+                        width: 450,
+                        html: `Não é possível liberar a OS <strong>${os.IdOrdemServico}</strong>.<br><br>` +
+                              `O Projeto <strong>"${nomeProjeto}"</strong> ainda não foi liberado.<br><br>` +
+                              `Acesse <b>Projetos</b>, localize o projeto e clique no ícone ✓ de liberação antes de liberar esta OS.`,
+                    });
+                    return;
+                }
+            } catch (err) {
+                console.warn('[handleLiberarOS] falha ao verificar liberação do projeto:', err);
+                // Se não conseguir verificar, permite prosseguir (backend vai bloquear se necessário)
+            }
+        }
+
         if (os.Fator === 0 || os.Fator === '0' || os.Fator == null) {
             setLiberacaoFatorModal(os);
             setNovoFator('');
@@ -2121,7 +2342,7 @@ function OrdemServicoContent() {
                                                             : 'hover:bg-white'
                                                 } ${!osLiberada ? 'cursor-pointer' : ''}`}
                                             >
-                                                <div className="flex gap-1 shrink-0" style={{ width: '11.5rem' }}>
+                                                <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
                                                     {item.EnderecoArquivo ? (
                                                         <button
                                                             onClick={(e) => handleOpenFile(e, item.EnderecoArquivo || '', 'pdf')}
@@ -2223,6 +2444,26 @@ function OrdemServicoContent() {
                                                             <Star size={14} />
                                                         </button>
                                                     )}
+                                                    {/* Botão Manutenção de Tempos de Produção — somente OS não liberadas */}
+                                                    {(() => {
+                                                        const osLiberada = os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM';
+                                                        return osLiberada ? (
+                                                            <span
+                                                                className="w-8 h-8 rounded flex items-center justify-center bg-gray-100 text-gray-300 cursor-not-allowed"
+                                                                title="Tempos bloqueados — OS já liberada"
+                                                            >
+                                                                <Clock size={14} />
+                                                            </span>
+                                                        ) : (
+                                                            <button
+                                                                onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
+                                                                className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
+                                                                title="Manutenção de Tempos de Produção"
+                                                            >
+                                                                <Clock size={14} />
+                                                            </button>
+                                                        );
+                                                    })()}
                                                 </div>
 
                                                 <span
@@ -2276,14 +2517,6 @@ function OrdemServicoContent() {
                                                     <ShieldAlert size={14} />
                                                 </button>
 
-                                                {/* Botão Manutenção de Tempos de Produção */}
-                                                <button
-                                                    onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
-                                                    className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
-                                                    title="Manutenção de Tempos de Produção"
-                                                >
-                                                    <Clock size={14} />
-                                                </button>
 
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
                                                     <button
@@ -3172,15 +3405,43 @@ function OrdemServicoContent() {
             )}
 
             {/* ============================================================ */}
-            {/* ============================================================ */}
             {/* Modal Manutenção de Tempos de Produção                       */}
             {/* ============================================================ */}
             <AnimatePresence>
                 {tempoModalOpen && tempoModalItem && (() => {
-                    const setup = parseFloat(tempoSetupEdit) || 0;
-                    const padrao = parseFloat(tempoPadraoEdit) || 0;
                     const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
-                    const totalTempo = (qtde * padrao) + setup;
+                    const hasRecursos = Object.keys(recursoTemposEdit).length > 0;
+
+                    // Calcular total geral para exibição
+                    let totalGlobal = 0;
+                    if (hasRecursos) {
+                        for (const v of Object.values(recursoTemposEdit)) {
+                            const s = parseFloat(v.setup) || 0;
+                            const p = parseFloat(v.padrao) || 0;
+                            totalGlobal += (qtde * p) + s;
+                        }
+                    } else {
+                        const s = parseFloat(tempoSetupEdit) || 0;
+                        const p = parseFloat(tempoPadraoEdit) || 0;
+                        totalGlobal = (qtde * p) + s;
+                    }
+
+                    const SETOR_COLORS: Record<string, string> = {
+                        corte: 'bg-orange-100 text-orange-700 border-orange-200',
+                        dobra: 'bg-yellow-100 text-yellow-700 border-yellow-200',
+                        solda: 'bg-red-100 text-red-700 border-red-200',
+                        pintura: 'bg-blue-100 text-blue-700 border-blue-200',
+                        montagem: 'bg-green-100 text-green-700 border-green-200',
+                        cortealasar: 'bg-purple-100 text-purple-700 border-purple-200',
+                        pulsionadeira: 'bg-pink-100 text-pink-700 border-pink-200',
+                        galvanizar: 'bg-teal-100 text-teal-700 border-teal-200',
+                    };
+                    const SETOR_LABELS: Record<string, string> = {
+                        corte: 'Corte', dobra: 'Dobra', solda: 'Solda', pintura: 'Pintura',
+                        montagem: 'Montagem', cortealasar: 'Corte Laser',
+                        pulsionadeira: 'Pulsionadeira', galvanizar: 'Galvanizar',
+                    };
+
                     return (
                         <motion.div
                             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -3189,10 +3450,10 @@ function OrdemServicoContent() {
                         >
                             <motion.div
                                 initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-                                className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+                                className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden max-h-[90vh] flex flex-col"
                             >
                                 {/* Header */}
-                                <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex items-center justify-between">
+                                <div className="bg-gradient-to-r from-blue-600 to-blue-800 px-6 py-4 flex items-center justify-between flex-shrink-0">
                                     <div className="flex items-center gap-3">
                                         <Clock size={20} className="text-white" />
                                         <div>
@@ -3206,68 +3467,243 @@ function OrdemServicoContent() {
                                 </div>
 
                                 {/* Body */}
-                                <div className="p-6 space-y-4">
-                                    <div className="text-xs text-gray-400 bg-gray-50 rounded-lg px-3 py-2">
-                                        <strong>Qtde Total:</strong> {qtde} peças
-                                        &nbsp;|&nbsp;
-                                        <strong>Fórmula:</strong> C = (Qtde × B) + A
+                                <div className="p-5 space-y-4 overflow-y-auto flex-1">
+                                    {/* Info qtde + fórmula */}
+                                    <div className="text-xs text-gray-500 bg-gray-50 rounded-lg px-3 py-2 flex gap-4">
+                                        <span><strong>Qtde Total:</strong> {qtde} peças</span>
+                                        <span><strong>Fórmula:</strong> Total = (Qtde × Padrão) + Setup</span>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* A — TempoSetup */}
-                                        <div>
-                                            <label className="block text-xs font-black text-gray-500 uppercase mb-1">
-                                                (A) Tempo Setup <span className="text-blue-400">min</span>
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.5"
-                                                value={tempoSetupEdit}
-                                                onChange={e => setTempoSetupEdit(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
-                                                placeholder="0"
-                                            />
-                                        </div>
+                                    {/* ── Painel + Novo Recurso (dinâmico do backend Fabrica=SIM) ── */}
+                                    {(() => {
+                                        // Usar lista dinâmica do backend; filtrar os já presentes no item
+                                        const disponiveis = processosFabricaSIM.filter(r => !recursoTemposEdit[r.key]);
+                                        if (disponiveis.length === 0 && processosFabricaSIM.length > 0) return null;
+                                        return (
+                                            <div className="flex items-center gap-1.5">
+                                                <select
+                                                    id="select-novo-recurso"
+                                                    defaultValue=""
+                                                    disabled={processosFabricaSIM.length === 0}
+                                                    className="flex-1 px-2 py-1 border border-dashed border-blue-300 rounded text-[10px] text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                                                    onChange={e => {
+                                                        const key = e.target.value;
+                                                        if (!key) return;
+                                                        const matProc = materialProcessos.find(m => m.key === key);
+                                                        let newSeq = '';
+                                                        if (matProc && matProc.sequencia != null) {
+                                                            newSeq = String(matProc.sequencia);
+                                                        } else {
+                                                            let max = 0;
+                                                            Object.values(recursoTemposEdit).forEach(v => {
+                                                                const s = parseInt(v.seq || '0', 10);
+                                                                if (!isNaN(s) && s > max) max = s;
+                                                            });
+                                                            newSeq = String(max + 1);
+                                                        }
+                                                        setRecursoTemposEdit(prev => ({ ...prev, [key]: { setup: '', padrao: '', seq: newSeq, IdProcesso: matProc?.IdProcesso } }));
+                                                        e.target.value = '';
+                                                    }}
+                                                >
+                                                    <option value="">
+                                                        {processosFabricaSIM.length === 0 ? 'Carregando processos...' : '+ Adicionar recurso...'}
+                                                    </option>
+                                                    {disponiveis.map(r => (
+                                                        <option key={r.key} value={r.key}>{r.label}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        );
+                                    })()}
 
-                                        {/* B — TempoPadrao */}
-                                        <div>
-                                            <label className="block text-xs font-black text-gray-500 uppercase mb-1">
-                                                (B) Tempo Padrão <span className="text-blue-400">min/peça</span>
-                                            </label>
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                step="0.5"
-                                                value={tempoPadraoEdit}
-                                                onChange={e => setTempoPadraoEdit(e.target.value)}
-                                                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
-                                                placeholder="0"
-                                            />
+                                    {hasRecursos ? (
+                                        /* ── Modo por recurso: grade compacta ── */
+                                        <div className="rounded-lg border border-gray-200 overflow-hidden">
+                                            {/* Header da tabela */}
+                                            <div className="grid bg-gray-50 border-b border-gray-200 px-2 py-1" style={{ gridTemplateColumns: '4.5rem 2.8rem 3.5rem 3.5rem 3rem 1.2rem' }}>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase">Recurso</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase text-center">Seq.</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase text-center">Setup</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase text-center">Padrão</span>
+                                                <span className="text-[9px] font-bold text-gray-400 uppercase text-right">Tot.</span>
+                                                <span></span>
+                                            </div>
+                                            {/* Linhas por recurso */}
+                                            {Object.entries(recursoTemposEdit)
+                                                .sort((a, b) => {
+                                                    const sa = parseInt(a[1].seq || '9999', 10);
+                                                    const sb = parseInt(b[1].seq || '9999', 10);
+                                                    return sa - sb;
+                                                })
+                                                .map(([secKey, vals], idx) => {
+                                                const colorCls = SETOR_COLORS[secKey] || 'bg-gray-100 text-gray-700 border-gray-200';
+                                                const label = SETOR_LABELS[secKey] || secKey;
+                                                const s = parseFloat(vals.setup) || 0;
+                                                const p = parseFloat(vals.padrao) || 0;
+                                                const tot = (qtde * p) + s;
+                                                const textColor = colorCls.split(' ').find(c => c.startsWith('text-')) || 'text-gray-700';
+                                                const bgColor   = colorCls.split(' ').find(c => c.startsWith('bg-')) || 'bg-gray-50';
+                                                return (
+                                                    <div
+                                                        key={secKey}
+                                                        draggable
+                                                        onDragStart={(e) => {
+                                                            setDraggedResource(secKey);
+                                                            e.dataTransfer.effectAllowed = 'move';
+                                                            e.dataTransfer.setData('text/plain', secKey);
+                                                        }}
+                                                        onDragOver={(e) => {
+                                                            e.preventDefault();
+                                                            setDragOverResource(secKey);
+                                                        }}
+                                                        onDrop={(e) => {
+                                                            e.preventDefault();
+                                                            const sourceKey = e.dataTransfer.getData('text/plain');
+                                                            if (sourceKey && sourceKey !== secKey) {
+                                                                setRecursoTemposEdit(prev => {
+                                                                    const arr = Object.entries(prev).sort((a, b) => parseInt(a[1].seq || '9999', 10) - parseInt(b[1].seq || '9999', 10));
+                                                                    const sourceIdx = arr.findIndex(x => x[0] === sourceKey);
+                                                                    const targetIdx = arr.findIndex(x => x[0] === secKey);
+                                                                    if (sourceIdx >= 0 && targetIdx >= 0) {
+                                                                        const [movedItem] = arr.splice(sourceIdx, 1);
+                                                                        arr.splice(targetIdx, 0, movedItem);
+                                                                        
+                                                                        const prevSeq = targetIdx > 0 ? parseInt(arr[targetIdx - 1][1].seq || '0', 10) : 0;
+                                                                        const nextSeq = targetIdx < arr.length - 1 ? parseInt(arr[targetIdx + 1][1].seq || '99999', 10) : prevSeq + 20;
+                                                                        
+                                                                        let newSeq = Math.floor((prevSeq + nextSeq) / 2);
+                                                                        if (newSeq <= prevSeq) newSeq = prevSeq + 1; // Fallback to evitar colisão
+                                                                        
+                                                                        return { ...prev, [sourceKey]: { ...movedItem[1], seq: String(newSeq) } };
+                                                                    }
+                                                                    return prev;
+                                                                });
+                                                            }
+                                                            setDraggedResource(null);
+                                                            setDragOverResource(null);
+                                                        }}
+                                                        onDragEnd={() => {
+                                                            setDraggedResource(null);
+                                                            setDragOverResource(null);
+                                                        }}
+                                                        className={`grid items-center px-2 py-0.5 gap-1 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/60'} border-b border-gray-100 last:border-0 cursor-move ${dragOverResource === secKey ? 'border-t-2 border-t-blue-500' : ''} ${draggedResource === secKey ? 'opacity-50' : ''}`}
+                                                        style={{ gridTemplateColumns: '4.5rem 2.8rem 3.5rem 3.5rem 3rem 1.2rem' }}
+                                                    >
+                                                        {/* Label */}
+                                                        <span className={`text-[9px] font-black uppercase truncate ${textColor}`}>{label}</span>
+                                                        {/* Seq */}
+                                                        <input
+                                                            type="number" min="1" step="1"
+                                                            value={vals.seq || ''}
+                                                            onChange={e => setRecursoTemposEdit(prev => ({
+                                                                ...prev,
+                                                                [secKey]: { ...prev[secKey], seq: e.target.value }
+                                                            }))}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            placeholder="Seq"
+                                                        />
+                                                        {/* Setup */}
+                                                        <input
+                                                            type="number" min="0" step="0.5"
+                                                            value={vals.setup}
+                                                            onChange={e => setRecursoTemposEdit(prev => ({
+                                                                ...prev,
+                                                                [secKey]: { ...prev[secKey], setup: e.target.value }
+                                                            }))}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            placeholder="0"
+                                                        />
+                                                        {/* Padrão */}
+                                                        <input
+                                                            type="number" min="0" step="0.5"
+                                                            value={vals.padrao}
+                                                            onChange={e => setRecursoTemposEdit(prev => ({
+                                                                ...prev,
+                                                                [secKey]: { ...prev[secKey], padrao: e.target.value }
+                                                            }))}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            placeholder="0"
+                                                        />
+                                                        {/* Total */}
+                                                        <span className="text-[10px] font-bold text-gray-600 text-right tabular-nums">
+                                                            {tot.toFixed(1)}<span className="text-gray-400 font-normal">m</span>
+                                                        </span>
+                                                        {/* Remover recurso — botão lixeira vermelho */}
+                                                        <button
+                                                            type="button"
+                                                            title={`Excluir recurso ${label} deste item`}
+                                                            onClick={() => {
+                                                                if (!window.confirm(`Remover o recurso "${label}" deste item?`)) return;
+                                                                setRecursoTemposEdit(prev => {
+                                                                    const novo = { ...prev };
+                                                                    delete novo[secKey];
+                                                                    return novo;
+                                                                });
+                                                            }}
+                                                            className="flex items-center justify-center text-red-300 hover:text-red-600 transition-colors rounded hover:bg-red-50 p-0.5"
+                                                        >
+                                                            <Trash2 size={11} />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
-                                    </div>
+                                    ) : (
+                                        /* ── Modo global (sem recursos específicos) ── */
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs font-black text-gray-500 uppercase mb-1">
+                                                    (A) Tempo Setup <span className="text-blue-400">min</span>
+                                                </label>
+                                                <input
+                                                    type="number" min="0" step="0.5"
+                                                    value={tempoSetupEdit}
+                                                    onChange={e => setTempoSetupEdit(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                    placeholder="0"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs font-black text-gray-500 uppercase mb-1">
+                                                    (B) Tempo Padrão <span className="text-blue-400">min/peça</span>
+                                                </label>
+                                                <input
+                                                    type="number" min="0" step="0.5"
+                                                    value={tempoPadraoEdit}
+                                                    onChange={e => setTempoPadraoEdit(e.target.value)}
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                    placeholder="0"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
 
-                                    {/* C — TotalTempo (calculado automaticamente) */}
-                                    <div className="bg-blue-50 border-2 border-blue-200 rounded-xl px-4 py-3 text-center">
-                                        <div className="text-xs font-black text-blue-400 uppercase tracking-wider mb-1">(C) Total Produção = ({qtde} × {padrao}) + {setup}</div>
-                                        <div className="text-3xl font-black text-blue-700">{totalTempo.toFixed(1)} <span className="text-lg">min</span></div>
+                                    {/* Total geral */}
+                                    <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5 flex items-center justify-between">
+                                        <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">
+                                            {hasRecursos ? 'Total geral' : 'Total'}
+                                        </span>
+                                        <span className="text-lg font-black text-blue-700 tabular-nums">
+                                            {totalGlobal.toFixed(1)}<span className="text-xs font-normal text-blue-400 ml-1">min</span>
+                                        </span>
                                     </div>
                                 </div>
 
                                 {/* Footer */}
-                                <div className="px-6 pb-6 flex gap-3">
+                                <div className="px-3 pb-3 pt-1 flex gap-2 flex-shrink-0">
                                     <button
                                         onClick={() => setTempoModalOpen(false)}
-                                        className="flex-1 py-2 rounded-xl border border-gray-200 text-gray-600 font-black hover:bg-gray-50 transition-colors"
+                                        disabled={tempoSaving}
+                                        className="flex-1 py-1 rounded-lg border border-gray-200 text-gray-600 text-xs font-bold hover:bg-gray-50 transition-colors disabled:opacity-40"
                                     >
-                                        Cancelar
+                                        Fechar
                                     </button>
                                     <button
                                         onClick={handleSaveTempos}
                                         disabled={tempoSaving}
-                                        className="flex-1 py-2 rounded-xl bg-blue-600 text-white font-black hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                                        className="flex-1 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                                     >
-                                        {tempoSaving ? <Loader2 size={16} className="animate-spin" /> : <Clock size={16} />}
+                                        {tempoSaving ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}
                                         {tempoSaving ? 'Salvando...' : 'Salvar Tempos'}
                                     </button>
                                 </div>

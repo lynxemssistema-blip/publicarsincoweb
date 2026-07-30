@@ -3190,3 +3190,341 @@
 21/07/2026 21:59:23:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
 21/07/2026 21:59:23:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
 21/07/2026 21:59:23:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+21/07/2026 22:01:48: 
+21/07/2026 22:01:48: PWA v1.2.0
+21/07/2026 22:01:48: mode      generateSW
+21/07/2026 22:01:48: precache  2 entries (0.12 KiB)
+21/07/2026 22:01:48: files generated
+21/07/2026 22:01:48:   dev-dist/sw.js
+21/07/2026 22:01:48:   dev-dist/workbox-5a5d9309.js
+24/07/2026 08:13:18: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 08:39:08: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 08:57:46: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:28:00: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:30:53: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:31:53: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:33:17: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:33:18: 
+26/07/2026 09:33:18:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m263[22m[2m[0m ms[22m
+26/07/2026 09:33:18: 
+26/07/2026 09:33:18:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 09:33:18:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 09:33:18:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 09:43:01: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 09:43:03: 
+26/07/2026 09:43:03:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m220[22m[2m[0m ms[22m
+26/07/2026 09:43:03: 
+26/07/2026 09:43:03:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 09:43:03:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 09:43:03:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 09:51:45: 
+26/07/2026 09:51:45: PWA v1.2.0
+26/07/2026 09:51:45: mode      generateSW
+26/07/2026 09:51:45: precache  2 entries (0.12 KiB)
+26/07/2026 09:51:45: files generated
+26/07/2026 09:51:45:   dev-dist/sw.js
+26/07/2026 09:51:45:   dev-dist/workbox-5a5d9309.js
+26/07/2026 10:04:09: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 10:04:11: 
+26/07/2026 10:04:11:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m361[22m[2m[0m ms[22m
+26/07/2026 10:04:11: 
+26/07/2026 10:04:11:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 10:04:11:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 10:04:11:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 10:05:47: [2m10:05:47[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 11:02:42: [2m11:02:42[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:02:53: [2m11:02:53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:03:04: [2m11:03:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:03:15: [2m11:03:15[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:03:48: [2m11:03:48[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:04:14: [2m11:04:14[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:18:46: [2m11:18:46[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:19:13: [2m11:19:13[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:21:02: 
+26/07/2026 11:21:02: PWA v1.2.0
+26/07/2026 11:21:02: mode      generateSW
+26/07/2026 11:21:02: precache  2 entries (0.12 KiB)
+26/07/2026 11:21:02: files generated
+26/07/2026 11:21:02:   dev-dist/sw.js
+26/07/2026 11:21:02:   dev-dist/workbox-5a5d9309.js
+26/07/2026 11:24:19: [2m11:24:19[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:24:39: [2m11:24:39[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:26:10: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 11:26:12: 
+26/07/2026 11:26:12:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m250[22m[2m[0m ms[22m
+26/07/2026 11:26:12: 
+26/07/2026 11:26:12:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 11:26:12:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 11:26:12:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 11:26:29: [2m11:26:29[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 11:26:33: 
+26/07/2026 11:26:33: PWA v1.2.0
+26/07/2026 11:26:33: mode      generateSW
+26/07/2026 11:26:33: precache  2 entries (0.12 KiB)
+26/07/2026 11:26:33: files generated
+26/07/2026 11:26:33:   dev-dist/sw.js
+26/07/2026 11:26:33:   dev-dist/workbox-5a5d9309.js
+26/07/2026 11:29:22: [2m11:29:22[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 11:29:53: [2m11:29:53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 11:30:32: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 11:30:33: 
+26/07/2026 11:30:33:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m262[22m[2m[0m ms[22m
+26/07/2026 11:30:33: 
+26/07/2026 11:30:33:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 11:30:33:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 11:30:33:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 11:31:36: 
+26/07/2026 11:31:36: PWA v1.2.0
+26/07/2026 11:31:36: mode      generateSW
+26/07/2026 11:31:36: precache  2 entries (0.12 KiB)
+26/07/2026 11:31:36: files generated
+26/07/2026 11:31:36:   dev-dist/sw.js
+26/07/2026 11:31:36:   dev-dist/workbox-5a5d9309.js
+26/07/2026 11:32:57: [2m11:32:57[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 11:33:45: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 11:33:47: 
+26/07/2026 11:33:47:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m223[22m[2m[0m ms[22m
+26/07/2026 11:33:47: 
+26/07/2026 11:33:47:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 11:33:47:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 11:33:47:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 11:33:50: 
+26/07/2026 11:33:50: PWA v1.2.0
+26/07/2026 11:33:50: mode      generateSW
+26/07/2026 11:33:50: precache  2 entries (0.12 KiB)
+26/07/2026 11:33:50: files generated
+26/07/2026 11:33:50:   dev-dist/sw.js
+26/07/2026 11:33:50:   dev-dist/workbox-5a5d9309.js
+26/07/2026 11:43:20: [2m11:43:20[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:43:56: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 11:43:58: 
+26/07/2026 11:43:58:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m208[22m[2m[0m ms[22m
+26/07/2026 11:43:58: 
+26/07/2026 11:43:58:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 11:43:58:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 11:43:58:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 11:44:03: 
+26/07/2026 11:44:03: PWA v1.2.0
+26/07/2026 11:44:03: mode      generateSW
+26/07/2026 11:44:03: precache  2 entries (0.12 KiB)
+26/07/2026 11:44:03: files generated
+26/07/2026 11:44:03:   dev-dist/sw.js
+26/07/2026 11:44:03:   dev-dist/workbox-5a5d9309.js
+26/07/2026 11:57:44: [2m11:57:44[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:58:30: [2m11:58:30[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 11:59:53: [2m11:59:53[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 12:00:31: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 12:00:33: 
+26/07/2026 12:00:33:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m206[22m[2m[0m ms[22m
+26/07/2026 12:00:33: 
+26/07/2026 12:00:33:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 12:00:33:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 12:00:33:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 12:01:52: [2m12:01:52[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 12:01:55: 
+26/07/2026 12:01:55: PWA v1.2.0
+26/07/2026 12:01:55: mode      generateSW
+26/07/2026 12:01:55: precache  2 entries (0.12 KiB)
+26/07/2026 12:01:55: files generated
+26/07/2026 12:01:55:   dev-dist/sw.js
+26/07/2026 12:01:55:   dev-dist/workbox-5a5d9309.js
+26/07/2026 12:02:26: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 12:02:28: 
+26/07/2026 12:02:28:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m201[22m[2m[0m ms[22m
+26/07/2026 12:02:28: 
+26/07/2026 12:02:28:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 12:02:28:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 12:02:28:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 12:03:10: 
+26/07/2026 12:03:10: PWA v1.2.0
+26/07/2026 12:03:10: mode      generateSW
+26/07/2026 12:03:10: precache  2 entries (0.12 KiB)
+26/07/2026 12:03:10: files generated
+26/07/2026 12:03:10:   dev-dist/sw.js
+26/07/2026 12:03:10:   dev-dist/workbox-5a5d9309.js
+26/07/2026 12:04:55: [2m12:04:55[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 12:05:33: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 12:05:35: 
+26/07/2026 12:05:35:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m221[22m[2m[0m ms[22m
+26/07/2026 12:05:35: 
+26/07/2026 12:05:35:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 12:05:35:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 12:05:35:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 12:05:38: 
+26/07/2026 12:05:38: PWA v1.2.0
+26/07/2026 12:05:38: mode      generateSW
+26/07/2026 12:05:38: precache  2 entries (0.12 KiB)
+26/07/2026 12:05:38: files generated
+26/07/2026 12:05:38:   dev-dist/sw.js
+26/07/2026 12:05:38:   dev-dist/workbox-5a5d9309.js
+26/07/2026 12:20:32: [2m12:20:32[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 12:21:34: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 12:21:35: 
+26/07/2026 12:21:35:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m212[22m[2m[0m ms[22m
+26/07/2026 12:21:35: 
+26/07/2026 12:21:35:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 12:21:35:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 12:21:35:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 12:21:41: 
+26/07/2026 12:21:41: PWA v1.2.0
+26/07/2026 12:21:41: mode      generateSW
+26/07/2026 12:21:41: precache  2 entries (0.12 KiB)
+26/07/2026 12:21:41: files generated
+26/07/2026 12:21:41:   dev-dist/sw.js
+26/07/2026 12:21:41:   dev-dist/workbox-5a5d9309.js
+26/07/2026 13:11:33: [2m13:11:33[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 13:12:09: [2m13:12:09[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 13:13:02: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 13:13:04: 
+26/07/2026 13:13:04:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m262[22m[2m[0m ms[22m
+26/07/2026 13:13:04: 
+26/07/2026 13:13:04:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 13:13:04:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 13:13:04:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 13:13:07: 
+26/07/2026 13:13:07: PWA v1.2.0
+26/07/2026 13:13:07: mode      generateSW
+26/07/2026 13:13:07: precache  2 entries (0.12 KiB)
+26/07/2026 13:13:07: files generated
+26/07/2026 13:13:07:   dev-dist/sw.js
+26/07/2026 13:13:07:   dev-dist/workbox-5a5d9309.js
+26/07/2026 13:13:08: [2m13:13:08[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 13:14:42: [2m13:14:42[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 13:15:21: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 13:15:23: 
+26/07/2026 13:15:23:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m278[22m[2m[0m ms[22m
+26/07/2026 13:15:23: 
+26/07/2026 13:15:23:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 13:15:23:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 13:15:23:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 13:15:26: 
+26/07/2026 13:15:26: PWA v1.2.0
+26/07/2026 13:15:26: mode      generateSW
+26/07/2026 13:15:26: precache  2 entries (0.12 KiB)
+26/07/2026 13:15:26: files generated
+26/07/2026 13:15:26:   dev-dist/sw.js
+26/07/2026 13:15:26:   dev-dist/workbox-5a5d9309.js
+26/07/2026 18:23:43: [2m18:23:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 18:24:37: [2m18:24:37[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 18:25:56: [2m18:25:56[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 18:26:50: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 18:26:52: 
+26/07/2026 18:26:52:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m299[22m[2m[0m ms[22m
+26/07/2026 18:26:52: 
+26/07/2026 18:26:52:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 18:26:52:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 18:26:52:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 18:26:58: 
+26/07/2026 18:26:58: PWA v1.2.0
+26/07/2026 18:26:58: mode      generateSW
+26/07/2026 18:26:58: precache  2 entries (0.12 KiB)
+26/07/2026 18:26:58: files generated
+26/07/2026 18:26:58:   dev-dist/sw.js
+26/07/2026 18:26:58:   dev-dist/workbox-5a5d9309.js
+26/07/2026 18:26:59: [2m18:26:59[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/index.css[22m
+26/07/2026 18:34:54: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 18:34:55: 
+26/07/2026 18:34:55:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m222[22m[2m[0m ms[22m
+26/07/2026 18:34:55: 
+26/07/2026 18:34:55:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 18:34:55:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 18:34:55:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 18:35:00: 
+26/07/2026 18:35:00: PWA v1.2.0
+26/07/2026 18:35:00: mode      generateSW
+26/07/2026 18:35:00: precache  2 entries (0.12 KiB)
+26/07/2026 18:35:00: files generated
+26/07/2026 18:35:00:   dev-dist/sw.js
+26/07/2026 18:35:00:   dev-dist/workbox-5a5d9309.js
+26/07/2026 19:01:43: [2m19:01:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/OrdemServico.tsx, /src/index.css[22m
+26/07/2026 19:01:43: [2m19:01:43[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/OrdemServico.tsx, /src/index.css[22m
+26/07/2026 19:02:43: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 19:02:46: 
+26/07/2026 19:02:46:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m319[22m[2m[0m ms[22m
+26/07/2026 19:02:46: 
+26/07/2026 19:02:46:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 19:02:46:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 19:02:46:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 19:02:50: 
+26/07/2026 19:02:50: PWA v1.2.0
+26/07/2026 19:02:50: mode      generateSW
+26/07/2026 19:02:50: precache  2 entries (0.12 KiB)
+26/07/2026 19:02:50: files generated
+26/07/2026 19:02:50:   dev-dist/sw.js
+26/07/2026 19:02:50:   dev-dist/workbox-5a5d9309.js
+26/07/2026 19:07:06: [2m19:07:06[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/OrdemServico.tsx, /src/index.css[22m
+26/07/2026 19:08:05: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 19:08:07: 
+26/07/2026 19:08:07:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m259[22m[2m[0m ms[22m
+26/07/2026 19:08:07: 
+26/07/2026 19:08:07:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 19:08:07:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 19:08:07:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 19:08:11: 
+26/07/2026 19:08:11: PWA v1.2.0
+26/07/2026 19:08:11: mode      generateSW
+26/07/2026 19:08:11: precache  2 entries (0.12 KiB)
+26/07/2026 19:08:11: files generated
+26/07/2026 19:08:11:   dev-dist/sw.js
+26/07/2026 19:08:11:   dev-dist/workbox-5a5d9309.js
+26/07/2026 19:12:21: [2m19:12:21[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 19:13:04: [2m19:13:04[22m [36m[1m[vite][22m[39m [90m[2m(client)[22m[39m [32mhmr update [39m[2m/src/pages/VisaoGeralProducao.tsx, /src/index.css[22m
+26/07/2026 19:13:59: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+26/07/2026 19:14:01: 
+26/07/2026 19:14:01:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m343[22m[2m[0m ms[22m
+26/07/2026 19:14:01: 
+26/07/2026 19:14:01:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+26/07/2026 19:14:01:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+26/07/2026 19:14:01:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+26/07/2026 19:14:08: 
+26/07/2026 19:14:08: PWA v1.2.0
+26/07/2026 19:14:08: mode      generateSW
+26/07/2026 19:14:08: precache  2 entries (0.12 KiB)
+26/07/2026 19:14:08: files generated
+26/07/2026 19:14:08:   dev-dist/sw.js
+26/07/2026 19:14:08:   dev-dist/workbox-5a5d9309.js
+27/07/2026 08:37:09: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+28/07/2026 08:50:09: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 07:56:27: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:00:58: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:05:18: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:05:20: 
+30/07/2026 08:05:20:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m602[22m[2m[0m ms[22m
+30/07/2026 08:05:20: 
+30/07/2026 08:05:20:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+30/07/2026 08:05:20:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+30/07/2026 08:05:20:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+30/07/2026 08:08:52: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:08:53: 
+30/07/2026 08:08:53: > frontend@0.0.0 dev
+30/07/2026 08:08:53: > vite --host 0.0.0.0
+30/07/2026 08:08:53: 
+30/07/2026 08:08:53: 
+30/07/2026 08:08:53:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m224[22m[2m[0m ms[22m
+30/07/2026 08:08:53: 
+30/07/2026 08:08:53:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+30/07/2026 08:08:53:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+30/07/2026 08:08:53:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+30/07/2026 08:10:01: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:10:02: 
+30/07/2026 08:10:02: > frontend@0.0.0 dev
+30/07/2026 08:10:02: > vite --host 0.0.0.0
+30/07/2026 08:10:02: 
+30/07/2026 08:10:02: 
+30/07/2026 08:10:02:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m221[22m[2m[0m ms[22m
+30/07/2026 08:10:02: 
+30/07/2026 08:10:02:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+30/07/2026 08:10:02:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+30/07/2026 08:10:02:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m
+30/07/2026 08:21:59: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:22:24: [ViteWrapper] Iniciando Vite em: C:\SincoWeb\SINCO-WEB\SINCO-WEB\frontend
+30/07/2026 08:22:24: 
+30/07/2026 08:22:24: > frontend@0.0.0 dev
+30/07/2026 08:22:24: > vite --host 0.0.0.0
+30/07/2026 08:22:24: 
+30/07/2026 08:22:25: 
+30/07/2026 08:22:25:   [32m[1mVITE[22m v7.3.1[39m  [2mready in [0m[1m297[22m[2m[0m ms[22m
+30/07/2026 08:22:25: 
+30/07/2026 08:22:25:   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+30/07/2026 08:22:25:   [32m➜[39m  [1mNetwork[22m: [36mhttp://169.254.191.204:[1m5173[22m/[39m
+30/07/2026 08:22:25:   [32m➜[39m  [1mNetwork[22m: [36mhttp://192.168.1.8:[1m5173[22m/[39m

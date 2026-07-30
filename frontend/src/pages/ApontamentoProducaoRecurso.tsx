@@ -2036,7 +2036,7 @@ useEffect(() => {
  </div>
  <div>
  <h3 className="text-xs font-black uppercase tracking-tight">
- {modalSetor === 'mapa' ? 'Finalização Geral (MAPA)' : `Apontar ${setorInfo.label}`}
+ {modalSetor === 'mapa' ? 'Apontar Recurso' : `Apontar ${setorInfo.label}`}
  </h3>
  <div className="flex items-center gap-1.5">
  <p className="text-[10px] opacity-90 font-bold bg-black/10 px-1 rounded">OS {selectedItem.IdOrdemServico}</p>

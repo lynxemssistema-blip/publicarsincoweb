@@ -6380,14 +6380,18 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         const { usuario } = req.body;
         const projectId = req.params.id;
         const now = getCurrentDateTimeBR();
+        const dbPool = req.tenantDbPool || pool;
 
-        const [rows] = await pool.execute('SELECT liberado FROM projetos WHERE IdProjeto = ?', [projectId]);
-        if (rows.length > 0 && rows[0].liberado && rows[0].liberado.trim() !== '') {
-            return res.status(400).json({ success: false, message: 'O projeto não pode ser liberado pois o status de liberação não está vazio.' });
+        const [rows] = await dbPool.execute('SELECT liberado, Projeto FROM projetos WHERE IdProjeto = ?', [projectId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
+        }
+        if (rows[0].liberado && String(rows[0].liberado).trim().toUpperCase() === 'S') {
+            return res.status(400).json({ success: false, message: `O projeto "${rows[0].Projeto}" já está liberado.` });
         }
 
         // 1. Validação: O projeto deve possuir pelo menos uma Tag
-        const [tagRows] = await pool.execute(
+        const [tagRows] = await dbPool.execute(
             `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
             [projectId]
         );
@@ -6396,12 +6400,12 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         if (tagCount === 0) {
             return res.json({
                 success: false,
-                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
         // 2. Validação: Pelo menos uma Tag do projeto deve possuir pelo menos uma Ordem de Serviço (OS)
-        const [osRows] = await pool.execute(
+        const [osRows] = await dbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservico os
              INNER JOIN tags t ON t.IdTag = os.IdTag
              WHERE t.IdProjeto = ? 
@@ -6414,21 +6418,24 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         if (osCount === 0) {
             return res.status(400).json({
                 success: false,
-                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
-        // Lógica Não-Alfatec padrão (liberado = 'S', DataLiberacao)
-        await pool.execute(
+        // Liberar: atualiza Liberado = 'S', DataLiberacao e UsuarioCriacao (NomeCompleto do usuário logado)
+        const nomeUsuario = req.user?.NomeCompleto || req.user?.nome || usuario || 'Sistema';
+        await dbPool.execute(
             `UPDATE projetos SET 
                 liberado = 'S', 
                 DataLiberacao = ?,
                 StatusProj = 'AT',
-                DescStatus = 'Ativo'
+                DescStatus = 'Ativo',
+                UsuarioCriacao = COALESCE(UsuarioCriacao, ?)
             WHERE IdProjeto = ?`,
-            [now, projectId]
+            [now, nomeUsuario, projectId]
         );
 
+        console.log(`[Projeto] Projeto ${projectId} liberado (Liberado='S') por ${nomeUsuario} em ${now}`);
         res.json({ success: true, message: 'Projeto liberado com sucesso.' });
     } catch (error) {
         console.error('Error liberating project:', error);
@@ -8282,6 +8289,25 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes: IdOrdemServico, Fator e TipoLiberacao são necessários.' });
         }
 
+        // 0. Validar se o Projeto desta OS está liberado (Liberado = 'S')
+        if (IdProjeto) {
+            const dbPool = req.tenantDbPool || pool;
+            const [projRows] = await dbPool.execute(
+                `SELECT Liberado, Projeto FROM projetos WHERE IdProjeto = ? LIMIT 1`,
+                [IdProjeto]
+            );
+            if (projRows.length > 0) {
+                const projLiberado = String(projRows[0].Liberado || '').trim().toUpperCase();
+                if (projLiberado !== 'S') {
+                    const nomeProjeto = projRows[0].Projeto || `ID ${IdProjeto}`;
+                    return res.status(400).json({
+                        success: false,
+                        message: `Não é possível liberar esta Ordem de Serviço. O Projeto "${nomeProjeto}" ainda não foi liberado. Acesse a tela de Projetos, localize o projeto e clique no ícone de liberação (✓) antes de liberar a OS.`
+                    });
+                }
+            }
+        }
+
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
@@ -8781,7 +8807,21 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
                 txtCorteaLaser, CorteaLaserPercentual,
                 txtPULSIONADEIRA, PULSIONADEIRAPercentual,
                 txtGALVANIZAR, GALVANIZARPercentual,
-                Liberado_Engenharia
+                Liberado_Engenharia,
+                -- Tempos de produção globais
+                TempoSetup, TempoPadrao, TotalTempo,
+                -- Tempos por recurso
+                CorteTempoSetup, CorteTempoPadrao, CorteTotalTempo,
+                DobraTempoSetup, DobraTempoPadrao, DobraTotalTempo,
+                SoldaTempoSetup, SoldaTempoPadrao, SoldaTotalTempo,
+                PinturaTempoSetup, PinturaTempoPadrao, PinturaTotalTempo,
+                MontagemTempoSetup, MontagemTempoPadrao, MontagemTotalTempo,
+                CorteaLaserTempoSetup, CorteaLaserTempoPadrao, CorteaLaserTotalTempo,
+                PulsionadeiraTempoSetup, PulsionadeiraTempoPadrao, PulsionadeiraTotalTempo,
+                GalvanizarTempoSetup, GalvanizarTempoPadrao, GalvanizarTotalTempo,
+                CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia,
+                MontagemSequencia, CorteaLaserSequencia, PulsionadeiraSequencia,
+                GalvanizarSequencia, EngenhariaSequencia
             FROM ordemservicoitem 
             WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             ORDER BY IdOrdemServicoItem
@@ -13774,31 +13814,164 @@ app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
 // ============================================================
 // PUT /api/ordemservicoitem/:id/tempos - Manutencao de Tempos de Producao
 // ============================================================
+// Mapa de prefixo do campo de BD para cada recurso/setor
+const SETOR_PREFIXO_MAP = {
+    corte:        'Corte',
+    dobra:        'Dobra',
+    solda:        'Solda',
+    pintura:      'Pintura',
+    montagem:     'Montagem',
+    cortealasar:  'CorteaLaser',
+    pulsionadeira:'Pulsionadeira',
+    galvanizar:   'Galvanizar',
+    engenharia:   'Engenharia',
+};
+
 app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
+    let conn = null;
     try {
         const { id } = req.params;
-        const { TempoSetup, TempoPadrao, TotalTempo } = req.body;
-
-        if (isNaN(parseFloat(TempoSetup)) || isNaN(parseFloat(TempoPadrao))) {
-            return res.status(400).json({ success: false, message: 'TempoSetup e TempoPadrao são obrigatórios e devem ser numéricos.' });
-        }
-
-        const setup  = parseFloat(TempoSetup)  || 0;
-        const padrao = parseFloat(TempoPadrao) || 0;
-        const total  = parseFloat(TotalTempo)  || 0;
+        const { TempoSetup, TempoPadrao, TotalTempo, recursoTempos, QtdeTotal,
+                addRecursos, removeRecursos, osContext } = req.body;
 
         const dbPool = req.tenantDbPool || pool;
+
+        // --- Campos dinâmicos por recurso (tempos) ---
+        const setClauses = [];
+        const values = [];
+        let globalSetup = parseFloat(TempoSetup) || 0;
+        let globalPadrao = parseFloat(TempoPadrao) || 0;
+        let globalTotal = parseFloat(TotalTempo) || 0;
+        const qtde = parseFloat(QtdeTotal) || 0;
+
+        if (recursoTempos && typeof recursoTempos === 'object' && Object.keys(recursoTempos).length > 0) {
+            let sumSetup = 0, sumPadrao = 0, sumTotal = 0;
+            for (const [secKey, vals] of Object.entries(recursoTempos)) {
+                const pref = SETOR_PREFIXO_MAP[secKey];
+                if (!pref) continue;
+                const rSetup  = Math.max(0, parseFloat(vals.setup)  || 0);
+                const rPadrao = Math.max(0, parseFloat(vals.padrao) || 0);
+                const rSeq    = parseInt(vals.seq, 10) || null;
+                const rTotal  = (qtde * rPadrao) + rSetup;
+                setClauses.push(`${pref}TempoSetup = ?`, `${pref}TempoPadrao = ?`, `${pref}TotalTempo = ?`, `${pref}Sequencia = ?`);
+                values.push(rSetup, rPadrao, rTotal, rSeq);
+                sumSetup  += rSetup;
+                sumPadrao += rPadrao;
+                sumTotal  += rTotal;
+            }
+            globalSetup  = sumSetup;
+            globalPadrao = sumPadrao;
+            globalTotal  = sumTotal;
+        }
+
+        setClauses.push('TempoSetup = ?', 'TempoPadrao = ?', 'TotalTempo = ?');
+        values.push(globalSetup, globalPadrao, globalTotal);
+        values.push(id); // WHERE
+
         await dbPool.execute(
-            `UPDATE ordemservicoitem
-                SET TempoSetup  = ?,
-                    TempoPadrao = ?,
-                    TotalTempo  = ?
-              WHERE IdOrdemServicoItem = ?`,
-            [setup, padrao, total, id]
+            `UPDATE ordemservicoitem SET ${setClauses.join(', ')} WHERE IdOrdemServicoItem = ?`,
+            values
         );
 
-        console.log(`[API] Tempos atualizados para item ${id}: setup=${setup}, padrao=${padrao}, total=${total}`);
-        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.' });
+        // --- Ativar/desativar flags txt* para recursos adicionados/removidos ---
+        // Mapa de campo txt* por secKey
+        const TXT_FIELD_MAP = {
+            corte:         'txtCorte',
+            dobra:         'txtDobra',
+            solda:         'txtSolda',
+            pintura:       'txtPintura',
+            montagem:      'TxtMontagem',
+            cortealasar:   'txtCorteaLaser',
+            pulsionadeira: 'txtPULSIONADEIRA',
+            galvanizar:    'txtGALVANIZAR',
+            engenharia:    'txtEngenharia',
+        };
+
+        // Buscar IdOrdemServico do item para propagar nas tabelas pai e infos de material para atualizar engenharia
+        const [itemRows] = await dbPool.execute(
+            `SELECT IdOrdemServico, IdMaterial, CodMatFabricante FROM ordemservicoitem WHERE IdOrdemServicoItem = ? LIMIT 1`, [id]
+        );
+        const itemOsId = itemRows.length > 0 ? itemRows[0].IdOrdemServico : null;
+        const itemIdMaterial = itemRows.length > 0 ? itemRows[0].IdMaterial : null;
+        const itemCodMatFabricante = itemRows.length > 0 ? itemRows[0].CodMatFabricante : null;
+        
+        // Atualizar SequenciaExecucao na tabela material_processo (Engenharia) se o recurso foi modificado
+        if (itemIdMaterial || itemCodMatFabricante) {
+            for (const [secKey, vals] of Object.entries(recursoTempos || {})) {
+                if (vals.IdProcesso && vals.seq != null && vals.seq !== '') {
+                    const seqNum = parseInt(vals.seq, 10);
+                    if (!isNaN(seqNum)) {
+                        try {
+                            const [resUpd] = await dbPool.execute(
+                                `UPDATE material_processo SET SequenciaExecucao = ? WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
+                                [seqNum, itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso]
+                            );
+                            if (resUpd.affectedRows === 0) {
+                                await dbPool.execute(
+                                    `INSERT INTO material_processo (IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, Ativo, UsuarioCriacao, DataCriacao, IdMatriz)
+                                     VALUES (?, ?, ?, ?, 1, ?, NOW(), ?)`,
+                                    [itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso, seqNum, req.user?.nome || req.user?.NomeCompleto || 'Sistema', req.tenantUser?.tenantId || null]
+                                );
+                            }
+                        } catch(e) {
+                            console.warn(`[Tempos] Erro ao atualizar material_processo para ${secKey}:`, e.message);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Buscar IdTag e IdProjeto da OS
+        let itemIdTag = osContext?.IdTag || null;
+        let itemIdProjeto = osContext?.IdProjeto || null;
+        if (itemOsId && (!itemIdTag || !itemIdProjeto)) {
+            const [osRows] = await dbPool.execute(
+                `SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ? LIMIT 1`, [itemOsId]
+            );
+            if (osRows.length > 0) {
+                if (!itemIdTag)     itemIdTag     = osRows[0].IdTag;
+                if (!itemIdProjeto) itemIdProjeto = osRows[0].IdProjeto;
+            }
+        }
+
+        // Ativar flags para recursos adicionados
+        if (Array.isArray(addRecursos) && addRecursos.length > 0) {
+            for (const secKey of addRecursos) {
+                const txtField = TXT_FIELD_MAP[secKey];
+                const pref     = SETOR_PREFIXO_MAP[secKey];
+                if (!txtField || !pref) continue;
+                // Ativar no item
+                try { await dbPool.execute(`UPDATE ordemservicoitem SET \`${txtField}\` = '1' WHERE IdOrdemServicoItem = ?`, [id]); } catch(e) { console.warn(`[Tempos] flag item ${txtField}:`, e.message); }
+                // Ativar na OS pai
+                if (itemOsId) { try { await dbPool.execute(`UPDATE ordemservico SET \`${txtField}\` = '1' WHERE IdOrdemServico = ?`, [itemOsId]); } catch(e) { console.warn(`[Tempos] flag OS ${txtField}:`, e.message); } }
+                // Ativar na tag
+                if (itemIdTag) { try { await dbPool.execute(`UPDATE tags SET \`${txtField}\` = '1' WHERE IdTag = ?`, [itemIdTag]); } catch(e) { console.warn(`[Tempos] flag tag ${txtField}:`, e.message); } }
+                // Ativar no projeto
+                if (itemIdProjeto) { try { await dbPool.execute(`UPDATE projetos SET \`${txtField}\` = '1' WHERE IdProjeto = ?`, [itemIdProjeto]); } catch(e) { console.warn(`[Tempos] flag proj ${txtField}:`, e.message); } }
+                console.log(`[Tempos] Recurso ADICIONADO: ${secKey} (${txtField}) no item ${id}`);
+            }
+        }
+
+        // Desativar flags para recursos removidos (apenas no item — OS/tag/projeto podem ter outros itens)
+        if (Array.isArray(removeRecursos) && removeRecursos.length > 0) {
+            for (const secKey of removeRecursos) {
+                const txtField = TXT_FIELD_MAP[secKey];
+                const pref     = SETOR_PREFIXO_MAP[secKey];
+                if (!txtField || !pref) continue;
+                // Desativar no item e zerar tempos do recurso
+                try {
+                    await dbPool.execute(
+                        `UPDATE ordemservicoitem SET \`${txtField}\` = '0',
+                         \`${pref}TempoSetup\` = 0, \`${pref}TempoPadrao\` = 0, \`${pref}TotalTempo\` = 0
+                         WHERE IdOrdemServicoItem = ?`, [id]
+                    );
+                } catch(e) { console.warn(`[Tempos] desativar item ${txtField}:`, e.message); }
+                console.log(`[Tempos] Recurso REMOVIDO: ${secKey} (${txtField}) no item ${id}`);
+            }
+        }
+
+        console.log(`[Tempos] Item ${id}: global setup=${globalSetup}, padrao=${globalPadrao}, total=${globalTotal}`);
+        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.', globalSetup, globalPadrao, globalTotal });
     } catch (err) {
         console.error('[API] Erro ao atualizar tempos:', err.message);
         return res.status(500).json({ success: false, message: err.message });

@@ -10,6 +10,8 @@ import { useAlert } from '../contexts/AlertContext';
 import { useAuth } from '../contexts/AuthContext';
 
 import { formatToBRDate, isDateInPast } from '../utils/dateUtils';
+import Swal from 'sweetalert2';
+
 
 const API_BASE = '/api';
 
@@ -495,20 +497,24 @@ export default function ProjetoPage() {
 
  const handleLiberar = async (id: number) => {
     try {
+      const token = localStorage.getItem('sinco_token') || '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
       // 1. Consulta das Tags do projeto
-      const resTags = await fetch(`${API_BASE}/projeto/${id}/tags`);
+      const resTags = await fetch(`${API_BASE}/projeto/${id}/tags`, { headers });
       const jsonTags = await resTags.json();
       const tagsList = (jsonTags.success && Array.isArray(jsonTags.data)) ? jsonTags.data : [];
 
       // 2. Consulta das Ordens de Serviço (OS) do projeto
-      const resOs = await fetch(`${API_BASE}/visao-geral/projeto/${id}/ordens-servico`);
+      const resOs = await fetch(`${API_BASE}/visao-geral/projeto/${id}/ordens-servico`, { headers });
       const jsonOs = await resOs.json();
       const osList = (jsonOs.success && Array.isArray(jsonOs.data)) ? jsonOs.data : [];
 
       const hasTags = tagsList.length > 0;
       const hasOs = osList.length > 0;
 
-      // Se não possui Tag ou não possui OS, exibe a mensagem explicativa e CANCELA antes da confirmação
+      // Se não possui Tag ou não possui OS, exibe a mensagem explicativa e CANCELA
       if (!hasTags || !hasOs) {
         showAlert(
           'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).',
@@ -517,18 +523,33 @@ export default function ProjetoPage() {
         return;
       }
 
-      // 3. Pergunta de confirmação apenas para projetos válidos (que possuem Tag e OS)
-      if (!confirm('Deseja realmente liberar este projeto?')) return;
+      // 3. Busca nome do projeto para exibir na confirmação
+      const nomeProjeto = projetos.find(p => p.IdProjeto === id)?.Projeto || `ID ${id}`;
 
-      // 4. Liberação do projeto
+      // 4. Confirmação via SweetAlert (padrão do sistema)
+      const result = await Swal.fire({
+        title: 'Liberar Projeto',
+        html: `Deseja realmente liberar o projeto <strong>${nomeProjeto}</strong>?<br><small style="color:#666">Esta ação irá marcar o projeto como liberado (Liberado = 'S').</small>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, liberar',
+        cancelButtonText: 'Cancelar',
+        confirmButtonColor: '#10B981',
+      });
+      if (!result.isConfirmed) return;
+
+      // 5. Liberação do projeto
       const res = await fetch(`${API_BASE}/projeto/${id}/liberar`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ usuario: 'Sistema' })
+        headers,
+        body: JSON.stringify({ usuario: user?.nome || 'Sistema' })
       });
       const json = await res.json();
       if (json.success) {
-        showAlert('Projeto liberado com sucesso!', 'success');
+        showAlert('Projeto liberado com sucesso! Agora é possível liberar as Ordens de Serviço vinculadas.', 'success');
+        // Atualiza estado local imediatamente
+        setProjetos(prev => prev.map(p => p.IdProjeto === id ? { ...p, liberado: 'S' } : p));
+        // Refetch completo para sincronizar com banco
         fetchProjetos();
       } else {
         showAlert(json.message || 'Erro ao liberar o projeto.', 'error');

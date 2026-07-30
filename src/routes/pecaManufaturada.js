@@ -306,15 +306,16 @@ router.get('/materiais-criar', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────────
-// GET /processos — Lista processos de fabricação disponíveis
+// GET /processos - Lista processos de fabricação com Fabrica = 'SIM'
 // ────────────────────────────────────────────────────────────────────────────────
 router.get('/processos', async (req, res) => {
     try {
         const [rows] = await db(req).execute(
-            `SELECT IdProcessoFabricacao, ProcessoFabricacao
+            `SELECT IdProcessoFabricacao, processofabricacao AS ProcessoFabricacao
              FROM processofabricacao
              WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL)
-             ORDER BY ProcessoFabricacao`
+               AND Fabrica = 'SIM'
+             ORDER BY processofabricacao`
         );
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -324,7 +325,7 @@ router.get('/processos', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────────
-// GET /processos-existentes/:codmatFabricante — Processos já cadastrados para um produto
+// GET /processos-existentes/:codmatFabricante - Processos já cadastrados
 // ────────────────────────────────────────────────────────────────────────────────
 router.get('/processos-existentes/:codmatFabricante', async (req, res) => {
     try {

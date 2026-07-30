@@ -7,11 +7,20 @@ const frontendDir = path.join(__dirname);
 
 console.log('[ViteWrapper] Iniciando Vite em:', frontendDir);
 
-const vite = spawn('npx', ['vite', '--host'], {
+// Usa npm run dev para garantir que o Vite seja encontrado corretamente
+const vite = spawn('npm', ['run', 'dev'], {
     cwd: frontendDir,
     shell: true,
-    stdio: 'inherit',
-    env: { ...process.env, NODE_ENV: 'development' }
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, NODE_ENV: 'development', FORCE_COLOR: '0' }
+});
+
+vite.stdout.on('data', (data) => {
+    process.stdout.write(data);
+});
+
+vite.stderr.on('data', (data) => {
+    process.stderr.write(data);
 });
 
 vite.on('error', (err) => {
@@ -24,5 +33,5 @@ vite.on('exit', (code) => {
     process.exit(code ?? 0);
 });
 
-process.on('SIGINT',  () => vite.kill('SIGINT'));
-process.on('SIGTERM', () => vite.kill('SIGTERM'));
+process.on('SIGINT',  () => { vite.kill('SIGINT');  });
+process.on('SIGTERM', () => { vite.kill('SIGTERM'); });
