@@ -65,6 +65,7 @@ export const defaultMenuItems: MenuItem[] = [
     { id: 'teste-final-montagem', icon: 'ClipboardCheck', label: 'Teste Final Montagem', href: '/teste-final-montagem' },
     { id: 'recursos-fabricacao', icon: 'Settings2', label: 'Recursos de Fabricação', href: '/recursos-fabricacao' },
     { id: 'tipos-produto', icon: 'Boxes', label: 'Tipos Produto', href: '/tipos-produto' },
+    { id: 'tipos-transporte', icon: 'Truck', label: 'Tipos Transporte', href: '/tipos-transporte' },
     { id: 'visao-geral-pendencias', icon: 'ListChecks', label: 'Todas as Pendências', href: '/visao-geral-pendencias' },
     { id: 'unidades-medida', icon: 'Ruler', label: 'Unidades de Medida', href: '/unidades-medida' },
     { id: 'usuarios', icon: 'Users', label: 'Usuários', href: '/usuarios' },

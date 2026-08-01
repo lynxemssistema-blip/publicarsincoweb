@@ -1732,10 +1732,13 @@ useEffect(() => {
  {/* Items */}
  <div className="divide-y divide-gray-100 min-w-max">
  {items.map((item) => {
+ // Calculate specific sector target quantity
  const qtdeProduzida = Number(item.QtdeProduzidaSetor) || 0;
+ const qtdeAlvoSetor = Number(item.TotalExecutar || 0) + qtdeProduzida;
+ const percentual = qtdeAlvoSetor > 0 ? Math.round((qtdeProduzida / qtdeAlvoSetor) * 100) : 0;
+ const concluido = qtdeAlvoSetor > 0 && qtdeProduzida >= qtdeAlvoSetor;
+ // We still need the global item qtdeTotal for the checkPredecessorStatus logic
  const qtdeTotal = Number(item.QtdeTotal) || 0;
- const percentual = qtdeTotal > 0 ? Math.round((qtdeProduzida / qtdeTotal) * 100) : 0;
- const concluido = percentual >= 100;
 
  return (
  <div
@@ -1794,8 +1797,8 @@ useEffect(() => {
  <div className="w-16 shrink-0 flex justify-center">
  {(() => {
  const { allowed, predecessor } = checkPredecessorStatus(item, setorAtivo as Setor);
- const semSaldo = qtdeTotal <= 0;
- const bloqueado = !allowed || semSaldo;
+  const semSaldo = qtdeAlvoSetor <= 0;
+  const bloqueado = semSaldo;
  return concluido ? (
  <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200">
  <CheckCircle size={10} />
@@ -1815,22 +1818,22 @@ useEffect(() => {
  }`}
  title={semSaldo ? 'Sem saldo a executar' : !allowed ? `Aguardando setor ${predecessor}` : 'Apontar'}
  >
- {semSaldo ? <span className="text-[8px]">S/S</span> : !allowed ? <Clock size={10} /> : <Plus size={10} />}
- {semSaldo ? 'S/S' : allowed ? 'Apontar' : 'Bloq.'}
+ <Plus size={10} />
+ Apontar
  </button>
  );
  })()}
  </div>
 
- {/* Quantidade Total */}
+ {/* Quantidade Total do Setor (Alvo) */}
  <div className="w-10 shrink-0 text-center">
- <span className="font-black text-[#32423D]">{qtdeTotal}</span>
+ <span className="font-black text-[#32423D]">{qtdeAlvoSetor > 0 ? qtdeAlvoSetor : '-'}</span>
  </div>
 
- {/* Produzido */}
+ {/* Produzido no Setor */}
  <div className="w-14 shrink-0 text-center">
  <span className={`font-bold text-[10px] ${concluido ? 'text-green-600' : 'text-gray-600'}`}>
- {qtdeProduzida}/{qtdeTotal}
+ {qtdeProduzida}/{qtdeAlvoSetor}
  </span>
  </div>
 
@@ -2263,27 +2266,19 @@ useEffect(() => {
             const limiteDiarioVal = limitesSalvos[setorKey] ?? 500;
 
             const itemAny = itemDetails.item as any;
-            const PREFIXOS_RECURSOS = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'Galvanizar', 'Pulsionadeira', 'CorteaLaser', 'Engenharia'];
             let prefixoAlvo = modalSetor !== 'mapa'
               ? (modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1))
               : (recursoOrigemRef.current && recursoOrigemRef.current !== 'mapa'
                   ? recursoOrigemRef.current.charAt(0).toUpperCase() + recursoOrigemRef.current.slice(1)
                   : '');
-            let tempoSetup = 0, tempoPadrao = 0, tempoTotalDB = 0;
-            const candidatos = prefixoAlvo ? [prefixoAlvo, ...PREFIXOS_RECURSOS.filter(p => p !== prefixoAlvo)] : PREFIXOS_RECURSOS;
-            for (const pref of candidatos) {
-              const s = parseFloat(String(itemAny[`${pref}TempoSetup`] ?? 0)) || 0;
-              const p = parseFloat(String(itemAny[`${pref}TempoPadrao`] ?? 0)) || 0;
-              const t = parseFloat(String(itemAny[`${pref}TotalTempo`] ?? 0)) || 0;
-              if (s > 0 || p > 0 || t > 0) { tempoSetup = s; tempoPadrao = p; tempoTotalDB = t; break; }
+            
+            let tempoSetup = 0, tempoPadrao = 0;
+            if (prefixoAlvo) {
+              tempoSetup = parseFloat(String(itemAny[`${prefixoAlvo}TempoSetup`] ?? 0)) || 0;
+              tempoPadrao = parseFloat(String(itemAny[`${prefixoAlvo}TempoPadrao`] ?? 0)) || 0;
             }
-            if (tempoSetup === 0 && tempoPadrao === 0) {
-              tempoSetup   = parseFloat(String(itemAny.TempoSetup  ?? 0)) || 0;
-              tempoPadrao  = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
-              tempoTotalDB = parseFloat(String(itemAny.TotalTempo  ?? 0)) || 0;
-            }
+
             const qtdeTotalItem = parseFloat(String(itemDetails.item.QtdeTotal)) || 0;
-            const tempoTotal = tempoTotalDB > 0 ? tempoTotalDB : (qtdeTotalItem * tempoPadrao) + tempoSetup;
             const atLimite = minProdVal >= limiteDiarioVal;
 
             return (
@@ -2339,7 +2334,7 @@ useEffect(() => {
                   <div className="flex-1 text-center px-1">
                     <div className="text-[7px] font-black text-amber-500 uppercase tracking-wider leading-none">Total (C)</div>
                     <div className="text-xs font-black text-amber-800 leading-tight mt-0.5">
-                      {tempoTotal.toFixed(1)}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
+                      {((parseFloat(qtdeApontar) || 0) * tempoPadrao).toFixed(1)}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
                     </div>
                   </div>
 
@@ -2352,13 +2347,10 @@ useEffect(() => {
           {/* ─── LINHA DE AÇÃO INTEGRADA: Qtde + Tempo + Botões ─── */}
           {modalSetor !== 'mapa' && itemDetails && (() => {
             const itemAny = itemDetails.item as any;
-            const PREFIXOS_Q = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Pulsionadeira','CorteaLaser','Engenharia'];
             let tPadrao = 0;
             const prefQ = modalSetor !== 'mapa' ? modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1) : '';
-            const candidatosQ = prefQ ? [prefQ, ...PREFIXOS_Q.filter(p => p !== prefQ)] : PREFIXOS_Q;
-            for (const pref of candidatosQ) {
-              const p = parseFloat(String(itemAny[`${pref}TempoPadrao`] ?? 0)) || 0;
-              if (p > 0) { tPadrao = p; break; }
+            if (prefQ) {
+              tPadrao = parseFloat(String(itemAny[`${prefQ}TempoPadrao`] ?? 0)) || 0;
             }
             const qtdeNum = parseFloat(qtdeApontar) || 0;
             const tempoCalculado = (qtdeNum * tPadrao).toFixed(1);

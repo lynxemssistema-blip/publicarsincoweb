@@ -106,5 +106,18 @@ export const getMergedMenu = (savedMenu: MenuItem[]): MenuItem[] => {
     }
   }
 
+  // Force add 'tipos-transporte'
+  if (!menu.find(item => item.id === 'tipos-transporte')) {
+    const ttItem = defaultMenuItems.find(item => item.id === 'tipos-transporte');
+    if (ttItem) {
+      const tpIdx = menu.findIndex(item => item.id === 'tipos-produto');
+      if (tpIdx >= 0) {
+        menu = [...menu.slice(0, tpIdx + 1), ttItem, ...menu.slice(tpIdx + 1)];
+      } else {
+        menu = [...menu, ttItem];
+      }
+    }
+  }
+
   return menu;
 };

@@ -17,6 +17,7 @@ import AcabamentoPage from './pages/Acabamento';
 import MaterialPage from './pages/Material';
 import ProjetoPage from './pages/Projeto';
 import TipoProdutoPage from './pages/TipoProduto';
+import TiposTransportePage from './pages/TiposTransporte';
 import SetorPage from './pages/Setor';
 import RecursoFabricacaoPage from './pages/RecursoFabricacao';
 import MotoristaPage from './pages/Motorista';
@@ -62,16 +63,12 @@ function AppContent() {
   const [selectedRncItem, setSelectedRncItem] = useState<number | null>(null);
   const hasInitialized = useRef(false); // prevent URL mapping from running more than once
 
-  // Autenticação local obrigatória: verifica se o usuário já autenticou contra a tabela usuario do banco ativo
-  const [isLocallyAuthenticated, setIsLocallyAuthenticated] = useState<boolean>(() => {
-    try {
-      const stored = JSON.parse(localStorage.getItem('sinco_user') || '{}');
-      const dbName = stored.dbName || '';
-      return sessionStorage.getItem(`sinco_local_auth_${dbName}`) === 'true';
-    } catch { return false; }
-  });
-
   useEffect(() => {
+    const isSuperUser =
+      user?.isSuperadmin === true ||
+      user?.superadmin === 'S' ||
+      user?.login?.toLowerCase() === 'superadmin';
+
     const loadMenu = () => {
       if (!user) return; // Don't fetch if not logged in
 
@@ -317,6 +314,8 @@ function AppContent() {
         return <RecursoFabricacaoPage />;
       case 'tipos-produto':
         return <TipoProdutoPage />;
+      case 'tipos-transporte':
+        return <TiposTransportePage />;
       case 'setor':
       case 'group_1781115534701':
       case 'cadastros_setor':
@@ -392,12 +391,13 @@ function AppContent() {
         return <RomaneioRetornoPage />;
       case 'pendencia-romaneio':
         return <PendenciaRomaneioPage onNavigate={handleNavigate} idRomaneioItem={selectedRncItem} />;
-      case 'config-sistema':
+      case 'config-sistema': {
         const isMasterOrSuper = user?.isSuperadmin || user?.login?.toLowerCase() === 'superadmin' || user?.login?.toLowerCase() === 'admin';
         if (!isMasterOrSuper) {
           return <div className="p-8 text-center text-red-500 font-bold">Acesso Negado - Apenas o usuário Admin ou Superadmin pode acessar.</div>;
         }
         return <ConfiguracaoSistemaPage />;
+      }
       case 'superadmin':
         return <SuperadminPage />;
       case 'login':
@@ -418,7 +418,6 @@ function AppContent() {
         return <PowerBuildAgglutinationPage onNavigate={handleNavigate} />;
       case 'peça-manufaturada':
       case 'peca-manufaturada':
-
       case 'monta-peca-manufaturada':
         return <MontaPecaManufaturadaPage usuario={user?.nomeCompleto || user?.login} />;
       default:
@@ -430,11 +429,6 @@ function AppContent() {
   if (!user) {
     return <LoginPage />;
   }
-
-  const isSuperUser =
-    user?.isSuperadmin === true ||
-    user?.superadmin === 'S' ||
-    user?.login?.toLowerCase() === 'superadmin';
 
   // O segundo login foi removido conforme solicitado para evitar que o pedido de login se repita.
 

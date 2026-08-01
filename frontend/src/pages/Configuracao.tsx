@@ -6,6 +6,7 @@ import { useToast } from '../contexts/ToastContext';
 import { useAppConfig, saveLocalPrefs } from '../contexts/AppConfigContext';
 import { useAuth } from '../contexts/AuthContext';
 import { defaultMenuItems } from '../utils/constants';
+import { getMergedMenu } from '../utils/menuUtils';
 
 const API_BASE = '/api';
 
@@ -63,6 +64,7 @@ export default function ConfiguracaoPage() {
  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
  const [editingItem, setEditingItem] = useState<{ item: MenuItem } | null>(null);
  const [showIconPicker, setShowIconPicker] = useState(false);
+ const [draggedPath, setDraggedPath] = useState<number[] | null>(null);
 
  // Superadmin DB Selection
  const [showDbSelection, setShowDbSelection] = useState(false);
@@ -154,7 +156,7 @@ export default function ConfiguracaoPage() {
  .then(res => res.json())
  .then(data => {
  if (data.success) {
- const savedMenu: MenuItem[] = sortMenuRecursive(data.menu || defaultMenuItems);
+ const savedMenu: MenuItem[] = sortMenuRecursive(getMergedMenu(data.menu || defaultMenuItems));
  setMenuItems(savedMenu);
  }
  })
@@ -277,7 +279,7 @@ export default function ConfiguracaoPage() {
              addToast({ type: 'error', title: 'Erro de Validação', message: valData.message });
              return; // Stop saving
          }
-     } catch (e) {
+     } catch {
          addToast({ type: 'error', title: 'Erro', message: 'Erro ao validar o endereço da CNH' });
          return;
      }
@@ -425,13 +427,67 @@ export default function ConfiguracaoPage() {
  setMenuItems([newGroup, ...menuItems]);
  };
 
+ const handleDragStart = (e: React.DragEvent, path: number[]) => {
+ e.dataTransfer.effectAllowed = 'move';
+ setDraggedPath(path);
+ };
+
+ const handleDragOver = (e: React.DragEvent) => {
+ e.preventDefault();
+ e.dataTransfer.dropEffect = 'move';
+ };
+
+ const handleDrop = (e: React.DragEvent, targetPath: number[]) => {
+ e.preventDefault();
+ if (!draggedPath) return;
+ if (draggedPath.join('-') === targetPath.join('-')) {
+ setDraggedPath(null);
+ return;
+ }
+ 
+ if (draggedPath.slice(0, -1).join('-') !== targetPath.slice(0, -1).join('-')) {
+ // Permitir apenas ordenação no mesmo nível
+ setDraggedPath(null);
+ return;
+ }
+
+ const newMenu = JSON.parse(JSON.stringify(menuItems)) as MenuItem[];
+ let parentLevel = newMenu;
+ for (let i = 0; i < draggedPath.length - 1; i++) {
+ parentLevel = parentLevel[draggedPath[i]].children!;
+ }
+ 
+ const draggedIndex = draggedPath[draggedPath.length - 1];
+ const targetIndex = targetPath[targetPath.length - 1];
+ const draggedItem = parentLevel[draggedIndex];
+ 
+ parentLevel.splice(draggedIndex, 1);
+ 
+ let finalTargetIndex = targetIndex;
+ if (draggedIndex < targetIndex) {
+ finalTargetIndex -= 1; // Ajusta o índice pois removemos um item anterior
+ }
+ 
+ parentLevel.splice(finalTargetIndex, 0, draggedItem);
+ setMenuItems(newMenu);
+ setDraggedPath(null);
+ };
+
  const renderEditorItem = (item: MenuItem, path: number[]) => {
  const Icon = iconMap[item.icon] || Menu;
  const isEditing = editingItem?.item.id === item.id;
+ const isDragging = draggedPath?.join('-') === path.join('-');
 
  return (
- <div key={item.id} className="mb-0.5">
- <div className="flex items-center gap-1.5 bg-white px-1.5 py-1 border border-gray-100 rounded hover:shadow-sm hover:border-gray-200 transition-all">
+ <div key={item.id} className={`mb-0.5 ${isDragging ? 'opacity-40' : ''}`}>
+ <div 
+   className={`flex items-center gap-1.5 bg-white px-1.5 py-1 border border-gray-100 rounded hover:shadow-sm hover:border-gray-200 transition-all ${!isEditing ? 'cursor-move' : ''}`}
+   draggable={!isEditing}
+   onDragStart={(e) => !isEditing && handleDragStart(e, path)}
+   onDragOver={handleDragOver}
+   onDrop={(e) => handleDrop(e, path)}
+   onDragEnd={() => setDraggedPath(null)}
+ >
  {/* Controls */}
  <div className="flex flex-col gap-0">
  <button onClick={() => handleMove(path, 'up')} className="p-0.5 hover:bg-gray-100 rounded text-gray-400"><ChevronUp size={11} /></button>

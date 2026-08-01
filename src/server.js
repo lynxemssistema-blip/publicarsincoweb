@@ -56,6 +56,7 @@ function toIsoDate(val) {
 const matrizRoutes = require('./routes/matrizRoutes');
 const blocksetRoutes = require('./routes/blocksetRoutes');
 const pecaManufaturadaRoutes = require('./routes/pecaManufaturada');
+const tiposTransporteRoutes = require('./routes/tiposTransporte');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const multer = require('multer');
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -170,6 +171,7 @@ app.use('/api/blockset', blocksetRoutes);
 // Peça Manufaturada Routes (modularizado)
 app.locals.pool = pool;
 app.use('/api/peca-manufaturada', pecaManufaturadaRoutes);
+app.use('/api/config/veiculo', tiposTransporteRoutes);
 
 // Reposià§ão Routes
 app.get('/api/reposicao/itens', tenantMiddleware, async (req, res) => {
@@ -11212,13 +11214,16 @@ osi.*,
         // Reference: VB.NET BancoDados.AtualizaSetoresAnteriores() logic
         if (someSectorFinalized || isMapa) {
             // Equivalent to checking viewordemservicoitemstatussetor.Resultado = 0
+            const allSectorKeys = Object.keys(setorColumns).filter(k => k !== 'mapa');
+            const checkClauses = allSectorKeys.map(key => {
+                const s = setorColumns[key];
+                // Adiciona verificações p/ 'S' ou '1', mantendo retrocompatibilidade
+                return `COALESCE(CASE WHEN (NULLIF(${s.txt}, '') = '1' OR UPPER(NULLIF(${s.txt}, '')) = 'S') AND COALESCE(${s.status}, '') != 'C' THEN 1 ELSE 0 END, 0)`;
+            }).join(' +\n        ');
+
             const [checkSectors] = await conn.execute(`
 SELECT
-    (COALESCE(CASE WHEN NULLIF(txtCorte, '') = '1' AND COALESCE(sttxtCorte, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtDobra, '') = '1' AND COALESCE(sttxtDobra, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtSolda, '') = '1' AND COALESCE(sttxtSolda, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtPintura, '') = '1' AND COALESCE(sttxtPintura, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(TxtMontagem, '') = '1' AND COALESCE(sttxtMontagem, '') != 'C' THEN 1 ELSE 0 END, 0)) as Pendentes
+    (${checkClauses}) as Pendentes
                 FROM ordemservicoitem 
                 WHERE IdOrdemServicoItem = ?
     `, [IdOrdemServicoItem]);
@@ -13934,6 +13939,28 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
         let globalTotal = parseFloat(TotalTempo) || 0;
         const qtde = parseFloat(QtdeTotal) || 0;
 
+        // Buscar as sequencias atuais do item para descobrir o maior valor
+        const [rowItemSeq] = await dbPool.execute(`SELECT CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia, MontagemSequencia, CorteaLaserSequencia, PulsionadeiraSequencia, GalvanizarSequencia, EngenhariaSequencia FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`, [id]);
+        let maxSeq = 0;
+        if (rowItemSeq.length > 0) {
+            const itemSeqs = rowItemSeq[0];
+            for (const key in itemSeqs) {
+                if (itemSeqs[key] !== null && itemSeqs[key] > maxSeq) {
+                    maxSeq = itemSeqs[key];
+                }
+            }
+        }
+
+        // Tambem verificar se o usuario passou alguma sequencia explicitamente no payload que seja maior
+        if (recursoTempos && typeof recursoTempos === 'object') {
+            for (const vals of Object.values(recursoTempos)) {
+                const rSeqParsed = parseInt(vals.seq, 10);
+                if (!isNaN(rSeqParsed) && rSeqParsed > maxSeq) {
+                    maxSeq = rSeqParsed;
+                }
+            }
+        }
+
         if (recursoTempos && typeof recursoTempos === 'object' && Object.keys(recursoTempos).length > 0) {
             let sumSetup = 0, sumPadrao = 0, sumTotal = 0;
             for (const [secKey, vals] of Object.entries(recursoTempos)) {
@@ -13941,7 +13968,15 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
                 if (!pref) continue;
                 const rSetup  = Math.max(0, parseFloat(vals.setup)  || 0);
                 const rPadrao = Math.max(0, parseFloat(vals.padrao) || 0);
-                const rSeq    = parseInt(vals.seq, 10) || null;
+                
+                let rSeqParsed = parseInt(vals.seq, 10);
+                if (isNaN(rSeqParsed)) {
+                    maxSeq = maxSeq === 0 ? 10 : (Math.floor(maxSeq / 10) * 10 + 10);
+                    rSeqParsed = maxSeq;
+                    vals.seq = rSeqParsed.toString();
+                }
+                const rSeq = rSeqParsed;
+                
                 const rTotal  = (qtde * rPadrao) + rSetup;
                 setClauses.push(`${pref}TempoSetup = ?`, `${pref}TempoPadrao = ?`, `${pref}TotalTempo = ?`, `${pref}Sequencia = ?`);
                 values.push(rSetup, rPadrao, rTotal, rSeq);
@@ -13988,24 +14023,26 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
         // Atualizar SequenciaExecucao na tabela material_processo (Engenharia) se o recurso foi modificado
         if (itemIdMaterial || itemCodMatFabricante) {
             for (const [secKey, vals] of Object.entries(recursoTempos || {})) {
-                if (vals.IdProcesso && vals.seq != null && vals.seq !== '') {
-                    const seqNum = parseInt(vals.seq, 10);
-                    if (!isNaN(seqNum)) {
-                        try {
-                            const [resUpd] = await dbPool.execute(
-                                `UPDATE material_processo SET SequenciaExecucao = ? WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
-                                [seqNum, itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso]
+                if (vals.IdProcesso) {
+                    const seqParsed = parseInt(vals.seq, 10);
+                    const seqNum = isNaN(seqParsed) ? 99 : seqParsed;
+                    const tSetup = vals.setup != null && vals.setup !== '' ? parseFloat(vals.setup) : null;
+                    const tPadrao = vals.padrao != null && vals.padrao !== '' ? parseFloat(vals.padrao) : null;
+                    
+                    try {
+                        const [resUpd] = await dbPool.execute(
+                            `UPDATE material_processo SET SequenciaExecucao = ?, TempoEstimadoMin = ?, TempoPadraoMin = ? WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
+                            [seqNum, tSetup, tPadrao, itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso]
+                        );
+                        if (resUpd.affectedRows === 0) {
+                            await dbPool.execute(
+                                `INSERT INTO material_processo (IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, TempoEstimadoMin, TempoPadraoMin, Ativo, UsuarioCriacao, DataCriacao, IdMatriz)
+                                 VALUES (?, ?, ?, ?, ?, ?, 'A', ?, NOW(), ?)`,
+                                [itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso, seqNum, tSetup, tPadrao, req.user?.NomeCompleto || req.user?.nome || 'Sistema', req.tenantUser?.tenantId || null]
                             );
-                            if (resUpd.affectedRows === 0) {
-                                await dbPool.execute(
-                                    `INSERT INTO material_processo (IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, Ativo, UsuarioCriacao, DataCriacao, IdMatriz)
-                                     VALUES (?, ?, ?, ?, 1, ?, NOW(), ?)`,
-                                    [itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso, seqNum, req.user?.nome || req.user?.NomeCompleto || 'Sistema', req.tenantUser?.tenantId || null]
-                                );
-                            }
-                        } catch(e) {
-                            console.warn(`[Tempos] Erro ao atualizar material_processo para ${secKey}:`, e.message);
                         }
+                    } catch(e) {
+                        console.warn(`[Tempos] Erro ao atualizar material_processo para ${secKey}:`, e.message);
                     }
                 }
             }
@@ -14076,7 +14113,17 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
         }
 
         console.log(`[Tempos] Item ${id}: global setup=${globalSetup}, padrao=${globalPadrao}, total=${globalTotal}`);
-        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.', globalSetup, globalPadrao, globalTotal });
+        
+        if (itemOsId) {
+            try {
+                await recalcularQuantidadesTotais(itemOsId, dbPool);
+                console.log(`[Tempos] Recalculo de totais (OS, Tag, Projeto) concluído para OS ${itemOsId}`);
+            } catch(e) {
+                console.error(`[Tempos] Erro ao recalcular totais para OS ${itemOsId}:`, e.message);
+            }
+        }
+
+        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.', globalSetup, globalPadrao, globalTotal, recursoTempos });
     } catch (err) {
         console.error('[API] Erro ao atualizar tempos:', err.message);
         return res.status(500).json({ success: false, message: err.message });

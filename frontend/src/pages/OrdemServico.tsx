@@ -719,10 +719,17 @@ function OrdemServicoContent() {
             let totalTempo = 0;
 
             if (hasRecursos) {
-                // Calcular globais como soma dos recursos
-                for (const v of Object.values(recursoTemposEdit)) {
+                // Validar se algum recurso esta com tempos zerados e calcular totais
+                for (const [key, v] of Object.entries(recursoTemposEdit)) {
                     const s = parseFloat(v.setup)  || 0;
                     const p = parseFloat(v.padrao) || 0;
+                    
+                    if (s === 0 && p === 0) {
+                        addToast({ type: 'warning', title: 'Validação', message: `O recurso ${key.toUpperCase()} não pode ficar com Setup e Padrão zerados.` });
+                        setTempoSaving(false);
+                        return;
+                    }
+
                     setup  += s;
                     padrao += p;
                     totalTempo += (qtde * p) + s;
@@ -770,10 +777,23 @@ function OrdemServicoContent() {
             });
             const data = await res.json();
             if (data.success) {
-                addToast({ type: 'success', title: 'Tempos atualizados', message: `Setup: ${setup}min | Padrão: ${padrao}min | Total: ${totalTempo.toFixed(1)}min` });
+                addToast({ type: 'success', title: 'Tempos atualizados', message: `Os tempos foram salvos. Total Geral: ${totalTempo.toFixed(1)} min.` });
 
-                // Atualizar snapshot para a próxima comparação de add/remove
-                setRecursoTemposOriginal({ ...recursoTemposEdit });
+                // Atualizar snapshot para a proxima comparacao de add/remove
+                if (data.recursoTempos) {
+                    setRecursoTemposEdit(prev => {
+                        const next = { ...prev };
+                        for (const [k, v] of Object.entries(data.recursoTempos)) {
+                            if (next[k]) {
+                                next[k] = { ...next[k], seq: (v as any).seq || next[k].seq };
+                            }
+                        }
+                        setRecursoTemposOriginal({ ...next });
+                        return next;
+                    });
+                } else {
+                    setRecursoTemposOriginal({ ...recursoTemposEdit });
+                }
 
                 // Refetch completo dos itens da OS para refletir novos recursos/flags txt* na tela
                 const osId = tempoModalItem.IdOrdemServico!;
