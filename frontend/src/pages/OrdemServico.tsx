@@ -412,7 +412,7 @@ function OrdemServicoContent() {
     // Snapshot dos recursos ao abrir o modal (para calcular adicionados/removidos ao salvar)
     const [recursoTemposOriginal, setRecursoTemposOriginal] = useState<Record<string, { setup: string; padrao: string }>>({});
     // Lista dinâmica de processos com Fabrica = 'SIM' buscada do backend
-    const [processosFabricaSIM, setProcessosFabricaSIM] = useState<{ key: string; label: string }[]>([]);
+    const [processosFabricaSIM, setProcessosFabricaSIM] = useState<{ key: string; label: string; IdProcesso: number }[]>([]);
     const [materialProcessos, setMaterialProcessos] = useState<{ IdProcesso: number; key: string; sequencia: number }[]>([]);
     const [draggedResource, setDraggedResource] = useState<string | null>(null);
     const [dragOverResource, setDragOverResource] = useState<string | null>(null);
@@ -591,10 +591,15 @@ function OrdemServicoContent() {
                 const rawSetup  = itemAny[`${pref}TempoSetup`];
                 const rawPadrao = itemAny[`${pref}TempoPadrao`];
                 const rawSeq    = itemAny[`${pref}Sequencia`];
+                
+                // Buscar IdProcesso na lista processosFabricaSIM
+                const procMatch = processosFabricaSIM.find(p => p.key === secKey);
+                
                 recursoInit[secKey] = {
                     setup:  (rawSetup  != null && rawSetup  !== '') ? String(rawSetup)  : '',
                     padrao: (rawPadrao != null && rawPadrao !== '') ? String(rawPadrao) : '',
                     seq:    (rawSeq != null && rawSeq !== '') ? String(rawSeq) : '',
+                    IdProcesso: procMatch?.IdProcesso
                 };
             }
         }
@@ -619,7 +624,7 @@ function OrdemServicoContent() {
                     }));
                     setMaterialProcessos(matList);
                     
-                    // Enriquecer recursoTemposEdit com sequências e IdProcesso caso faltem
+                    // Enriquecer recursoTemposEdit com IdProcesso caso falte
                     setRecursoTemposEdit(prev => {
                         const novo = { ...prev };
                         let mudou = false;
@@ -628,10 +633,6 @@ function OrdemServicoContent() {
                             if (mat) {
                                 if (vals.IdProcesso !== mat.IdProcesso) {
                                     novo[key] = { ...novo[key], IdProcesso: mat.IdProcesso };
-                                    mudou = true;
-                                }
-                                if (!vals.seq && mat.sequencia != null) {
-                                    novo[key] = { ...novo[key], seq: String(mat.sequencia) };
                                     mudou = true;
                                 }
                             }
@@ -659,18 +660,43 @@ function OrdemServicoContent() {
             });
             const json = await r.json();
             if (json.success && Array.isArray(json.data)) {
-                // Converte nomes do banco em { key, label } deduplicated by key
+                // Converte nomes do banco em { key, label, IdProcesso } deduplicated by key
                 const seen = new Set<string>();
-                const lista: { key: string; label: string }[] = [];
+                const lista: { key: string; label: string; IdProcesso: number }[] = [];
                 for (const row of json.data) {
                     const name = row.ProcessoFabricacao || '';
-                    const mapped = mapProcessNameToKey(name);
-                    if (!seen.has(mapped.key)) {
-                        seen.add(mapped.key);
-                        lista.push({ key: mapped.key, label: name });
+                    
+                    // Manual mapping to prioritize cortealasar over corte
+                    const desc = name.toLowerCase();
+                    let mappedKey = `proc_${row.IdProcessoFabricacao}`;
+                    
+                    // Hardcoded priority list
+                    if (desc.includes('laser') || desc.includes('corte a laser') || desc.includes('corte laser') || desc.includes('cortealaser') || desc.includes('cortelaser')) {
+                        mappedKey = 'cortealasar';
+                    } else if (desc.includes('corte') || desc.includes('cortar')) {
+                        mappedKey = 'corte';
+                    } else if (desc.includes('dobra') || desc.includes('dobrar')) {
+                        mappedKey = 'dobra';
+                    } else if (desc.includes('solda') || desc.includes('soldar') || desc.includes('soldagem')) {
+                        mappedKey = 'solda';
+                    } else if (desc.includes('pintura') || desc.includes('pintar')) {
+                        mappedKey = 'pintura';
+                    } else if (desc.includes('montagem') || desc.includes('montar')) {
+                        mappedKey = 'montagem';
+                    } else if (desc.includes('pulsionadeira') || desc.includes('punçao') || desc.includes('punção')) {
+                        mappedKey = 'pulsionadeira';
+                    } else if (desc.includes('galvanizar') || desc.includes('galvanização')) {
+                        mappedKey = 'galvanizar';
+                    } else if (desc.includes('engenharia') || desc.includes('projeto')) {
+                        mappedKey = 'engenharia';
+                    }
+                    
+                    if (!seen.has(mappedKey)) {
+                        seen.add(mappedKey);
+                        lista.push({ key: mappedKey, label: name, IdProcesso: row.IdProcessoFabricacao });
                     }
                 }
-                setProcessosFabricaSIM(lista);
+                setProcessosFabricaSIM(lista as any); // Type assertion needed due to state interface
             }
         } catch (err) {
             console.warn('[handleOpenTempoModal] falha ao buscar processos Fabrica=SIM:', err);
@@ -718,7 +744,9 @@ function OrdemServicoContent() {
             const currentKeys  = new Set(Object.keys(recursoTemposEdit));
             const originalKeys = new Set(Object.keys(recursoTemposOriginal));
             const addRecursos    = [...currentKeys].filter(k => !originalKeys.has(k));
-            const removeRecursos = [...originalKeys].filter(k => !currentKeys.has(k));
+            const removeRecursos = [...originalKeys]
+                .filter(k => !currentKeys.has(k))
+                .map(k => ({ key: k, IdProcesso: recursoTemposOriginal[k]?.IdProcesso }));
 
             // Montar osContext para propagar flags nas tabelas pai
             const osCtx = {
@@ -3476,8 +3504,8 @@ function OrdemServicoContent() {
 
                                     {/* ── Painel + Novo Recurso (dinâmico do backend Fabrica=SIM) ── */}
                                     {(() => {
-                                        // Usar lista dinâmica do backend; filtrar os já presentes no item
-                                        const disponiveis = processosFabricaSIM.filter(r => !recursoTemposEdit[r.key]);
+                                        // Usar lista dinâmica do backend (mostrar todos mesmo já selecionados)
+                                        const disponiveis = processosFabricaSIM;
                                         if (disponiveis.length === 0 && processosFabricaSIM.length > 0) return null;
                                         return (
                                             <div className="flex items-center gap-1.5">
@@ -3489,19 +3517,26 @@ function OrdemServicoContent() {
                                                     onChange={e => {
                                                         const key = e.target.value;
                                                         if (!key) return;
-                                                        const matProc = materialProcessos.find(m => m.key === key);
-                                                        let newSeq = '';
-                                                        if (matProc && matProc.sequencia != null) {
-                                                            newSeq = String(matProc.sequencia);
-                                                        } else {
-                                                            let max = 0;
-                                                            Object.values(recursoTemposEdit).forEach(v => {
+                                                        const catProc = processosFabricaSIM.find(p => p.key === key);
+                                                        
+                                                        setRecursoTemposEdit(prev => {
+                                                            let maxSeq = 0;
+                                                            Object.values(prev).forEach(v => {
                                                                 const s = parseInt(v.seq || '0', 10);
-                                                                if (!isNaN(s) && s > max) max = s;
+                                                                if (!isNaN(s) && s > maxSeq) maxSeq = s;
                                                             });
-                                                            newSeq = String(max + 1);
-                                                        }
-                                                        setRecursoTemposEdit(prev => ({ ...prev, [key]: { setup: '', padrao: '', seq: newSeq, IdProcesso: matProc?.IdProcesso } }));
+                                                            const newSeq = String(maxSeq === 0 ? 10 : maxSeq + 10);
+
+                                                            return {
+                                                                ...prev, 
+                                                                [key]: { 
+                                                                    setup: prev[key]?.setup || '', 
+                                                                    padrao: prev[key]?.padrao || '', 
+                                                                    seq: prev[key]?.seq || newSeq, 
+                                                                    IdProcesso: catProc?.IdProcesso 
+                                                                }
+                                                            };
+                                                        });
                                                         e.target.value = '';
                                                     }}
                                                 >
@@ -3637,6 +3672,10 @@ function OrdemServicoContent() {
                                                                 setRecursoTemposEdit(prev => {
                                                                     const novo = { ...prev };
                                                                     delete novo[secKey];
+                                                                    if (Object.keys(novo).length === 0) {
+                                                                        setTempoSetupEdit('0');
+                                                                        setTempoPadraoEdit('0');
+                                                                    }
                                                                     return novo;
                                                                 });
                                                             }}

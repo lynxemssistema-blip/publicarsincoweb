@@ -16,16 +16,9 @@ const tenantMiddleware = async (req, res, next) => {
     // 2. Public / Bypassed routes that don't require tenant auth token
     const pathStr = req.originalUrl || req.url || '';
     if (
-        pathStr.includes('visao-geral') ||
-        pathStr.includes('login') ||
-        pathStr.includes('public') ||
-        pathStr.includes('download') ||
-        pathStr.includes('pdf') ||
-        pathStr.includes('manutencao') ||
-        pathStr.includes('acompanhamento') ||
-        pathStr.includes('material') ||
-        pathStr.includes('ordemservico') ||
-        pathStr.includes('salvar-setores-planejamento')
+        pathStr.includes('/api/login') ||
+        pathStr.includes('/api/admin/login') ||
+        pathStr.includes('public')
     ) {
         return next();
     }

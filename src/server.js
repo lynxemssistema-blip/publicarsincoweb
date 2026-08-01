@@ -172,7 +172,7 @@ app.locals.pool = pool;
 app.use('/api/peca-manufaturada', pecaManufaturadaRoutes);
 
 // Reposià§ão Routes
-app.get('/api/reposicao/itens', async (req, res) => {
+app.get('/api/reposicao/itens', tenantMiddleware, async (req, res) => {
     try {
         const query = `
             SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
@@ -189,7 +189,7 @@ app.get('/api/reposicao/itens', async (req, res) => {
             WHERE Reposicao = 'S' 
               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')
         `;
-        const [rows] = await pool.query(query);
+        const [rows] = await req.tenantDbPool.query(query);
         console.log(`[DEBUG REPOSICAO] tenantId was unused | rows.length: ${rows.length}`);
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -198,7 +198,7 @@ app.get('/api/reposicao/itens', async (req, res) => {
     }
 });
 
-app.delete('/api/reposicao/itens/:id', async (req, res) => {
+app.delete('/api/reposicao/itens/:id', tenantMiddleware, async (req, res) => {
     let connection;
     try {
         const { id } = req.params;
@@ -230,7 +230,7 @@ app.delete('/api/reposicao/itens/:id', async (req, res) => {
 });
 
 
-app.post('/api/reposicao/apontamento', async (req, res) => {
+app.post('/api/reposicao/apontamento', tenantMiddleware, async (req, res) => {
     let connection;
     try {
         const { IdOrdemServicoItem, quantidadeApontada } = req.body;
@@ -404,12 +404,12 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
         console.log(`[Excel] Iniciando exportação padr?o do Romaneio #${idRomaneio}`);
 
         // 1. Buscar Caminhos e Template
-        const [configRows] = await pool.execute(
+        const [configRows] = await req.tenantDbPool.execute(
             "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelRomaneio'"
         );
         const templatePath = configRows.length > 0 ? configRows[0].valor : null;
 
-        const [romRows] = await pool.execute(
+        const [romRows] = await req.tenantDbPool.execute(
             `SELECT * FROM romaneio WHERE idRomaneio = ?`,
             [idRomaneio]
         );
@@ -417,7 +417,7 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
         const romData = romRows[0];
 
         // 2. Buscar Itens
-        const [items] = await pool.execute(
+        const [items] = await req.tenantDbPool.execute(
             "SELECT * FROM v_rom_itens_incluidos WHERE IdRomaneio = ?",
             [idRomaneio]
         );
@@ -510,10 +510,10 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
 };
 
 // Route to Download Excel
-app.get('/api/romaneio/download-excel/:id', async (req, res) => {
+app.get('/api/romaneio/download-excel/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
             [id]
         );
@@ -545,10 +545,10 @@ app.get('/api/romaneio/download-excel/:id', async (req, res) => {
 });
 
 // Route to Open Folder in Explorer
-app.post('/api/romaneio/open-folder/:id', async (req, res) => {
+app.post('/api/romaneio/open-folder/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
             [id]
         );
@@ -586,7 +586,7 @@ app.post('/api/romaneio/open-folder/:id', async (req, res) => {
 // --- ROUTES ---
 
 // GET /api/tarefas - List tarefas
-app.get('/api/tarefas', async (req, res) => {
+app.get('/api/tarefas', tenantMiddleware, async (req, res) => {
     try {
         const { showFinalized } = req.query;
         let estatusCondition = "Estatus = 'TarefaAberta'";
@@ -624,7 +624,7 @@ app.get('/api/tarefas', async (req, res) => {
               AND ${estatusCondition}
             ORDER BY DataCriacao DESC
         `;
-        const [rows] = await pool.execute(query);
+        const [rows] = await req.tenantDbPool.execute(query);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar tarefas:', error);
@@ -634,9 +634,9 @@ app.get('/api/tarefas', async (req, res) => {
 
 
 // GET /api/romaneio - List all
-app.get('/api/romaneio', async (req, res) => {
+app.get('/api/romaneio', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.query(
+        const [rows] = await req.tenantDbPool.query(
             "SELECT idRomaneio AS idRomaneio, Descricao AS Descricao, EnviadoPara AS EnviadoPara, DATACRIACAO AS DATACRIACAO, CriadoPor AS CriadoPor, ENDERECORomaneio AS ENDERECORomaneio, Estatus AS Estatus, Liberado AS Liberado, DataEnvio AS DataEnvio, NomeMotorista AS NomeMotorista FROM romaneio WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*') ORDER BY idRomaneio DESC"
         );
 
@@ -649,7 +649,7 @@ app.get('/api/romaneio', async (req, res) => {
 });
 
 // GET /api/romaneio/v-itens-projeto-aberto - Search available items from project
-app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
+app.get('/api/romaneio/v-itens-projeto-aberto', tenantMiddleware, async (req, res) => {
     const { projeto, tag, resumo, detalhe, codFabricante, mostrarEnviados, mostrarFinalizados } = req.query;
 
     try {
@@ -692,7 +692,7 @@ app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
 
         sql += ` LIMIT 500`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching v-itens-projeto-aberto:', error);
@@ -701,10 +701,10 @@ app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
 });
 
 // GET /api/romaneio/:id - Get single romaneio details
-app.get('/api/romaneio/:id', async (req, res) => {
+app.get('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT * FROM romaneio WHERE idRomaneio = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')",
             [id]
         );
@@ -719,7 +719,7 @@ app.get('/api/romaneio/:id', async (req, res) => {
 });
 
 // POST /api/romaneio/:id/items - Add items to a Romaneio
-app.post('/api/romaneio/:id/items', async (req, res) => {
+app.post('/api/romaneio/:id/items', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { IdOrdemServicoItem, qtde, usuario } = req.body;
 
@@ -729,7 +729,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
 
     try {
         // 1. Fetch item details and check balance from view
-        const [viewRows] = await pool.execute(
+        const [viewRows] = await req.tenantDbPool.execute(
             "SELECT * FROM v_rom_itens_disponiveis WHERE IdOrdemServicoItem = ?",
             [IdOrdemServicoItem]
         );
@@ -749,7 +749,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         }
 
         // 2. UPSERT: verificar se item já existe neste romaneio (evitar duplicata)
-        const [existing] = await pool.execute(
+        const [existing] = await req.tenantDbPool.execute(
             "SELECT IdRomaneioItem, qtdeUsuario FROM romaneioitem WHERE IdRomaneio = ? AND IDOrdemServicoITEM = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1",
             [id, IdOrdemServicoItem]
         );
@@ -764,18 +764,18 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
             const novoPeso = pesoUnit * novaQtde;
             const novaArea = areaUnit * novaQtde;
 
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 "UPDATE romaneioitem SET qtdeUsuario = ?, qtdeGrid = ?, QtdeRomaneio = ?, PesoTotal = ?, AreaPinturaTotal = ? WHERE IdRomaneioItem = ?",
                 [novaQtde, novaQtde, novaQtde, novoPeso, novaArea, reg.IdRomaneioItem]
             );
             // Atualiza ordemservicoitem com referências ao romaneio
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem
                  SET idRomaneio = ?, IdRomaneioItem = ?, QtdeRomaneio = ?, EnviadoParaRomaneio = 'S'
                  WHERE IdOrdemServicoItem = ?`,
                 [id, reg.IdRomaneioItem, novaQtde, IdOrdemServicoItem]
             );
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 "INSERT INTO ordemservicoitemcontrole (IdOrdemServico, IdOrdemServicoItem, Processo, QtdeTotal, QtdeProduzida, Origem, CriadoPor, DataCriacao, D_E_L_E_T_E) VALUES (?, ?, 'Expedicao', ?, ?, 'Expedicao', ?, ?, '')",
                 [item.IdOrdemServico || null, IdOrdemServicoItem, item.QtdeTotal || qtde, qtde, usuario || 'Sistema', getCurrentDateTimeBR()]
             );
@@ -786,19 +786,19 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         const pesoTotal = pesoUnit * qtde;
         const areaTotal = areaUnit * qtde;
 
-        const [insertResult] = await pool.execute(
+        const [insertResult] = await req.tenantDbPool.execute(
             "INSERT INTO romaneioitem (IdRomaneio, IDOrdemServicoITEM, Usuario, DataCriacao, qtdeUsuario, qtdeGrid, QtdeRomaneio, PesoUnitario, PesoTotal, AreaPintura, AreaPinturaTotal, CodMatFabricante, Situacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ITEM LOCALIZADO')",
             [id, IdOrdemServicoItem, usuario || 'Sistema', getCurrentDateTimeBR(), qtde, qtde, qtde, pesoUnit, pesoTotal, areaUnit, areaTotal, item.CodMatFabricante || '']
         );
         const novoIdRomaneioItem = insertResult.insertId;
         // Atualiza ordemservicoitem com referências ao romaneio
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem
              SET idRomaneio = ?, IdRomaneioItem = ?, QtdeRomaneio = ?, EnviadoParaRomaneio = 'S'
              WHERE IdOrdemServicoItem = ?`,
             [id, novoIdRomaneioItem, qtde, IdOrdemServicoItem]
         );
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO ordemservicoitemcontrole (IdOrdemServico, IdOrdemServicoItem, Processo, QtdeTotal, QtdeProduzida, Origem, CriadoPor, DataCriacao, D_E_L_E_T_E) VALUES (?, ?, 'Expedicao', ?, ?, 'Expedicao', ?, ?, '')",
             [item.IdOrdemServico || null, IdOrdemServicoItem, item.QtdeTotal || qtde, qtde, usuario || 'Sistema', getCurrentDateTimeBR()]
         );
@@ -810,7 +810,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
 });
 
 // GET /api/romaneio/:id/inserted-items - List items already in the Romaneio
-app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
+app.get('/api/romaneio/:id/inserted-items', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { projeto, tag, resumo, detalhe, codFabricante } = req.query;
 
@@ -841,7 +841,7 @@ app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
 
         sql += ` LIMIT 200`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching inserted items:', error);
@@ -850,7 +850,7 @@ app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
 });
 
 // GET /api/files/open-pdf/:idRomaneioItem - Open PDF drawing for a romaneio item
-app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
+app.get('/api/files/open-pdf/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const fs = require('fs');
     const path = require('path');
@@ -858,7 +858,7 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
     console.log(`[FILES] Request to open PDF for Item: ${idRomaneioItem}`);
 
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT EnderecoArquivo FROM v_rom_itens_incluidos WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
         );
@@ -908,7 +908,7 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
 });
 
 // GET /api/files/open-3d/:idRomaneioItem - Open original 3D drawing
-app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
+app.get('/api/files/open-3d/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const fs = require('fs');
     const path = require('path');
@@ -916,7 +916,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
     console.log(`[FILES] Request to open 3D for Item: ${idRomaneioItem}`);
 
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT EnderecoArquivo FROM v_rom_itens_incluidos WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
         );
@@ -954,7 +954,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
     }
 });
 // PUT /api/romaneio/item/:idRomaneioItem/observacao - Update observation
-app.put('/api/romaneio/item/:idRomaneioItem/observacao', async (req, res) => {
+app.put('/api/romaneio/item/:idRomaneioItem/observacao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { observacao } = req.body;
@@ -976,7 +976,7 @@ app.put('/api/romaneio/item/:idRomaneioItem/observacao', async (req, res) => {
 });
 
 // POST /api/romaneio/item/:idRomaneioItem/estorno - Estorno de quantidade
-app.post('/api/romaneio/item/:idRomaneioItem/estorno', async (req, res) => {
+app.post('/api/romaneio/item/:idRomaneioItem/estorno', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const { qtdeEstorno, usuario } = req.body;
     let conn = null;
@@ -1072,7 +1072,7 @@ app.post('/api/romaneio/item/:idRomaneioItem/estorno', async (req, res) => {
 });
 
 // POST /api/romaneio/item/:idRomaneioItem/alterar-qtde - Alterar (subtrair) qtdeUsuario e devolver saldo à OS
-app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', async (req, res) => {
+app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const { qtdeAlterar, usuario } = req.body;
     let conn = null;
@@ -1144,7 +1144,7 @@ app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', async (req, res) => 
     }
 });
 
-app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
+app.delete('/api/romaneio/item/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const { usuario } = req.query; // Pega o usuário da query string ou header se disponível
     const connection = await pool.getConnection();
@@ -1264,7 +1264,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 });
 
 // POST /api/admin/shutdown - Shut down background processes
-app.post('/api/admin/shutdown', async (req, res) => {
+app.post('/api/admin/shutdown', tenantMiddleware, async (req, res) => {
     console.log('[SYSTEM] =4 Shutdown requested by admin.');
     res.json({ success: true, message: 'Encerrando servidores...' });
 
@@ -1295,14 +1295,14 @@ app.post('/api/admin/shutdown', async (req, res) => {
 });
 
 // POST /api/romaneio/open - Open Folder on Server
-app.post('/api/romaneio/open', async (req, res) => {
+app.post('/api/romaneio/open', tenantMiddleware, async (req, res) => {
     const { id, path: clientPath } = req.body;
     try {
         let folderPath = clientPath || null;
 
         // Se o frontend não enviou o path, busca no banco pelo id
         if (!folderPath && id) {
-            const [rows] = await pool.execute(
+            const [rows] = await req.tenantDbPool.execute(
                 "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ? LIMIT 1",
                 [id]
             );
@@ -1337,7 +1337,7 @@ app.post('/api/romaneio/open', async (req, res) => {
 });
 
 // POST /api/romaneio - Create New
-app.post('/api/romaneio', async (req, res) => {
+app.post('/api/romaneio', tenantMiddleware, async (req, res) => {
     const data = req.body;
     let conn;
     try {
@@ -1429,12 +1429,12 @@ app.post('/api/romaneio', async (req, res) => {
 });
 
 // PUT /api/romaneio/:id - Update
-app.put('/api/romaneio/:id', async (req, res) => {
+app.put('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const data = req.body;
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE romaneio SET 
                 Descricao = ?, EnviadoPara = ?, endereco = ?, numero = ?, 
                 bairro = ?, complemento = ?, cidade = ?, estado = ?, 
@@ -1462,10 +1462,10 @@ app.put('/api/romaneio/:id', async (req, res) => {
 });
 
 // DELETE /api/romaneio/:id - Soft Delete romaneio
-app.delete('/api/romaneio/:id', async (req, res) => {
+app.delete('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        await pool.query(
+        await req.tenantDbPool.query(
             "UPDATE romaneio SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ? WHERE idRomaneio = ?",
             [getCurrentDateTimeBR(), id]
         );
@@ -1477,7 +1477,7 @@ app.delete('/api/romaneio/:id', async (req, res) => {
 });
 
 // PUT /api/romaneio/:id/action - Perform specific actions (Status Workflow)
-app.put('/api/romaneio/:id/action', async (req, res) => {
+app.put('/api/romaneio/:id/action', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { action, usuario } = req.body;
     if (!action) {
@@ -1495,7 +1495,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 const { dadosEnvio } = req.body;
 
                 // Pre-check: Verify if already registered or sent
-                const [checkRows] = await pool.execute(
+                const [checkRows] = await req.tenantDbPool.execute(
                     "SELECT idRomaneio, NomeMotorista, DataEnvio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1561,7 +1561,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
             case 'liberar':
                 // 1. Check current status
-                const [currentRows] = await pool.execute(
+                const [currentRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, D_E_L_E_T_E, NomeMotorista, DataEnvio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1593,7 +1593,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 }
 
                 // Validation 5: Check if there are items (Condition 2)
-                const [itemRows] = await pool.execute(
+                const [itemRows] = await req.tenantDbPool.execute(
                     "SELECT COUNT(*) as count FROM romaneioitem WHERE IdRomaneio = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')",
                     [id]
                 );
@@ -1609,7 +1609,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
             case 'cancelar_lib':
                 // 1. Fetch current details
-                const [abortRows] = await pool.execute(
+                const [abortRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1655,7 +1655,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
             case 'cancelar_registro':
                 // Valida: so permitido quando romaneio esta Registrado (tem motorista, nao liberado, nao finalizado)
-                const [crRows] = await pool.execute(
+                const [crRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, NomeMotorista FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1722,7 +1722,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 return res.status(400).json({ success: false, message: 'A??o inválida.' });
         }
 
-        const [result] = await pool.execute(updateQuery, params);
+        const [result] = await req.tenantDbPool.execute(updateQuery, params);
 
         // --- Post-Action Logic: Excel Export for 'liberar' ---
         let excelResult = null;
@@ -1755,7 +1755,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 // --- ROMANEIO-RETORNO ROUTES ---
 
 // GET /api/romaneio-retorno/items - List items for return control
-app.get('/api/romaneio-retorno/items', async (req, res) => {
+app.get('/api/romaneio-retorno/items', tenantMiddleware, async (req, res) => {
     const { romaneio, projeto, tag, numDoc, mostrarConcluidos } = req.query;
     try {
         let sql = `SELECT * FROM view_retorno_itens WHERE 1=1
@@ -1789,7 +1789,7 @@ app.get('/api/romaneio-retorno/items', async (req, res) => {
 
         sql += ` ORDER BY IdRomaneio DESC, IdRomaneioItem ASC LIMIT 500`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[RETORNO] Erro ao buscar itens:', error);
@@ -1798,10 +1798,10 @@ app.get('/api/romaneio-retorno/items', async (req, res) => {
 });
 
 // GET /api/romaneio-retorno/history/:idRomaneioItem - List movement history for an item
-app.get('/api/romaneio-retorno/history/:idRomaneioItem', async (req, res) => {
+app.get('/api/romaneio-retorno/history/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT * FROM romaneioitemcontrole 
              WHERE IdRomaneioItem = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
              ORDER BY DataCriacao DESC`,
@@ -1815,7 +1815,7 @@ app.get('/api/romaneio-retorno/history/:idRomaneioItem', async (req, res) => {
 });
 
 // POST /api/romaneio-retorno/process - Mark item as returned/processed
-app.post('/api/romaneio-retorno/process', async (req, res) => {
+app.post('/api/romaneio-retorno/process', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem, qtdeRetorno, observacao, usuario, tipoRetorno } = req.body;
     const connection = await pool.getConnection();
 
@@ -1862,7 +1862,7 @@ app.post('/api/romaneio-retorno/process', async (req, res) => {
 });
 
 // POST /api/romaneio-retorno/registrar-retorno — Registra qtde de retorno em romaneioitemcontrole
-app.post('/api/romaneio-retorno/registrar-retorno', async (req, res) => {
+app.post('/api/romaneio-retorno/registrar-retorno', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem, idRomaneio, qtdeGrid, usuario, nomeCompleto } = req.body;
     const connection = await pool.getConnection();
     try {
@@ -1910,7 +1910,7 @@ app.post('/api/romaneio-retorno/registrar-retorno', async (req, res) => {
 });
 
 // DELETE /api/romaneio-retorno/history/:idControle - Cancel a return entry
-app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
+app.delete('/api/romaneio-retorno/history/:idControle', tenantMiddleware, async (req, res) => {
     const { idControle } = req.params;
     const { usuario } = req.query;
     const connection = await pool.getConnection();
@@ -1964,10 +1964,10 @@ app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
 });
 
 // GET /api/romaneio-retorno/controle/:idOrdemServicoItem - busca romaneioitemcontrole pelo IdOrdemServicoItem
-app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', async (req, res) => {
+app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItem } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT ric.*, ri.QtdeUsuario AS QtdeAtualItem, ri.IdRomaneioItem
              FROM romaneioitemcontrole ric
              LEFT JOIN romaneioitem ri ON ri.IdRomaneioItem = ric.IdRomaneioItem
@@ -1984,7 +1984,7 @@ app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', async (req, res) =
 });
 
 // POST /api/romaneio-retorno/estorno/:idControle - Estorna um registro de romaneioitemcontrole
-app.post('/api/romaneio-retorno/estorno/:idControle', async (req, res) => {
+app.post('/api/romaneio-retorno/estorno/:idControle', tenantMiddleware, async (req, res) => {
     const { idControle } = req.params;
     const { usuario, observacao, qtdeEstorno } = req.body;
     const connection = await pool.getConnection();
@@ -2505,7 +2505,7 @@ app.get('/api/superadmin/bancos-ativos', async (req, res) => {
 });
 
 // POST /api/superadmin/switch-db — gera novo token JWT com o dbName solicitado (apenas SuperAdmin)
-app.post('/api/superadmin/switch-db', async (req, res) => {
+app.post('/api/superadmin/switch-db', tenantMiddleware, async (req, res) => {
     try {
         if (!req.tenantUser?.isSuperadmin) {
             return res.status(403).json({ success: false, message: 'Acesso restrito a SuperAdmins.' });
@@ -2995,7 +2995,7 @@ async function syncUserToCentral(userData, tenantDbHost = null, tenantDbName = n
 // LIST All Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status 
              FROM usuario 
              WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
@@ -3011,7 +3011,7 @@ app.get('/api/usuario', tenantMiddleware, async (req, res) => {
 // GET One User
 app.get('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status FROM usuario WHERE idUsuario = ?',
             [req.params.id]
         );
@@ -3040,7 +3040,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
 
     try {
         // Check NomeCompleto duplicado
-        const [existingName] = await pool.execute(
+        const [existingName] = await req.tenantDbPool.execute(
             "SELECT NomeCompleto FROM usuario WHERE NomeCompleto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [NomeCompleto.trim()]
         );
@@ -3049,7 +3049,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         // Check Login duplicado
-        const [existingLogin] = await pool.execute(
+        const [existingLogin] = await req.tenantDbPool.execute(
             "SELECT idUsuario FROM usuario WHERE Login = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [Login.trim()]
         );
@@ -3065,7 +3065,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO usuario (
                 NomeCompleto, Login, Senha, TipoUsuario, Setor, email,
                 Descricao, Sigla, DataCadastro, CriadoPor, status,
@@ -3120,7 +3120,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         // Obter senha real caso a enviada seja placeholder ou vazia
         let senhaFinal = Senha;
         if (!Senha || Senha.trim() === '' || Senha === '••••••••') {
-            const [userRows] = await db.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
+            const [userRows] = await req.tenantDbPool.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
             if (userRows.length > 0) {
                 senhaFinal = userRows[0].Senha;
             }
@@ -3159,10 +3159,10 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         sql += ' WHERE idUsuario = ?';
         values.push(id);
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
 
         // Sync to Central DB (async)
-        const [userRows] = await pool.execute(
+        const [userRows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [id]
         );
         if (userRows.length > 0) {
@@ -3182,13 +3182,13 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
 
         // Sync delete to Central DB (async)
-        const [userRows] = await db.execute(
+        const [userRows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [req.params.id]
         );
         if (userRows.length > 0) {
@@ -3462,7 +3462,7 @@ app.get('/api/admin/schema/history', authenticateAdmin, async (req, res) => {
         sql += ' ORDER BY data_execucao DESC LIMIT ?';
         params.push(limit);
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -3474,7 +3474,7 @@ app.get('/api/admin/schema/history', authenticateAdmin, async (req, res) => {
 // POST /api/manutencao/recalcular-qtde-os
 // Body: { chave: 'SincoMasterKey2026!' }
 // ══════════════════════════════════════════════════════════════════════════════
-app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
+app.post('/api/manutencao/recalcular-qtde-os', tenantMiddleware, async (req, res) => {
     const MANUT_KEY = 'SincoMasterKey2026!';
     const { chave } = req.body;
 
@@ -3486,7 +3486,7 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Atualiza QtdeOS e QtdeOSExecutadas em TODAS as tags de uma vez
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags t
             SET
                 QtdeOS = (
@@ -3514,10 +3514,10 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
 // --- CRUD: Pessoa Jur?dica ---
 
 // LIST (Read All)
-app.get('/api/pj', async (req, res) => {
+app.get('/api/pj', tenantMiddleware, async (req, res) => {
     try {
         // FIXED: Used EnderecoLogo instead of LogoUrl
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdPessoa, RazaoSocial, NomeFantasia, Cnpj, Cidade, Estado, Telefone, EnderecoLogo FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY IdPessoa DESC"
         );
         res.json({ success: true, data: rows });
@@ -3528,9 +3528,9 @@ app.get('/api/pj', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/pj/options', async (req, res) => {
+app.get('/api/pj/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdPessoa as id, RazaoSocial as label FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
         );
         res.json({ success: true, data: rows });
@@ -3541,9 +3541,9 @@ app.get('/api/pj/options', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/pj/:id', async (req, res) => {
+app.get('/api/pj/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM pessoajuridica WHERE IdPessoa = ?',
             [req.params.id]
         );
@@ -3637,7 +3637,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
 
         const sql = `INSERT INTO pessoajuridica (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
 
-        const [result] = await pool.execute(sql, values);
+        const [result] = await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Cadastrado com sucesso', id: result.insertId });
 
     } catch (error) {
@@ -3688,7 +3688,7 @@ app.put('/api/pj/:id', upload.single('Logo'), async (req, res) => {
 
         const sql = `UPDATE pessoajuridica SET ${updates.join(', ')} WHERE IdPessoa = ?`;
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Atualizado com sucesso' });
 
     } catch (error) {
@@ -3698,12 +3698,12 @@ app.put('/api/pj/:id', upload.single('Logo'), async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/pj/:id', async (req, res) => {
+app.delete('/api/pj/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body; // Expect user from body
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE pessoajuridica SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdPessoa = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -3717,9 +3717,9 @@ app.delete('/api/pj/:id', async (req, res) => {
 // --- CRUD: Unidade de Medida ---
 
 // LIST (Read All)
-app.get('/api/medida', async (req, res) => {
+app.get('/api/medida', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdMedida, TipoMedida, DescMedida, IdEmpresa, DataCriacao, CriadoPor FROM medida WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IdMedida DESC"
         );
         res.json({ success: true, data: rows });
@@ -3730,9 +3730,9 @@ app.get('/api/medida', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/medida/options', async (req, res) => {
+app.get('/api/medida/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT TipoMedida as id, CONCAT(TipoMedida, ' - ', COALESCE(DescMedida, '')) as label FROM medida WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoMedida"
         );
         res.json({ success: true, data: rows });
@@ -3743,9 +3743,9 @@ app.get('/api/medida/options', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/medida/:id', async (req, res) => {
+app.get('/api/medida/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM medida WHERE IdMedida = ?',
             [req.params.id]
         );
@@ -3761,7 +3761,7 @@ app.get('/api/medida/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/medida', async (req, res) => {
+app.post('/api/medida', tenantMiddleware, async (req, res) => {
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
     if (!TipoMedida) {
@@ -3774,7 +3774,7 @@ app.post('/api/medida', async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO medida (TipoMedida, DescMedida, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, now, getCtxNomeCompleto()]
         );
@@ -3786,7 +3786,7 @@ app.post('/api/medida', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/medida/:id', async (req, res) => {
+app.put('/api/medida/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
@@ -3799,7 +3799,7 @@ app.put('/api/medida/:id', async (req, res) => {
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE medida SET TipoMedida = ?, DescMedida = ?, IdEmpresa = ? WHERE IdMedida = ?',
             [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, id]
         );
@@ -3811,12 +3811,12 @@ app.put('/api/medida/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/medida/:id', async (req, res) => {
+app.delete('/api/medida/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE medida SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMedida = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -3830,9 +3830,9 @@ app.delete('/api/medida/:id', async (req, res) => {
 // --- CRUD: Fam?lia ---
 
 // LIST (Read All)
-app.get('/api/familia', async (req, res) => {
+app.get('/api/familia', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdFamilia, DescFamilia, IdEmpresa, DataCriacao, CriadoPor FROM familia WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IdFamilia DESC"
         );
         res.json({ success: true, data: rows });
@@ -3843,9 +3843,9 @@ app.get('/api/familia', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/familia/options', async (req, res) => {
+app.get('/api/familia/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdFamilia as id, DescFamilia as label FROM familia WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY DescFamilia"
         );
         res.json({ success: true, data: rows });
@@ -3856,9 +3856,9 @@ app.get('/api/familia/options', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/familia/:id', async (req, res) => {
+app.get('/api/familia/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM familia WHERE IdFamilia = ?',
             [req.params.id]
         );
@@ -3874,7 +3874,7 @@ app.get('/api/familia/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/familia', async (req, res) => {
+app.post('/api/familia', tenantMiddleware, async (req, res) => {
     const { DescFamilia, IdEmpresa } = req.body;
 
     if (!DescFamilia) {
@@ -3887,7 +3887,7 @@ app.post('/api/familia', async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO familia (DescFamilia, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?)',
             [DescFamilia.trim(), IdEmpresa || null, now, getCtxNomeCompleto()]
         );
@@ -3899,7 +3899,7 @@ app.post('/api/familia', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/familia/:id', async (req, res) => {
+app.put('/api/familia/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { DescFamilia, IdEmpresa } = req.body;
 
@@ -3912,7 +3912,7 @@ app.put('/api/familia/:id', async (req, res) => {
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE familia SET DescFamilia = ?, IdEmpresa = ? WHERE IdFamilia = ?',
             [DescFamilia.trim(), IdEmpresa || null, id]
         );
@@ -3924,12 +3924,12 @@ app.put('/api/familia/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/familia/:id', async (req, res) => {
+app.delete('/api/familia/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE familia SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdFamilia = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -3943,9 +3943,9 @@ app.delete('/api/familia/:id', async (req, res) => {
 // --- CRUD: Acabamento ---
 
 // LIST (Read All)
-app.get('/api/acabamento', async (req, res) => {
+app.get('/api/acabamento', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IDAcabamento, DescAcabamento, Status, IdEmpresa, DataCriacao, CriadoPor FROM acabamento WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IDAcabamento DESC"
         );
         res.json({ success: true, data: rows });
@@ -3956,9 +3956,9 @@ app.get('/api/acabamento', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/acabamento/options', async (req, res) => {
+app.get('/api/acabamento/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IDAcabamento as id, DescAcabamento as label FROM acabamento WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY DescAcabamento"
         );
         res.json({ success: true, data: rows });
@@ -3969,9 +3969,9 @@ app.get('/api/acabamento/options', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/acabamento/:id', async (req, res) => {
+app.get('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM acabamento WHERE IDAcabamento = ?',
             [req.params.id]
         );
@@ -3987,7 +3987,7 @@ app.get('/api/acabamento/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/acabamento', async (req, res) => {
+app.post('/api/acabamento', tenantMiddleware, async (req, res) => {
     const { DescAcabamento, IdEmpresa } = req.body;
 
     if (!DescAcabamento) {
@@ -4000,7 +4000,7 @@ app.post('/api/acabamento', async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO acabamento (DescAcabamento, Status, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [DescAcabamento.trim(), 'A', IdEmpresa || null, now, getCtxNomeCompleto()]
         );
@@ -4012,7 +4012,7 @@ app.post('/api/acabamento', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/acabamento/:id', async (req, res) => {
+app.put('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { DescAcabamento, IdEmpresa } = req.body;
 
@@ -4025,7 +4025,7 @@ app.put('/api/acabamento/:id', async (req, res) => {
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE acabamento SET DescAcabamento = ?, IdEmpresa = ? WHERE IDAcabamento = ?',
             [DescAcabamento.trim(), IdEmpresa || null, id]
         );
@@ -4037,12 +4037,12 @@ app.put('/api/acabamento/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/acabamento/:id', async (req, res) => {
+app.delete('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE acabamento SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IDAcabamento = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -4060,13 +4060,13 @@ const _colCache = new Map();
 const ensureColumn = async (db, table, col, colDef) => {
     const key = `${table}.${col}`;
     if (_colCache.has(key)) return;
-    const [cols] = await db.execute(`SHOW COLUMNS FROM \`${table}\` LIKE '${col}'`);
-    if (cols.length === 0) await db.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${colDef}`);
+    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM \`${table}\` LIKE '${col}'`);
+    if (cols.length === 0) await req.tenantDbPool.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${colDef}`);
     _colCache.set(key, true);
 };
 
 // LIST (Read All) with JOINs
-app.get('/api/material', async (req, res) => {
+app.get('/api/material', tenantMiddleware, async (req, res) => {
     try {
         const db = req.tenantDbPool || pool;
         // Garante colunas opcionais — roda somente se a coluna ainda não existir
@@ -4076,7 +4076,7 @@ app.get('/api/material', async (req, res) => {
             ensureColumn(db, 'material', 'D_E_L_E_T_E', 'VARCHAR(1) NULL'),
         ]);
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 m.IdMaterial, m.CodMatFabricante, m.DescResumo, m.DescDetal, m.NumeroRP,
                 m.FamiliaMat, f.DescFamilia,
@@ -4099,11 +4099,11 @@ app.get('/api/material', async (req, res) => {
 });
 
 // BUSCAR por CodMatFabricante
-app.get('/api/material/busca-cod', async (req, res) => {
+app.get('/api/material/busca-cod', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search) return res.json({ success: true, data: [] });
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT * FROM material 
             WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
               AND CodMatFabricante = ?
@@ -4118,7 +4118,7 @@ app.get('/api/material/busca-cod', async (req, res) => {
 
 
 // BUSCA LIVRE (Por código ou descrição)
-app.get('/api/material/busca-livre', async (req, res) => {
+app.get('/api/material/busca-livre', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q || '';
         const limit = 50;
@@ -4136,7 +4136,7 @@ app.get('/api/material/busca-livre', async (req, res) => {
         
         sql += ` ORDER BY IdMaterial DESC LIMIT ${limit}`;
         
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error in material search libre:', error);
@@ -4145,20 +4145,20 @@ app.get('/api/material/busca-livre', async (req, res) => {
 });
 
 // GET PROCESSOS DO MATERIAL (Processos de Fabricacao)
-app.get('/api/material/processos/:cod', async (req, res) => {
+app.get('/api/material/processos/:cod', tenantMiddleware, async (req, res) => {
     try {
         const cod = req.params.cod;
         if (!cod) {
             return res.json({ success: true, data: [] });
         }
 
-        const [mats] = await pool.execute(
+        const [mats] = await req.tenantDbPool.execute(
             `SELECT IdMaterial FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
             [cod]
         );
         const idMaterial = mats.length > 0 ? mats[0].IdMaterial : null;
 
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT 
                 mp.IdMaterialProcesso,
                 mp.IdProcesso,
@@ -4190,9 +4190,9 @@ app.get('/api/material/processos/:cod', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/material/:id', async (req, res) => {
+app.get('/api/material/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM material WHERE IdMaterial = ?',
             [req.params.id]
         );
@@ -4208,7 +4208,7 @@ app.get('/api/material/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/material', async (req, res) => {
+app.post('/api/material', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.CodMatFabricante) {
@@ -4218,7 +4218,7 @@ app.post('/api/material', async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
 
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO material (
                 CodMatFabricante, DescResumo, DescDetal, NumeroRP,
                 FamiliaMat, CodigoJuridicoMat, 
@@ -4262,7 +4262,7 @@ app.post('/api/material', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/material/:id', async (req, res) => {
+app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
@@ -4273,7 +4273,7 @@ app.put('/api/material/:id', async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE material SET
                 CodMatFabricante = ?, DescResumo = ?, DescDetal = ?, NumeroRP = ?,
                 FamiliaMat = ?, CodigoJuridicoMat = ?,
@@ -4318,12 +4318,12 @@ app.put('/api/material/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/material/:id', async (req, res) => {
+app.delete('/api/material/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE material SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMaterial = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -4345,7 +4345,7 @@ app.delete('/api/material/:id', async (req, res) => {
 
 // --- CRUD: Projetos ---
 // LIST (Read All) 
-app.get('/api/projeto', async (req, res) => {
+app.get('/api/projeto', tenantMiddleware, async (req, res) => {
     try {
         const {
             dataInicio, dataFim, projeto, descProjeto, descEmpresa,
@@ -4468,8 +4468,8 @@ app.get('/api/projeto', async (req, res) => {
         `;
 
         const [[rows], [countResult]] = await Promise.all([
-            pool.execute(sql, queryParams),
-            pool.execute(countSql, queryParams)
+            req.tenantDbPool.execute(sql, queryParams),
+            req.tenantDbPool.execute(countSql, queryParams)
         ]);
 
         res.json({
@@ -4486,9 +4486,9 @@ app.get('/api/projeto', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/projeto/:id', async (req, res) => {
+app.get('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT p.*,
                 (SELECT COUNT(*) FROM ordemservicoitemcontrole c
                  INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
@@ -4511,7 +4511,7 @@ app.get('/api/projeto/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/projeto', async (req, res) => {
+app.post('/api/projeto', tenantMiddleware, async (req, res) => {
     const data = req.body;
     if (!data.Projeto) {
         return res.status(400).json({ success: false, message: 'Nome do projeto à© obrigatà³rio' });
@@ -4523,7 +4523,7 @@ app.post('/api/projeto', async (req, res) => {
         let idEmpresa = null;
         let descEmpresa = null;
         if (data.ClienteProjeto) {
-            const [empRows] = await pool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
+            const [empRows] = await req.tenantDbPool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
             if (empRows && empRows.length > 0) {
                 idEmpresa = empRows[0].IdPessoa;
                 descEmpresa = empRows[0].NomeFantasia;
@@ -4549,7 +4549,7 @@ app.post('/api/projeto', async (req, res) => {
             console.error('Erro ao criar diretorio de projeto:', dirError);
         }
 
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO projetos (
                 Projeto, DescProjeto, ClienteProjeto, Responsavel,
                 DataPrevisao, PrazoEntrega, StatusProj, DescStatus,
@@ -4582,7 +4582,7 @@ app.post('/api/projeto', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/projeto/:id', async (req, res) => {
+app.put('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
@@ -4594,14 +4594,14 @@ app.put('/api/projeto/:id', async (req, res) => {
         let idEmpresa = null;
         let descEmpresa = null;
         if (data.ClienteProjeto) {
-            const [empRows] = await pool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
+            const [empRows] = await req.tenantDbPool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
             if (empRows && empRows.length > 0) {
                 idEmpresa = empRows[0].IdPessoa;
                 descEmpresa = empRows[0].NomeFantasia;
             }
         }
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET
                 Projeto = ?, DescProjeto = ?, ClienteProjeto = ?, Responsavel = ?,
                 DataPrevisao = ?, PrazoEntrega = ?, StatusProj = ?, DescStatus = ?,
@@ -4708,12 +4708,12 @@ app.put('/api/projeto/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/projeto/:id', async (req, res) => {
+app.delete('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE projetos SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProjeto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -4732,7 +4732,7 @@ app.delete('/api/projeto/:id', async (req, res) => {
 // ─── ACOMPANHAMENTO GERAL (VISÃO GERAL PRODUÇÃO) ───
 
 // GET projetos for production overview
-app.get('/api/acompanhamento/projetos', async (req, res) => {
+app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
     try {
         const status = req.query.status; 
         const isFinalizados = req.query.finalizados === '1';
@@ -4802,7 +4802,7 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Get projects with aggregated sector totals from their tags + RNC count
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 p.IdProjeto, p.Projeto, p.DescProjeto, 
                 CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa,
@@ -4961,7 +4961,7 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
 });
 
 // GET tags for a project in production overview
-app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
+app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
         const tenantDb = req.tenantDb || 'default';
@@ -4969,13 +4969,13 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
         // Build column list defensively — check if Observacao exists before using it
         let observacaoExpr = 'NULL AS Observacao';
         try {
-            const [cols] = await db.execute(
+            const [cols] = await req.tenantDbPool.execute(
                 "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'Observacao'"
             );
             if (cols.length > 0) observacaoExpr = 'Observacao';
         } catch (_) { /* fallback to NULL */ }
 
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
                 (SELECT COUNT(*) FROM ordemservico os WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS QtdeOS,
@@ -5085,7 +5085,7 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
 
 
 // PUT planejar-projetista for a tag
-app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', tenantMiddleware, async (req, res) => {
     try {
         const { projetistaPlanejado, planejadoInicioEngenharia, planejadoFinalEngenharia, usuario } = req.body;
         
@@ -5094,7 +5094,7 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags 
             SET ProjetistaPlanejado = ?, 
                 PlanejadoInicioEngenharia = ?, 
@@ -5114,13 +5114,13 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
 });
 
 // PUT observacao for a project
-app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
+app.put('/api/acompanhamento/projeto/:id/observacao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "UPDATE projetos SET Observacao = ? WHERE IdProjeto = ?",
             [observacao || '', id]
         );
@@ -5137,13 +5137,13 @@ app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
 });
 
 // PUT observacao for a tag
-app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/observacao', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "UPDATE tags SET Observacao = ? WHERE IdTag = ?",
             [observacao || '', idTag]
         );
@@ -5160,7 +5160,7 @@ app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
 });
 
 // PUT alterar qtde liberada for a tag
-app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/qtde', tenantMiddleware, async (req, res) => {
     try {
         const { qtdeLiberada, usuario } = req.body;
         
@@ -5170,7 +5170,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 
         // Fetch current tag to calculate balance
         const queryPool = req.tenantDbPool || pool;
-        const [tagRows] = await db.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
+        const [tagRows] = await req.tenantDbPool.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
         if (tagRows.length === 0) {
             return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         }
@@ -5184,7 +5184,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 
         const saldo = qtdeTag - liberada;
 
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags 
             SET QtdeLiberada = ?, 
                 SaldoTag = ?
@@ -5199,7 +5199,7 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 });
 
 // PUT finalizar tag(s)
-app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
+app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res) => {
     try {
         const { idProjeto, idTag, finalizarTodas, usuario } = req.body;
         
@@ -5211,7 +5211,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5219,7 +5219,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5227,7 +5227,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE idProjeto = ? AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5237,7 +5237,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
         } else {
             if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag à© obrigatà³rio para finalizar apenas uma.' });
             
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5245,7 +5245,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5253,7 +5253,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5275,10 +5275,10 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
 // =========================================================================
 
 // GET Tags for Visao Geral Engenharia
-app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
+app.get('/api/visao-geral-engenharia/tags', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 t.IdTag, t.Tag, t.DescTag, t.Projeto, t.DescEmpresa, t.TipoProduto, t.DataPrevisao, t.ProjetistaPlanejado, t.CaminhoIsometrico,
                 t.PlanejadoInicioMedicao, t.PlanejadoFinalMedicao, t.RealizadoInicioMedicao, t.RealizadoFinalMedicao,
@@ -5300,7 +5300,7 @@ app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
 });
 
 // GET: Buscar TODAS as tags globalmente (para a tela de Visão Geral Global Tags)
-app.get('/api/visao-geral/tags-globais', async (req, res) => {
+app.get('/api/visao-geral/tags-globais', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.executeOnDefault(`
             SELECT 
@@ -5326,7 +5326,7 @@ app.get('/api/visao-geral/tags-globais', async (req, res) => {
 });
 
 // PUT lote update dates for Visao Geral Engenharia
-app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
+app.put('/api/visao-geral-engenharia/tags/lote', tenantMiddleware, async (req, res) => {
     try {
         const { idTags, setor, planejadoInicio, planejadoFinal, realizadoInicio, realizadoFinal, usuario } = req.body;
         
@@ -5374,7 +5374,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
         `;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(query, params);
+        const [result] = await req.tenantDbPool.execute(query, params);
 
         // ── PROPAGAR 4 DATAS DO SETOR PARA PROJETOS (com usuário responsável) ──
         // MIN para Início | MAX para Final | usuario = NomeCompleto do usuário logado
@@ -5409,7 +5409,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             if (camposSetor) {
                 // 1) Descobre os projetos afetados pelas tags alteradas
                 const phIds = idTags.map(() => 'é').join(',');
-                const [tagProjRows] = await db.execute(
+                const [tagProjRows] = await req.tenantDbPool.execute(
                     `SELECT DISTINCT IdProjeto FROM tags WHERE IdTag IN (${phIds})`, idTags
                 );
 
@@ -5419,7 +5419,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
 
                     // 2) Para cada um dos 4 campos do setor: recalcula MIN ou MAX nas tags
                     for (const { tag, proj, usu, fn } of camposSetor) {
-                        const [[aggRow]] = await db.execute(`
+                        const [[aggRow]] = await req.tenantDbPool.execute(`
                             SELECT DATE_FORMAT(
                                 ${fn}(STR_TO_DATE(NULLIF(TRIM(\`${tag}\`),''), '%d/%m/%Y')),
                                 '%d/%m/%Y'
@@ -5438,7 +5438,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
                     }
 
                     paramsProjeto.push(IdProjeto);
-                    await db.execute(
+                    await req.tenantDbPool.execute(
                         `UPDATE projetos SET ${setProjeto.join(', ')} WHERE IdProjeto = ?`,
                         paramsProjeto
                     );
@@ -5504,13 +5504,13 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
         const filePath = `/uploads/isometricos/${file.filename}`;
 
-        await db.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
+        await req.tenantDbPool.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico associado com sucesso.', data: { CaminhoIsometrico: filePath } });
     } catch (error) {
@@ -5520,16 +5520,16 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
 });
 
 // DELETE limpar isometrico
-app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res) => {
+app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const queryPool = req.tenantDbPool || pool;
         
-        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
-        const [tagRow] = await db.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
+        const [tagRow] = await req.tenantDbPool.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
         const caminho = tagRow[0].CaminhoIsometrico;
 
         if (caminho) {
@@ -5539,7 +5539,7 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
             }
         }
 
-        await db.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
+        await req.tenantDbPool.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico removido com sucesso.', data: { CaminhoIsometrico: null } });
     } catch (error) {
@@ -5550,10 +5550,10 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
 
 
 // GET RNCs for a project in production overview
-app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
+app.get('/api/visao-geral/rncs/:projetoId', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 Estatus,
@@ -5587,7 +5587,7 @@ app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
 });
 
 // GET Todas as Pendencias globais do sistema
-app.get('/api/todas-pendencias', async (req, res) => {
+app.get('/api/todas-pendencias', tenantMiddleware, async (req, res) => {
     try {
         const { exibirFinalizadas } = req.query; // 'true' or 'false'
         
@@ -5597,7 +5597,7 @@ app.get('/api/todas-pendencias', async (req, res) => {
             statusFilter = "AND Estatus = 'FINALIZADA'";
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 IdOrdemServicoItemPendencia, IdOrdemServico, IdOrdemServicoItem, IdPLanodeCorte, IdRomaneio, IdProjeto, IdTag, CodMatFabricante,
                 Projeto, Tag, DescEmpresa, IdMaterial, DescResumo, DescDetal, Espessura,
@@ -5620,7 +5620,7 @@ app.get('/api/todas-pendencias', async (req, res) => {
 });
 
 // GET Pendencias (Origem: VISAOGERALPROJ) for a project
-app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
+app.get('/api/visao-geral/pendencias/:projetoId', tenantMiddleware, async (req, res) => {
     try {
         const origem = req.query.origem || 'VISAOGERALPROJ';
         
@@ -5631,7 +5631,7 @@ app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
             statusList = "'TarefaAberta', 'TarefaFinalizada'";
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 IdProjeto, Projeto, IdTag, Tag, DescricaoPendencia,
@@ -5654,7 +5654,7 @@ app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
 });
 
 // POST: Salvar ou Atualizar Pendencia da Visao Geral
-app.post('/api/visao-geral/pendencias', async (req, res) => {
+app.post('/api/visao-geral/pendencias', tenantMiddleware, async (req, res) => {
     try {
         const data = req.body;
         const now = getCurrentDateTimeBR();
@@ -5663,7 +5663,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
 
         if (idRnc) {
             // UPDATE EXISITNG
-            await pool.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitempendencia SET
                     DescricaoPendencia = ?,
                     SetorResponsavel = ?,
@@ -5689,7 +5689,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
             const tipoRegistro = data.tipoRegistro || 'RNC';
             const estatus = data.estatus || 'PENDENCIA';
             
-            const [result] = await pool.execute(`
+            const [result] = await req.tenantDbPool.execute(`
                 INSERT INTO ordemservicoitempendencia (
                     IdProjeto, Projeto, IdTag, Tag, TipoCadastro, OrigemPendencia, Estatus, DataCriacao,
                     DescricaoPendencia, SetorResponsavel, TipoTarefa, UsuarioResponsavel, DataExecucao,
@@ -5708,9 +5708,9 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
             // Increment totals (qtdernc, qtderncPendente) on projetos, tags, ordemservico
             // Only increment legacy RNC counters if it's a legacy RNC
             if (data.idProjeto && tipoCadastro === 'RNC') {
-                await pool.execute(`UPDATE projetos SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ?`, [data.idProjeto]);
-                await pool.execute(`UPDATE tags SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
-                await pool.execute(`UPDATE ordemservico SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE projetos SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ?`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE tags SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE ordemservico SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
             }
         }
 
@@ -5722,7 +5722,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
 });
 
 // PUT /api/visao-geral/pendencias/:id/finalizar
-app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
+app.put('/api/visao-geral/pendencias/:id/finalizar', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { usuarioFin, dataFin, setorFin, descFin, idProjeto } = req.body;
     
@@ -5748,7 +5748,7 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
     }
 
     try {
-        await pool.execute(`
+        await req.tenantDbPool.execute(`
             UPDATE ordemservicoitempendencia SET
                 Estatus = 'Finalizada',
                 DataAcertoProjeto = ?,
@@ -5760,17 +5760,17 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
         `, [dtFinFormatada, setorFin, usuarioFin, descFin || '', dtFinFormatada, id]);
 
         // Specific legacy counters just for RNC (avoiding count pollution by Tarefas)
-        const [pendencyInfo] = await pool.execute(`SELECT TipoCadastro, IdTag, IdOrdemServico FROM ordemservicoitempendencia WHERE IdOrdemServicoItemPendencia = ?`, [id]);
+        const [pendencyInfo] = await req.tenantDbPool.execute(`SELECT TipoCadastro, IdTag, IdOrdemServico FROM ordemservicoitempendencia WHERE IdOrdemServicoItemPendencia = ?`, [id]);
         
         if (idProjeto && pendencyInfo.length > 0 && pendencyInfo[0].TipoCadastro === 'RNC') {
-            await pool.execute(`UPDATE projetos SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdProjeto = ?`, [idProjeto]);
+            await req.tenantDbPool.execute(`UPDATE projetos SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdProjeto = ?`, [idProjeto]);
             
             // Get specific Tag and OS for this pendency to update them correctly
             const pendency = pendencyInfo;
             if (pendency.length > 0) {
                 const { IdTag, IdOrdemServico } = pendency[0];
-                if (IdTag) await pool.execute(`UPDATE tags SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdTag = ?`, [IdTag]);
-                if (IdOrdemServico) await pool.execute(`UPDATE ordemservico SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdOrdemServico = ?`, [IdOrdemServico]);
+                if (IdTag) await req.tenantDbPool.execute(`UPDATE tags SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdTag = ?`, [IdTag]);
+                if (IdOrdemServico) await req.tenantDbPool.execute(`UPDATE ordemservico SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdOrdemServico = ?`, [IdOrdemServico]);
             }
         }
 
@@ -5782,7 +5782,7 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
 });
 
 // PUT: Atualizar DataPrevisao do projeto (e opcionalmente das tags)
-app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
+app.put('/api/visao-geral/projeto/:id/data-previsao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { dataPrevisao, atualizarTags } = req.body;
@@ -5811,7 +5811,7 @@ app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
 });
 
 // PUT: Atualizar DataPrevisao de uma Tag especà­fica
-app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
+app.put('/api/visao-geral/tag/:idTag/data-previsao', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { dataPrevisao } = req.body;
@@ -5833,7 +5833,7 @@ app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
 });
 
 // PUT: Atualizar data planejada em lote para todas as tags sem planejamento de um projeto
-app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) => {
+app.put('/api/visao-geral/projeto/:id/bulk-update-planning', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { updates } = req.body;
@@ -5859,21 +5859,21 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
             const valFim = dataFim || '';
 
             const queryPool = req.tenantDbPool || pool;
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE tags 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
@@ -5890,7 +5890,7 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
 });
 
 // PUT: Atualizar data planejada de um setor de uma Tag especà­fica
-app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
+app.put('/api/visao-geral/tag/:idTag/setor-data', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { field, value } = req.body;
@@ -5932,7 +5932,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Atualizar a TAG
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET ${field} = ? WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
             [dbValue, idTag]
         );
@@ -5945,7 +5945,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
 });
 
 // Propag// Propagar datas de planejamento e usuário da TAG → OS e OSItens respeitando txt{Recurso}='1'
-app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
+app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { setores, usuario } = req.body;
@@ -5972,13 +5972,13 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Fetch column lists for dynamic column checking
-        const [colsTag] = await db.execute('SHOW COLUMNS FROM tags');
+        const [colsTag] = await req.tenantDbPool.execute('SHOW COLUMNS FROM tags');
         const tagColNames = colsTag.map(c => c.Field);
 
-        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -6017,7 +6017,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 tagParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE tags SET ${tagSetClauses.join(', ')} WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [...tagParams, idTag]
             );
@@ -6040,7 +6040,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdTag = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idTag]
             );
@@ -6059,7 +6059,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await db.execute(
+            const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem osi
                  INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
                  SET ${osiSetClauses.join(', ')}
@@ -6080,7 +6080,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
 });
 
 // Propagar datas de planejamento e usuário de uma OS específica para seus itens
-app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
+app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (req, res) => {
     try {
         const { idOs } = req.params;
         const { setores, usuario } = req.body;
@@ -6106,10 +6106,10 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
 
         const queryPool = req.tenantDbPool || pool;
 
-        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -6147,7 +6147,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdOrdemServico = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idOs]
             );
@@ -6166,7 +6166,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await db.execute(
+            const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
                  WHERE IdOrdemServico = ?
                    AND ${exactOsiTxtFlag} = '1'
@@ -6184,14 +6184,14 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
     }
 });
 
-app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
+app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userFinal = usuario || 'Sistema';
 
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await db.execute(
+        const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
@@ -6209,22 +6209,22 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
 
         // 2. Finalizar em transaà§ão
         // projetos: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // tags: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [userFinal, now, id]
         );
         // ordemservico: DataFinalizacao (diferente!)
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // ordemservicoitem: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='C', UsuarioFinalizado=?, DataFinalizado=?
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [userFinal, now, id]
@@ -6238,7 +6238,7 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
 });
 
 // POST: Cancelar Finalizaà§ão do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
-app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) => {
+app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userCancel = usuario || 'Sistema';
@@ -6246,7 +6246,7 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
     try {
         // 1. Verificar se está finalizado (condià§ão para cancelar)
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await db.execute(
+        const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
@@ -6262,22 +6262,22 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
 
         // 2. Desfazer finalizaà§ão em cascata (limpar campos)
         // projetos
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
             [id]
         );
         // tags
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [id]
         );
         // ordemservico
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='', UsuarioFinalizado='', DataFinalizacao='' WHERE IdProjeto=?`,
             [id]
         );
         // ordemservicoitem
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='', UsuarioFinalizado='', DataFinalizado=''
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [id]
@@ -6292,9 +6292,9 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) =
 
 // ABRIR PASTA DO PROJETO NO SERVIDOR
 
-app.post('/api/projeto/:id/open-folder', async (req, res) => {
+app.post('/api/projeto/:id/open-folder', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT EnderecoProjeto FROM projetos WHERE IdProjeto = ?',
             [req.params.id]
         );
@@ -6327,11 +6327,11 @@ app.post('/api/projeto/:id/open-folder', async (req, res) => {
 });
 
 // PRE-CHECK STATUS LIBERACAO PROJETO
-app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
+app.get('/api/projeto/:id/status-liberacao', tenantMiddleware, async (req, res) => {
     try {
         const projectId = req.params.id;
 
-        const [tagRows] = await pool.execute(
+        const [tagRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
             [projectId]
         );
@@ -6345,7 +6345,7 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
             });
         }
 
-        const [osRows] = await pool.execute(
+        const [osRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservico os
              INNER JOIN tags t ON t.IdTag = os.IdTag
              WHERE t.IdProjeto = ? 
@@ -6375,7 +6375,7 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
 });
 
 // LIBERAR PROJETO
-app.post('/api/projeto/:id/liberar', async (req, res) => {
+app.post('/api/projeto/:id/liberar', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const projectId = req.params.id;
@@ -6430,7 +6430,7 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
                 DataLiberacao = ?,
                 StatusProj = 'AT',
                 DescStatus = 'Ativo',
-                UsuarioCriacao = COALESCE(UsuarioCriacao, ?)
+                CriadoPor = COALESCE(CriadoPor, ?)
             WHERE IdProjeto = ?`,
             [now, nomeUsuario, projectId]
         );
@@ -6452,7 +6452,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Status invalido. Use AT, PA ou CA.' });
         }
 
-        const [apontRows] = await pool.execute(
+        const [apontRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
              INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
              INNER JOIN ordemservico os ON os.IdOrdemServico = oi.IdOrdemServico
@@ -6482,12 +6482,12 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             : descStatus;
 
         if (status === 'AT') {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos SET StatusProj = 'AT', DescStatus = 'Ativo', liberado = 'S', DataLiberacao = ? WHERE IdProjeto = ?`,
                 [now, id]
             );
         } else {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos SET StatusProj = ?, DescStatus = ? WHERE IdProjeto = ?`,
                 [status, descStatusFinal, id]
             );
@@ -6505,7 +6505,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
 
         await Promise.all([
             // Atualiza Tags
-            pool.execute(
+            req.tenantDbPool.execute(
                 `UPDATE tags
                  SET StatusTag = ?, DescStatus = ?
                  WHERE IdProjeto = ?
@@ -6513,7 +6513,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
                 [tagStatus, tagDescStatus, id]
             ),
             // Atualiza Ordens de Serviço (campo correto: Estatus)
-            pool.execute(
+            req.tenantDbPool.execute(
                 `UPDATE ordemservico
                  SET Estatus = ?
                  WHERE IdProjeto = ?
@@ -6522,10 +6522,10 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             ),
         ]);
 
-        const [[tagsAtualizadas]] = await pool.execute(
+        const [[tagsAtualizadas]] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) AS cnt FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`, [id]
         );
-        const [[osAtualizadas]] = await pool.execute(
+        const [[osAtualizadas]] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) AS cnt FROM ordemservico WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')`, [id]
         );
 
@@ -6544,12 +6544,12 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
 
 
 
-app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
+app.post('/api/projeto/:id/cancelar-liberacao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
 
         // 1. Verificar se existem apontamentos de produção vinculados ao projeto
-        const [apontRows] = await pool.execute(
+        const [apontRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
              INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
              INNER JOIN ordemservico os ON os.IdOrdemServico = oi.IdOrdemServico
@@ -6565,7 +6565,7 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
         }
 
         // 2. Verificar se existem Ordens de Serviço vinculadas
-        const [osRows] = await pool.execute('SELECT COUNT(*) as count FROM ordemservico WHERE IdProjeto = ?', [id]);
+        const [osRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as count FROM ordemservico WHERE IdProjeto = ?', [id]);
         if (osRows[0].count > 0) {
             return res.status(400).json({ 
                 success: false, 
@@ -6574,7 +6574,7 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
         }
 
         // 3. Reverter status do projeto
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET 
                 liberado = '', 
                 DataLiberacao = NULL 
@@ -6592,9 +6592,9 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
 // --- CRUD: Tags (associadas a Projetos) ---
 
 // LIST by Project ID
-app.get('/api/projeto/:projetoId/tags', async (req, res) => {
+app.get('/api/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 IdTag, Tag, DescTag, IdProjeto, Projeto,
                 DataPrevisao, TipoProduto, UnidadeProduto,
@@ -6612,9 +6612,9 @@ app.get('/api/projeto/:projetoId/tags', async (req, res) => {
 });
 
 // GET ONE Tag
-app.get('/api/tag/:id', async (req, res) => {
+app.get('/api/tag/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM tags WHERE IdTag = ?',
             [req.params.id]
         );
@@ -6630,7 +6630,7 @@ app.get('/api/tag/:id', async (req, res) => {
 });
 
 // CREATE Tag
-app.post('/api/tag', async (req, res) => {
+app.post('/api/tag', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.Tag || !data.IdProjeto) {
@@ -6638,7 +6638,7 @@ app.post('/api/tag', async (req, res) => {
     }
 
     try {
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO tags (
                 Tag, DescTag, IdProjeto, Projeto, DataPrevisao,
                 TipoProduto, UnidadeProduto, QtdeTag, QtdeLiberada, 
@@ -6663,7 +6663,7 @@ app.post('/api/tag', async (req, res) => {
         );
 
         // Recalcula QtdeTags no projeto após inserir a nova tag
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos
              SET QtdeTags = (
                  SELECT COUNT(*) FROM tags
@@ -6683,7 +6683,7 @@ app.post('/api/tag', async (req, res) => {
 });
 
 // UPDATE Tag
-app.put('/api/tag/:id', async (req, res) => {
+app.put('/api/tag/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
@@ -6692,7 +6692,7 @@ app.put('/api/tag/:id', async (req, res) => {
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET
                 Tag = ?, DescTag = ?, DataPrevisao = ?,
                 TipoProduto = ?, UnidadeProduto = ?, QtdeTag = ?, 
@@ -6722,25 +6722,25 @@ app.put('/api/tag/:id', async (req, res) => {
 });
 
 // DELETE Tag (Soft Delete)
-app.delete('/api/tag/:id', async (req, res) => {
+app.delete('/api/tag/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
         // Descobre o IdProjeto antes de deletar (para recalcular QtdeTags)
-        const [[tagRow]] = await pool.execute(
+        const [[tagRow]] = await req.tenantDbPool.execute(
             'SELECT IdProjeto FROM tags WHERE IdTag = ?',
             [req.params.id]
         );
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tags SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTag = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
 
         // Recalcula QtdeTags no projeto após a exclusão
         if (tagRow?.IdProjeto) {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos
                  SET QtdeTags = (
                      SELECT COUNT(*) FROM tags
@@ -6763,9 +6763,9 @@ app.delete('/api/tag/:id', async (req, res) => {
 // --- CRUD: TipoProduto ---
 
 // OPTIONS for dropdown
-app.get('/api/tipoproduto/options', async (req, res) => {
+app.get('/api/tipoproduto/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdTipoProduto as id, TipoProduto as label FROM tipoproduto WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoProduto"
         );
         res.json({ success: true, data: rows });
@@ -6776,9 +6776,9 @@ app.get('/api/tipoproduto/options', async (req, res) => {
 });
 
 // LIST
-app.get('/api/tipoproduto', async (req, res) => {
+app.get('/api/tipoproduto', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT IdTipoProduto, TipoProduto, Unidade, Descricao, DataCriacao
             FROM tipoproduto 
             WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = ''
@@ -6792,9 +6792,9 @@ app.get('/api/tipoproduto', async (req, res) => {
 });
 
 // GET ONE
-app.get('/api/tipoproduto/:id', async (req, res) => {
+app.get('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM tipoproduto WHERE IdTipoProduto = ?',
             [req.params.id]
         );
@@ -6810,7 +6810,7 @@ app.get('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // CREATE
-app.post('/api/tipoproduto', async (req, res) => {
+app.post('/api/tipoproduto', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
@@ -6819,7 +6819,7 @@ app.post('/api/tipoproduto', async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO tipoproduto (TipoProduto, Unidade, Descricao, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [TipoProduto.trim(), Unidade || null, Descricao || null, now, getCtxNomeCompleto()]
         );
@@ -6831,7 +6831,7 @@ app.post('/api/tipoproduto', async (req, res) => {
 });
 
 // UPDATE
-app.put('/api/tipoproduto/:id', async (req, res) => {
+app.put('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
@@ -6839,7 +6839,7 @@ app.put('/api/tipoproduto/:id', async (req, res) => {
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE tipoproduto SET TipoProduto = ?, Unidade = ?, Descricao = ? WHERE IdTipoProduto = ?',
             [TipoProduto.trim(), Unidade || null, Descricao || null, req.params.id]
         );
@@ -6851,12 +6851,12 @@ app.put('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // DELETE (Soft)
-app.delete('/api/tipoproduto/:id', async (req, res) => {
+app.delete('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipoproduto SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoProduto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
@@ -6869,7 +6869,7 @@ app.delete('/api/tipoproduto/:id', async (req, res) => {
 
 // --- Rota para servir PDFs de caminhos locais ---
 // Esta rota permite abrir PDFs que est?o em pastas do sistema de arquivos
-app.get('/api/pdf', async (req, res) => {
+app.get('/api/pdf', tenantMiddleware, async (req, res) => {
     const filePath = req.query.path;
 
     if (!filePath) {
@@ -6916,7 +6916,7 @@ app.get('/api/pdf', async (req, res) => {
 });
 
 // --- Rota para download de DXF e arquivos 3D (SLDPRT) ---
-app.get('/api/download', async (req, res) => {
+app.get('/api/download', tenantMiddleware, async (req, res) => {
     const filePath = req.query.path;
     const type = req.query.type; // 'dxf' or 'sldprt'
 
@@ -6971,9 +6971,9 @@ app.get('/api/download', async (req, res) => {
 // --- Ordens de Serviço (Somente Leitura) ---
 
 // OPTIONS: Lista de Projetos únicos para dropdown
-app.get('/api/ordemservico/projetos', async (req, res) => {
+app.get('/api/ordemservico/projetos', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT Projeto as value, Projeto as label 
             FROM ordemservico 
             WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND Projeto IS NOT NULL AND Projeto != ''
@@ -6987,7 +6987,7 @@ app.get('/api/ordemservico/projetos', async (req, res) => {
 });
 
 // OPTIONS: Lista de Tags únicas para dropdown
-app.get('/api/ordemservico/tags', async (req, res) => {
+app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
     try {
         const projeto = req.query.projeto;
         let sql = `
@@ -7001,7 +7001,7 @@ app.get('/api/ordemservico/tags', async (req, res) => {
             params.push(projeto);
         }
         sql += ' ORDER BY Tag';
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -7012,31 +7012,31 @@ app.get('/api/ordemservico/tags', async (req, res) => {
 // SEARCH: Busca global em itens por código do documento/desenho
 
 // OPTIONS: Lista de Projetos para Clonagem
-app.get('/api/ordemservico/projetos-clonagem', async (req, res) => {
+app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
 // OPTIONS: Lista de Tags para Clonagem
-app.get('/api/ordemservico/tags-clonagem', async (req, res) => {
+app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) => {
     try {
         const projetoId = req.query.projetoId;
         if (!projetoId) return res.json({ success: true, data: [] });
-        const [rows] = await pool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND IdProjeto = ? ORDER BY Tag", [projetoId]);
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND IdProjeto = ? ORDER BY Tag", [projetoId]);
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
-app.get('/api/ordemservico/busca-item', async (req, res) => {
+app.get('/api/ordemservico/busca-item', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search || search.length < 2) {
             return res.json({ success: true, data: [] });
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem, osi.IdOrdemServico, osi.CodMatFabricante, 
                 osi.DescResumo, osi.QtdeTotal, osi.Peso, osi.EnderecoArquivo,
@@ -7065,7 +7065,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
         
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO ordemservico (
                 Projeto, Tag, DescTag, Descricao, IdEmpresa, IdProjeto, IdTag, DescEmpresa,
                 EnderecoOrdemServico, CriadoPor, DataCriacao, Estatus, DataPrevisao,
@@ -7104,7 +7104,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
 });
 
 // LIST Ordens de Serviço com paginação e filtros
-app.get('/api/ordemservico', async (req, res) => {
+app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
@@ -7174,14 +7174,14 @@ app.get('/api/ordemservico', async (req, res) => {
         addDateFilter('Data_Liberacao_Engenharia', dataLiberacaoInicio, dataLiberacaoFim);
 
         // Count total
-        const [countResult] = await pool.execute(
+        const [countResult] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as total FROM ordemservico WHERE ${whereClause}`,
             params
         );
         const total = countResult[0].total;
 
         // Query com paginação e calculo dinÃ¢mico de itens e percentuais
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.Projeto, os.Tag, os.DescTag, os.Descricao,
                 os.Estatus, os.DataPrevisao, os.DataCriacao, os.CriadoPor,
@@ -7216,7 +7216,7 @@ app.get('/api/ordemservico', async (req, res) => {
             for (const os of rows) {
                 try {
                     // Sequential loop ensures AsyncLocalStorage context is preserved for each tenant query
-                    const [stats] = await pool.execute(`
+                    const [stats] = await req.tenantDbPool.execute(`
                         SELECT 
                             COUNT(*) as itTotal,
                             COUNT(CASE WHEN OrdemServicoItemFinalizado = 'C' THEN 1 END) as itExec,
@@ -7244,7 +7244,7 @@ app.get('/api/ordemservico', async (req, res) => {
                     }
 
                     // Verificar se OS possui apontamentos de produção
-                    const [apontCheck] = await pool.execute(
+                    const [apontCheck] = await req.tenantDbPool.execute(
                         `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
                          INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
                          WHERE oi.IdOrdemServico = ?
@@ -7282,9 +7282,9 @@ app.get('/api/ordemservico', async (req, res) => {
 });
 
 // GET ONE Ordem de Serviço
-app.get('/api/ordemservico/:id', async (req, res) => {
+app.get('/api/ordemservico/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.*
             FROM ordemservico os
@@ -7293,7 +7293,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
 
         if (rows.length > 0) {
             const os = rows[0];
-            const [itemStats] = await pool.execute(`
+            const [itemStats] = await req.tenantDbPool.execute(`
                 SELECT 
                     COUNT(*) as itTotal,
                     COUNT(CASE WHEN OrdemServicoItemFinalizado = 'C' THEN 1 END) as itExec,
@@ -8281,7 +8281,7 @@ app.get('/api/ordemservico/:id/fator', tenantMiddleware, async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/liberar', async (req, res) => {
+app.post('/api/ordemservico/liberar', tenantMiddleware, async (req, res) => {
     const { IdOrdemServico, IdTag, IdProjeto, Fator, EnderecoOrdemServico, TipoLiberacao } = req.body;
     let connection;
     try {
@@ -8539,7 +8539,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
 
 
 // ══ ROTAS BULK DE PLANEJAMENTO DE SETORES (PROJETO + TAG + OSs + ITENS DAS OSs) ══
-app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
+app.put('/api/visao-geral/tag/:id/setor-data-bulk', tenantMiddleware, async (req, res) => {
     try {
         const { updates } = req.body;
         const tagId = req.params.id;
@@ -8598,15 +8598,15 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
         // 1. Atualizar a TAG no MySQL
         valuesTag.push(tagId);
         const sqlTag = `UPDATE tags SET ${setClausesTag.join(', ')} WHERE IdTag = ?`;
-        await db.execute(sqlTag, valuesTag);
+        await req.tenantDbPool.execute(sqlTag, valuesTag);
 
         // 2. Atualizar o PROJETO correspondente no MySQL
-        const [tagRows] = await db.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
+        const [tagRows] = await req.tenantDbPool.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
         if (tagRows.length > 0 && tagRows[0].IdProjeto) {
             const idProjeto = tagRows[0].IdProjeto;
             valuesProj.push(idProjeto);
             const sqlProj = `UPDATE projetos SET ${setClausesProj.join(', ')} WHERE IdProjeto = ?`;
-            await db.execute(sqlProj, valuesProj);
+            await req.tenantDbPool.execute(sqlProj, valuesProj);
         }
 
         res.json({ success: true, message: 'Datas de planejamento do Projeto e Tag salvas com sucesso no banco de dados.' });
@@ -8616,7 +8616,7 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
     }
 });
 
-app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
+app.put('/api/visao-geral/tag/:id/propagar-datas-os', tenantMiddleware, async (req, res) => {
     try {
         const { updates } = req.body;
         const tagId = req.params.id;
@@ -8662,11 +8662,11 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
 
         valuesOS.push(tagId);
         const sqlOS = `UPDATE ordemservico SET ${setClausesOS.join(', ')} WHERE IdTag = ?`;
-        await db.execute(sqlOS, valuesOS);
+        await req.tenantDbPool.execute(sqlOS, valuesOS);
 
         valuesItems.push(tagId);
         const sqlItems = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClausesItems.join(', ')} WHERE os.IdTag = ?`;
-        await db.execute(sqlItems, valuesItems);
+        await req.tenantDbPool.execute(sqlItems, valuesItems);
 
         res.json({ success: true, message: 'Datas propagadas com sucesso para todas as OSs e Itens da Tag!' });
     } catch (error) {
@@ -8675,10 +8675,10 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
+app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
                 os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
@@ -8717,10 +8717,10 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
+app.get('/api/visao-geral/tag/:id/itens', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.*, osi.OrdemServicoItemFinalizado as Finalizado
             FROM ordemservicoitem osi
@@ -8736,14 +8736,14 @@ app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
+app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (req, res) => {
     try {
         const projId = req.params.id;
         console.log(`[API] Fetching OS for project ID: ${projId}`);
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Fetch the project to get its "Projeto" name
-        const [projRows] = await db.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
+        const [projRows] = await req.tenantDbPool.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
         const projName = projRows.length > 0 ? projRows[0].Projeto : null;
 
         // 2. Fetch the OSes matching either IdProjeto OR Projeto
@@ -8779,7 +8779,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
         sql += `) AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
                 ORDER BY IdOrdemServico`;
 
-        const [rows] = await db.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         console.log(`[API] Returning ${rows.length} OSes for project ${projId} (Projeto Name: ${projName})`);
         
         res.json({ success: true, data: rows });
@@ -8789,9 +8789,9 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens', async (req, res) => {
+app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
                 QtdeTotal, Peso, AreaPintura, Acabamento, Unidade,
                 Espessura, Altura, Largura,
@@ -8833,12 +8833,12 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
+app.get('/api/ordemservico/:id/itens-disponiveis', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
         const search = req.query.search || '';
         
-        const [osItems] = await pool.execute(
+        const [osItems] = await req.tenantDbPool.execute(
             `SELECT CodMatFabricante FROM ordemservicoitem WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
             [osId]
         );
@@ -8876,7 +8876,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
 
         sql += ` GROUP BY CodMatFabricante ORDER BY MAX(IdOrdemServicoItem) DESC LIMIT 100 `;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (e) {
         console.error(e);
@@ -8884,7 +8884,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
+app.post('/api/ordemservico/:id/incluir-itens', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
         const osId = req.params.id;
@@ -9057,10 +9057,10 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
+app.get('/api/ordemservico/:id/itens-codigos', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT CodMatFabricante 
             FROM ordemservicoitem 
             WHERE IdOrdemServico = ? 
@@ -9075,7 +9075,7 @@ app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) => {
+app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
         const osId = req.params.id;
@@ -9496,7 +9496,7 @@ async function inicializarPrimeiroSetor(conn, id) {
 }
 
 // GET: Mapa da Produ??o - vis?o geral de todos os processos
-app.get('/api/apontamento/mapa/producao', async (req, res) => {
+app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => {
     const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
@@ -9571,7 +9571,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             countJoinStr += ' LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto';
         }
 
-        const [countResult] = await pool.execute(`
+        const [countResult] = await req.tenantDbPool.execute(`
             SELECT COUNT(osi.IdOrdemServicoItem) as total
             FROM ordemservicoitem osi
             ${countJoinStr}
@@ -9579,7 +9579,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
         `, params);
         const total = countResult[0].total;
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem,
                 osi.IdOrdemServico,
@@ -9596,6 +9596,10 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
                 osi.txtSolda,
                 osi.txtPintura,
                 osi.TxtMontagem,
+                osi.CorteSequencia, osi.DobraSequencia, osi.SoldaSequencia, osi.PinturaSequencia, osi.MontagemSequencia, 
+                osi.txtCorteaLaser, osi.CorteaLaserSequencia, osi.txtPULSIONADEIRA, osi.PulsionadeiraSequencia, 
+                osi.txtGALVANIZAR, osi.GalvanizarSequencia, osi.txtENGENHARIA, osi.EngenhariaSequencia,
+
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.CorteTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as CortePercentual,
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.DobraTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as DobraPercentual,
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.SoldaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as SoldaPercentual,
@@ -9655,7 +9659,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
     }
 });
 
-app.get('/api/apontamento/planejamento/diario', async (req, res) => {
+app.get('/api/apontamento/planejamento/diario', tenantMiddleware, async (req, res) => {
     try {
         const { planInicioDe, planInicioAte, planFimDe, planFimAte, setor, os, limit } = req.query;
         let query = `
@@ -9708,7 +9712,7 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
             }
         }
 
-        const [rows] = await pool.query(query, params);
+        const [rows] = await req.tenantDbPool.query(query, params);
 
         const normalizeDate = (d) => {
             if(!d) return null;
@@ -9787,7 +9791,7 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
     }
 });
 
-app.get('/api/apontamento/:setor', async (req, res) => {
+app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
     const setor = req.params.setor.toLowerCase();
     let setorConfig = setorColumns[setor];
 
@@ -9869,7 +9873,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             params.push(dataPlanejamento, dataPlanejamento);
         }
 
-        const [countResult] = await pool.execute(`
+        const [countResult] = await req.tenantDbPool.execute(`
             SELECT COUNT(*) as total
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
@@ -9878,7 +9882,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         `, params);
         const total = countResult[0].total;
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem,
                 osi.IdOrdemServico,
@@ -9912,6 +9916,21 @@ app.get('/api/apontamento/:setor', async (req, res) => {
                 osi.txtsolda as txtSolda,
                 osi.txtpintura as txtPintura,
                 osi.txtmontagem as TxtMontagem,
+
+                osi.CorteSequencia,
+                osi.DobraSequencia,
+                osi.SoldaSequencia,
+                osi.PinturaSequencia,
+                osi.MontagemSequencia,
+                osi.txtCorteaLaser,
+                osi.CorteaLaserSequencia,
+                osi.txtPULSIONADEIRA,
+                osi.PulsionadeiraSequencia,
+                osi.txtGALVANIZAR,
+                osi.GalvanizarSequencia,
+                osi.txtENGENHARIA,
+                osi.EngenhariaSequencia,
+
                 osi.CorteTotalExecutado,
                 osi.DobraTotalExecutado,
                 osi.SoldaTotalExecutado,
@@ -9946,7 +9965,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             const itemIds = rows.map(r => r.IdOrdemServicoItem);
             const osIds = [...new Set(rows.map(r => r.IdOrdemServico))];
 
-            const [historyRows] = await pool.execute(`
+            const [historyRows] = await req.tenantDbPool.execute(`
                 SELECT IdOrdemServicoItem, COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as QtdeProduzidaHistory
                 FROM ordemservicoitemcontrole
                 WHERE Processo = ?
@@ -9960,7 +9979,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
                 historyMap[hr.IdOrdemServicoItem] = hr.QtdeProduzidaHistory;
             }
 
-            const [ppRows] = await pool.execute(`
+            const [ppRows] = await req.tenantDbPool.execute(`
                 SELECT IdOrdemServico, MAX(DescResumo) as NomeProdutoPrincipal
                 FROM ordemservicoitem
                 WHERE ProdutoPrincipal = 'sim'
@@ -9991,15 +10010,24 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             }
         });
     } catch (error) {
+        if (error.code === 'ER_BAD_FIELD_ERROR') {
+            return res.json({ 
+                success: true, 
+                data: [], 
+                setor,
+                pagination: { total: 0, page: pageNum, limit: limitNum, totalPages: 0 },
+                message: 'Setor sem apontamentos (coluna inexistente)'
+            });
+        }
         console.error('Error fetching apontamento:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar itens para apontamento' });
     }
 });
 
 // GET: Projetos para dropdown de apontamento
-app.get('/api/apontamento/projetos/options', async (req, res) => {
+app.get('/api/apontamento/projetos/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT os.Projeto as value, os.Projeto as label 
             FROM ordemservico os
             INNER JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico
@@ -10016,7 +10044,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Tags para dropdown de apontamento
-app.get('/api/apontamento/tags/options', async (req, res) => {
+app.get('/api/apontamento/tags/options', tenantMiddleware, async (req, res) => {
     try {
         let query = `
             SELECT DISTINCT os.Tag as value, CONCAT(os.Tag, ' - ', os.DescTag) as label 
@@ -10035,7 +10063,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 
         query += ' ORDER BY os.Tag';
 
-        const [rows] = await pool.execute(query, params);
+        const [rows] = await req.tenantDbPool.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -10044,7 +10072,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Ordens de Serviço para dropdown de apontamento
-app.get('/api/apontamento/os/options', async (req, res) => {
+app.get('/api/apontamento/os/options', tenantMiddleware, async (req, res) => {
     try {
         let query = `
             SELECT DISTINCT os.IdOrdemServico as value,
@@ -10068,7 +10096,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 
         query += ' ORDER BY os.IdOrdemServico DESC';
 
-        const [rows] = await pool.execute(query, params);
+        const [rows] = await req.tenantDbPool.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching ordens:', error);
@@ -10077,9 +10105,9 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Clientes para dropdown de apontamento
-app.get('/api/apontamento/clientes/options', async (req, res) => {
+app.get('/api/apontamento/clientes/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT os.DescEmpresa as value, os.DescEmpresa as label 
             FROM ordemservico os
             INNER JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico
@@ -10096,7 +10124,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
 });
 
 // GET: Detalhes de um item + histórico de apontamentos
-app.get('/api/apontamento/item/:id/:processo', async (req, res) => {
+app.get('/api/apontamento/item/:id/:processo', tenantMiddleware, async (req, res) => {
     const { id, processo } = req.params;
     const isAll = processo.toLowerCase() === 'all';
     let setorConfig = setorColumns[processo.toLowerCase()];
@@ -10115,7 +10143,7 @@ app.get('/api/apontamento/item/:id/:processo', async (req, res) => {
     try {
         console.log(`[API] Fetching item details for ID: ${id}, Processo: ${processo} `);
         // Buscar item
-        const [itemRows] = await pool.execute(`
+        const [itemRows] = await req.tenantDbPool.execute(`
 SELECT
     osi.IdOrdemServicoItem,
     osi.IdOrdemServico,
@@ -10215,7 +10243,7 @@ WHERE osi.IdOrdemServicoItem = ?
 });
 
 // GET: Listar apontamentos parciais
-app.get('/api/apontamentos-parciais', async (req, res) => {
+app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
         const [rows] = await queryPool.query(`
@@ -10467,7 +10495,63 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
     }
 });
 
-app.post('/api/apontamento-parcial', async (req, res) => {
+
+// Função para cascatear o saldo para o próximo recurso ativo
+async function cascatearSaldoProximoRecurso(conn, item, sName, quantidadeAAdicionar) {
+    if (!item || !sName || quantidadeAAdicionar <= 0) return;
+
+    const recursos = [
+        { id: 'corte',         txtField: 'txtCorte',         seqField: 'CorteSequencia',         executarField: 'CorteTotalExecutar' },
+        { id: 'dobra',         txtField: 'txtDobra',         seqField: 'DobraSequencia',         executarField: 'DobraTotalExecutar' },
+        { id: 'solda',         txtField: 'txtSolda',         seqField: 'SoldaSequencia',         executarField: 'SoldaTotalExecutar' },
+        { id: 'pintura',       txtField: 'txtPintura',       seqField: 'PinturaSequencia',       executarField: 'PinturaTotalExecutar' },
+        { id: 'montagem',      txtField: 'TxtMontagem',      seqField: 'MontagemSequencia',      executarField: 'MontagemTotalExecutar' },
+        { id: 'cortealaser',   txtField: 'txtCorteaLaser',   seqField: 'CorteaLaserSequencia',   executarField: 'CorteaLaserTotalExecutar' },
+        { id: 'pulsionadeira', txtField: 'txtPULSIONADEIRA', seqField: 'PulsionadeiraSequencia', executarField: 'PULSIONADEIRATotalExecutar' },
+        { id: 'galvanizar',    txtField: 'txtGALVANIZAR',    seqField: 'GalvanizarSequencia',    executarField: 'GALVANIZARTotalExecutar' },
+        { id: 'engenharia',    txtField: 'txtENGENHARIA',    seqField: 'EngenhariaSequencia',    executarField: 'ENGENHARIATotalExecutar' },
+        { id: 'usinagem',      txtField: 'txtUsinagem',      seqField: 'UsinagemSequencia',      executarField: 'UsinagemTotalExecutar' },
+        { id: 'caldeiraria',   txtField: 'txtCALDEIRARIA',   seqField: 'CaldeirariaSequencia',   executarField: 'CALDEIRARIATotalExecutar' },
+        { id: 'serralheria',   txtField: 'txtSERRALHERIA',   seqField: 'SerralheriaSequencia',   executarField: 'SERRALHERIATotalExecutar' },
+        { id: 'puncionadeira', txtField: 'txtPUNCIONADEIRA', seqField: 'PuncionadeiraSequencia', executarField: 'PUNCIONADEIRATotalExecutar' },
+        { id: 'acabamento',    txtField: 'txtACABAMENTO',    seqField: 'AcabamentoSequencia',    executarField: 'ACABAMENTOTotalExecutar' }
+    ];
+
+    const ativos = [];
+    for (const r of recursos) {
+        // Handle txtmontagem mapping in server.js vs db if needed, but DB field is TxtMontagem or txtmontagem
+        const val = String(item[r.txtField] || item[r.txtField.toLowerCase()] || '').trim().toUpperCase();
+        if (val === '1' || val === 'S') {
+            ativos.push({
+                id: r.id,
+                executarField: r.executarField,
+                seq: parseInt(item[r.seqField] || item[r.seqField.toLowerCase()]) || 999
+            });
+        }
+    }
+
+    ativos.sort((a, b) => a.seq - b.seq);
+
+    const currentResource = ativos.find(r => r.id === sName.toLowerCase());
+    if (!currentResource) return; 
+
+    const currentSeq = currentResource.seq;
+    const nextResource = ativos.find(r => r.seq > currentSeq);
+
+    if (nextResource) {
+        try {
+            await conn.execute(
+                `UPDATE ordemservicoitem SET ${nextResource.executarField} = COALESCE(${nextResource.executarField}, 0) + ? WHERE IdOrdemServicoItem = ?`,
+                [quantidadeAAdicionar, item.IdOrdemServicoItem]
+            );
+            console.log(`[Cascata] Adicionado ${quantidadeAAdicionar} em ${nextResource.executarField} (Setor: ${nextResource.id}) para OSItem: ${item.IdOrdemServicoItem}`);
+        } catch(e) {
+            console.error(`[Cascata] Falha ao atualizar saldo para o próximo recurso: `, e.message);
+        }
+    }
+}
+
+app.post('/api/apontamento-parcial', tenantMiddleware, async (req, res) => {
     const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor } = req.body;
 
     if (!IdOrdemServicoItem || !Processo || !QtdeProduzida) {
@@ -10589,6 +10673,9 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         // 8. Recalcular totais em cascata (OS -> Tag -> Projeto)
         await recalcularQuantidadesTotais(idOS, conn);
 
+        // Cascata de Saldo
+        await cascatearSaldoProximoRecurso(conn, item, processoKey, inputQty);
+
         await conn.commit();
         console.log(`[API Apontamento Parcial] OK | Item=${IdOrdemServicoItem} | Processo=${processoKey} | Qtde=${inputQty} | NovoExecutado=${novoTotalExecutado}`);
         res.json({ success: true, message: 'Apontamento parcial registrado com sucesso.' });
@@ -10603,7 +10690,7 @@ app.post('/api/apontamento-parcial', async (req, res) => {
 });
 
 // DELETE: Excluir apontamento parcial
-app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
+app.delete('/api/apontamentos-parciais/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const queryPool = req.tenantDbPool || pool;
     const conn = await queryPool.getConnection();
@@ -10650,7 +10737,7 @@ app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
 });
 
 // POST: Registrar apontamento de produção
-app.post('/api/apontamento', async (req, res) => {
+app.post('/api/apontamento', tenantMiddleware, async (req, res) => {
     const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, TipoApontamento, CriadoPor, LimiteDiario } = req.body;
 
     if (!IdOrdemServicoItem || !Processo || !QtdeProduzida) {
@@ -10686,7 +10773,7 @@ app.post('/api/apontamento', async (req, res) => {
         if (limiteDiario > 0) {
             // Busca tempoPadrao/setup do item diretamente (leitura rápida, sem transação)
             try {
-                const [quickRows] = await pool.execute(
+                const [quickRows] = await req.tenantDbPool.execute(
                     `SELECT GalvanizarTempoPadrao, GalvanizarTempoSetup,
                             PulsionadeiraTempoPadrao, PulsionadeiraTempoSetup,
                             CorteaLaserTempoPadrao, CorteaLaserTempoSetup,
@@ -10741,7 +10828,7 @@ app.post('/api/apontamento', async (req, res) => {
     try {
         let req_idmatriz = null;
         try {
-            const [matRows] = await pool.query('SELECT id FROM conexoes_bancos WHERE db_name = ? LIMIT 1', [req.tenantDb]);
+            const [matRows] = await req.tenantDbPool.query('SELECT id FROM conexoes_bancos WHERE db_name = ? LIMIT 1', [req.tenantDb]);
             if (matRows && matRows.length > 0) req_idmatriz = matRows[0].id;
         } catch(e) {
             console.error('[API Apontamento] Aviso: Falha ao buscar idmatriz de conexoes_bancos:', e.message);
@@ -10948,6 +11035,9 @@ osi.*,
             // 6. Cascading Totals e Percentuais Dinâmicos (HIERARQUIA: Item -> OS -> Tag -> Projeto)
             // Utilizando o helper centralizado garantimos que QtdePecasExecutadas e Setores também recalculem em tempo real
             await recalcularQuantidadesTotais(item.IdOrdemServico, conn);
+
+            // Cascata de Saldo
+            await cascatearSaldoProximoRecurso(conn, item, sName, currentInputQty);
             // 6b. Atualizar MinProd acumulado do recurso em cascata (Item -> OS -> Tag -> Projeto)
             await atualizarMinProdCascata(conn, IdOrdemServicoItem, sName, currentInputQty, 'ADD');
 
@@ -11222,13 +11312,13 @@ WHERE(Finalizado IS NULL OR Finalizado != 'C')
 });
 
 // DELETE: Estornar apontamento
-app.delete('/api/apontamento/:id', async (req, res) => {
+app.delete('/api/apontamento/:id', tenantMiddleware, async (req, res) => {
     const { usuario, descricao } = req.body;
     const now = getCurrentDateTimeBR();
 
     try {
         // Buscar dados do apontamento antes de deletar
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT IdOrdemServico, IdOrdemServicoItem, Processo, QtdeProduzida FROM ordemservicoitemcontrole WHERE IdOrdemServicoItemControle = ?',
             [req.params.id]
         );
@@ -11241,7 +11331,7 @@ app.delete('/api/apontamento/:id', async (req, res) => {
         const setorConfig = setorColumns[Processo.toLowerCase()];
 
         // Soft delete
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitemcontrole 
              SET D_E_L_E_T_E = '*', UsuarioD_E_L_E_T_E = ?, DataD_E_L_E_T_E = ?, DescricaoEstorno = ?
     WHERE IdOrdemServicoItemControle = ? `,
@@ -11249,13 +11339,13 @@ app.delete('/api/apontamento/:id', async (req, res) => {
         );
 
         // Recalcular percentual
-        const [sumRows] = await pool.execute(`
+        const [sumRows] = await req.tenantDbPool.execute(`
             SELECT COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as totalProduzido
             FROM ordemservicoitemcontrole
             WHERE IdOrdemServicoItem = ? AND Processo = ? AND(D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
     `, [IdOrdemServicoItem, Processo]);
 
-        const [itemRows] = await pool.execute(
+        const [itemRows] = await req.tenantDbPool.execute(
             'SELECT QtdeTotal FROM ordemservicoitem WHERE IdOrdemServicoItem = ?',
             [IdOrdemServicoItem]
         );
@@ -11267,7 +11357,7 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 
         // Atualizar percentual, total e executar
         if (setorConfig) {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${setorConfig.total} = ?, ${setorConfig.executar} = ?, ${setorConfig.percentual} = ? WHERE IdOrdemServicoItem = ? `,
                 [totalProduzido, novoExecutar, novoPercentual, IdOrdemServicoItem]
             );
@@ -11286,14 +11376,14 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 });
 
 // --- DASHBOARD STATS ---
-app.get('/api/dashboard/stats', async (req, res) => {
+app.get('/api/dashboard/stats', tenantMiddleware, async (req, res) => {
     try {
         // Query companies count (active only)
         // Using pool from context (tenant) or default pool
-        const [rows] = await pool.execute("SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'");
+        const [rows] = await req.tenantDbPool.execute("SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'");
 
         // Consulta estatísticas dos projetos
-        const [projRows] = await pool.execute(`
+        const [projRows] = await req.tenantDbPool.execute(`
             SELECT 
                 COUNT(*) as total_projetos,
                 SUM(CASE WHEN TRIM(COALESCE(liberado, '')) != 'S' THEN 1 ELSE 0 END) as sem_liberacao,
@@ -11320,7 +11410,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
     }
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', tenantMiddleware, (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
@@ -11443,12 +11533,12 @@ app.get('/api/config', tenantMiddleware, async (req, res) => {
         await ensureConfigColumns(pool);
 
         // Verifica se o tenant JÁ tem configuração própria (ao menos 1 linha com algum dado salvo)
-        const [countRows] = await pool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
+        const [countRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
             // Banco ativo tem configuração própria: usa ela diretamente
-            const [rows] = await pool.execute(
+            const [rows] = await req.tenantDbPool.execute(
                 `SELECT RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC,
                         MaxRegistros, MenuStructure, PermitirRealizadoSemPlanejamento
                  FROM configuracaosistema LIMIT 1`
@@ -11560,7 +11650,7 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 
         await ensureConfigColumns(pool);
 
-        const [existing] = await pool.execute('SELECT id FROM configuracaosistema LIMIT 1');
+        const [existing] = await req.tenantDbPool.execute('SELECT id FROM configuracaosistema LIMIT 1');
 
         const updates = [];
         const params = [];
@@ -11584,13 +11674,13 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 
         if (updates.length > 0) {
             if (existing.length > 0) {
-                await pool.execute(
+                await req.tenantDbPool.execute(
                     'UPDATE configuracaosistema SET ' + updates.join(', ') + ' WHERE id = ?',
                     [...params, existing[0].id]
                 );
             } else {
                 const defaultProcessos = JSON.stringify(['corte','dobra','solda','pintura','montagem','medicao','isometrico','engenharia','aprovacao','acabamento','expedicao']);
-                await pool.execute(
+                await req.tenantDbPool.execute(
                     `INSERT INTO configuracaosistema (RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC, MaxRegistros, PermitirRealizadoSemPlanejamento)
                      VALUES (?, ?, 'corte', ?, ?)`,
                     [restringirApontamento || 'Não', processosVisiveis || defaultProcessos, maxRegistros || 500, permitirRealizadoSemPlanejamento || 'Sim']
@@ -11607,9 +11697,9 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 });
 
 // GET /api/config/setores - Retornar Setores
-app.get('/api/config/setores', async (req, res) => {
+app.get('/api/config/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
+        const [rows] = await req.tenantDbPool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
         res.json({ success: true, setores: rows.map(r => r.Setor) });
     } catch (error) {
         console.error('Error fetching setores:', error);
@@ -11618,9 +11708,9 @@ app.get('/api/config/setores', async (req, res) => {
 });
 
 // GET /api/config/usuarios - Retornar Usu?rios (Colaboradores)
-app.get('/api/config/usuarios', async (req, res) => {
+app.get('/api/config/usuarios', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto");
         res.json({ success: true, usuarios: rows });
     } catch (error) {
         console.error('Error fetching usuarios:', error);
@@ -11629,9 +11719,9 @@ app.get('/api/config/usuarios', async (req, res) => {
 });
 
 // GET /api/config/tipostarefa - Retornar Tipos de Tarefa
-app.get('/api/config/tipostarefa', async (req, res) => {
+app.get('/api/config/tipostarefa', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdTipoTarefa, TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoTarefa");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTipoTarefa, TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoTarefa");
         res.json({ success: true, tipostarefa: rows });
     } catch (error) {
         console.error('Error fetching tipos tarefa:', error);
@@ -11640,7 +11730,7 @@ app.get('/api/config/tipostarefa', async (req, res) => {
 });
 
 // POST /api/producao/pendencia - Gerar Pend?ncia (A??o 2)
-app.post('/api/producao/pendencia', async (req, res) => {
+app.post('/api/producao/pendencia', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.idOrdemServicoItem || !data.descricaoPendencia) {
@@ -11772,7 +11862,7 @@ app.post('/api/producao/pendencia', async (req, res) => {
 });
 
 // GET /api/producao/pendencias/historico - Listar pend?ncias vinculadas a um item (por CodMatFabricante)
-app.get('/api/producao/pendencias/historico', async (req, res) => {
+app.get('/api/producao/pendencias/historico', tenantMiddleware, async (req, res) => {
     console.log('[DEBUG] GET /historico - REACHED ROUTE!');
     try {
         const codMat = req.query.codMatFabricante;
@@ -11831,7 +11921,7 @@ app.get('/api/producao/pendencias/historico', async (req, res) => {
         console.log('[DEBUG] GET /historico - sql:', sql);
         console.log('[DEBUG] GET /historico - params:', params);
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
 
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -11841,7 +11931,7 @@ app.get('/api/producao/pendencias/historico', async (req, res) => {
 });
 
 // POST /api/producao/reposicao - Gerar Reposi??o
-app.post('/api/producao/reposicao', async (req, res) => {
+app.post('/api/producao/reposicao', tenantMiddleware, async (req, res) => {
     console.log('[POST /api/producao/reposicao] req.body chamado com:', req.body);
     const { idOrdemServicoItem, qtdeReposicao, motivo, usuario } = req.body;
 
@@ -12027,12 +12117,12 @@ app.post('/api/producao/reposicao', async (req, res) => {
 app.get('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         // Verifica se o banco ativo já tem configuração própria (ao menos 1 linha)
-        const [countRows] = await db.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
+        const [countRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
             // Banco ativo tem linha própria: usa o MenuStructure local
-            const [rows] = await db.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
+            const [rows] = await req.tenantDbPool.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
             if (rows.length > 0 && rows[0].MenuStructure) {
                 try {
                     const menu = JSON.parse(rows[0].MenuStructure);
@@ -12075,11 +12165,11 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         await ensureConfigColumns(req.tenantDbPool);
         const menuJson = JSON.stringify(menu);
-        const [rows] = await db.execute('SELECT id FROM configuracaosistema LIMIT 1');
+        const [rows] = await req.tenantDbPool.execute('SELECT id FROM configuracaosistema LIMIT 1');
         if (rows.length > 0) {
-            await db.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
+            await req.tenantDbPool.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
         } else {
-            await db.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
+            await req.tenantDbPool.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
         }
         console.log('[Config/Menu POST] Menu salvo localmente. Banco agora tem config própria.');
         res.json({ success: true });
@@ -12094,7 +12184,7 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
 // LIST Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status 
             FROM usuario 
             WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' 
@@ -12118,7 +12208,7 @@ app.get('/api/admin/usuarios', tenantMiddleware, async (req, res) => {
         if (NomeCompleto) { filtros.push('NomeCompleto LIKE ?'); params.push(`%${NomeCompleto}%`); }
         if (Setor)        { filtros.push('Setor LIKE ?');        params.push(`%${Setor}%`); }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT idUsuario, NomeCompleto, Login, Senha, TipoUsuario, Setor, email, status,
                    Descricao, Sigla, EnderecoImagem,
                    txtCorte, txtDobra, txtSolda, txtPintura, txtMontagem, txtAlmoxarifado,
@@ -12139,9 +12229,9 @@ app.get('/api/admin/usuarios', tenantMiddleware, async (req, res) => {
 
 
 // GET ONE User
-app.get('/api/usuario/:id', async (req, res) => {
+app.get('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, NomeCompleto, Login, Senha, TipoUsuario, email, status FROM usuario WHERE idUsuario = ?',
             [req.params.id]
         );
@@ -12170,7 +12260,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
 
     try {
         // Check if NomeCompleto already exists
-        const [existingName] = await pool.execute(
+        const [existingName] = await req.tenantDbPool.execute(
             "SELECT NomeCompleto FROM usuario WHERE NomeCompleto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [NomeCompleto.trim()]
         );
@@ -12179,7 +12269,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         // Check if Login already exists
-        const [existingLogin] = await pool.execute(
+        const [existingLogin] = await req.tenantDbPool.execute(
             "SELECT idUsuario FROM usuario WHERE Login = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [Login.trim()]
         );
@@ -12188,7 +12278,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO usuario (
                 NomeCompleto, Login, Senha, TipoUsuario, Setor, email,
                 Descricao, Sigla, DataCadastro, CriadoPor, status,
@@ -12258,7 +12348,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         sql += ' WHERE idUsuario = ?';
         values.push(id);
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Usuário atualizado com sucesso' });
     } catch (error) {
         console.error('Error updating user:', error);
@@ -12270,7 +12360,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
@@ -12286,7 +12376,7 @@ app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 // GET /api/rnc/sectors - List all sectors from dedicated table
 app.get('/api/rnc/sectors', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT DISTINCT Setor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY Setor"
         );
         res.json({ success: true, data: rows.map(r => r.Setor) });
@@ -12353,7 +12443,7 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const { processofabricacao, CodigoProcessoFabricacao, Fabrica, DataLiberada, Setup, TempoPadrao } = req.body;
     try {
         // --- NEW VALIDATION ---
-        const [oldRows] = await db.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
+        const [oldRows] = await req.tenantDbPool.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
         if (oldRows.length > 0) {
             const oldProc = oldRows[0];
             const oldFabrica = oldProc.Fabrica || 'NAO';
@@ -12363,9 +12453,9 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
                 const procNameFormatado = (oldProc.processofabricacao || '').trim().replace(/\s+/g, '');
                 if (procNameFormatado) {
                     const colName = `txt${procNameFormatado}`;
-                    const [cols] = await db.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
+                    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
                     if (cols.length > 0) {
-                        const [usage] = await db.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
+                        const [usage] = await req.tenantDbPool.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
                         if (usage.length > 0) {
                             return res.status(400).json({ success: false, message: 'Não ? possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
                         }
@@ -12393,7 +12483,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE processofabricacao SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProcessoFabricacao = ?",
             [nowFormat, usuario, id]
         );
@@ -12409,7 +12499,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
 // GET /api/setores - Listar todos os setores (usado na tela de Manutenção)
 app.get('/api/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idSetor, Setor, DataLiberada, Fabrica, DataCriacao, CriadoPor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY idSetor DESC"
         );
         res.json({ success: true, data: rows });
@@ -12426,7 +12516,7 @@ app.post('/api/setores', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO setor (Setor, Fabrica, DataLiberada, CriadoPor, DataCriacao) VALUES (?, ?, ?, ?, ?)",
             [Setor, Fabrica || 'NAO', DataLiberada || 'NAO', usuario, nowFormat]
         );
@@ -12442,7 +12532,7 @@ app.put('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Setor, Fabrica, DataLiberada } = req.body;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE setor SET Setor = ?, Fabrica = ?, DataLiberada = ? WHERE idSetor = ?",
             [Setor, Fabrica, DataLiberada, id]
         );
@@ -12460,7 +12550,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE setor SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE idSetor = ?",
             [nowFormat, usuario, id]
         );
@@ -12476,7 +12566,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
 // GET /api/motoristas - Listar todos os motoristas
 app.get('/api/motoristas', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT * FROM motorista WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Motorista"
         );
         res.json({ success: true, data: rows });
@@ -12502,7 +12592,7 @@ app.post('/api/motoristas', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO motorista (Motorista, CNH, Categoria, Telefone, DataCadastro) VALUES (?, ?, ?, ?, ?)",
             [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, nowFormat]
         );
@@ -12518,7 +12608,7 @@ app.put('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Motorista, CNH, Categoria, Telefone, DataVencimentoCNH, ImagemCNH } = req.body;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE motorista SET Motorista = ?, CNH = ?, Categoria = ?, Telefone = ?, DataVencimentoCNH = ?, ImagemCNH = ? WHERE IdMotorista = ?",
               [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, ImagemCNH || null, id]
         );
@@ -12536,7 +12626,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE motorista SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMotorista = ?",
             [nowFormat, usuario, id]
         );
@@ -12553,7 +12643,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
 app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     try {
         // Auto-create table if not exists
-        await db.execute(`
+        await req.tenantDbPool.execute(`
             CREATE TABLE IF NOT EXISTS tipotransporte (
                 IdTipoTransporte INT AUTO_INCREMENT PRIMARY KEY,
                 TipoVeiculo VARCHAR(80) NOT NULL,
@@ -12564,7 +12654,7 @@ app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
                 UsuarioD_E_L_E_T_E VARCHAR(80) DEFAULT ''
             )
         `);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdTipoTransporte, TipoVeiculo, Placa FROM tipotransporte WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoVeiculo"
         );
         res.json({ success: true, data: rows });
@@ -12583,7 +12673,7 @@ app.post('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "INSERT INTO tipotransporte (TipoVeiculo, Placa, DataCadastro) VALUES (?, ?, ?)",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), nowFormat]
         );
@@ -12602,7 +12692,7 @@ app.put('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
         return res.status(400).json({ success: false, message: 'Tipo de Veículo ? obrigatório' });
     }
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipotransporte SET TipoVeiculo = ?, Placa = ? WHERE IdTipoTransporte = ?",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), id]
         );
@@ -12620,7 +12710,7 @@ app.delete('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipotransporte SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoTransporte = ?",
             [nowFormat, usuario, id]
         );
@@ -12633,9 +12723,9 @@ app.delete('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
 
 // GET /api/processosfabricacao - Lista todos os processos de fabricação ativos
 // NOTA: não usar /api/usuario/processos pois conflita com /api/usuario/:id
-app.get('/api/processosfabricacao', async (req, res) => {
+app.get('/api/processosfabricacao', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdProcessoFabricacao, ProcessoFabricacao, CodigoProcessoFabricacao FROM processofabricacao WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY ProcessoFabricacao"
         );
         res.json({ success: true, data: rows });
@@ -12646,9 +12736,9 @@ app.get('/api/processosfabricacao', async (req, res) => {
 });
 
 // GET /api/processosfabricacao/usuario/:id - Lista processos vinculados ao usuário
-app.get('/api/processosfabricacao/usuario/:id', async (req, res) => {
+app.get('/api/processosfabricacao/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdUsuarioprocessofabricacao, ProcessoFabricacao, IdProcessoFabricacao FROM usuarioprocessofabricacao WHERE IdUsuario = ? AND (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY ProcessoFabricacao",
             [req.params.id]
         );
@@ -12660,19 +12750,19 @@ app.get('/api/processosfabricacao/usuario/:id', async (req, res) => {
 });
 
 // POST /api/processosfabricacao/associar - Associa um processo a um usuário
-app.post('/api/processosfabricacao/associar', async (req, res) => {
+app.post('/api/processosfabricacao/associar', tenantMiddleware, async (req, res) => {
     const { IdUsuario, IdProcessoFabricacao, ProcessoFabricacao } = req.body;
     if (!IdUsuario || !IdProcessoFabricacao) return res.status(400).json({ success: false, message: 'Faltam dados obrigatórios' });
     try {
         // Verificar se já existe
-        const [existing] = await pool.execute(
+        const [existing] = await req.tenantDbPool.execute(
             "SELECT 1 FROM usuarioprocessofabricacao WHERE IdUsuario = ? AND IdProcessoFabricacao = ? AND (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL)",
             [IdUsuario, IdProcessoFabricacao]
         );
         if (existing.length > 0) return res.json({ success: false, message: 'Este processo já está associado a este usuário.' });
 
         // Inserir
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO usuarioprocessofabricacao (IdUsuario, IdProcessoFabricacao, ProcessoFabricacao) VALUES (?, ?, ?)",
             [IdUsuario, IdProcessoFabricacao, ProcessoFabricacao]
         );
@@ -12684,10 +12774,10 @@ app.post('/api/processosfabricacao/associar', async (req, res) => {
 });
 
 // DELETE /api/processosfabricacao/desvincular/:id - Remove associação (Desvincula)
-app.delete('/api/processosfabricacao/desvincular/:id', async (req, res) => {
+app.delete('/api/processosfabricacao/desvincular/:id', tenantMiddleware, async (req, res) => {
     try {
         // Exclusão lógica padrão do sistema
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuarioprocessofabricacao SET D_E_L_E_T_E = '*' WHERE IdUsuarioprocessofabricacao = ?",
             [req.params.id]
         );
@@ -12699,9 +12789,9 @@ app.delete('/api/processosfabricacao/desvincular/:id', async (req, res) => {
 });
 
 // GET /api/config/espessuras - List all espessuras
-app.get('/api/config/espessuras', async (req, res) => {
+app.get('/api/config/espessuras', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC");
+        const [rows] = await req.tenantDbPool.execute("SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching espessuras:', error);
@@ -12710,9 +12800,9 @@ app.get('/api/config/espessuras', async (req, res) => {
 });
 
 // GET /api/config/materiais - List all materialsw
-app.get('/api/config/materiais', async (req, res) => {
+app.get('/api/config/materiais', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC");
+        const [rows] = await req.tenantDbPool.execute("SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching materiais:', error);
@@ -12721,9 +12811,9 @@ app.get('/api/config/materiais', async (req, res) => {
 });
 
 // GET /api/rnc/collaborators - List active collaborators
-app.get('/api/rnc/collaborators', async (req, res) => {
+app.get('/api/rnc/collaborators', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idUsuario, NomeCompleto, Setor FROM usuario WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY NomeCompleto"
         );
         res.json({ success: true, data: rows });
@@ -12734,9 +12824,9 @@ app.get('/api/rnc/collaborators', async (req, res) => {
 });
 
 // GET /api/rnc/task-types - List task types from dedicated table
-app.get('/api/rnc/task-types', async (req, res) => {
+app.get('/api/rnc/task-types', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT DISTINCT TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND TipoTarefa IS NOT NULL AND TipoTarefa != '' ORDER BY TipoTarefa"
         );
         res.json({ success: true, data: rows.map(r => r.TipoTarefa) });
@@ -12747,9 +12837,9 @@ app.get('/api/rnc/task-types', async (req, res) => {
 });
 
 // GET /api/rnc/item-data/:idRomaneioItem - Get header data for initial load
-app.get('/api/rnc/item-data/:idRomaneioItem', async (req, res) => {
+app.get('/api/rnc/item-data/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
 v.IdRomaneioItem,
             v.IDOrdemServicoITEM as IdOrdemServicoItem,
@@ -12790,7 +12880,7 @@ v.IdRomaneioItem,
 });
 
 // GET /api/rnc/list/:idRomaneioItem - List existing pendencies (Global or specific)
-app.get('/api/rnc/list/:idRomaneioItem', async (req, res) => {
+app.get('/api/rnc/list/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { showFinalized, q1, q2 } = req.query;
 
     // GLOBAL QUERY as requested by user - removing join with viewromaneioitem
@@ -12818,7 +12908,7 @@ WHERE(v.D_E_L_E_T_E IS NULL OR v.D_E_L_E_T_E = '')
     sql += " ORDER BY v.IdOrdemServicoItemPendencia DESC ";
 
     try {
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error listing RNCs:', error);
@@ -12827,7 +12917,7 @@ WHERE(v.D_E_L_E_T_E IS NULL OR v.D_E_L_E_T_E = '')
 });
 
 // POST /api/rnc - Save Pendency (RNC) with complex logic from VB.NET
-app.post('/api/rnc', async (req, res) => {
+app.post('/api/rnc', tenantMiddleware, async (req, res) => {
     const data = req.body;
     const connection = await pool.getConnection();
 
@@ -12985,7 +13075,7 @@ DescricaoPendencia = ?, SetorResponsavel = ?, TipoCadastro = ?, TipoTarefa = ?,
 });
 
 // POST /api/rnc/finalizar - Finaliza Pendncia e Decrementa Contadores
-app.post('/api/rnc/finalizar', async (req, res) => {
+app.post('/api/rnc/finalizar', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItemPendencia, usuario, setor } = req.body;
     const connection = await pool.getConnection();
 
@@ -13068,7 +13158,7 @@ Estatus = 'FINALIZADA',
 });
 
 // --- SYSTEM UTILITIES ---
-app.post('/api/system/open-folder', async (req, res) => {
+app.post('/api/system/open-folder', tenantMiddleware, async (req, res) => {
     const { path: folderPath } = req.body;
 
     if (!folderPath) {
@@ -13183,7 +13273,7 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
 // CONTROLE DE EXPEDIÃƒâ€¡ÃƒÆ’O
 // ============================================================================
 
-app.get('/api/controle-expedicao', async (req, res) => {
+app.get('/api/controle-expedicao', tenantMiddleware, async (req, res) => {
     try {
         const { projeto, tag, descTag, empresa, codmat, descResumo, dataPrevisaoInicio, dataPrevisaoFim, concluidos } = req.query;
         let query = `
@@ -13234,7 +13324,7 @@ WHERE (o.D_E_L_E_T_E IS NULL OR o.D_E_L_E_T_E = '' OR o.D_E_L_E_T_E != '*')
 
         query += " ORDER BY Projeto ASC, Tag ASC LIMIT 1000";
 
-        const [rows] = await pool.execute(query, queryParams);
+        const [rows] = await req.tenantDbPool.execute(query, queryParams);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar viewcontroleexpedicao:', error);
@@ -13243,7 +13333,7 @@ WHERE (o.D_E_L_E_T_E IS NULL OR o.D_E_L_E_T_E = '' OR o.D_E_L_E_T_E != '*')
 });
 
 // ABRIR ARQUIVO GENÃƒâ€°RICO (3D, PDF, etc) - SIMULA PROCESS.START DO VB.NET NO SERVIDOR
-app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
+app.get('/api/controle-expedicao/abrir-arquivo', tenantMiddleware, (req, res) => {
     try {
         let { caminho, tipo } = req.query;
 
@@ -13278,12 +13368,12 @@ app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
 });
 
 // ABRIR ISOMÃƒâ€°TRICO (Busca caminho no banco e abre)
-app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
+app.get('/api/controle-expedicao/abrir-iso', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.query;
         if (!idTag) return res.status(400).json({ success: false, message: 'IdTag não informado' });
 
-        const [rows] = await pool.execute("SELECT CaminhoIsometrico FROM tags WHERE idtag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT CaminhoIsometrico FROM tags WHERE idtag = ?", [idTag]);
         
         if (rows.length > 0 && rows[0].CaminhoIsometrico) {
             const endereco = rows[0].CaminhoIsometrico;
@@ -13306,7 +13396,7 @@ app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
     }
 });
 
-app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
+app.get('/api/controle-expedicao/ordem-item', tenantMiddleware, async (req, res) => {
     try {
         const { idOrdemServico, idOrdemServicoItem, tag, projeto } = req.query;
         let query = `
@@ -13327,7 +13417,7 @@ app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
             queryParams.push(`%${projeto}%`);
         }
 
-        const [rows] = await pool.execute(query, queryParams);
+        const [rows] = await req.tenantDbPool.execute(query, queryParams);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar viewordemservicoitemcontrole:', error);
@@ -13335,7 +13425,7 @@ app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
     }
 });
 
-app.post('/api/controle-expedicao/apontar', async (req, res) => {
+app.post('/api/controle-expedicao/apontar', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItem, idOrdemServico, idTag, idProjeto, qtde, qtdeTotalDaLinha } = req.body;
     const qtdeNum = parseFloat(qtde);
     
@@ -13467,12 +13557,12 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
 });
 
 // Exportar Tarefas / PCP Excel
-app.post('/api/tarefas/exportar-excel', async (req, res) => {
+app.post('/api/tarefas/exportar-excel', tenantMiddleware, async (req, res) => {
     try {
         const { tarefas, usuario } = req.body;
         
         // 1. Buscar Caminhos e Template
-        const [configRows] = await pool.execute(
+        const [configRows] = await req.tenantDbPool.execute(
             "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelRelatorios'"
         );
         const templatePath = configRows.length > 0 ? configRows[0].valor : null;
@@ -13531,7 +13621,7 @@ app.post('/api/tarefas/exportar-excel', async (req, res) => {
 });
 
 // Pesquisar Desenho Endpoint
-app.get('/api/pesquisar-desenho', async (req, res) => {
+app.get('/api/pesquisar-desenho', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { projeto, tag, codMat, descResumo, descDetal, espessura, material } = req.query;
@@ -13640,7 +13730,7 @@ const resolveDrawingPath = (basePath, type) => {
     return resolved;
 };
 
-app.get('/api/ordemservicoitem/check-file', (req, res) => {
+app.get('/api/ordemservicoitem/check-file', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath, type } = req.query;
         if (!filePath) return res.json({ exists: false });
@@ -13659,7 +13749,7 @@ app.get('/api/ordemservicoitem/check-file', (req, res) => {
 });
 
 // Sem autenticaà§ão obrigatà³ria para facilitar window.open em nova guia. Ideal: usar tokens em querystring se necessário.
-app.get('/api/pdf', (req, res) => {
+app.get('/api/pdf', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath } = req.query;
         if (!filePath) return res.status(400).send('Path is required');
@@ -13680,7 +13770,7 @@ app.get('/api/pdf', (req, res) => {
     }
 });
 
-app.get('/api/download', (req, res) => {
+app.get('/api/download', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath, type } = req.query;
         if (!filePath || !type) return res.status(400).send('Path and type are required');
@@ -13703,7 +13793,7 @@ app.get('/api/download', (req, res) => {
 
 // --- àcone 5: Excluir linha OS ---
 // --- Toggle Produto Principal ---
-app.post('/api/ordemservicoitem/:id/toggle-principal', async (req, res) => {
+app.post('/api/ordemservicoitem/:id/toggle-principal', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { id } = req.params;
@@ -13749,7 +13839,7 @@ app.post('/api/ordemservicoitem/:id/toggle-principal', async (req, res) => {
     }
 });
 
-app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
+app.post('/api/ordemservicoitem/alterar-fator', tenantMiddleware, async (req, res) => {
 
     let connection = null;
     try {
@@ -13827,7 +13917,7 @@ const SETOR_PREFIXO_MAP = {
     engenharia:   'Engenharia',
 };
 
-app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
+app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
         const { id } = req.params;
@@ -13954,7 +14044,9 @@ app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
 
         // Desativar flags para recursos removidos (apenas no item — OS/tag/projeto podem ter outros itens)
         if (Array.isArray(removeRecursos) && removeRecursos.length > 0) {
-            for (const secKey of removeRecursos) {
+            for (const item of removeRecursos) {
+                const secKey = typeof item === 'string' ? item : item.key;
+                const idProc = typeof item === 'object' ? item.IdProcesso : null;
                 const txtField = TXT_FIELD_MAP[secKey];
                 const pref     = SETOR_PREFIXO_MAP[secKey];
                 if (!txtField || !pref) continue;
@@ -13966,6 +14058,19 @@ app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
                          WHERE IdOrdemServicoItem = ?`, [id]
                     );
                 } catch(e) { console.warn(`[Tempos] desativar item ${txtField}:`, e.message); }
+                
+                // Excluir da tabela material_processo
+                if (idProc && (itemIdMaterial || itemCodMatFabricante)) {
+                    try {
+                        await dbPool.execute(
+                            `DELETE FROM material_processo WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
+                            [itemIdMaterial || 0, itemCodMatFabricante || '', idProc]
+                        );
+                    } catch(e) {
+                        console.warn(`[Tempos] Erro ao deletar material_processo para ${secKey}:`, e.message);
+                    }
+                }
+                
                 console.log(`[Tempos] Recurso REMOVIDO: ${secKey} (${txtField}) no item ${id}`);
             }
         }
@@ -13978,7 +14083,7 @@ app.put('/api/ordemservicoitem/:id/tempos', async (req, res) => {
     }
 });
 
-app.delete('/api/ordemservicoitem/:id', async (req, res) => {
+app.delete('/api/ordemservicoitem/:id', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const id = req.params.id;
@@ -14045,7 +14150,7 @@ app.delete('/api/ordemservicoitem/:id', async (req, res) => {
 // ============================================================================
 // TESTE FINAL MONTAGEM
 // ============================================================================
-app.get('/api/teste-final-montagem/itens', async (req, res) => {
+app.get('/api/teste-final-montagem/itens', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14123,7 +14228,7 @@ app.get('/api/teste-final-montagem/itens', async (req, res) => {
 // ----------------------------------------------------------------------------
 // TESTE FINAL MONTAGEM Ã¢â‚¬â€ Lanà§ar quantidade testada
 // ----------------------------------------------------------------------------
-app.post('/api/teste-final-montagem/lancar', async (req, res) => {
+app.post('/api/teste-final-montagem/lancar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14317,7 +14422,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
 // PLANO DE CORTE — Lista para tela de MONTAGEM
 // GET /api/plano-corte/lista
 // ============================================================================
-app.get('/api/plano-corte/lista', async (req, res) => {
+app.get('/api/plano-corte/lista', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14387,7 +14492,7 @@ app.get('/api/plano-corte/lista', async (req, res) => {
 //   exibirTodos=false (PENDENTES): exclui concluídos
 //   exibirTodos=true  (TODOS):     mostra todos enviados, concluídos ou não
 // ============================================================================
-app.get('/api/producao-plano-corte/lista', async (req, res) => {
+app.get('/api/producao-plano-corte/lista', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14456,7 +14561,7 @@ app.get('/api/producao-plano-corte/lista', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Itens disponíveis para Montagem
 // ============================================================================
-app.get('/api/plano-corte/itens-disponiveis', async (req, res) => {
+app.get('/api/plano-corte/itens-disponiveis', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14700,7 +14805,7 @@ app.get('/api/plano-corte/itens/:idPlano', _handlePlanoItens);
 // POST /api/producao-plano-corte/:id/liberar-producao
 // Espelha VB.NET: Liberar Plano de Corte para Produção
 // Atualiza LiberacaoParaCorte = 'S', DataLiberacaoParaCorte, UsuarioLiberacaoParaCorte
-app.post('/api/producao-plano-corte/:id/liberar-producao', async (req, res) => {
+app.post('/api/producao-plano-corte/:id/liberar-producao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14744,7 +14849,7 @@ app.post('/api/producao-plano-corte/:id/liberar-producao', async (req, res) => {
 // Espelha VB.NET: Finalizar Plano de Corte
 // 1. Marca plano como concluído
 // 2. Finaliza compulsoriamente itens pendentes
-app.post('/api/producao-plano-corte/:id/finalizar', async (req, res) => {
+app.post('/api/producao-plano-corte/:id/finalizar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14838,7 +14943,7 @@ app.post('/api/producao-plano-corte/:id/finalizar', async (req, res) => {
 
 // POST /api/producao-plano-corte/itens/:id/lancar-producao
 // Lançamento de produção manual para item individual (Ícone 5)
-app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res) => {
+app.post('/api/producao-plano-corte/itens/:id/lancar-producao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15021,7 +15126,7 @@ app.get('/api/producao-plano-corte/itens/:idPlano', _handlePlanoItens);
 // ============================================================================
 // PLANO DE CORTE — Abrir Pasta no Servidor (Explorer)
 // ============================================================================
-app.post('/api/plano-corte/:id/abrir-pasta', async (req, res) => {
+app.post('/api/plano-corte/:id/abrir-pasta', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15074,7 +15179,7 @@ app.post('/api/plano-corte/:id/abrir-pasta', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Abrir Desenho no Servidor (3D ou PDF)
 // ============================================================================
-app.post('/api/plano-corte/abrir-desenho', async (req, res) => {
+app.post('/api/plano-corte/abrir-desenho', tenantMiddleware, async (req, res) => {
     try {
         let { filePath, tipo } = req.body;
         if (!filePath) return res.json({ success: false, message: 'Caminho do arquivo não fornecido.' });
@@ -15115,7 +15220,7 @@ app.post('/api/plano-corte/abrir-desenho', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Liberar Plano de Corte (Importar Arquivos + Set Enviadocorte 'S')
 // ============================================================================
-app.post('/api/plano-corte/:id/liberar', async (req, res) => {
+app.post('/api/plano-corte/:id/liberar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15235,7 +15340,7 @@ app.post('/api/plano-corte/:id/liberar', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Cancelar Liberação (equivalente ao UpdateCancelaEnvioPC do VB)
 // ============================================================================
-app.post('/api/plano-corte/:id/cancelar-liberacao', async (req, res) => {
+app.post('/api/plano-corte/:id/cancelar-liberacao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15273,7 +15378,7 @@ app.post('/api/plano-corte/:id/cancelar-liberacao', async (req, res) => {
 // Equivalente: BancoDados.AlteracaoEspecifica("planodecorte","enviadocorte","B",...)
 // Condições: plano NÃO pode estar liberado ('S') nem já bloqueado ('B')
 // ============================================================================
-app.post('/api/plano-corte/:id/bloquear', async (req, res) => {
+app.post('/api/plano-corte/:id/bloquear', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15322,7 +15427,7 @@ app.post('/api/plano-corte/:id/bloquear', async (req, res) => {
 // PLANO DE CORTE — Desbloquear preenchimento automático (Enviadocorte = '')
 // Desfaz o processo de bloqueio (ícone 6)
 // ============================================================================
-app.post('/api/plano-corte/:id/desbloquear', async (req, res) => {
+app.post('/api/plano-corte/:id/desbloquear', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15364,7 +15469,7 @@ app.post('/api/plano-corte/:id/desbloquear', async (req, res) => {
 // PLANO DE CORTE — Excluir Plano de Corte (Soft Delete)
 // Ícone 7: Só exclui se não houver execução (cortetotalexecutado = 0)
 // ============================================================================
-app.post('/api/plano-corte/:id/excluir', async (req, res) => {
+app.post('/api/plano-corte/:id/excluir', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15431,7 +15536,7 @@ app.post('/api/plano-corte/:id/excluir', async (req, res) => {
 // PLANO DE CORTE — Gerar Relatório Excel (Ícone 8)
 // Somente exportação (sem cópia de arquivos)
 // ============================================================================
-app.post('/api/plano-corte/:id/exportar-excel', async (req, res) => {
+app.post('/api/plano-corte/:id/exportar-excel', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const tenantPool = req.tenantDbPool || pool;
@@ -15468,7 +15573,7 @@ app.post('/api/plano-corte/:id/exportar-excel', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Remover item (desvincular de plano)
 // ============================================================================
-app.post('/api/plano-corte/remover-item', async (req, res) => {
+app.post('/api/plano-corte/remover-item', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15514,7 +15619,7 @@ app.post('/api/plano-corte/remover-item', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Incluir itens de OS em plano (cria ou reutiliza)
 // ============================================================================
-app.post('/api/plano-corte/incluir-itens', async (req, res) => {
+app.post('/api/plano-corte/incluir-itens', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15851,7 +15956,7 @@ const ExportarPlanoExcelPadrao = async (idPlano, tenantPool) => {
 // Equivalente ao botão VB.NET: LimparDiretorio + ImportarArquivos (LXDS/DXF/DFT/PDF)
 // Condição: deve ser executado somente quando aglutinado = true (verificação no frontend)
 // ============================================================================
-app.post('/api/plano-corte/:id/atualizar-arquivos', async (req, res) => {
+app.post('/api/plano-corte/:id/atualizar-arquivos', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -16319,7 +16424,7 @@ app.listen(PORT, '0.0.0.0', async () => {
 // ============================================================================
 // ACOMPANHAMENTO DE ETAPAS (Visão Geral de Projetos / Etapas)
 // ============================================================================
-app.get('/api/acompanhamento-etapas', async (req, res) => {
+app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -16462,7 +16567,7 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
 });
 
 // Bulk Update das datas de etapas (Planejamento e Realizado)
-app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) => {
+app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { id } = req.params;
@@ -16671,12 +16776,12 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
 // ─── ENDPOINT DE MANUTENCAO: Recalcula QtdeTags para todos os projetos ────
 // Chame via: GET /api/manutencao/fix-qtdetags?key=sinco-manut-2026
 // REMOVER APOS EXECUTAR UMA VEZ.
-app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
+app.get('/api/manutencao/fix-qtdetags', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
-        const [result] = await pool.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE projetos p
             SET QtdeTags = (
                 SELECT COUNT(*) FROM tags t
@@ -16687,11 +16792,11 @@ app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
         `);
         console.log(`[MANUTENCAO] QtdeTags recalculado para ${result.affectedRows} projetos.`);
 
-        const [[p84]] = await pool.execute(
+        const [[p84]] = await req.tenantDbPool.execute(
             'SELECT IdProjeto, Projeto, QtdeTags FROM projetos WHERE IdProjeto = 84'
         );
 
-        const [divs] = await pool.execute(`
+        const [divs] = await req.tenantDbPool.execute(`
             SELECT p.IdProjeto, p.Projeto, p.QtdeTags, COUNT(t.IdTag) as CountReal
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto
@@ -16715,13 +16820,13 @@ app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
 });
 
 // ─── ENDPOINT ANALISE: Padrao EnderecoArquivo ───────────────────────────────
-app.get('/api/manutencao/analise-endereco', async (req, res) => {
+app.get('/api/manutencao/analise-endereco', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
         // 1. Amostras de EnderecoArquivo existentes
-        const [amostras] = await pool.execute(`
+        const [amostras] = await req.tenantDbPool.execute(`
             SELECT EnderecoArquivo, CodMatFabricante
             FROM ordemservicoitem
             WHERE EnderecoArquivo IS NOT NULL AND EnderecoArquivo <> ''
@@ -16749,7 +16854,7 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
         // 4. Verifica configuracoes_internas por chave de caminho
         let configPath = null;
         try {
-            const [cfg] = await pool.execute(
+            const [cfg] = await req.tenantDbPool.execute(
                 `SELECT chave, valor FROM configuracoes_internas
                  WHERE chave LIKE '%solidworks%' OR chave LIKE '%endereco%'
                     OR chave LIKE '%path%' OR chave LIKE '%arquivo%'
@@ -16759,7 +16864,7 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
         } catch(e) { configPath = 'Tabela configuracoes_internas nao encontrada ou sem registros'; }
 
         // 5. Estatisticas: com/sem EnderecoArquivo
-        const [[stats]] = await pool.execute(`
+        const [[stats]] = await req.tenantDbPool.execute(`
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN EnderecoArquivo IS NOT NULL AND EnderecoArquivo <> '' THEN 1 ELSE 0 END) as com_endereco,
@@ -16782,12 +16887,12 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
 });
 
 // ─── ENDPOINT ANALISE: Correlacao txtTipoDesenho x sufixo arquivo ───────────
-app.get('/api/manutencao/analise-tipoarquivo', async (req, res) => {
+app.get('/api/manutencao/analise-tipoarquivo', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 txtTipoDesenho,
                 EnderecoArquivo,
@@ -16820,7 +16925,7 @@ app.get('/api/manutencao/analise-tipoarquivo', async (req, res) => {
 
 // ─── ENDPOINT MANUTENCAO: Corrige EnderecoArquivo = 'IMPORTADO DA PLANILHA' ─
 // GET /api/manutencao/fix-endereco-importado?key=sinco-manut-2026
-app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
+app.get('/api/manutencao/fix-endereco-importado', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
@@ -16828,7 +16933,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
         // 1. Busca caminho base configurado (ou usa fallback padrao lynxlocal)
         let swBasePath = 'G:\\MEU DRIVE\\04-ARQUIVOS SOLIDWORKS';
         try {
-            const [cfgRows] = await pool.execute(
+            const [cfgRows] = await req.tenantDbPool.execute(
                 `SELECT valor FROM configuracoes_internas WHERE chave = 'path_solidworks' LIMIT 1`
             );
             if (cfgRows.length > 0 && cfgRows[0].valor) {
@@ -16837,7 +16942,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
         } catch(e) { /* usa fallback */ }
 
         // 2. Busca todos os itens com EnderecoArquivo = 'IMPORTADO DA PLANILHA'
-        const [itens] = await pool.execute(`
+        const [itens] = await req.tenantDbPool.execute(`
             SELECT IdOrdemServicoItem, CodMatFabricante, txtTipoDesenho
             FROM ordemservicoitem
             WHERE EnderecoArquivo = 'IMPORTADO DA PLANILHA'
@@ -16859,7 +16964,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
             const codMat = (item.CodMatFabricante || '').trim();
             const novoEndereco = `${swBasePath}\\${codMat}${sufixo}`;
 
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET EnderecoArquivo = ? WHERE IdOrdemServicoItem = ?`,
                 [novoEndereco, item.IdOrdemServicoItem]
             );
@@ -16884,14 +16989,14 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
 });
 
 // ─── ENDPOINT DIAGNOSTICO: Inspeciona item por ID ───────────────────────────
-app.get('/api/manutencao/inspecionar-item', async (req, res) => {
+app.get('/api/manutencao/inspecionar-item', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     const { id } = req.query;
     if (!id) return res.status(400).json({ success: false, message: 'Parametro id obrigatorio' });
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
                     EnderecoArquivo, txtTipoDesenho, D_E_L_E_T_E, DescResumo
              FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`,
@@ -16931,7 +17036,7 @@ app.get('/api/manutencao/inspecionar-item', async (req, res) => {
 // ROTA MANUTENÇÃO: Update EnderecoArquivo por OS e banco (sem tenant middleware)
 // Acesso: chave interna 'SincoMasterKey2026!' + POST /api/manutencao/update-endereco-arquivo
 // ══════════════════════════════════════════════════════════════════════════════
-app.post('/api/manutencao/update-endereco-arquivo', async (req, res) => {
+app.post('/api/manutencao/update-endereco-arquivo', tenantMiddleware, async (req, res) => {
     const MANUT_KEY = 'SincoMasterKey2026!';
     const { chave, dbName, osId, basePath } = req.body;
 
@@ -17014,7 +17119,7 @@ app.post('/api/manutencao/update-endereco-arquivo', async (req, res) => {
 
 const ensureMaterialArquivosTable = async (pool) => {
     try {
-        await pool.execute(`
+        await req.tenantDbPool.execute(`
             CREATE TABLE IF NOT EXISTS material_arquivos (
                 idArquivo INT AUTO_INCREMENT PRIMARY KEY,
                 IdMaterial INT NOT NULL,
@@ -17036,7 +17141,7 @@ app.get('/api/materiais/:id/arquivos', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idArquivo, IdMaterial, NomeArquivo, TipoArquivo, Tamanho, DataCriacao, CriadoPor FROM material_arquivos WHERE IdMaterial = ? ORDER BY DataCriacao DESC",
             [id]
         );
@@ -17059,7 +17164,7 @@ app.post('/api/materiais/:id/arquivos', tenantMiddleware, uploadMemory.single('a
 
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO material_arquivos (IdMaterial, NomeArquivo, TipoArquivo, Tamanho, Dados, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [id, file.originalname, file.mimetype, file.size, file.buffer, nowFormat, usuario]
         );
@@ -17075,7 +17180,7 @@ app.get('/api/materiais/arquivos/:idArquivo/download', tenantMiddleware, async (
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT NomeArquivo, TipoArquivo, Dados FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );
@@ -17099,7 +17204,7 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await db.execute(
+        await req.tenantDbPool.execute(
             "DELETE FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );

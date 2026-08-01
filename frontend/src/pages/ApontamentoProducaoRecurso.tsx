@@ -230,6 +230,34 @@ useEffect(() => {
     return '-';
   };
 
+  // Retorna os recursos ativos ordenados por sequência
+  const getRecursosAtivosTooltip = (item: any): string => {
+    const res: {name: string, seq: number}[] = [];
+    const check = (txtField: string, name: string, seqField: string) => {
+        const val = String(item[txtField] || '').trim().toUpperCase();
+        if (val === '1' || val === 'S') {
+            res.push({ name, seq: parseInt(item[seqField]) || 999 });
+        }
+    };
+    check('txtCorte', 'Corte', 'CorteSequencia');
+    check('txtDobra', 'Dobra', 'DobraSequencia');
+    check('txtSolda', 'Solda', 'SoldaSequencia');
+    check('txtPintura', 'Pintura', 'PinturaSequencia');
+    check('TxtMontagem', 'Montagem', 'MontagemSequencia');
+    check('txtmontagem', 'Montagem', 'MontagemSequencia');
+    check('txtCorteaLaser', 'Corte a Laser', 'CorteaLaserSequencia');
+    check('txtPULSIONADEIRA', 'Pulsionadeira', 'PulsionadeiraSequencia');
+    check('txtGALVANIZAR', 'Galvanizar', 'GalvanizarSequencia');
+    check('txtENGENHARIA', 'Engenharia', 'EngenhariaSequencia');
+    
+    if (res.length === 0) return item.CodMatFabricante || '-';
+    
+    res.sort((a,b) => a.seq - b.seq);
+    
+    const lines = res.map(r => `• ${r.name} (Seq: ${r.seq === 999 ? '-' : r.seq})`);
+    return `CÓDIGO: ${item.CodMatFabricante || '-'}\nRECURSOS ATIVOS:\n${lines.join('\n')}`;
+  };
+
 
  const [showFilters, setShowFilters] = useState(true);
 
@@ -1480,7 +1508,7 @@ useEffect(() => {
  <span className="w-24 shrink-0 overflow-hidden text-ellipsis text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Tag}>
  {item.Tag || '-'}
  </span>
- <span className="w-[140px] shrink-0 overflow-hidden text-ellipsis text-[10px] font-black text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.CodMatFabricante}>
+ <span className="w-[140px] shrink-0 overflow-hidden text-ellipsis text-[10px] font-black text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded whitespace-nowrap" title={getRecursosAtivosTooltip(item)}>
  {item.CodMatFabricante || '-'}
  </span>
  <div className="w-8 shrink-0 flex justify-center">
@@ -1736,7 +1764,7 @@ useEffect(() => {
  <span className="w-24 shrink-0 overflow-hidden text-ellipsis text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Tag}>
  {item.Tag || '-'}
  </span>
- <span className="w-[140px] shrink-0 overflow-hidden text-ellipsis text-[10px] font-black text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.CodMatFabricante}>
+ <span className="w-[140px] shrink-0 overflow-hidden text-ellipsis text-[10px] font-black text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded whitespace-nowrap" title={getRecursosAtivosTooltip(item)}>
  {item.CodMatFabricante || '-'}
  </span>
  <div className="w-6 shrink-0 flex justify-center">
