@@ -7099,6 +7099,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
             ]
         );
         res.json({ success: true, message: 'OS cadastrada', id: result.insertId });
+
     } catch (error) {
         console.error('Error creating ordemservico:', error);
         res.status(500).json({ success: false, message: 'Erro ao cadastrar OS: ' + error.message });
@@ -16332,6 +16333,61 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     TotalPadrao = (SELECT COALESCE(SUM(os.TotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     TotalTempo = (SELECT COALESCE(SUM(os.TotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
 
+                    
+                    CorteTempoSetup = (SELECT COALESCE(SUM(os.CorteTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalSetup = (SELECT COALESCE(SUM(os.CorteTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTempoPadrao = (SELECT COALESCE(SUM(os.CorteTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalPadrao = (SELECT COALESCE(SUM(os.CorteTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalTempo = (SELECT COALESCE(SUM(os.CorteTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteDiasProducao = (SELECT CASE WHEN SUM(os.CorteTotalTempo) > 0 THEN CEIL(SUM(os.CorteTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTempoSetup = (SELECT COALESCE(SUM(os.DobraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalSetup = (SELECT COALESCE(SUM(os.DobraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTempoPadrao = (SELECT COALESCE(SUM(os.DobraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalPadrao = (SELECT COALESCE(SUM(os.DobraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalTempo = (SELECT COALESCE(SUM(os.DobraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraDiasProducao = (SELECT CASE WHEN SUM(os.DobraTotalTempo) > 0 THEN CEIL(SUM(os.DobraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTempoSetup = (SELECT COALESCE(SUM(os.SoldaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalSetup = (SELECT COALESCE(SUM(os.SoldaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTempoPadrao = (SELECT COALESCE(SUM(os.SoldaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalPadrao = (SELECT COALESCE(SUM(os.SoldaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalTempo = (SELECT COALESCE(SUM(os.SoldaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaDiasProducao = (SELECT CASE WHEN SUM(os.SoldaTotalTempo) > 0 THEN CEIL(SUM(os.SoldaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTempoSetup = (SELECT COALESCE(SUM(os.PinturaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalSetup = (SELECT COALESCE(SUM(os.PinturaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTempoPadrao = (SELECT COALESCE(SUM(os.PinturaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalPadrao = (SELECT COALESCE(SUM(os.PinturaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalTempo = (SELECT COALESCE(SUM(os.PinturaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaDiasProducao = (SELECT CASE WHEN SUM(os.PinturaTotalTempo) > 0 THEN CEIL(SUM(os.PinturaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTempoSetup = (SELECT COALESCE(SUM(os.MontagemTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalSetup = (SELECT COALESCE(SUM(os.MontagemTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTempoPadrao = (SELECT COALESCE(SUM(os.MontagemTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalPadrao = (SELECT COALESCE(SUM(os.MontagemTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalTempo = (SELECT COALESCE(SUM(os.MontagemTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemDiasProducao = (SELECT CASE WHEN SUM(os.MontagemTotalTempo) > 0 THEN CEIL(SUM(os.MontagemTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoSetup = (SELECT COALESCE(SUM(os.CorteaLaserTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalSetup = (SELECT COALESCE(SUM(os.CorteaLaserTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(os.CorteaLaserTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(os.CorteaLaserTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalTempo = (SELECT COALESCE(SUM(os.CorteaLaserTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(os.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(os.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(os.PulsionadeiraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(os.PulsionadeiraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(os.PulsionadeiraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(os.PulsionadeiraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(os.PulsionadeiraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(os.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(os.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoSetup = (SELECT COALESCE(SUM(os.GalvanizarTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalSetup = (SELECT COALESCE(SUM(os.GalvanizarTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoPadrao = (SELECT COALESCE(SUM(os.GalvanizarTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalPadrao = (SELECT COALESCE(SUM(os.GalvanizarTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalTempo = (SELECT COALESCE(SUM(os.GalvanizarTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarDiasProducao = (SELECT CASE WHEN SUM(os.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(os.GalvanizarTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoSetup = (SELECT COALESCE(SUM(os.EngenhariaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalSetup = (SELECT COALESCE(SUM(os.EngenhariaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoPadrao = (SELECT COALESCE(SUM(os.EngenhariaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalPadrao = (SELECT COALESCE(SUM(os.EngenhariaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalTempo = (SELECT COALESCE(SUM(os.EngenhariaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaDiasProducao = (SELECT CASE WHEN SUM(os.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(os.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutado = (SELECT COALESCE(SUM(os.CorteTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(os.CorteTotalExecutar), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(os.DobraTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
@@ -16373,6 +16429,61 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     TotalPadrao = (SELECT COALESCE(SUM(t.TotalPadrao), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     TotalTempo = (SELECT COALESCE(SUM(t.TotalTempo), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     
+                    
+                    CorteTempoSetup = (SELECT COALESCE(SUM(t2.CorteTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalSetup = (SELECT COALESCE(SUM(t2.CorteTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTempoPadrao = (SELECT COALESCE(SUM(t2.CorteTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalPadrao = (SELECT COALESCE(SUM(t2.CorteTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalTempo = (SELECT COALESCE(SUM(t2.CorteTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteDiasProducao = (SELECT CASE WHEN SUM(t2.CorteTotalTempo) > 0 THEN CEIL(SUM(t2.CorteTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTempoSetup = (SELECT COALESCE(SUM(t2.DobraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalSetup = (SELECT COALESCE(SUM(t2.DobraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTempoPadrao = (SELECT COALESCE(SUM(t2.DobraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalPadrao = (SELECT COALESCE(SUM(t2.DobraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalTempo = (SELECT COALESCE(SUM(t2.DobraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraDiasProducao = (SELECT CASE WHEN SUM(t2.DobraTotalTempo) > 0 THEN CEIL(SUM(t2.DobraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTempoSetup = (SELECT COALESCE(SUM(t2.SoldaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalSetup = (SELECT COALESCE(SUM(t2.SoldaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTempoPadrao = (SELECT COALESCE(SUM(t2.SoldaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalPadrao = (SELECT COALESCE(SUM(t2.SoldaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalTempo = (SELECT COALESCE(SUM(t2.SoldaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaDiasProducao = (SELECT CASE WHEN SUM(t2.SoldaTotalTempo) > 0 THEN CEIL(SUM(t2.SoldaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTempoSetup = (SELECT COALESCE(SUM(t2.PinturaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalSetup = (SELECT COALESCE(SUM(t2.PinturaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTempoPadrao = (SELECT COALESCE(SUM(t2.PinturaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalPadrao = (SELECT COALESCE(SUM(t2.PinturaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalTempo = (SELECT COALESCE(SUM(t2.PinturaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaDiasProducao = (SELECT CASE WHEN SUM(t2.PinturaTotalTempo) > 0 THEN CEIL(SUM(t2.PinturaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTempoSetup = (SELECT COALESCE(SUM(t2.MontagemTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalSetup = (SELECT COALESCE(SUM(t2.MontagemTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTempoPadrao = (SELECT COALESCE(SUM(t2.MontagemTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalPadrao = (SELECT COALESCE(SUM(t2.MontagemTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalTempo = (SELECT COALESCE(SUM(t2.MontagemTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemDiasProducao = (SELECT CASE WHEN SUM(t2.MontagemTotalTempo) > 0 THEN CEIL(SUM(t2.MontagemTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoSetup = (SELECT COALESCE(SUM(t2.CorteaLaserTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalSetup = (SELECT COALESCE(SUM(t2.CorteaLaserTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(t2.CorteaLaserTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(t2.CorteaLaserTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalTempo = (SELECT COALESCE(SUM(t2.CorteaLaserTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(t2.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(t2.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(t2.PulsionadeiraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(t2.PulsionadeiraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(t2.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(t2.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoSetup = (SELECT COALESCE(SUM(t2.GalvanizarTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalSetup = (SELECT COALESCE(SUM(t2.GalvanizarTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoPadrao = (SELECT COALESCE(SUM(t2.GalvanizarTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalPadrao = (SELECT COALESCE(SUM(t2.GalvanizarTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalTempo = (SELECT COALESCE(SUM(t2.GalvanizarTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarDiasProducao = (SELECT CASE WHEN SUM(t2.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(t2.GalvanizarTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoSetup = (SELECT COALESCE(SUM(t2.EngenhariaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalSetup = (SELECT COALESCE(SUM(t2.EngenhariaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoPadrao = (SELECT COALESCE(SUM(t2.EngenhariaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalPadrao = (SELECT COALESCE(SUM(t2.EngenhariaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalTempo = (SELECT COALESCE(SUM(t2.EngenhariaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaDiasProducao = (SELECT CASE WHEN SUM(t2.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(t2.EngenhariaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutado = (SELECT COALESCE(SUM(t.CorteTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(t.CorteTotalExecutar), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(t.DobraTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
@@ -16453,6 +16564,96 @@ app.get(/^\/(dashboard|app|admin|projetos|tags|os|romaneio|producao|material|apo
         res.sendFile(devPath);
     } else {
         res.sendFile(prodPath);
+    }
+});
+
+
+// GET /api/ordemservico/:idTag/tempos-producao
+app.get('/api/ordemservico/:idTag/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { idTag } = req.params;
+        const { recurso } = req.query;
+        if (!idTag || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: idTag ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM tags WHERE IdTag = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, idTag]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo}`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
+    }
+});
+
+
+// GET /api/ordemservico/os/:id/tempos-producao
+app.get('/api/ordemservico/os/:id/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { recurso } = req.query;
+        if (!id || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: id ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM ordemservico WHERE IdOrdemServico = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, id]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo} em ordemservico`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao da OS:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
+    }
+});
+
+
+// GET /api/ordemservico/projetos/:id/tempos-producao
+app.get('/api/ordemservico/projetos/:id/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { recurso } = req.query;
+        if (!id || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: id ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM projetos WHERE IdProjeto = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, id]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo} em projetos`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao do projeto:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
     }
 });
 

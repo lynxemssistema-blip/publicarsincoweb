@@ -8,6 +8,7 @@ interface SectorProductionModalProps {
     targetType?: 'os' | 'tag' | 'item';
     targetId?: number;
     sectors: any[];
+    isLiberado?: boolean;
   } | null;
   onClose: () => void;
   onSave?: (updatedSectors: any[]) => void;
@@ -416,7 +417,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
 
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl shadow-2xl border border-slate-200 w-full max-w-5xl overflow-hidden flex flex-col max-h-[90vh]">
         {/* MODAL HEADER */}
         <div className="bg-[#32423D] px-6 py-4 flex items-center justify-between text-white shadow-md">
           <h3 className="font-extrabold text-sm tracking-wide flex items-center gap-2">
@@ -501,7 +502,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                   <input
                     type="date"
                     value={targetDeadlineIso}
-                    onChange={(e) => handleDeadlineDateChange(e.target.value)}
+                    disabled={modalData.isLiberado}
+                                                              onChange={(e) => handleDeadlineDateChange(e.target.value)}
                     className="bg-white border border-slate-300 rounded px-1.5 py-0.5 font-extrabold text-slate-900 text-[11px] focus:border-[#32423D] outline-none cursor-pointer"
                   />
                 </div>
@@ -511,7 +513,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 <input
                   type="checkbox"
                   checked={excludeWeekendsHolidays}
-                  onChange={(e) => handleExcludeWeekendsToggle(e.target.checked)}
+                  disabled={modalData.isLiberado}
+                                                              onChange={(e) => handleExcludeWeekendsToggle(e.target.checked)}
                   className="w-3.5 h-3.5 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
                 />
                 <span className="text-[10.5px]">Excluir Sábados, Domingos e Feriados</span>
@@ -532,9 +535,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 <thead className="bg-slate-100 text-slate-700 uppercase font-bold tracking-wider text-[10px] border-b border-slate-200">
                   <tr>
                     <th className="px-3 py-2.5 border-r border-slate-200 font-black text-slate-800">Recurso Ativo (Posição)</th>
-                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Qtd. Total Peças</th>
-                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total Executado</th>
-                    <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Total a Executar</th>
+                    <th className="px-2 py-2.5 text-center border-r border-slate-200 w-36 font-black text-slate-800">Peças (Tot | Exec | Pend)</th>
                     <th className="px-2.5 py-2.5 text-center border-r border-slate-200 w-28 font-black text-slate-800">Min. Prod</th>
                     <th className="px-3 py-2.5 text-center border-r border-slate-200 w-32 font-black text-slate-800">Dias p/ Produção</th>
                     <th className="px-3 py-2.5 text-center font-black text-slate-800">Intervalo de Datas p/ Produção</th>
@@ -588,19 +589,22 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           </div>
                         </td>
 
-                        {/* COLUNA: QTD TOTAL PEÇAS */}
-                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-slate-800 text-xs">
-                          {s.qtdeTotal ?? s.itemQty ?? 0}
-                        </td>
-
-                        {/* COLUNA: TOTAL EXECUTADO */}
-                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-emerald-600 text-xs">
-                          {s.totalExecutado ?? s.exec ?? 0}
-                        </td>
-
-                        {/* COLUNA: TOTAL A EXECUTAR */}
-                        <td className="px-3 py-2 text-center border-r border-slate-100 font-bold text-amber-600 text-xs">
-                          {s.totalExecutar ?? s.aExec ?? 0}
+                        {/* COLUNA: PEÇAS AGRUPADAS */}
+                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                          <div className="flex flex-col items-center justify-center gap-0.5">
+                            <span className="font-extrabold text-slate-800 text-xs" title="Quantidade Total">
+                              {s.qtdeTotal ?? s.itemQty ?? 0}
+                            </span>
+                            <div className="flex items-center gap-2 text-[10px] bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
+                              <span className="font-bold text-emerald-600" title="Total Executado">
+                                ✓ {s.totalExecutado ?? s.exec ?? 0}
+                              </span>
+                              <span className="text-slate-300">|</span>
+                              <span className="font-bold text-amber-600" title="A Executar">
+                                ⏱ {s.totalExecutar ?? s.aExec ?? 0}
+                              </span>
+                            </div>
+                          </div>
                         </td>
 
                         {/* COLUNA: MINPROD ACUMULADO */}
@@ -633,31 +637,31 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                         </td>
 
                         {/* COLUNA 3: INTERVALO DE DATAS (FORMATO DD/MM/AAAA EXPLICITO PARA O NAVEGADOR) */}
-                        <td className="px-3 py-2 text-center border-r border-slate-100">
-                          <div className="flex items-center justify-center gap-2">
+                        <td className="px-2 py-1.5 text-center border-r border-slate-100">
+                          <div className="flex items-center justify-center gap-1.5">
                             {/* DATA INÍCIO (INPUT FORMATO DD/MM/AAAA) */}
-                            <div className="flex items-center gap-1.5 bg-[#F8FAFC] px-2.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
-                              <span className="text-[9px] font-black text-slate-500 uppercase shrink-0">Início:</span>
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
                               <input
                                 type="text"
-                                placeholder="dd/mm/aaaa"
+                                placeholder="Início"
                                 value={s.pi || ''}
-                                onChange={(e) => handlePiChange(idx, e.target.value)}
-                                className="w-24 bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
+                                disabled={modalData.isLiberado}
+                                                              onChange={(e) => handlePiChange(idx, e.target.value)}
+                                className="w-[70px] bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
                               />
                             </div>
 
-                            <span className="text-slate-400 font-bold text-xs shrink-0">até</span>
+                            <span className="text-slate-400 font-bold text-xs shrink-0">→</span>
 
                             {/* DATA FIM (INPUT FORMATO DD/MM/AAAA) */}
-                            <div className="flex items-center gap-1.5 bg-[#F8FAFC] px-2.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
-                              <span className="text-[9px] font-black text-slate-500 uppercase shrink-0">Fim:</span>
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
                               <input
                                 type="text"
-                                placeholder="dd/mm/aaaa"
+                                placeholder="Fim"
                                 value={s.pf || ''}
-                                onChange={(e) => handlePfChange(idx, e.target.value)}
-                                className="w-24 bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
+                                disabled={modalData.isLiberado}
+                                                              onChange={(e) => handlePfChange(idx, e.target.value)}
+                                className="w-[70px] bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
                               />
                             </div>
                           </div>
@@ -688,7 +692,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
             </button>
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || modalData.isLiberado}
               onClick={handleSave}
               className="px-5 py-1.5 text-xs font-black text-white bg-[#32423D] hover:bg-[#25322E] rounded-lg shadow-sm transition-all flex items-center gap-1.5 disabled:opacity-50"
             >

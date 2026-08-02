@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import Swal from 'sweetalert2';
 
-import { Activity, Search, Filter, X, CalendarDays, Calendar, ArrowUp, ArrowDown, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList, Maximize2, Minimize2 , Share2 } from 'lucide-react';
+import { Clock, Activity, Search, Filter, X, CalendarDays, Calendar, ArrowUp, ArrowDown, CheckCircle, Loader, RotateCcw, ShieldAlert, Tag as TagIcon, LayoutGrid, ArrowRight, Edit3, DollarSign, FileDown, List, ClipboardList, Maximize2, Minimize2 , Share2 } from 'lucide-react';
 import VisaoGeralTagsGlobais from './VisaoGeralTagsGlobais';
 
 
@@ -197,7 +197,98 @@ export default function VisaoGeralProducao() {
 
 
  // Modais e Ações
- const [actionModal, setActionModal] = useState<'dateProj' | 'dateTagGlobal' | 'dateTagSetores' | 'fin' | 'cancelFin' | 'addRnc' | 'addTask' | 'planejarProjetista' | 'alterarQtdeLiberada' | 'finTag' | 'bulkDateTags' | null>(null);
+ const [actionModal, setActionModal] = useState<'dateProj' | 'dateTagGlobal' | 'dateTagSetores' | 'fin' | 'cancelFin' | 'addRnc' | 'addTask' | 'planejarProjetista' | 'alterarQtdeLiberada' | 'finTag' | 'bulkDateTags' | 'temposProducaoOs' | 'temposProducaoProj' | null>(null);
+  const [temposProducaoRecursos, setTemposProducaoRecursos] = useState<any[]>([]);
+  const [temposProducaoSelId, setTemposProducaoSelId] = useState('');
+  const [temposProducaoValores, setTemposProducaoValores] = useState({ setup: 0, padrao: 0, total: 0 });
+
+  useEffect(() => {
+    if (actionModal === 'temposProducao' || actionModal === 'temposProducaoOs' || actionModal === 'temposProducaoProj') {
+      fetch(`${API_BASE}/recursos`, { headers: getAuthHeaders() })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const list = data.data.filter((r:any) => r.Fabrica === 'SIM' || r.Fabrica === 'S' || r.Fabrica === true);
+            setTemposProducaoRecursos(list);
+            setTemposProducaoSelId('');
+            setTemposProducaoValores({ setup: 0, padrao: 0, total: 0 });
+          }
+        })
+        .catch(console.error);
+    }
+  }, [actionModal]);
+
+  
+  
+  const handleSelectRecursoTemposProj = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const recId = e.target.value;
+    setTemposProducaoSelId(recId);
+    const rec = temposProducaoRecursos.find(r => String(r.IdProcessoFabricacao) === String(recId));
+    if (rec && selProj) {
+      try {
+        const res = await fetch(`${API_BASE}/ordemservico/projetos/${selProj.IdProjeto}/tempos-producao?recurso=${encodeURIComponent(rec.processofabricacao)}`, { headers: getAuthHeaders() });
+        const json = await res.json();
+        if (json.success) {
+          setTemposProducaoValores({
+            setup: json.data.Setup || 0,
+            padrao: json.data.Padrao || 0,
+            total: json.data.Total || 0
+          });
+        }
+      } catch(err) {
+        console.error(err);
+      }
+    } else {
+        setTemposProducaoValores({ setup: 0, padrao: 0, total: 0 });
+    }
+  };
+
+  const handleSelectRecursoTemposOs = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const recId = e.target.value;
+    setTemposProducaoSelId(recId);
+    const rec = temposProducaoRecursos.find(r => String(r.IdProcessoFabricacao) === String(recId));
+    if (rec && selOs) {
+      try {
+        const res = await fetch(`${API_BASE}/ordemservico/os/${selOs.IdOrdemServico}/tempos-producao?recurso=${encodeURIComponent(rec.processofabricacao)}`, { headers: getAuthHeaders() });
+        const json = await res.json();
+        if (json.success) {
+          setTemposProducaoValores({
+            setup: json.data.Setup || 0,
+            padrao: json.data.Padrao || 0,
+            total: json.data.Total || 0
+          });
+        }
+      } catch(err) {
+        console.error(err);
+      }
+    } else {
+        setTemposProducaoValores({ setup: 0, padrao: 0, total: 0 });
+    }
+  };
+
+  const handleSelectRecursoTempos = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const recId = e.target.value;
+    setTemposProducaoSelId(recId);
+    const rec = temposProducaoRecursos.find(r => String(r.IdProcessoFabricacao) === String(recId));
+    if (rec && selTag) {
+      try {
+        const res = await fetch(`${API_BASE}/ordemservico/${selTag.IdTag}/tempos-producao?recurso=${encodeURIComponent(rec.processofabricacao)}`, { headers: getAuthHeaders() });
+        const json = await res.json();
+        if (json.success) {
+          setTemposProducaoValores({
+            setup: json.data.Setup || 0,
+            padrao: json.data.Padrao || 0,
+            total: json.data.Total || 0
+          });
+        }
+      } catch(err) {
+        console.error(err);
+      }
+    } else {
+        setTemposProducaoValores({ setup: 0, padrao: 0, total: 0 });
+    }
+  };
+
  const [viewModeTags, setViewModeTags] = useState<'detailed' | 'list'>('list');
  const [rncForm, setRncForm] = useState<{idRnc?: number, idTag?: number, tag?: string, estatus?: string, descricao: string, setor: string, usuario: string, tipoTarefa: string, dataExec: string, usuarioFin?: string, dataFin?: string, setorFin?: string, descFin?: string, wantsToFinalize?: boolean}>({ descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false });
  const [planejarProjetistaForm, setPlanejarProjetistaForm] = useState<{ projetistaPlanejado: string, planejadoInicioEngenharia: string, planejadoFinalEngenharia: string }>({ projetistaPlanejado: '', planejadoInicioEngenharia: '', planejadoFinalEngenharia: '' });
@@ -206,7 +297,8 @@ export default function VisaoGeralProducao() {
  const [usuarios, setUsuarios] = useState<Record<string, unknown>[]>([]);
  const [tipostarefa, setTipostarefa] = useState<Record<string, unknown>[]>([]);
  const [dateInput, setDateInput] = useState(''); const [updateTagsCheck, setUpdateTagsCheck] = useState(false);
- const [selTag, setSelTag] = useState<Tag | null>(null); 
+ const [selTag, setSelTag] = useState<Tag | null>(null);
+  const [selOs, setSelOs] = useState<any>(null); 
  const [isSaving, setIsSaving] = useState(false); const [msg, setMsg] = useState<{ ok: boolean, t: string } | null>(null);
  
  // Estado para editar datas de setor da Tag
@@ -986,7 +1078,8 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       title: `Produção por Setor/Recurso (Item #${item.IdOrdemServicoItem} — ${freshItem.DescResumo || item.DescResumo || 'Sem descrição'})`,
       targetType: 'item',
       targetId: item.IdOrdemServicoItem,
-      sectors: activeSectors
+      sectors: activeSectors,
+      isLiberado: item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM'
     });
   };
 
@@ -1873,6 +1966,9 @@ const salvarDatasBulkTags = async () => {
  <div className="flex items-center gap-2 flex-wrap mt-2">
  {isFin && <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded uppercase leading-none border border-emerald-200">Finalizado</span>}
  {isLib && !isFin && <span className="text-[9px] font-bold text-[#32423D] bg-blue-100 px-1.5 py-0.5 rounded uppercase leading-none border border-blue-200">Liberado</span>}
+ <button type="button" onClick={(e) => { e.stopPropagation(); setSelProj(p); setMsg(null); setActionModal('temposProducaoProj'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-blue-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Exibir Produção em Minutos">
+ <Clock size={10} className="pointer-events-none" /> T.Prod
+ </button>
  </div>
  </td>
  <td className="px-3 py-3 align-middle text-center border-r border-slate-100">
@@ -2335,6 +2431,13 @@ const salvarDatasBulkTags = async () => {
                     title="Alterar Qtde Liberada"
                   >
                     <Edit3 size={11} /> Qtde Lib.
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); setSelTag(t); setMsg(null); setActionModal('temposProducao'); }}
+                    className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Exibir Produção em Minutos"
+                  >
+                    <Clock size={11} /> Tempo Prod.
                   </button>
                   {!t.Finalizado && (
                     <button 
@@ -2861,6 +2964,7 @@ const salvarDatasBulkTags = async () => {
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center">Peças Exec.</th>
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center">Tot. Peças</th>
                         <th className="px-2 py-1.5 border-b border-slate-300 text-center w-24">Status</th>
+             <th className="px-2 py-1.5 border-b border-slate-300 text-center w-28">Opções</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 bg-white">
@@ -2903,6 +3007,15 @@ const salvarDatasBulkTags = async () => {
                                 {os.OrdemServicoFinalizado === 'C' ? 'Finalizada' : 'Aberta'}
                               </span>
                             </td>
+                            <td className="px-2 py-2 text-center border-r border-slate-100">
+                               <button 
+                                 onClick={(e) => { e.stopPropagation(); setSelOs(os); setMsg(null); setActionModal('temposProducaoOs'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }}
+                                 className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[8.5px] font-bold flex items-center justify-center gap-1 transition-colors w-full"
+                                 title="Exibir Produção em Minutos"
+                               >
+                                 <Clock size={10} /> Tempo Prod.
+                               </button>
+                            </td>
                           </tr>
                           {/* ROW EXPANSIVEL DE SETORES DA OS */}
                           {expandedOsSectors[os.IdOrdemServico] && (() => {
@@ -2910,7 +3023,7 @@ const salvarDatasBulkTags = async () => {
 
                             return (
                               <tr>
-                                <td colSpan={11} className="p-0 border-b border-slate-200">
+                                <td colSpan={12} className="p-0 border-b border-slate-200">
                                   <div className="p-3 bg-[#eaf4f0] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
                                     <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#32423D]/20">
                                       <h6 className="text-[11px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
@@ -2962,7 +3075,7 @@ const salvarDatasBulkTags = async () => {
                           {/* ROW EXPANSIVEL DE ITENS DA OS */}
                           {expandedOsItems[os.IdOrdemServico] && (
                             <tr>
-                              <td colSpan={11} className="p-0 border-b border-slate-200">
+                              <td colSpan={12} className="p-0 border-b border-slate-200">
                                 <div className="px-0 py-3 bg-[#f0f4f8] shadow-inner border-y border-[#dbeafe]">
                                   <h5 className="text-[11px] font-extrabold text-sky-900 mb-2 flex items-center gap-2 px-3 tracking-wide">
                                     <List size={12} className="text-[#3b82f6]" /> Itens da OS: {os.IdOrdemServico}
@@ -3047,7 +3160,7 @@ const salvarDatasBulkTags = async () => {
 
                                               return (
                                                 <tr>
-                                                  <td colSpan={14} className="p-0 border-b border-slate-200">
+                                                  <td colSpan={15} className="p-0 border-b border-slate-200">
                                                     <div className="p-2.5 bg-[#f0f7f4] border-y border-[#32423D]/20 shadow-inner animate-in fade-in duration-150">
                                                       <div className="flex items-center justify-between mb-1.5 pb-1 border-b border-[#32423D]/20">
                                                         <h6 className="text-[10px] font-black text-slate-800 flex items-center gap-1.5 uppercase tracking-wide">
@@ -3136,7 +3249,7 @@ const salvarDatasBulkTags = async () => {
                       ))}
                       {expandedTagsOs[t.IdTag].length === 0 && (
                         <tr>
-                          <td colSpan={11} className="px-3 py-4 text-center text-slate-400 font-medium">Nenhuma Ordem de Serviço encontrada para esta Tag.</td>
+                          <td colSpan={12} className="px-3 py-4 text-center text-slate-400 font-medium">Nenhuma Ordem de Serviço encontrada para esta Tag.</td>
                         </tr>
                       )}
                     </tbody>
@@ -3176,6 +3289,220 @@ const salvarDatasBulkTags = async () => {
       }}
     />
   )}
+
+  {actionModal === 'temposProducaoProj' && selProj && (
+    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-200">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <Clock size={16} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Produção em Minutos</h3>
+              <p className="text-[11px] text-slate-500">Visualizar tempos do Projeto {selProj.Projeto}</p>
+            </div>
+          </div>
+          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        
+        <div className="p-5 flex-1 overflow-y-auto">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Processo de Fabricação</label>
+              <select
+                value={temposProducaoSelId}
+                onChange={handleSelectRecursoTemposProj}
+                className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Selecione um recurso...</option>
+                {temposProducaoRecursos.map(r => (
+                  <option key={r.IdProcessoFabricacao} value={r.IdProcessoFabricacao}>
+                    {r.processofabricacao}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {temposProducaoSelId && (
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Setup</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.setup}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Padrão</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.padrao}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-center flex flex-col justify-center">
+                  <div className="text-[10px] font-bold text-blue-600 uppercase mb-1">Total</div>
+                  <div className="text-lg font-bold text-blue-800">{temposProducaoValores.total}</div>
+                  <div className="text-[10px] text-blue-400">min</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setActionModal(null)}
+            className="px-4 py-1.5 border border-slate-300 text-slate-700 rounded text-xs font-bold hover:bg-slate-100 transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {actionModal === 'temposProducaoOs' && selOs && (
+    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-200">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <Clock size={16} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Produção em Minutos</h3>
+              <p className="text-[11px] text-slate-500">Visualizar tempos da OS {selOs.IdOrdemServico}</p>
+            </div>
+          </div>
+          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        
+        <div className="p-5 flex-1 overflow-y-auto">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Processo de Fabricação</label>
+              <select
+                value={temposProducaoSelId}
+                onChange={handleSelectRecursoTemposOs}
+                className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Selecione um recurso...</option>
+                {temposProducaoRecursos.map(r => (
+                  <option key={r.IdProcessoFabricacao} value={r.IdProcessoFabricacao}>
+                    {r.processofabricacao}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {temposProducaoSelId && (
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Setup</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.setup}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Padrão</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.padrao}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-center flex flex-col justify-center">
+                  <div className="text-[10px] font-bold text-blue-600 uppercase mb-1">Total</div>
+                  <div className="text-lg font-bold text-blue-800">{temposProducaoValores.total}</div>
+                  <div className="text-[10px] text-blue-400">min</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setActionModal(null)}
+            className="px-4 py-1.5 border border-slate-300 text-slate-700 rounded text-xs font-bold hover:bg-slate-100 transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
+  {actionModal === 'temposProducao' && selTag && (
+    <div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col border border-slate-200">
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+              <Clock size={16} />
+            </div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-sm">Produção em Minutos</h3>
+              <p className="text-[11px] text-slate-500">Visualizar tempos da OS {selTag.Tag}</p>
+            </div>
+          </div>
+          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        
+        <div className="p-5 flex-1 overflow-y-auto">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-600 mb-1">Processo de Fabricação</label>
+              <select
+                value={temposProducaoSelId}
+                onChange={handleSelectRecursoTempos}
+                className="w-full border border-slate-300 rounded px-3 py-2 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+              >
+                <option value="">Selecione um recurso...</option>
+                {temposProducaoRecursos.map(r => (
+                  <option key={r.IdProcessoFabricacao} value={r.IdProcessoFabricacao}>
+                    {r.processofabricacao}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            {temposProducaoSelId && (
+              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100">
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Setup</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.setup}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-slate-50 border border-slate-200 rounded p-3 text-center">
+                  <div className="text-[10px] font-bold text-slate-500 uppercase mb-1">Padrão</div>
+                  <div className="text-lg font-bold text-slate-800">{temposProducaoValores.padrao}</div>
+                  <div className="text-[10px] text-slate-400">min</div>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-3 text-center flex flex-col justify-center">
+                  <div className="text-[10px] font-bold text-blue-600 uppercase mb-1">Total</div>
+                  <div className="text-lg font-bold text-blue-800">{temposProducaoValores.total}</div>
+                  <div className="text-[10px] text-blue-400">min</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={() => setActionModal(null)}
+            className="px-4 py-1.5 border border-slate-300 text-slate-700 rounded text-xs font-bold hover:bg-slate-100 transition-colors"
+          >
+            Fechar
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+
   </div>
   );
 }
