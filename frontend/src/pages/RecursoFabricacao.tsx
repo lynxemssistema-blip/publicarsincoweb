@@ -514,8 +514,8 @@ export default function RecursoFabricacaoPage() {
                               type="text" 
                               name="processofabricacao" 
                               value={editFormData.processofabricacao || ''} 
-                              className="w-full px-1.5 py-1 rounded border border-transparent bg-transparent font-medium text-[#32423D] text-[11px] uppercase outline-none cursor-default" 
-                              disabled
+                              onChange={handleInputInline}
+                              className="w-full px-1.5 py-1 rounded border border-gray-300 font-medium text-[#32423D] text-[11px] uppercase focus:border-[#32423D] outline-none" 
                             />
                           </td>
                           <td className="px-2 py-1 hidden md:table-cell">
