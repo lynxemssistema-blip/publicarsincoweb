@@ -168,7 +168,7 @@ const SECTOR_RESOURCE_FIELDS = [
   { field: 'txtPintura', key: 'Pintura', label: 'Pintura', order: 4 },
   { field: 'TxtMontagem', key: 'Montagem', label: 'Montagem', order: 5 },
   { field: 'txtCorteaLaser', key: 'CorteaLaser', label: 'Corte a Laser', order: 6 },
-  { field: 'txtPULSIONADEIRA', key: 'Pulsionadeira', label: 'Pulsionadeira', order: 7 },
+  { field: 'txtPUNSIONADEIRA', key: 'Punsionadeira', label: 'Punsionadeira', order: 7 },
   { field: 'txtGALVANIZAR', key: 'Galvanizar', label: 'Galvanizar', order: 8 }
 ];
 
@@ -181,7 +181,7 @@ const getSectorDiasProducao = (obj: any, sectorKey: string): number => {
     const kLower = k.toLowerCase();
     if (kLower.endsWith('diasproducao')) {
       const prefix = kLower.replace('diasproducao', '');
-      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+      if (prefix === target || (target === 'punsionadeira' && prefix === 'punsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
         const val = parseFloat(String(obj[k]));
         if (!isNaN(val) && val > 0) return val;
       }
@@ -209,21 +209,21 @@ const getSectorPlanningDatesInOS = (obj: any, sectorKey: string) => {
     
     if (!pi && kLower.startsWith('planejadoinicio')) {
       const rest = kLower.replace('planejadoinicio', '');
-      if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+      if (rest === target || (target === 'punsionadeira' && rest === 'punsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
         if (obj[k]) pi = String(obj[k]);
       }
     }
 
     if (!pf && kLower.startsWith('planejadofinal')) {
       const rest = kLower.replace('planejadofinal', '');
-      if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+      if (rest === target || (target === 'punsionadeira' && rest === 'punsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
         if (obj[k]) pf = String(obj[k]);
       }
     }
 
     if (kLower.endsWith('minprod')) {
       const prefix = kLower.replace('minprod', '');
-      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+      if (prefix === target || (target === 'punsionadeira' && prefix === 'punsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
         const val = parseInt(String(obj[k]), 10) || 0;
         if (val > 0) minProd = val;
       }
@@ -425,7 +425,7 @@ function OrdemServicoContent() {
         pintura:      'Pintura',
         montagem:     'Montagem',
         cortealasar:  'CorteaLaser',
-        pulsionadeira:'Pulsionadeira',
+        punsionadeira:'Punsionadeira',
         galvanizar:   'Galvanizar',
     };
 
@@ -433,7 +433,7 @@ function OrdemServicoContent() {
     const mapProcessNameToKey = (name: string): { key: string; label: string } => {
         const norm = (name || '').trim().toUpperCase().replace(/\s+/g, '');
         if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return { key: 'cortealasar', label: name };
-        if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA'))                      return { key: 'pulsionadeira', label: name };
+        if (norm.includes('PUNSIONADEIRA') || norm.includes('PUNCIONADEIRA'))                      return { key: 'punsionadeira', label: name };
         if (norm.includes('GALVANIZAR'))   return { key: 'galvanizar',   label: name };
         if (norm.includes('ENGENHARIA'))   return { key: 'engenharia',   label: name };
         if (norm.includes('CORTE'))        return { key: 'corte',        label: name };
@@ -582,7 +582,7 @@ function OrdemServicoContent() {
             const txtFields: Record<string, string> = {
                 corte: 'txtCorte', dobra: 'txtDobra', solda: 'txtSolda', pintura: 'txtPintura',
                 montagem: 'TxtMontagem', cortealasar: 'txtCorteaLaser',
-                pulsionadeira: 'txtPULSIONADEIRA', galvanizar: 'txtGALVANIZAR',
+                punsionadeira: 'txtPUNSIONADEIRA', galvanizar: 'txtGALVANIZAR',
                 engenharia: 'txtEngenharia',
             };
             const txtKey = txtFields[secKey];
@@ -683,8 +683,8 @@ function OrdemServicoContent() {
                         mappedKey = 'pintura';
                     } else if (desc.includes('montagem') || desc.includes('montar')) {
                         mappedKey = 'montagem';
-                    } else if (desc.includes('pulsionadeira') || desc.includes('punçao') || desc.includes('punção')) {
-                        mappedKey = 'pulsionadeira';
+                    } else if (desc.includes('punsionadeira') || desc.includes('punçao') || desc.includes('punção')) {
+                        mappedKey = 'punsionadeira';
                     } else if (desc.includes('galvanizar') || desc.includes('galvanização')) {
                         mappedKey = 'galvanizar';
                     } else if (desc.includes('engenharia') || desc.includes('projeto')) {
@@ -1990,7 +1990,7 @@ function OrdemServicoContent() {
             { key: 'pintura',      txtField: 'txtPintura',      label: 'Pintura',      labelShort: 'Pint.',   percentField: 'PinturaPercentual',      planInicioOS: 'PlanejadoInicioPintura',      planFimOS: 'PlanejadoFinalPintura',      realInicioOS: 'RealizadoInicioPintura',      realFimOS: 'RealizadoFinalPintura'      },
             { key: 'montagem',     txtField: 'TxtMontagem',     label: 'Montagem',     labelShort: 'Mont.',   percentField: 'MontagemPercentual',     planInicioOS: 'PlanejadoInicioMontagem',     planFimOS: 'PlanejadoFinalMontagem',     realInicioOS: 'RealizadoInicioMontagem',     realFimOS: 'RealizadoFinalMontagem'     },
             { key: 'cortealasar',  txtField: 'txtCorteaLaser',  label: 'Corte Laser',  labelShort: 'Laser',   percentField: 'CorteaLaserPercentual',  planInicioOS: 'PlanejadoInicioCorteaLaser',  planFimOS: 'PlanejadoFinalCorteaLaser',  realInicioOS: 'RealizadoInicioCorteaLaser',  realFimOS: 'RealizadoFinalCorteaLaser'  },
-            { key: 'pulsionadeira',txtField: 'txtPULSIONADEIRA',label: 'Pulsionadeira',labelShort: 'Pulsi.',  percentField: 'PULSIONADEIRAPercentual',planInicioOS: 'PlanejadoInicioPULSIONADEIRA',planFimOS: 'PlanejadoFinalPULSIONADEIRA',realInicioOS: 'RealizadoInicioPULSIONADEIRA',realFimOS: 'RealizadoFinalPULSIONADEIRA'},
+            { key: 'punsionadeira',txtField: 'txtPUNSIONADEIRA',label: 'Punsionadeira',labelShort: 'Pulsi.',  percentField: 'PUNSIONADEIRAPercentual',planInicioOS: 'PlanejadoInicioPUNSIONADEIRA',planFimOS: 'PlanejadoFinalPUNSIONADEIRA',realInicioOS: 'RealizadoInicioPUNSIONADEIRA',realFimOS: 'RealizadoFinalPUNSIONADEIRA'},
             { key: 'galvanizar',   txtField: 'txtGALVANIZAR',   label: 'Galvanizar',   labelShort: 'Galv.',   percentField: 'GALVANIZARPercentual',   planInicioOS: 'PlanejadoInicioGALVANIZAR',   planFimOS: 'PlanejadoFinalGALVANIZAR',   realInicioOS: 'RealizadoInicioGALVANIZAR',   realFimOS: 'RealizadoFinalGALVANIZAR'   },
         ];
 
@@ -3481,13 +3481,13 @@ function OrdemServicoContent() {
                         pintura: 'bg-blue-100 text-blue-700 border-blue-200',
                         montagem: 'bg-green-100 text-green-700 border-green-200',
                         cortealasar: 'bg-purple-100 text-purple-700 border-purple-200',
-                        pulsionadeira: 'bg-pink-100 text-pink-700 border-pink-200',
+                        punsionadeira: 'bg-pink-100 text-pink-700 border-pink-200',
                         galvanizar: 'bg-teal-100 text-teal-700 border-teal-200',
                     };
                     const SETOR_LABELS: Record<string, string> = {
                         corte: 'Corte', dobra: 'Dobra', solda: 'Solda', pintura: 'Pintura',
                         montagem: 'Montagem', cortealasar: 'Corte Laser',
-                        pulsionadeira: 'Pulsionadeira', galvanizar: 'Galvanizar',
+                        punsionadeira: 'Punsionadeira', galvanizar: 'Galvanizar',
                     };
 
                     return (

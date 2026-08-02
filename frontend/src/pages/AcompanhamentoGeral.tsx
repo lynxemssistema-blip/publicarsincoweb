@@ -82,7 +82,7 @@ interface TagDetalhe {
 const SETORES = [
  { key: 'Corte', label: 'Corte', icon: Scissors, color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe', solid: '#2563eb' },
  { key: 'CorteaLaser', label: 'Corte a Laser', icon: Scissors, color: '#ec4899', bg: '#fdf2f8', border: '#fbcfe8', solid: '#db2777' },
- { key: 'Pulsionadeira', label: 'Pulsionadeira', icon: Package, color: '#14b8a6', bg: '#f0fdfa', border: '#ccfbf1', solid: '#0d9488' },
+ { key: 'Punsionadeira', label: 'Punsionadeira', icon: Package, color: '#14b8a6', bg: '#f0fdfa', border: '#ccfbf1', solid: '#0d9488' },
  { key: 'Dobra', label: 'Dobra', icon: Wrench, color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe', solid: '#7c3aed' },
  { key: 'Solda', label: 'Solda', icon: Flame, color: '#ef4444', bg: '#fef2f2', border: '#fecaca', solid: '#dc2626' },
  { key: 'Galvanizar', label: 'Galvanizar', icon: Package, color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', solid: '#475569' },
@@ -278,7 +278,7 @@ function GanttChart({ data, mode, setoresVisiveis }: GanttChartProps) {
  let pk = `${s.key}Percentual`;
  let dpk = s.key;
  if (s.key === 'Galvanizar') { tk = 'GALVANIZARTotalExecutar'; ek = 'GALVANIZARTotalExecutado'; pk = 'GALVANIZARPercentual'; dpk = 'GALVANIZAR'; }
- if (s.key === 'Pulsionadeira') { tk = 'PULSIONADEIRATotalExecutar'; ek = 'PULSIONADEIRATotalExecutado'; pk = 'PULSIONADEIRAPercentual'; dpk = 'PULSIONADEIRA'; }
+ if (s.key === 'Punsionadeira') { tk = 'PUNSIONADEIRATotalExecutar'; ek = 'PUNSIONADEIRATotalExecutado'; pk = 'PUNSIONADEIRAPercentual'; dpk = 'PUNSIONADEIRA'; }
 
  const total = Number(mode === 'tag' ? item[tk] : item[`Total${s.key}`]) || 0;
  const exec = Number(mode === 'tag' ? item[ek] : item[`Exec${s.key}`]) || 0;
@@ -498,7 +498,7 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  const totais = useMemo(() => {
  const t: Record<string, [number, number]> = { 
     Corte: [0,0], Dobra: [0,0], Solda: [0,0], Pintura: [0,0], Montagem: [0,0],
-    CorteaLaser: [0,0], Pulsionadeira: [0,0], Galvanizar: [0,0]
+    CorteaLaser: [0,0], Punsionadeira: [0,0], Galvanizar: [0,0]
  };
  tags.forEach(tag => {
  t.Corte[0] += Number(tag.CorteTotalExecutar) || 0;
@@ -514,8 +514,8 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  // Novos setores
  t.CorteaLaser[0] += Number((tag as any).CorteaLaserTotalExecutar) || 0;
  t.CorteaLaser[1] += Number((tag as any).CorteaLaserTotalExecutado) || 0;
- t.Pulsionadeira[0] += Number((tag as any).PULSIONADEIRATotalExecutar) || 0;
- t.Pulsionadeira[1] += Number((tag as any).PULSIONADEIRATotalExecutado) || 0;
+ t.Punsionadeira[0] += Number((tag as any).PUNSIONADEIRATotalExecutar) || 0;
+ t.Punsionadeira[1] += Number((tag as any).PUNSIONADEIRATotalExecutado) || 0;
  t.Galvanizar[0] += Number((tag as any).GALVANIZARTotalExecutar) || 0;
  t.Galvanizar[1] += Number((tag as any).GALVANIZARTotalExecutado) || 0;
  });

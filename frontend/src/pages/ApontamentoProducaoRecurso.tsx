@@ -162,7 +162,7 @@ useEffect(() => {
    const checkPredecessorStatus = (item: any, currentSetor: any) => {
     if (currentSetor === 'mapa' || currentSetor === 'mapaproducao') return { allowed: true };
     
-    const sequence = ['engenharia', 'isometrico', 'medicao', 'corte', 'cortealaser', 'pulsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem', 'aprovacao'];
+    const sequence = ['engenharia', 'isometrico', 'medicao', 'corte', 'cortealaser', 'punsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem', 'aprovacao'];
     const currentIndex = sequence.indexOf(String(currentSetor).toLowerCase());
     
     if (currentIndex <= 0) return { allowed: true };
@@ -210,7 +210,7 @@ useEffect(() => {
 
   // Retorna o primeiro setor ativo na cascata de produção do item
   const getFirstRecurso = (item: any): string => {
-    const cascade = ['corte', 'cortealaser', 'pulsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem'];
+    const cascade = ['corte', 'cortealaser', 'punsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem'];
     for (const s of cascade) {
       let base = s;
       if (s === 'cortealaser') base = 'CorteaLaser';
@@ -246,7 +246,7 @@ useEffect(() => {
     check('TxtMontagem', 'Montagem', 'MontagemSequencia');
     check('txtmontagem', 'Montagem', 'MontagemSequencia');
     check('txtCorteaLaser', 'Corte a Laser', 'CorteaLaserSequencia');
-    check('txtPULSIONADEIRA', 'Pulsionadeira', 'PulsionadeiraSequencia');
+    check('txtPUNSIONADEIRA', 'Punsionadeira', 'PunsionadeiraSequencia');
     check('txtGALVANIZAR', 'Galvanizar', 'GalvanizarSequencia');
     check('txtENGENHARIA', 'Engenharia', 'EngenhariaSequencia');
     
@@ -680,7 +680,7 @@ useEffect(() => {
    const itemAny = itemDetails.item as any;
 
    // Calcula tempoPadrão do setor ativo
-   const PREFIXOS_V = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Pulsionadeira','CorteaLaser','Engenharia'];
+   const PREFIXOS_V = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Punsionadeira','CorteaLaser','Engenharia'];
    let tPadraoV = 0, tSetupV = 0;
    const prefV = secFormatted;
    const candidatesV = [prefV, ...PREFIXOS_V.filter(p => p !== prefV)];
@@ -2214,7 +2214,7 @@ useEffect(() => {
                         { id: 'medicao', field: 'txtMEDICAO', label: 'Medição' },
                         { id: 'corte', field: 'txtCorte', label: 'Corte' },
                         { id: 'cortealaser', field: 'txtCorteaLaser', label: 'Corte a Laser' },
-                        { id: 'pulsionadeira', field: 'txtPULSIONADEIRA', label: 'Pulsionadeira' },
+                        { id: 'punsionadeira', field: 'txtPUNSIONADEIRA', label: 'Punsionadeira' },
                         { id: 'puncionadeira', field: 'txtPUNCIONADEIRA', label: 'Puncionadeira' },
                         { id: 'usinagem', field: 'txtUsinagem', label: 'Usinagem' },
                         { id: 'dobra', field: 'txtDobra', label: 'Dobra' },

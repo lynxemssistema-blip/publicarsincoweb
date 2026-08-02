@@ -148,7 +148,7 @@ export default function ApontamentoProducaoPage() {
    const checkPredecessorStatus = (item: any, currentSetor: any) => {
     if (currentSetor === 'mapa' || currentSetor === 'mapaproducao') return { allowed: true };
     
-    const sequence = ['engenharia', 'isometrico', 'medicao', 'corte', 'cortealaser', 'pulsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem', 'aprovacao'];
+    const sequence = ['engenharia', 'isometrico', 'medicao', 'corte', 'cortealaser', 'punsionadeira', 'puncionadeira', 'usinagem', 'dobra', 'caldeiraria', 'serralheria', 'solda', 'galvanizar', 'pintura', 'acabamento', 'montagem', 'aprovacao'];
     const currentIndex = sequence.indexOf(String(currentSetor).toLowerCase());
     
     if (currentIndex <= 0) return { allowed: true };

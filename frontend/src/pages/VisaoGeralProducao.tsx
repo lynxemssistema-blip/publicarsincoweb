@@ -10,7 +10,7 @@ import VisaoGeralTagsGlobais from './VisaoGeralTagsGlobais';
 const SECTOR_RESOURCE_FIELDS = [
   { field: 'txtCorte', key: 'Corte', label: 'Corte', color: 'bg-emerald-100 text-emerald-800 border-emerald-300', order: 1 },
   { field: 'txtCorteaLaser', key: 'Laser', label: 'Corte a Laser', color: 'bg-rose-100 text-rose-800 border-rose-300', order: 2 },
-  { field: 'txtPULSIONADEIRA', key: 'Pulsionadeira', label: 'Pulsionadeira', color: 'bg-pink-100 text-pink-800 border-pink-300', order: 3 },
+  { field: 'txtPUNSIONADEIRA', key: 'Punsionadeira', label: 'Punsionadeira', color: 'bg-pink-100 text-pink-800 border-pink-300', order: 3 },
   { field: 'txtDobra', key: 'Dobra', label: 'Dobra', color: 'bg-blue-100 text-blue-800 border-blue-300', order: 4 },
   { field: 'txtSolda', key: 'Solda', label: 'Solda', color: 'bg-amber-100 text-amber-800 border-amber-300', order: 5 },
   { field: 'txtPintura', key: 'Pintura', label: 'Pintura', color: 'bg-purple-100 text-purple-800 border-purple-300', order: 6 },
@@ -21,7 +21,7 @@ const SECTOR_RESOURCE_FIELDS = [
 const ALL_TAG_SECTORS = [
   { key: 'Corte', label: 'Corte', flagField: 'txtCorte', piField: 'PlanejadoInicioCorte', pfField: 'PlanejadoFinalCorte' },
   { key: 'Laser', label: 'Corte a Laser', flagField: 'txtCorteaLaser', piField: 'PlanejadoInicioCorteaLaser', pfField: 'PlanejadoFinalCorteaLaser' },
-  { key: 'Pulsionadeira', label: 'Pulsionadeira', flagField: 'txtPULSIONADEIRA', piField: 'PlanejadoInicioPULSIONADEIRA', pfField: 'PlanejadoFinalPULSIONADEIRA' },
+  { key: 'Punsionadeira', label: 'Punsionadeira', flagField: 'txtPUNSIONADEIRA', piField: 'PlanejadoInicioPUNSIONADEIRA', pfField: 'PlanejadoFinalPUNSIONADEIRA' },
   { key: 'Dobra', label: 'Dobra', flagField: 'txtDobra', piField: 'PlanejadoInicioDobra', pfField: 'PlanejadoFinalDobra' },
   { key: 'Solda', label: 'Solda', flagField: 'txtSolda', piField: 'PlanejadoInicioSolda', pfField: 'PlanejadoFinalSolda' },
   { key: 'Pintura', label: 'Pintura', flagField: 'txtPintura', piField: 'PlanejadoInicioPintura', pfField: 'PlanejadoFinalPintura' },
@@ -45,7 +45,7 @@ const getSavedEntitySectorDates = (entity: any, sectorKey: string) => {
   if (!entity) return { pi: '', pf: '' };
   const keyMap: Record<string, string> = {
     'Corte': 'Corte',
-    'Pulsionadeira': 'PULSIONADEIRA',
+    'Punsionadeira': 'PUNSIONADEIRA',
     'Galvanizar': 'GALVANIZAR',
     'Laser': 'CorteaLaser',
     'Dobra': 'Dobra',
@@ -119,7 +119,7 @@ const SECTORS = [
  { k: 'Solda', ex: 'ExecSolda', t: 'TotalSolda', c: 'bg-red-600' }, { k: 'Pintura', ex: 'ExecPintura', t: 'TotalPintura', c: 'bg-amber-500' },
  { k: 'Montagem', ex: 'ExecMontagem', t: 'TotalMontagem', c: 'bg-emerald-600' },
  { k: 'CorteaLaser', ex: 'ExecCorteaLaser', t: 'TotalCorteaLaser', c: 'bg-purple-600' },
- { k: 'Pulsionadeira', ex: 'ExecPULSIONADEIRA', t: 'TotalPULSIONADEIRA', c: 'bg-pink-600' },
+ { k: 'Punsionadeira', ex: 'ExecPUNSIONADEIRA', t: 'TotalPUNSIONADEIRA', c: 'bg-pink-600' },
  { k: 'Galvanizar', ex: 'ExecGALVANIZAR', t: 'TotalGALVANIZAR', c: 'bg-cyan-600' },
 ];
 
@@ -136,8 +136,8 @@ const TAG_SECTORS = [
  fields: { pi: 'PlanejadoInicioMontagem', pf: 'PlanejadoFinalMontagem', ri: 'RealizadoInicioMontagem', rf: 'RealizadoFinalMontagem' } },
  { k: 'CorteaLaser', ex: 'CorteaLaserTotalExecutado', t: 'CorteaLaserTotalExecutar', p: 'CorteaLaserPercentual', c: 'bg-purple-500',
  fields: { pi: 'PlanejadoInicioCorteaLaser', pf: 'PlanejadoFinalCorteaLaser', ri: 'RealizadoInicioCorteaLaser', rf: 'RealizadoFinalCorteaLaser' } },
- { k: 'Pulsionadeira', ex: 'PULSIONADEIRATotalExecutado', t: 'PULSIONADEIRATotalExecutar', p: 'PULSIONADEIRAPercentual', c: 'bg-pink-500',
- fields: { pi: 'PlanejadoInicioPULSIONADEIRA', pf: 'PlanejadoFinalPULSIONADEIRA', ri: 'RealizadoInicioPULSIONADEIRA', rf: 'RealizadoFinalPULSIONADEIRA' } },
+ { k: 'Punsionadeira', ex: 'PUNSIONADEIRATotalExecutado', t: 'PUNSIONADEIRATotalExecutar', p: 'PUNSIONADEIRAPercentual', c: 'bg-pink-500',
+ fields: { pi: 'PlanejadoInicioPUNSIONADEIRA', pf: 'PlanejadoFinalPUNSIONADEIRA', ri: 'RealizadoInicioPUNSIONADEIRA', rf: 'RealizadoFinalPUNSIONADEIRA' } },
  { k: 'Galvanizar', ex: 'GALVANIZARTotalExecutado', t: 'GALVANIZARTotalExecutar', p: 'GALVANIZARPercentual', c: 'bg-cyan-500',
  fields: { pi: 'PlanejadoInicioGALVANIZAR', pf: 'PlanejadoFinalGALVANIZAR', ri: 'RealizadoInicioGALVANIZAR', rf: 'RealizadoFinalGALVANIZAR' } },
 ];
@@ -724,7 +724,7 @@ export default function VisaoGeralProducao() {
     const kLower = k.toLowerCase();
     if (kLower.endsWith('diasproducao')) {
       const prefix = kLower.replace('diasproducao', '');
-      if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+      if (prefix === target || (target === 'punsionadeira' && prefix === 'punsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
         const val = parseFloat(String(obj[k]));
         if (!isNaN(val) && val > 0) return val;
       }
@@ -752,21 +752,21 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       
       if (!pi && kLower.startsWith('planejadoinicio')) {
         const rest = kLower.replace('planejadoinicio', '');
-        if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+        if (rest === target || (target === 'punsionadeira' && rest === 'punsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
           if (obj[k]) pi = String(obj[k]);
         }
       }
 
       if (!pf && kLower.startsWith('planejadofinal')) {
         const rest = kLower.replace('planejadofinal', '');
-        if (rest === target || (target === 'pulsionadeira' && rest === 'pulsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
+        if (rest === target || (target === 'punsionadeira' && rest === 'punsionadeira') || (target === 'galvanizar' && rest === 'galvanizar') || (target === 'cortealaser' && (rest === 'cortealaser' || rest === 'laser'))) {
           if (obj[k]) pf = String(obj[k]);
         }
       }
 
       if (kLower.endsWith('minprod')) {
         const prefix = kLower.replace('minprod', '');
-        if (prefix === target || (target === 'pulsionadeira' && prefix === 'pulsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
+        if (prefix === target || (target === 'punsionadeira' && prefix === 'punsionadeira') || (target === 'galvanizar' && prefix === 'galvanizar') || (target === 'cortealaser' && (prefix === 'cortealaser' || prefix === 'laser'))) {
           const val = parseInt(String(obj[k]), 10) || 0;
           if (val > 0) minProd = val;
         }
@@ -803,8 +803,8 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
         return isTrue(obj.TxtMontagem) || isTrue(obj.txtMontagem) || isTrue(obj.txtMONTAGEM) || isTrue(obj.flagMontagem) || toNum({val: obj.MontagemTotalExecutado}) > 0 || toNum({val: obj.MontagemTotalExecutar}) > 0;
       case 'CorteaLaser':
         return isTrue(obj.txtCorteaLaser) || isTrue(obj.txtCORTEALASER) || isTrue(obj.flagCorteaLaser) || toNum({val: obj.CorteaLaserTotalExecutado}) > 0 || toNum({val: obj.CorteaLaserTotalExecutar}) > 0;
-      case 'Pulsionadeira':
-        return isTrue(obj.txtPULSIONADEIRA) || isTrue(obj.txtPulsionadeira) || isTrue(obj.flagPulsionadeira) || toNum({val: obj.PULSIONADEIRATotalExecutado}) > 0 || toNum({val: obj.PulsionadeiraTotalExecutado}) > 0 || toNum({val: obj.PULSIONADEIRATotalExecutar}) > 0 || toNum({val: obj.PulsionadeiraTotalExecutar}) > 0;
+      case 'Punsionadeira':
+        return isTrue(obj.txtPUNSIONADEIRA) || isTrue(obj.txtPunsionadeira) || isTrue(obj.flagPunsionadeira) || toNum({val: obj.PUNSIONADEIRATotalExecutado}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutado}) > 0 || toNum({val: obj.PUNSIONADEIRATotalExecutar}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutar}) > 0;
       case 'Galvanizar':
         return isTrue(obj.txtGALVANIZAR) || isTrue(obj.txtGalvanizar) || isTrue(obj.flagGalvanizar) || toNum({val: obj.GALVANIZARTotalExecutado}) > 0 || toNum({val: obj.GalvanizarTotalExecutado}) > 0 || toNum({val: obj.GALVANIZARTotalExecutar}) > 0 || toNum({val: obj.GalvanizarTotalExecutar}) > 0;
       default:
@@ -823,7 +823,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       { key: 'Pintura', label: 'Pintura', rawExec: item.PinturaTotalExecutado, rawAExec: item.PinturaTotalExecutar },
       { key: 'Montagem', label: 'Montagem', rawExec: item.MontagemTotalExecutado, rawAExec: item.MontagemTotalExecutar },
       { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: item.CorteaLaserTotalExecutado, rawAExec: item.CorteaLaserTotalExecutar },
-      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: item.PULSIONADEIRATotalExecutado ?? item.PulsionadeiraTotalExecutado, rawAExec: item.PULSIONADEIRATotalExecutar ?? item.PulsionadeiraTotalExecutar },
+      { key: 'Punsionadeira', label: 'Punsionadeira', rawExec: item.PUNSIONADEIRATotalExecutado ?? item.PunsionadeiraTotalExecutado, rawAExec: item.PUNSIONADEIRATotalExecutar ?? item.PunsionadeiraTotalExecutar },
       { key: 'Galvanizar', label: 'Galvanizar', rawExec: item.GALVANIZARTotalExecutado ?? item.GalvanizarTotalExecutado, rawAExec: item.GALVANIZARTotalExecutar ?? item.GalvanizarTotalExecutar },
     ];
 
@@ -861,7 +861,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       { key: 'Pintura', label: 'Pintura' },
       { key: 'Montagem', label: 'Montagem' },
       { key: 'CorteaLaser', label: 'Corte a Laser' },
-      { key: 'Pulsionadeira', label: 'Pulsionadeira' },
+      { key: 'Punsionadeira', label: 'Punsionadeira' },
       { key: 'Galvanizar', label: 'Galvanizar' },
     ];
 
@@ -900,7 +900,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       { key: 'Pintura', label: 'Pintura', rawExec: t.PinturaTotalExecutado, rawAExec: t.PinturaTotalExecutar },
       { key: 'Montagem', label: 'Montagem', rawExec: t.MontagemTotalExecutado, rawAExec: t.MontagemTotalExecutar },
       { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: t.CorteaLaserTotalExecutado, rawAExec: t.CorteaLaserTotalExecutar },
-      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: t.PULSIONADEIRATotalExecutado ?? t.PulsionadeiraTotalExecutado, rawAExec: t.PULSIONADEIRATotalExecutar ?? t.PulsionadeiraTotalExecutar },
+      { key: 'Punsionadeira', label: 'Punsionadeira', rawExec: t.PUNSIONADEIRATotalExecutado ?? t.PunsionadeiraTotalExecutado, rawAExec: t.PUNSIONADEIRATotalExecutar ?? t.PunsionadeiraTotalExecutar },
       { key: 'Galvanizar', label: 'Galvanizar', rawExec: t.GALVANIZARTotalExecutado ?? t.GalvanizarTotalExecutado, rawAExec: t.GALVANIZARTotalExecutar ?? t.GalvanizarTotalExecutar },
     ];
 
@@ -946,7 +946,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       { key: 'Pintura', label: 'Pintura', rawExec: os.PinturaTotalExecutado, rawAExec: os.PinturaTotalExecutar },
       { key: 'Montagem', label: 'Montagem', rawExec: os.MontagemTotalExecutado, rawAExec: os.MontagemTotalExecutar },
       { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: os.CorteaLaserTotalExecutado, rawAExec: os.CorteaLaserTotalExecutar },
-      { key: 'Pulsionadeira', label: 'Pulsionadeira', rawExec: os.PULSIONADEIRATotalExecutado ?? os.PulsionadeiraTotalExecutado, rawAExec: os.PULSIONADEIRATotalExecutar ?? os.PulsionadeiraTotalExecutar },
+      { key: 'Punsionadeira', label: 'Punsionadeira', rawExec: os.PUNSIONADEIRATotalExecutado ?? os.PunsionadeiraTotalExecutado, rawAExec: os.PUNSIONADEIRATotalExecutar ?? os.PunsionadeiraTotalExecutar },
       { key: 'Galvanizar', label: 'Galvanizar', rawExec: os.GALVANIZARTotalExecutado ?? os.GalvanizarTotalExecutado, rawAExec: os.GALVANIZARTotalExecutar ?? os.GalvanizarTotalExecutar },
     ];
 
@@ -1361,7 +1361,7 @@ const salvarDatasBulkTags = async () => {
       const keyToFields: Record<string, { pi: string; pf: string }> = {
         'Corte': { pi: 'PlanejadoInicioCorte', pf: 'PlanejadoFinalCorte' },
         'Laser': { pi: 'PlanejadoInicioCorteaLaser', pf: 'PlanejadoFinalCorteaLaser' },
-        'Pulsionadeira': { pi: 'PlanejadoInicioPulsionadeira', pf: 'PlanejadoFinalPulsionadeira' },
+        'Punsionadeira': { pi: 'PlanejadoInicioPunsionadeira', pf: 'PlanejadoFinalPunsionadeira' },
         'Dobra': { pi: 'PlanejadoInicioDobra', pf: 'PlanejadoFinalDobra' },
         'Solda': { pi: 'PlanejadoInicioSolda', pf: 'PlanejadoFinalSolda' },
         'Pintura': { pi: 'PlanejadoInicioPintura', pf: 'PlanejadoFinalPintura' },
@@ -1443,9 +1443,9 @@ const salvarDatasBulkTags = async () => {
           updates.push({ field: item.piField, value: item.startDateBr });
           (selTagObj as any)[item.piField] = item.startDateBr;
           // Add camelCase alias if uppercase
-          if (item.piField === 'PlanejadoInicioPULSIONADEIRA') {
-            updates.push({ field: 'PlanejadoInicioPulsionadeira', value: item.startDateBr });
-            (selTagObj as any)['PlanejadoInicioPulsionadeira'] = item.startDateBr;
+          if (item.piField === 'PlanejadoInicioPUNSIONADEIRA') {
+            updates.push({ field: 'PlanejadoInicioPunsionadeira', value: item.startDateBr });
+            (selTagObj as any)['PlanejadoInicioPunsionadeira'] = item.startDateBr;
           }
           if (item.piField === 'PlanejadoInicioGALVANIZAR') {
             updates.push({ field: 'PlanejadoInicioGalvanizar', value: item.startDateBr });
@@ -1455,9 +1455,9 @@ const salvarDatasBulkTags = async () => {
         if (item.pfField && item.endDateBr) {
           updates.push({ field: item.pfField, value: item.endDateBr });
           (selTagObj as any)[item.pfField] = item.endDateBr;
-          if (item.pfField === 'PlanejadoFinalPULSIONADEIRA') {
-            updates.push({ field: 'PlanejadoFinalPulsionadeira', value: item.endDateBr });
-            (selTagObj as any)['PlanejadoFinalPulsionadeira'] = item.endDateBr;
+          if (item.pfField === 'PlanejadoFinalPUNSIONADEIRA') {
+            updates.push({ field: 'PlanejadoFinalPunsionadeira', value: item.endDateBr });
+            (selTagObj as any)['PlanejadoFinalPunsionadeira'] = item.endDateBr;
           }
           if (item.pfField === 'PlanejadoFinalGALVANIZAR') {
             updates.push({ field: 'PlanejadoFinalGalvanizar', value: item.endDateBr });
@@ -2688,8 +2688,8 @@ const salvarDatasBulkTags = async () => {
                         if (item.piField && item.startDateBr) {
                           updates.push({ field: item.piField, value: item.startDateBr });
                           (t as any)[item.piField] = item.startDateBr;
-                          if (item.piField === 'PlanejadoInicioPULSIONADEIRA') {
-                            updates.push({ field: 'PlanejadoInicioPulsionadeira', value: item.startDateBr });
+                          if (item.piField === 'PlanejadoInicioPUNSIONADEIRA') {
+                            updates.push({ field: 'PlanejadoInicioPunsionadeira', value: item.startDateBr });
                           }
                           if (item.piField === 'PlanejadoInicioGALVANIZAR') {
                             updates.push({ field: 'PlanejadoInicioGalvanizar', value: item.startDateBr });
@@ -2698,8 +2698,8 @@ const salvarDatasBulkTags = async () => {
                         if (item.pfField && item.endDateBr) {
                           updates.push({ field: item.pfField, value: item.endDateBr });
                           (t as any)[item.pfField] = item.endDateBr;
-                          if (item.pfField === 'PlanejadoFinalPULSIONADEIRA') {
-                            updates.push({ field: 'PlanejadoFinalPulsionadeira', value: item.endDateBr });
+                          if (item.pfField === 'PlanejadoFinalPUNSIONADEIRA') {
+                            updates.push({ field: 'PlanejadoFinalPunsionadeira', value: item.endDateBr });
                           }
                           if (item.pfField === 'PlanejadoFinalGALVANIZAR') {
                             updates.push({ field: 'PlanejadoFinalGalvanizar', value: item.endDateBr });

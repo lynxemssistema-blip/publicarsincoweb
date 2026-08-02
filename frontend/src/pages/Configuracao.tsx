@@ -55,7 +55,7 @@ export default function ConfiguracaoPage() {
     pintura: 500,
     montagem: 500,
     cortealaser: 500,
-    pulsionadeira: 500,
+    punsionadeira: 500,
     galvanizar: 500
   };
   const [limitesSetores, setLimitesSetores] = useState<Record<string, number>>(DEFAULT_SECTOR_LIMITS);
@@ -818,7 +818,7 @@ export default function ConfiguracaoPage() {
         { key: 'pintura', label: 'Pintura', color: 'bg-purple-50 text-purple-700 border-purple-200' },
         { key: 'montagem', label: 'Montagem', color: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
         { key: 'cortealaser', label: 'Corte a Laser', color: 'bg-rose-50 text-rose-700 border-rose-200' },
-        { key: 'pulsionadeira', label: 'Pulsionadeira', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+        { key: 'punsionadeira', label: 'Punsionadeira', color: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
         { key: 'galvanizar', label: 'Galvanizar', color: 'bg-teal-50 text-teal-700 border-teal-200' },
       ].map(sec => {
         const minVal = limitesSetores[sec.key] ?? 500;

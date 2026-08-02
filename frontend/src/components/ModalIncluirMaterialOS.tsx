@@ -25,8 +25,8 @@ function mapProcessToKey(name: string): { key: string, label: string } {
   if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) {
     return { key: 'CorteaLaser', label: 'Corte a Laser' };
   }
-  if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) {
-    return { key: 'Pulsionadeira', label: 'Pulsionadeira' };
+  if (norm.includes('PUNSIONADEIRA') || norm.includes('PUNCIONADEIRA')) {
+    return { key: 'Punsionadeira', label: 'Punsionadeira' };
   }
   if (norm.includes('GALVANIZAR')) {
     return { key: 'Galvanizar', label: 'Galvanizar' };
