@@ -11420,10 +11420,7 @@ app.get('/api/health', tenantMiddleware, (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// Root Redirect
-app.get('/', (req, res) => {
-    res.redirect('/landing.html');
-});
+// Removed Root Redirect to landing.html to allow frontend index.html to be served
 
 // Test DB
 app.get('/test-db', async (req, res) => {
