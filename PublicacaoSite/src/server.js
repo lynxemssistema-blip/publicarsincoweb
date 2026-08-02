@@ -160,6 +160,7 @@ app.use((req, res, next) => {
 });
 
 // Apply Tenant Middleware to all API routes
+
 app.use('/api', tenantMiddleware);
 
 // Admin Routes
@@ -177,7 +178,7 @@ app.use('/api/config/veiculo', tiposTransporteRoutes);
 app.get('/api/reposicao/itens', tenantMiddleware, async (req, res) => {
     try {
         const query = `
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
                 CodMatFabricante, DescResumo, DescDetal, Espessura, 
                 MaterialSW, EnderecoArquivo, EnderecoArquivoItemOrdemServico,
                 CriadoPor, DataCriacao, QtdeTotal, SetorReposicao, 
@@ -246,7 +247,7 @@ app.post('/api/reposicao/apontamento', tenantMiddleware, async (req, res) => {
 
         // 1. Validar e capturar o Item
         const [items] = await connection.query(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
                    sttxtCorte, IdOrdemservicoReposicao, IdOrdemServicoItemReposicao, IdPendenciaReposicao
             FROM ordemservicoitem 
             WHERE IdOrdemServicoItem = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*') FOR UPDATE
@@ -4895,13 +4896,13 @@ app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
                 (SELECT MIN(osi.RealizadoInicioCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioCorteaLaser, 
                 (SELECT MAX(osi.RealizadoFinalCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalCorteaLaser,
 
-                /* -- Setor Pulsionadeira -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS TotalPulsionadeira,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS ExecPulsionadeira,
-                (SELECT MIN(osi.PlanejadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPulsionadeira, 
-                (SELECT MAX(osi.PlanejadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPulsionadeira,
-                (SELECT MIN(osi.RealizadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPulsionadeira, 
-                (SELECT MAX(osi.RealizadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPulsionadeira,
+                /* -- Setor Punsionadeira -- */
+                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPUNSIONADEIRA = '1') AS TotalPunsionadeira,
+                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPUNSIONADEIRA = '1') AS ExecPunsionadeira,
+                (SELECT MIN(osi.PlanejadoInicioPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPunsionadeira, 
+                (SELECT MAX(osi.PlanejadoFinalPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPunsionadeira,
+                (SELECT MIN(osi.RealizadoInicioPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPunsionadeira, 
+                (SELECT MAX(osi.RealizadoFinalPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPunsionadeira,
 
                 /* -- Setor Galvanizar -- */
                 (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtGALVANIZAR = '1') AS TotalGalvanizar,
@@ -4918,7 +4919,7 @@ app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
                 (SELECT MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPintura,
                 (SELECT MAX(CASE WHEN osi.TxtMontagem = '1' OR osi.TxtMontagem = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagMontagem,
                 (SELECT MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorteaLaser,
-                (SELECT MAX(CASE WHEN osi.txtPULSIONADEIRA = '1' OR osi.txtPULSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPulsionadeira,
+                (SELECT MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPunsionadeira,
                 (SELECT MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagGalvanizar
 
             FROM projetos p
@@ -4948,7 +4949,7 @@ app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
             PctPintura: pctSetor(Number(r.ExecPintura), Number(r.TotalPintura)),
             PctMontagem: pctSetor(Number(r.ExecMontagem), Number(r.TotalMontagem)),
             PctCorteaLaser: pctSetor(Number(r.ExecCorteaLaser), Number(r.TotalCorteaLaser)),
-            PctPulsionadeira: pctSetor(Number(r.ExecPulsionadeira), Number(r.TotalPulsionadeira)),
+            PctPunsionadeira: pctSetor(Number(r.ExecPunsionadeira), Number(r.TotalPunsionadeira)),
             PctGalvanizar: pctSetor(Number(r.ExecGalvanizar), Number(r.TotalGalvanizar)),
         }));
 
@@ -4988,7 +4989,7 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 tags.PlanejadoInicioPintura as TagPlanejadoInicioPintura, tags.PlanejadoFinalPintura as TagPlanejadoFinalPintura,
                 tags.PlanejadoInicioMontagem as TagPlanejadoInicioMontagem, tags.PlanejadoFinalMontagem as TagPlanejadoFinalMontagem,
                 tags.PlanejadoInicioCorteaLaser as TagPlanejadoInicioCorteaLaser, tags.PlanejadoFinalCorteaLaser as TagPlanejadoFinalCorteaLaser,
-                tags.PlanejadoInicioPULSIONADEIRA as TagPlanejadoInicioPULSIONADEIRA, tags.PlanejadoFinalPULSIONADEIRA as TagPlanejadoFinalPULSIONADEIRA,
+                tags.PlanejadoInicioPUNSIONADEIRA as TagPlanejadoInicioPUNSIONADEIRA, tags.PlanejadoFinalPUNSIONADEIRA as TagPlanejadoFinalPUNSIONADEIRA,
                 tags.PlanejadoInicioGALVANIZAR as TagPlanejadoInicioGALVANIZAR, tags.PlanejadoFinalGALVANIZAR as TagPlanejadoFinalGALVANIZAR,
                 (SELECT COALESCE(SUM(os.QtdeTotalItens), 0) FROM ordemservico os WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as QtdeTotalPecas,
                 qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
@@ -4998,7 +4999,7 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                   (SELECT MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPintura,
                   (SELECT MAX(CASE WHEN osi.txtMontagem = '1' OR osi.txtMontagem = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagMontagem,
                   (SELECT MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorteaLaser,
-                  (SELECT MAX(CASE WHEN osi.txtPULSIONADEIRA = '1' OR osi.txtPULSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPulsionadeira,
+                  (SELECT MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPunsionadeira,
                   (SELECT MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagGalvanizar,
                 ${observacaoExpr},
                 (SELECT MIN(osi.PlanejadoInicioCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioCorte,
@@ -5049,14 +5050,14 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS CorteaLaserTotalExecutar,
                 (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorteaLaser = '1') AS SumQtdeCorteaLaser,
                 CorteaLaserPercentual,
-                (SELECT MIN(osi.PlanejadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPULSIONADEIRA,
-                (SELECT MAX(osi.PlanejadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPULSIONADEIRA,
-                (SELECT MIN(osi.RealizadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPULSIONADEIRA,
-                (SELECT MAX(osi.RealizadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPULSIONADEIRA,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PULSIONADEIRATotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PULSIONADEIRATotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS SumQtdePulsionadeira,
-                PULSIONADEIRAPercentual,
+                (SELECT MIN(osi.PlanejadoInicioPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPUNSIONADEIRA,
+                (SELECT MAX(osi.PlanejadoFinalPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPUNSIONADEIRA,
+                (SELECT MIN(osi.RealizadoInicioPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPUNSIONADEIRA,
+                (SELECT MAX(osi.RealizadoFinalPUNSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPUNSIONADEIRA,
+                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PUNSIONADEIRATotalExecutado,
+                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PUNSIONADEIRATotalExecutar,
+                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPUNSIONADEIRA = '1') AS SumQtdePunsionadeira,
+                PUNSIONADEIRAPercentual,
                 (SELECT MIN(osi.PlanejadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioGALVANIZAR,
                 (SELECT MAX(osi.PlanejadoFinalGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalGALVANIZAR,
                 (SELECT MIN(osi.RealizadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioGALVANIZAR,
@@ -5905,7 +5906,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', tenantMiddleware, async (req, 
             'PlanejadoInicioPintura',       'PlanejadoFinalPintura',
             'PlanejadoInicioMontagem',      'PlanejadoFinalMontagem',
             'PlanejadoInicioCorteaLaser',   'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioGALVANIZAR',    'PlanejadoFinalGALVANIZAR',
         ];
 
@@ -5922,7 +5923,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', tenantMiddleware, async (req, 
                   "Pintura": "txtPintura",
                   "Montagem": "TxtMontagem",
                   "CorteaLaser": "txtCorteaLaser",
-                  "PULSIONADEIRA": "txtPULSIONADEIRA", "GALVANIZAR": "txtGALVANIZAR", "Pulsionadeira": "txtPULSIONADEIRA", "Galvanizar": "txtGALVANIZAR"
+                  "PUNSIONADEIRA": "txtPUNSIONADEIRA", "GALVANIZAR": "txtGALVANIZAR", "Punsionadeira": "txtPUNSIONADEIRA", "Galvanizar": "txtGALVANIZAR"
         };
         const sectorName = Object.keys(sectorFlagMap).find(k => field.includes(k));
         const txtFlag = sectorName ? sectorFlagMap[sectorName] : null;
@@ -5964,10 +5965,10 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', tenantMiddleware, asyn
             "Pintura": "txtPintura",
             "Montagem": "TxtMontagem",
             "CorteaLaser": "txtCorteaLaser",
-            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "PUNSIONADEIRA": "txtPUNSIONADEIRA",
             "GALVANIZAR": "txtGALVANIZAR",
             "Laser": "txtCorteaLaser",
-            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Punsionadeira": "txtPUNSIONADEIRA",
             "Galvanizar": "txtGALVANIZAR"
         };
 
@@ -5990,7 +5991,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', tenantMiddleware, asyn
             const txtFlag = sectorFlagMap[sectorName];
             if (!txtFlag) continue;
 
-            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Punsionadeira' ? 'PUNSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
 
             const piField = `PlanejadoInicio${nameKey}`;
             const pfField = `PlanejadoFinal${nameKey}`;
@@ -6099,10 +6100,10 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (re
             "Pintura": "txtPintura",
             "Montagem": "TxtMontagem",
             "CorteaLaser": "txtCorteaLaser",
-            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "PUNSIONADEIRA": "txtPUNSIONADEIRA",
             "GALVANIZAR": "txtGALVANIZAR",
             "Laser": "txtCorteaLaser",
-            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Punsionadeira": "txtPUNSIONADEIRA",
             "Galvanizar": "txtGALVANIZAR"
         };
 
@@ -6121,7 +6122,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (re
             const txtFlag = sectorFlagMap[sectorName];
             if (!txtFlag) continue;
 
-            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Punsionadeira' ? 'PUNSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
 
             const piField = `PlanejadoInicio${nameKey}`;
             const pfField = `PlanejadoFinal${nameKey}`;
@@ -7204,7 +7205,7 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 os.PlanejadoInicioMontagem, os.PlanejadoFinalMontagem, os.RealizadoInicioMontagem, os.RealizadoFinalMontagem,
                 os.PlanejadoInicioENGENHARIA, os.PlanejadoFinalENGENHARIA, os.RealizadoInicioENGENHARIA, os.RealizadoFinalENGENHARIA,
                 os.PlanejadoInicioACABAMENTO, os.PlanejadoFinalACABAMENTO, os.RealizadoInicioACABAMENTO, os.RealizadoFinalACABAMENTO,
-                os.PlanejadoInicioPULSIONADEIRA, os.PlanejadoFinalPULSIONADEIRA, os.RealizadoInicioPULSIONADEIRA, os.RealizadoFinalPULSIONADEIRA,
+                os.PlanejadoInicioPUNSIONADEIRA, os.PlanejadoFinalPUNSIONADEIRA, os.RealizadoInicioPUNSIONADEIRA, os.RealizadoFinalPUNSIONADEIRA,
                 os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR, os.RealizadoInicioGALVANIZAR, os.RealizadoFinalGALVANIZAR,
                 os.PlanejadoInicioCorteaLaser, os.PlanejadoFinalCorteaLaser, os.RealizadoInicioCorteaLaser, os.RealizadoFinalCorteaLaser,
                 os.EnderecoOrdemServico, os.NumeroOPOmie, os.Fator
@@ -8555,8 +8556,8 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', tenantMiddleware, async (req
         const allowedFields = [
             'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
             'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
             'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
@@ -8569,9 +8570,9 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', tenantMiddleware, async (req
 
         const dateColsProj = [
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
             'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar'
         ];
 
@@ -8632,8 +8633,8 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', tenantMiddleware, async (r
         const allowedFields = [
             'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
             'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
             'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
@@ -8702,10 +8703,10 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req,
                 os.MontagemTotalExecutar, os.MontagemTotalExecutado,
                 os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
                 os.PlanejadoInicioCorte, os.PlanejadoFinalCorte,
-                os.PlanejadoInicioPULSIONADEIRA, os.PlanejadoFinalPULSIONADEIRA,
+                os.PlanejadoInicioPUNSIONADEIRA, os.PlanejadoFinalPUNSIONADEIRA,
                 os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR,
                 
-                os.PulsionadeiraTotalExecutar, os.PulsionadeiraTotalExecutado,
+                os.PunsionadeiraTotalExecutar, os.PunsionadeiraTotalExecutado,
                 os.GalvanizarTotalExecutar, os.GalvanizarTotalExecutado
             FROM ordemservico os
             LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
@@ -8759,14 +8760,14 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (
                 PinturaTotalExecutar, PinturaTotalExecutado,
                 MontagemTotalExecutar, MontagemTotalExecutado,
                 CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
-                PulsionadeiraTotalExecutar, PulsionadeiraTotalExecutado,
+                PunsionadeiraTotalExecutar, PunsionadeiraTotalExecutado,
                 PlanejadoInicioCorte, PlanejadoFinalCorte,
                 PlanejadoInicioDobra, PlanejadoFinalDobra,
                 PlanejadoInicioSolda, PlanejadoFinalSolda,
                 PlanejadoInicioPintura, PlanejadoFinalPintura,
                 PlanejadoInicioMontagem, PlanejadoFinalMontagem,
                 PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser,
-                PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA,
+                PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA,
                 PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR,
                 
                 GalvanizarTotalExecutar, GalvanizarTotalExecutado
@@ -8795,7 +8796,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (
 app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
                 QtdeTotal, Peso, AreaPintura, Acabamento, Unidade,
                 Espessura, Altura, Largura,
                 CodMatFabricante, MaterialSW, EnderecoArquivo,
@@ -8808,7 +8809,7 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                 txtPintura, sttxtPintura, PinturaPercentual,
                 TxtMontagem, sttxtMontagem, MontagemPercentual,
                 txtCorteaLaser, CorteaLaserPercentual,
-                txtPULSIONADEIRA, PULSIONADEIRAPercentual,
+                txtPUNSIONADEIRA, PUNSIONADEIRAPercentual,
                 txtGALVANIZAR, GALVANIZARPercentual,
                 Liberado_Engenharia,
                 -- Tempos de produção globais
@@ -8820,10 +8821,10 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                 PinturaTempoSetup, PinturaTempoPadrao, PinturaTotalTempo,
                 MontagemTempoSetup, MontagemTempoPadrao, MontagemTotalTempo,
                 CorteaLaserTempoSetup, CorteaLaserTempoPadrao, CorteaLaserTotalTempo,
-                PulsionadeiraTempoSetup, PulsionadeiraTempoPadrao, PulsionadeiraTotalTempo,
+                PunsionadeiraTempoSetup, PunsionadeiraTempoPadrao, PunsionadeiraTotalTempo,
                 GalvanizarTempoSetup, GalvanizarTempoPadrao, GalvanizarTotalTempo,
                 CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia,
-                MontagemSequencia, CorteaLaserSequencia, PulsionadeiraSequencia,
+                MontagemSequencia, CorteaLaserSequencia, PunsionadeiraSequencia,
                 GalvanizarSequencia, EngenhariaSequencia
             FROM ordemservicoitem 
             WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
@@ -9113,12 +9114,12 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             }
         }
 
-        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Punsionadeira', 'Galvanizar', 'Engenharia'];
 
         function getSectorKey(procName) {
             const norm = (procName || '').trim().toUpperCase().replace(/\s+/g, '');
             if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return 'CorteaLaser';
-            if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Pulsionadeira';
+            if (norm.includes('PUNSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Punsionadeira';
             if (norm.includes('GALVANIZAR')) return 'Galvanizar';
             if (norm.includes('ENGENHARIA')) return 'Engenharia';
             if (norm.includes('CORTE')) return 'Corte';
@@ -9292,7 +9293,7 @@ const setorColumns = {
     pintura:       { txt: 'txtPintura',       percentual: 'PinturaPercentual',       status: 'sttxtPintura',       total: 'PinturaTotalExecutado',       executar: 'PinturaTotalExecutar',       inicio: 'RealizadoInicioPintura',       final: 'RealizadoFinalPintura',       userInicio: 'UsuarioRealizadoInicioPintura',       userFinal: 'UsuarioRealizadoFinalPintura'       },
     montagem:      { txt: 'TxtMontagem',      percentual: 'MontagemPercentual',      status: 'sttxtMontagem',      total: 'MontagemTotalExecutado',      executar: 'MontagemTotalExecutar',      inicio: 'RealizadoInicioMontagem',      final: 'RealizadoFinalMontagem',      userInicio: 'UsuarioRealizadoInicioMontagem',      userFinal: 'UsuarioRealizadoFinalMontagem'      },
     galvanizar:    { txt: 'txtGALVANIZAR',    percentual: 'GALVANIZARPercentual',    status: 'sttxtGALVANIZAR',    total: 'GALVANIZARTotalExecutado',    executar: 'GALVANIZARTotalExecutar',    inicio: 'RealizadoInicioGALVANIZAR',    final: 'RealizadoFinalGALVANIZAR',    userInicio: 'UsuarioRealizadoInicioGALVANIZAR',    userFinal: 'UsuarioRealizadoFinalGALVANIZAR'    },
-    pulsionadeira: { txt: 'txtPULSIONADEIRA', percentual: 'PULSIONADEIRAPercentual', status: 'sttxtPULSIONADEIRA', total: 'PULSIONADEIRATotalExecutado', executar: 'PULSIONADEIRATotalExecutar', inicio: 'RealizadoInicioPULSIONADEIRA', final: 'RealizadoFinalPULSIONADEIRA', userInicio: 'UsuarioRealizadoInicioPULSIONADEIRA', userFinal: 'UsuarioRealizadoFinalPULSIONADEIRA' },
+    punsionadeira: { txt: 'txtPUNSIONADEIRA', percentual: 'PUNSIONADEIRAPercentual', status: 'sttxtPUNSIONADEIRA', total: 'PUNSIONADEIRATotalExecutado', executar: 'PUNSIONADEIRATotalExecutar', inicio: 'RealizadoInicioPUNSIONADEIRA', final: 'RealizadoFinalPUNSIONADEIRA', userInicio: 'UsuarioRealizadoInicioPUNSIONADEIRA', userFinal: 'UsuarioRealizadoFinalPUNSIONADEIRA' },
     mapa:          { txt: 'txtCorte',         percentual: 'CortePercentual',         status: 'sttxtCorte',         total: 'CorteTotalExecutado',         executar: 'CorteTotalExecutar',         inicio: 'RealizadoInicioCorte',         final: 'RealizadoFinalCorte',         userInicio: 'UsuarioRealizadoInicioCorte',         userFinal: 'UsuarioRealizadoFinalCorte'         }
 };
 
@@ -9321,7 +9322,7 @@ async function atualizarMinProdCascata(conn, idItem, processoKey, inputQty, oper
         else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
         else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
         else if (rawName.toLowerCase() === 'galvanizar') recName = 'Galvanizar';
-        else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'Pulsionadeira';
+        else if (rawName.toLowerCase() === 'punsionadeira') recName = 'Punsionadeira';
         else if (rawName.toLowerCase() === 'cortealaser') recName = 'CorteaLaser';
 
         const minProdCol = `${recName}MinProd`;
@@ -9600,7 +9601,7 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
                 osi.txtPintura,
                 osi.TxtMontagem,
                 osi.CorteSequencia, osi.DobraSequencia, osi.SoldaSequencia, osi.PinturaSequencia, osi.MontagemSequencia, 
-                osi.txtCorteaLaser, osi.CorteaLaserSequencia, osi.txtPULSIONADEIRA, osi.PulsionadeiraSequencia, 
+                osi.txtCorteaLaser, osi.CorteaLaserSequencia, osi.txtPUNSIONADEIRA, osi.PunsionadeiraSequencia, 
                 osi.txtGALVANIZAR, osi.GalvanizarSequencia, osi.txtENGENHARIA, osi.EngenhariaSequencia,
 
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.CorteTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as CortePercentual,
@@ -9927,8 +9928,8 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
                 osi.MontagemSequencia,
                 osi.txtCorteaLaser,
                 osi.CorteaLaserSequencia,
-                osi.txtPULSIONADEIRA,
-                osi.PulsionadeiraSequencia,
+                osi.txtPUNSIONADEIRA,
+                osi.PunsionadeiraSequencia,
                 osi.txtGALVANIZAR,
                 osi.GalvanizarSequencia,
                 osi.txtENGENHARIA,
@@ -9940,10 +9941,10 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
                 osi.PinturaTotalExecutado,
                 osi.MontagemTotalExecutado,
                 osi.GALVANIZARTotalExecutado, osi.GALVANIZARTotalExecutar,
-                osi.PULSIONADEIRATotalExecutado, osi.PULSIONADEIRATotalExecutar,
+                osi.PUNSIONADEIRATotalExecutado, osi.PUNSIONADEIRATotalExecutar,
                 osi.CorteaLaserTotalExecutado, osi.CorteaLaserTotalExecutar,
                 osi.CorteMinProd, osi.DobraMinProd, osi.SoldaMinProd, osi.PinturaMinProd, osi.MontagemMinProd,
-                osi.CorteaLaserMinProd, osi.PULSIONADEIRAMinProd, osi.GALVANIZARMinProd,
+                osi.CorteaLaserMinProd, osi.PUNSIONADEIRAMinProd, osi.GALVANIZARMinProd,
                 osi.ProdutoPrincipal as IsProdutoPrincipal,
                 osi.TempoSetup, osi.TempoPadrao, osi.TotalTempo,
                 osi.CorteTempoSetup, osi.CorteTempoPadrao, osi.CorteTotalTempo,
@@ -9952,7 +9953,7 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
                 osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
                 osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
                 osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
-                osi.PulsionadeiraTempoSetup, osi.PulsionadeiraTempoPadrao, osi.PulsionadeiraTotalTempo,
+                osi.PunsionadeiraTempoSetup, osi.PunsionadeiraTempoPadrao, osi.PunsionadeiraTotalTempo,
                 osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
                 osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo
             FROM ordemservicoitem osi
@@ -10171,11 +10172,11 @@ SELECT
     osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
     osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
     osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
-    osi.PulsionadeiraTempoSetup, osi.PulsionadeiraTempoPadrao, osi.PulsionadeiraTotalTempo,
+    osi.PunsionadeiraTempoSetup, osi.PunsionadeiraTempoPadrao, osi.PunsionadeiraTotalTempo,
     osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
     osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo,
     osi.CorteMinProd, osi.DobraMinProd, osi.SoldaMinProd, osi.PinturaMinProd, osi.MontagemMinProd,
-    osi.CorteaLaserMinProd, osi.PULSIONADEIRAMinProd, osi.GALVANIZARMinProd,
+    osi.CorteaLaserMinProd, osi.PUNSIONADEIRAMinProd, osi.GALVANIZARMinProd,
     osi.GALVANIZARTotalExecutado, osi.GALVANIZARTotalExecutar,
     osi.${setorConfig.percentual} as PercentualSetor,
     osi.${setorConfig.total} as TotalExecutado,
@@ -10342,7 +10343,7 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
                 else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
                 else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
-                else if (rawName.toLowerCase() === 'pulsionadeira') { recName = 'PULSIONADEIRA'; diasName = 'Pulsionadeira'; }
+                else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
                 else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                 const colPi = `PlanejadoInicio${recName}`;
@@ -10391,7 +10392,7 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                     else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
                     else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
                     else if (rawName.toLowerCase() === 'galvanizar') recName = 'GALVANIZAR';
-                    else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'PULSIONADEIRA';
+                    else if (rawName.toLowerCase() === 'punsionadeira') recName = 'PUNSIONADEIRA';
                     else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') recName = 'CorteaLaser';
 
                     const colPi = `PlanejadoInicio${recName}`;
@@ -10510,7 +10511,7 @@ async function cascatearSaldoProximoRecurso(conn, item, sName, quantidadeAAdicio
         { id: 'pintura',       txtField: 'txtPintura',       seqField: 'PinturaSequencia',       executarField: 'PinturaTotalExecutar' },
         { id: 'montagem',      txtField: 'TxtMontagem',      seqField: 'MontagemSequencia',      executarField: 'MontagemTotalExecutar' },
         { id: 'cortealaser',   txtField: 'txtCorteaLaser',   seqField: 'CorteaLaserSequencia',   executarField: 'CorteaLaserTotalExecutar' },
-        { id: 'pulsionadeira', txtField: 'txtPULSIONADEIRA', seqField: 'PulsionadeiraSequencia', executarField: 'PULSIONADEIRATotalExecutar' },
+        { id: 'punsionadeira', txtField: 'txtPUNSIONADEIRA', seqField: 'PunsionadeiraSequencia', executarField: 'PUNSIONADEIRATotalExecutar' },
         { id: 'galvanizar',    txtField: 'txtGALVANIZAR',    seqField: 'GalvanizarSequencia',    executarField: 'GALVANIZARTotalExecutar' },
         { id: 'engenharia',    txtField: 'txtENGENHARIA',    seqField: 'EngenhariaSequencia',    executarField: 'ENGENHARIATotalExecutar' },
         { id: 'usinagem',      txtField: 'txtUsinagem',      seqField: 'UsinagemSequencia',      executarField: 'UsinagemTotalExecutar' },
@@ -10778,7 +10779,7 @@ app.post('/api/apontamento', tenantMiddleware, async (req, res) => {
             try {
                 const [quickRows] = await req.tenantDbPool.execute(
                     `SELECT GalvanizarTempoPadrao, GalvanizarTempoSetup,
-                            PulsionadeiraTempoPadrao, PulsionadeiraTempoSetup,
+                            PunsionadeiraTempoPadrao, PunsionadeiraTempoSetup,
                             CorteaLaserTempoPadrao, CorteaLaserTempoSetup,
                             CorteTempoPadrao, CorteTempoSetup,
                             DobraTempoPadrao, DobraTempoSetup,
@@ -10794,7 +10795,7 @@ app.post('/api/apontamento', tenantMiddleware, async (req, res) => {
                     const qi = quickRows[0];
                     const cap = setorParaValidar.charAt(0).toUpperCase() + setorParaValidar.slice(1);
                     // Mapa de nome especial para prefixo da coluna
-                    const PREFIXO_MAP = { galvanizar: 'Galvanizar', pulsionadeira: 'Pulsionadeira', cortealaser: 'CorteaLaser' };
+                    const PREFIXO_MAP = { galvanizar: 'Galvanizar', punsionadeira: 'Punsionadeira', cortealaser: 'CorteaLaser' };
                     const pref = PREFIXO_MAP[setorParaValidar] || cap;
                     const tPadrao = parseFloat(qi[`${pref}TempoPadrao`] || qi.TempoPadrao) || 0;
                     const tSetup  = parseFloat(qi[`${pref}TempoSetup`]  || qi.TempoSetup)  || 0;
@@ -10842,8 +10843,8 @@ app.post('/api/apontamento', tenantMiddleware, async (req, res) => {
         const now = getCurrentDateTimeBR();
         const dateSQL = getCurrentDateSQL(); // YYYY-MM-DD for DATE-type columns
         // Helper: date format depends on column type in DB
-        // galvanizar and pulsionadeira have DATE columns for Realizado* fields
-        const DATE_SETOR_KEYS = new Set(['galvanizar', 'pulsionadeira', 'cortealaser']);
+        // galvanizar and punsionadeira have DATE columns for Realizado* fields
+        const DATE_SETOR_KEYS = new Set(['galvanizar', 'punsionadeira', 'cortealaser']);
         const getDateForSetor = (sName) => DATE_SETOR_KEYS.has(sName) ? dateSQL : now;
 
         // 1. Fetch item and details
@@ -10866,7 +10867,7 @@ osi.*,
 
         const MAPA_SEQUENCE_SAFE = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
         const setoresParaProcessar = isMapaEspecial
-            // MAPA especial: recurso não-padrão (galvanizar, pulsionadeira etc.) - apontar só este setor
+            // MAPA especial: recurso não-padrão (galvanizar, punsionadeira etc.) - apontar só este setor
             ? [recursoOrigem]
             : isMapa
                 // MAPA padrão: somente os 5 setores seguros que têm colunas em OS/Tags/Projetos, filtrados por txt=1
@@ -11005,7 +11006,7 @@ osi.*,
             // Atualizar MinProd acumulado do recurso
             let minProdCol = `${sName.charAt(0).toUpperCase() + sName.slice(1)}MinProd`;
             if (sName === 'galvanizar') minProdCol = 'GALVANIZARMinProd';
-            else if (sName === 'pulsionadeira') minProdCol = 'PULSIONADEIRAMinProd';
+            else if (sName === 'punsionadeira') minProdCol = 'PUNSIONADEIRAMinProd';
             else if (sName === 'cortealaser') minProdCol = 'CorteaLaserMinProd';
 
             const minProdAtualDb = parseFloat(item[minProdCol]) || 0;
@@ -11121,7 +11122,7 @@ osi.*,
             // 7. Log de apontamento
             // A tabela ordemservicoitemcontrole só tem colunas txt para setores padrão:
             // txtCorte, txtDobra, txtSolda, txtPintura, txtMontagem, txtAlmoxarifado, txtMEDICAO, txtISOMETRICO, txtENGENHARIA, txtACABAMENTO, txtAPROVACAO
-            // Setores especiais (galvanizar, pulsionadeira, cortealaser) NÃO têm coluna txt — inserimos sem ela.
+            // Setores especiais (galvanizar, punsionadeira, cortealaser) NÃO têm coluna txt — inserimos sem ela.
             const CONTROLE_TXT_COLS = new Set([
                 'txtCorte', 'txtDobra', 'txtSolda', 'txtPintura', 'txtMontagem',
                 'txtAlmoxarifado', 'txtMEDICAO', 'txtISOMETRICO', 'txtENGENHARIA',
@@ -11137,7 +11138,7 @@ osi.*,
                     ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
                 `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
             } else {
-                // Setor especial (galvanizar, pulsionadeira, etc.): não há coluna txt — registra sem ela
+                // Setor especial (galvanizar, punsionadeira, etc.): não há coluna txt — registra sem ela
                 await conn.execute(`
                     INSERT INTO ordemservicoitemcontrole(
                         IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
@@ -11164,7 +11165,7 @@ osi.*,
                         [item.IdTag, item.Tag, item.IdProjeto, item.Projeto, dateNow, CriadoPor || 'Sistema', dateNow]);
                 }
             }
-            // Setores especiais (galvanizar, pulsionadeira, cortealaser etc.) não têm colunas em tagcontrole — log omitido
+            // Setores especiais (galvanizar, punsionadeira, cortealaser etc.) não têm colunas em tagcontrole — log omitido
 
             // 8.5 Incrementar saldo do próximo setor (Fluxo Push)
             if (currentInputQty > 0 && (TipoApontamento !== 'Parcial')) {
@@ -13915,7 +13916,7 @@ const SETOR_PREFIXO_MAP = {
     pintura:      'Pintura',
     montagem:     'Montagem',
     cortealasar:  'CorteaLaser',
-    pulsionadeira:'Pulsionadeira',
+    punsionadeira:'Punsionadeira',
     galvanizar:   'Galvanizar',
     engenharia:   'Engenharia',
 };
@@ -13938,7 +13939,7 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
         const qtde = parseFloat(QtdeTotal) || 0;
 
         // Buscar as sequencias atuais do item para descobrir o maior valor
-        const [rowItemSeq] = await dbPool.execute(`SELECT CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia, MontagemSequencia, CorteaLaserSequencia, PulsionadeiraSequencia, GalvanizarSequencia, EngenhariaSequencia FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`, [id]);
+        const [rowItemSeq] = await dbPool.execute(`SELECT CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia, MontagemSequencia, CorteaLaserSequencia, PunsionadeiraSequencia, GalvanizarSequencia, EngenhariaSequencia FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`, [id]);
         let maxSeq = 0;
         if (rowItemSeq.length > 0) {
             const itemSeqs = rowItemSeq[0];
@@ -14005,7 +14006,7 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
             pintura:       'txtPintura',
             montagem:      'TxtMontagem',
             cortealasar:   'txtCorteaLaser',
-            pulsionadeira: 'txtPULSIONADEIRA',
+            punsionadeira: 'txtPUNSIONADEIRA',
             galvanizar:    'txtGALVANIZAR',
             engenharia:    'txtEngenharia',
         };
@@ -15003,7 +15004,7 @@ app.post('/api/producao-plano-corte/itens/:id/lancar-producao', tenantMiddleware
 
         // 1. Busca dados do item
         const [[item]] = await connection.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
                     CorteTotalExecutado, CorteTotalExecutar, sttxtcorte,
                     txtDobra, txtSolda, txtPintura, txtMontagem, 
                     RealizadoInicioCorte, COALESCE(QtdeReposicao, 0) AS QtdeReposicao
@@ -15314,7 +15315,7 @@ app.post('/api/plano-corte/:id/liberar', tenantMiddleware, async (req, res) => {
 
         // Busca todos itens da OS
         const [itens] = await connection.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
              FROM ordemservicoitem 
              WHERE idplanodecorte = ? AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')`,
             [id]
@@ -16028,7 +16029,7 @@ app.post('/api/plano-corte/:id/atualizar-arquivos', tenantMiddleware, async (req
 
         // 2. Buscar itens do plano (equivalente ao DGVItensPLanodeCorte)
         const [itens] = await connection.execute(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
             FROM ordemservicoitem
             WHERE idplanodecorte = ?
               AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')
@@ -16153,7 +16154,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 const exCols = cRows.map(r => r.Field.toLowerCase());
                 
                 const timeCols = ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo'];
-                const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+                const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Punsionadeira', 'Galvanizar', 'Engenharia'];
                 for (const sec of sectorsList) {
                     timeCols.push(`${sec}TempoSetup`, `${sec}TotalSetup`, `${sec}TempoPadrao`, `${sec}TotalPadrao`, `${sec}TotalTempo`, `${sec}DiasProducao`);
                 }
@@ -16231,12 +16232,12 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 CorteaLaserTotalTempo = (SELECT COALESCE(SUM(oi.CorteaLaserTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(oi.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(oi.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
 
-                PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PunsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PunsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
 
                 GalvanizarTempoSetup = (SELECT COALESCE(SUM(oi.GalvanizarTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 GalvanizarTotalSetup = (SELECT COALESCE(SUM(oi.GalvanizarTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
@@ -16256,7 +16257,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
-                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSolda,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtCorteaLaser,'')!='1' AND IFNULL(oi.txtPULSIONADEIRA,'')!='1' AND IFNULL(oi.txtGALVANIZAR,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
+                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSolda,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtCorteaLaser,'')!='1' AND IFNULL(oi.txtPUNSIONADEIRA,'')!='1' AND IFNULL(oi.txtGALVANIZAR,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
                             THEN oi.QtdeTotal
                             ELSE
                                 CASE WHEN LEAST(
@@ -16266,7 +16267,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                                     COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPUNSIONADEIRA, '')='1' THEN oi.PunsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
                                 ) >= 999999999 THEN 0
@@ -16277,7 +16278,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                                     COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
+                                    COALESCE(CASE WHEN IFNULL(oi.txtPUNSIONADEIRA, '')='1' THEN oi.PunsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
                                     COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
                                 )
@@ -16367,12 +16368,12 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(os.CorteaLaserTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteaLaserTotalTempo = (SELECT COALESCE(SUM(os.CorteaLaserTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(os.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(os.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(os.PulsionadeiraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(os.PulsionadeiraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(os.PulsionadeiraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(os.PulsionadeiraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(os.PulsionadeiraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(os.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(os.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(os.PunsionadeiraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(os.PunsionadeiraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(os.PunsionadeiraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(os.PunsionadeiraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(os.PunsionadeiraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(os.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(os.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     GalvanizarTempoSetup = (SELECT COALESCE(SUM(os.GalvanizarTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     GalvanizarTotalSetup = (SELECT COALESCE(SUM(os.GalvanizarTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     GalvanizarTempoPadrao = (SELECT COALESCE(SUM(os.GalvanizarTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
@@ -16463,12 +16464,12 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(t2.CorteaLaserTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     CorteaLaserTotalTempo = (SELECT COALESCE(SUM(t2.CorteaLaserTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(t2.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(t2.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(t2.PulsionadeiraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(t2.PulsionadeiraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(t2.PulsionadeiraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
-                    PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(t2.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(t2.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(t2.PunsionadeiraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(t2.PunsionadeiraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(t2.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(t2.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     GalvanizarTempoSetup = (SELECT COALESCE(SUM(t2.GalvanizarTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     GalvanizarTotalSetup = (SELECT COALESCE(SUM(t2.GalvanizarTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     GalvanizarTempoPadrao = (SELECT COALESCE(SUM(t2.GalvanizarTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
@@ -17242,7 +17243,7 @@ app.get('/api/manutencao/inspecionar-item', tenantMiddleware, async (req, res) =
     if (!id) return res.status(400).json({ success: false, message: 'Parametro id obrigatorio' });
     try {
         const [rows] = await req.tenantDbPool.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
                     EnderecoArquivo, txtTipoDesenho, D_E_L_E_T_E, DescResumo
              FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`,
             [id]
