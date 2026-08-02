@@ -1756,7 +1756,7 @@ const salvarDatasBulkTags = async () => {
  <div className="relative flex items-center w-full">
  <input type="text" placeholder="Buscar projeto..." value={fProj} onChange={e => setFProj(e.target.value)} className="pr-6 bg-transparent border-none outline-none flex-1 font-medium text-xs text-slate-700" />
  {fProj && (
- <button onClick={() => setFProj('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+ <button type="button" onClick={() => setFProj('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
  <X size={14} />
  </button>
  )}
@@ -1766,7 +1766,7 @@ const salvarDatasBulkTags = async () => {
  {/* === FILTRO RADIO: 3 opções mutuamente exclusivas === */}
  <div className="flex bg-slate-100 p-0.5 rounded-md border border-slate-200 shadow-inner">
  {/* 1 - Finalizados */}
- <button
+ <button type="button"
  onClick={() => {
  const next = statusFilter === 'finalizados' ? null : 'finalizados';
  setStatusFilter(next);
@@ -1781,7 +1781,7 @@ const salvarDatasBulkTags = async () => {
  <CheckCircle size={11} /> Finalizados
  </button>
  {/* 2 - Liberados */}
- <button
+ <button type="button"
  onClick={() => {
  const next = statusFilter === 'liberados' ? null : 'liberados';
  setStatusFilter(next);
@@ -1796,7 +1796,7 @@ const salvarDatasBulkTags = async () => {
  <Filter size={11} /> Liberados
  </button>
         {/* Nao Liberados */}
-        <button
+        <button type="button"
           onClick={() => {
             const next = statusFilter === 'nao_liberados' ? null : 'nao_liberados';
             setStatusFilter(next);
@@ -1812,7 +1812,7 @@ const salvarDatasBulkTags = async () => {
         </button>
 
  {/* 3 - Todos */}
- <button
+ <button type="button"
  onClick={() => {
  const next = statusFilter === 'todos' ? null : 'todos';
  setStatusFilter(next);
@@ -1830,20 +1830,20 @@ const salvarDatasBulkTags = async () => {
 
  {/* View Mode */}
  <div className="hidden md:flex bg-slate-100 p-0.5 rounded-lg items-center shadow-inner">
- <button onClick={() => setViewMode('card')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'card' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+ <button type="button" onClick={() => setViewMode('card')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'card' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
  <LayoutGrid size={14} /> Cards
  </button>
- <button onClick={() => setViewMode('list')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+ <button type="button" onClick={() => setViewMode('list')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
  <List size={14} /> Lista
  </button>
- <button onClick={() => setViewMode('tags')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'tags' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+ <button type="button" onClick={() => setViewMode('tags')} className={`px-2 py-0.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 ${viewMode === 'tags' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
  <TagIcon size={14} /> Tags Globais
  </button>
  </div>
- <button onClick={() => fetchProj(statusFilter)} className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#32423D] text-white font-bold text-[10px] hover:bg-[#32423D]/80 transition shadow-sm"><Search size={12} /> Pesquisar</button>
+ <button type="button" onClick={() => fetchProj(statusFilter)} className="flex-1 md:flex-none flex justify-center items-center gap-1.5 px-4 py-1.5 rounded-lg bg-[#32423D] text-white font-bold text-[10px] hover:bg-[#32423D]/80 transition shadow-sm"><Search size={12} /> Pesquisar</button>
  
  {/* Limpar */}
- <button onClick={() => {
+ <button type="button" onClick={() => {
  setStatusFilter(null);
  setFProj('');
  setFProjCriacaoIni(''); setFProjCriacaoFim('');
@@ -1864,7 +1864,7 @@ const salvarDatasBulkTags = async () => {
  <div className="relative flex items-center w-full">
  <input type="date" value={fProjCriacaoIni} onChange={e => setFProjCriacaoIni(e.target.value)} className="pr-6 text-[10px] border border-slate-200 rounded px-2 py-1 outline-none focus:border-[#32423D] w-full md:w-28" />
  {fProjCriacaoIni && (
- <button onClick={() => setFProjCriacaoIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+ <button type="button" onClick={() => setFProjCriacaoIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
  <X size={14} />
  </button>
  )}
@@ -1873,7 +1873,7 @@ const salvarDatasBulkTags = async () => {
  <div className="relative flex items-center w-full">
  <input type="date" value={fProjCriacaoFim} onChange={e => setFProjCriacaoFim(e.target.value)} className="pr-6 text-[10px] border border-slate-200 rounded px-2 py-1 outline-none focus:border-[#32423D] w-full md:w-28" />
  {fProjCriacaoFim && (
- <button onClick={() => setFProjCriacaoFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+ <button type="button" onClick={() => setFProjCriacaoFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
  <X size={14} />
  </button>
  )}
@@ -1890,7 +1890,7 @@ const salvarDatasBulkTags = async () => {
  <div className="relative flex items-center w-full">
  <input type="date" value={fProjPrevIni} onChange={e => setFProjPrevIni(e.target.value)} className="pr-6 text-[10px] border border-slate-200 rounded px-2 py-1 outline-none focus:border-[#32423D] w-full md:w-28" />
  {fProjPrevIni && (
- <button onClick={() => setFProjPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+ <button type="button" onClick={() => setFProjPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
  <X size={14} />
  </button>
  )}
@@ -1899,7 +1899,7 @@ const salvarDatasBulkTags = async () => {
  <div className="relative flex items-center w-full">
  <input type="date" value={fProjPrevFim} onChange={e => setFProjPrevFim(e.target.value)} className="pr-6 text-[10px] border border-slate-200 rounded px-2 py-1 outline-none focus:border-[#32423D] w-full md:w-28" />
  {fProjPrevFim && (
- <button onClick={() => setFProjPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+ <button type="button" onClick={() => setFProjPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
  <X size={14} />
  </button>
  )}
@@ -1916,7 +1916,7 @@ const salvarDatasBulkTags = async () => {
  Visão Geral Produção
  </div>
  <div className="flex items-center gap-2">
- <button onClick={() => setIsExpanded(!isExpanded)} className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors" title={isExpanded ? "Restaurar tamanho" : "Expandir grid"}>
+ <button type="button" onClick={() => setIsExpanded(!isExpanded)} className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors" title={isExpanded ? "Restaurar tamanho" : "Expandir grid"}>
  {isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
  </button>
  </div>
@@ -2026,7 +2026,7 @@ const salvarDatasBulkTags = async () => {
  <div className="flex flex-col gap-0.5 group/edit">
  <div className="flex justify-between items-center w-full">
  <span className="text-[9px] font-bold text-[#32423D] uppercase tracking-wider flex items-center gap-1"><CalendarDays size={10} className="text-[#32423D]"/> Prev.</span>
- <button onClick={() => { setSelProj(p); setDateInput(brToIso(p.DataPrevisao)); setMsg(null); setActionModal('dateProj'); }} className="text-[9px] text-[#32423D] hover:text-[#32423D]/70 font-bold uppercase underline decoration-blue-300 flex items-center gap-0.5" title="Editar Data"><Edit3 size={10}/> Edit</button>
+ <button type="button" onClick={() => { setSelProj(p); setDateInput(brToIso(p.DataPrevisao)); setMsg(null); setActionModal('dateProj'); }} className="text-[9px] text-[#32423D] hover:text-[#32423D]/70 font-bold uppercase underline decoration-blue-300 flex items-center gap-0.5" title="Editar Data"><Edit3 size={10}/> Edit</button>
  </div>
  <span className={`text-[11px] font-bold ${businessDaysUntil(p.DataPrevisao) === -1 ? 'text-red-600' : 'text-slate-800'}`}>
  {p.DataPrevisao || 'Não definida'} {businessDaysUntil(p.DataPrevisao) === -1 && '(Atrasado)'}
@@ -2162,7 +2162,7 @@ const salvarDatasBulkTags = async () => {
  <div className="flex flex-col gap-1 w-full sm:w-auto border-l border-slate-200 pl-6">
  <div className="flex justify-between w-full">
  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1"><CalendarDays size={10} className="text-[#32423D]"/> Entrega Prev.</span>
- <button onClick={() => { setSelProj(p); setDateInput(brToIso(p.DataPrevisao)); setMsg(null); setActionModal('dateProj'); }} className="text-[9px] text-[#32423D] hover:text-[#32423D]/70 font-bold uppercase underline decoration-blue-300 ml-4 flex items-center gap-0.5"><Edit3 size={10}/> Editar</button>
+ <button type="button" onClick={() => { setSelProj(p); setDateInput(brToIso(p.DataPrevisao)); setMsg(null); setActionModal('dateProj'); }} className="text-[9px] text-[#32423D] hover:text-[#32423D]/70 font-bold uppercase underline decoration-blue-300 ml-4 flex items-center gap-0.5"><Edit3 size={10}/> Editar</button>
  </div>
  <span className={`text-xs font-bold ${businessDaysUntil(p.DataPrevisao) === -1 ? 'text-red-600' : 'text-slate-800'}`}>
  {p.DataPrevisao || 'Não definida'} {businessDaysUntil(p.DataPrevisao) === -1 && '(Atrasado)'}
@@ -2202,7 +2202,7 @@ const salvarDatasBulkTags = async () => {
  A janela de histórico e edição da pendência está aberta automaticamente. Quando finalizar sua consulta, feche o modal da pendência e clique no botão abaixo para retornar.
  </p>
  </div>
- <button 
+ <button type="button" 
  onClick={() => window.location.href = '/visao-geral-pendencias'}
  className="mt-4 bg-white hover:bg-slate-50 text-slate-700 font-bold border border-slate-300 text-xs px-4 py-1.5 rounded-md transition-colors shadow-sm cursor-pointer flex items-center gap-2"
  >
@@ -2243,7 +2243,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataEntradaIni} onChange={e => setFDataEntradaIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataEntradaIni && (
-            <button onClick={() => setFDataEntradaIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataEntradaIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2252,7 +2252,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataEntradaFim} onChange={e => setFDataEntradaFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataEntradaFim && (
-            <button onClick={() => setFDataEntradaFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataEntradaFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2263,7 +2263,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataPrevIni} onChange={e => setFDataPrevIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataPrevIni && (
-            <button onClick={() => setFDataPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataPrevIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2272,7 +2272,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataPrevFim} onChange={e => setFDataPrevFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataPrevFim && (
-            <button onClick={() => setFDataPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataPrevFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2283,7 +2283,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="text" placeholder="Buscar Tag..." value={fTag} onChange={e => setFTag(e.target.value)} className="pr-6 bg-transparent border-none outline-none text-xs text-slate-700 w-full font-medium" />
           {fTag && (
-            <button onClick={() => setFTag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFTag('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2294,7 +2294,7 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataPlanIni} onChange={e => setFDataPlanIni(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataPlanIni && (
-            <button onClick={() => setFDataPlanIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataPlanIni('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
@@ -2303,30 +2303,30 @@ const salvarDatasBulkTags = async () => {
         <div className="relative flex items-center w-full">
           <input type="date" value={fDataPlanFim} onChange={e => setFDataPlanFim(e.target.value)} className="pr-6 bg-white border border-slate-200 hover:border-blue-300 focus:border-[#32423D] rounded-lg outline-none text-[10px] text-slate-700 px-2 py-1.5 shadow-sm leading-none transition-colors" />
           {fDataPlanFim && (
-            <button onClick={() => setFDataPlanFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+            <button type="button" onClick={() => setFDataPlanFim('')} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
               <X size={14} />
             </button>
           )}
         </div>
       </div>
       {(fTag || fDataEntradaIni || fDataEntradaFim || fDataPrevIni || fDataPrevFim || fDataPlanIni || fDataPlanFim) && (
-        <button onClick={() => { setFTag(''); setFDataEntradaIni(''); setFDataEntradaFim(''); setFDataPrevIni(''); setFDataPrevFim(''); setFDataPlanIni(''); setFDataPlanFim(''); }} className="bg-slate-100 border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0" title="Limpar filtros">
+        <button type="button" onClick={() => { setFTag(''); setFDataEntradaIni(''); setFDataEntradaFim(''); setFDataPrevIni(''); setFDataPrevFim(''); setFDataPlanIni(''); setFDataPlanFim(''); }} className="bg-slate-100 border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0" title="Limpar filtros">
           <X size={14} /> <span>Limpar</span>
         </button>
       )}
       <div className="h-6 w-px bg-slate-300 hidden sm:block shrink-0"></div>
       <div className="flex bg-slate-100 p-1 rounded-lg border border-slate-200 shadow-inner">
-        <button onClick={() => setViewModeTags('detailed')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'detailed' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={() => setViewModeTags('detailed')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'detailed' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <LayoutGrid size={12} /> Detalhado
         </button>
-        <button onClick={() => setViewModeTags('list')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+        <button type="button" onClick={() => setViewModeTags('list')} className={`px-2.5 py-1.5 rounded-md text-[10px] font-bold transition-all flex items-center gap-1.5 ${viewModeTags === 'list' ? 'bg-white text-[#32423D] shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
           <List size={12} /> Lista Limpa
         </button>
       </div>
     </>
   )}
 
-  <button 
+  <button type="button" 
     onClick={() => setShowSearchFilters(prev => !prev)} 
     className="bg-white border border-slate-300 hover:bg-slate-100 p-2 rounded-lg text-slate-700 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0"
     title={showSearchFilters ? "Ocultar dados de pesquisa" : "Exibir dados de pesquisa"}
@@ -2335,7 +2335,7 @@ const salvarDatasBulkTags = async () => {
     <span>{showSearchFilters ? 'Ocultar Pesquisa' : 'Exibir Pesquisa'}</span>
   </button>
 
-  <button onClick={() => setShowDetailsModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-2 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0">
+  <button type="button" onClick={() => setShowDetailsModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 p-2 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1 font-bold text-xs shrink-0">
  <X size={14} /> Fechar
  </button>
  </div>
@@ -2393,21 +2393,21 @@ const salvarDatasBulkTags = async () => {
 
                 {/* BOTÕES DE AÇÕES DA TAG */}
                 <div className="flex flex-wrap gap-1.5 items-center">
-                  <button 
+                  <button type="button" 
                     onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'VISAOGERALTAG'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addRnc'); }}
                     className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Gerar Pendência para esta Tag"
                   >
                     <ShieldAlert size={11} /> Pendência
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={(e) => { e.stopPropagation(); if (selProj) fetchRncs(selProj.IdProjeto, 'ACAOPCP'); setRncForm({ idTag: t.IdTag, tag: t.Tag, descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '', usuarioFin: '', dataFin: '', setorFin: 'Corte', descFin: '', wantsToFinalize: false }); setActionModal('addTask'); }}
                     className="bg-[#E0E800]/20 hover:bg-[#E0E800]/30 border border-amber-300 text-[#32423D] px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Agendar Tarefa"
                   >
                     <CalendarDays size={11} /> Tarefa
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={(e) => { e.stopPropagation(); setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
                     className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Planejar Projetista e Engenharia"
@@ -2425,14 +2425,14 @@ const salvarDatasBulkTags = async () => {
                   >
                     <Calendar size={11} /> Montar Datas
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
                     className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Alterar Qtde Liberada"
                   >
                     <Edit3 size={11} /> Qtde Lib.
                   </button>
-                  <button 
+                  <button type="button" 
                     onClick={(e) => { e.stopPropagation(); setSelTag(t); setMsg(null); setActionModal('temposProducao'); }}
                     className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Exibir Produção em Minutos"
@@ -2440,7 +2440,7 @@ const salvarDatasBulkTags = async () => {
                     <Clock size={11} /> Tempo Prod.
                   </button>
                   {!t.Finalizado && (
-                    <button 
+                    <button type="button" 
                       onClick={(e) => { e.stopPropagation(); setSelTag(t); setMsg(null); setActionModal('finTag'); }}
                       className="bg-slate-50 hover:bg-green-100 border border-slate-200 hover:border-green-300 text-slate-500 hover:text-green-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                       title="Finalizar Tag(s)"
@@ -2893,7 +2893,7 @@ const salvarDatasBulkTags = async () => {
                       <Activity size={13} className="text-[#32423D]" />
                       Produção por Setor/Recurso (Tag #{t.IdTag} — {t.Tag})
                     </h6>
-                    <button onClick={() => toggleTagSectorsExpansion(t.IdTag)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
+                    <button type="button" onClick={() => toggleTagSectorsExpansion(t.IdTag)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
                   </div>
                   {activeSectors.length === 0 ? (
                     <div className="py-2 text-center text-slate-500 text-xs font-medium">Nenhum recurso/setor ativo localizado para esta Tag.</div>
@@ -3008,7 +3008,7 @@ const salvarDatasBulkTags = async () => {
                               </span>
                             </td>
                             <td className="px-2 py-2 text-center border-r border-slate-100">
-                               <button 
+                               <button type="button" 
                                  onClick={(e) => { e.stopPropagation(); setSelOs(os); setMsg(null); setActionModal('temposProducaoOs'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }}
                                  className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[8.5px] font-bold flex items-center justify-center gap-1 transition-colors w-full"
                                  title="Exibir Produção em Minutos"
@@ -3030,7 +3030,7 @@ const salvarDatasBulkTags = async () => {
                                         <Activity size={13} className="text-[#32423D]" />
                                         Produção por Setor/Recurso (Ordem de Serviço #{os.IdOrdemServico})
                                       </h6>
-                                      <button onClick={() => toggleOsSectorsExpansion(os.IdOrdemServico)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
+                                      <button type="button" onClick={() => toggleOsSectorsExpansion(os.IdOrdemServico)} className="text-slate-400 hover:text-red-500 p-0.5 transition-colors" title="Fechar"><X size={14} /></button>
                                     </div>
                                     {activeSectors.length === 0 ? (
                                       <div className="py-2 text-center text-slate-500 text-xs font-medium">Nenhum recurso/setor ativo localizado para esta OS.</div>
@@ -3167,7 +3167,7 @@ const salvarDatasBulkTags = async () => {
                                                           <Activity size={12} className="text-[#32423D]" />
                                                           Produção por Setor/Recurso (Item #{item.IdOrdemServicoItem} — {item.DescResumo || 'Sem descrição'})
                                                         </h6>
-                                                        <button 
+                                                        <button type="button" 
                                                           onClick={() => toggleItemSectorsExpansion(item.IdOrdemServicoItem)}
                                                           className="text-slate-400 hover:text-red-500 p-0.5 transition-colors"
                                                           title="Fechar"
@@ -3268,7 +3268,7 @@ const salvarDatasBulkTags = async () => {
  )}
  </div>
  <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end">
- <button onClick={() => setOsDetailsModal(null)} className="px-2 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg text-xs font-bold transition-colors">
+ <button type="button" onClick={() => setOsDetailsModal(null)} className="px-2 py-1 bg-slate-200 text-slate-700 hover:bg-slate-300 rounded-lg text-xs font-bold transition-colors">
  Voltar
  </button>
  </div>
@@ -3303,7 +3303,7 @@ const salvarDatasBulkTags = async () => {
               <p className="text-[11px] text-slate-500">Visualizar tempos do Projeto {selProj.Projeto}</p>
             </div>
           </div>
-          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+          <button type="button" onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -3374,7 +3374,7 @@ const salvarDatasBulkTags = async () => {
               <p className="text-[11px] text-slate-500">Visualizar tempos da OS {selOs.IdOrdemServico}</p>
             </div>
           </div>
-          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+          <button type="button" onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -3445,7 +3445,7 @@ const salvarDatasBulkTags = async () => {
               <p className="text-[11px] text-slate-500">Visualizar tempos da OS {selTag.Tag}</p>
             </div>
           </div>
-          <button onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
+          <button type="button" onClick={() => setActionModal(null)} className="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-200 transition-colors">
             <X size={16} />
           </button>
         </div>
