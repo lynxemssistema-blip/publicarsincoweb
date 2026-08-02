@@ -131,8 +131,9 @@ const execute = async (sql, params, retries = 1) => {
     return result;
   } catch (err) {
     // Retry logic for dropped connections (common in Hostinger/remote MySQL)
-    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT')) {
-        console.warn(`[DB] ⚠️  Connection dropped (${err.code}). Retrying query...`);
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT' || err.code === 'EPIPE')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}). Retrying query in 250ms... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, 250));
         return execute(sql, params, retries - 1);
     }
     console.error(`[DB] 🔴 ERROR: ${err.message}`);
@@ -179,7 +180,7 @@ const testConnection = async (config) => {
 };
 
 // Execute always on the default/central pool (ignores tenant context)
-const executeOnDefault = async (sql, params, retries = 1) => {
+const executeOnDefault = async (sql, params, retries = 3) => {
   if (!defaultPool) throw new Error('Default database pool not initialized.');
   const cleanSql = sql.replace(/\s+/g, ' ').trim();
   console.log(`\n[DB] 🔵 EXEC (DEFAULT): ${cleanSql}`);
@@ -189,8 +190,9 @@ const executeOnDefault = async (sql, params, retries = 1) => {
     console.log(`[DB] [DEFAULT] 🟢 OK - Rows: ${rowCount}`);
     return result;
   } catch (err) {
-    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT')) {
-        console.warn(`[DB] ⚠️  Connection dropped (${err.code}) on DEFAULT pool. Retrying query...`);
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT' || err.code === 'EPIPE')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}) on DEFAULT pool. Retrying query in 250ms... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, 250));
         return executeOnDefault(sql, params, retries - 1);
     }
     throw err;
