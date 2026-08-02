@@ -413,18 +413,18 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                 {c.EnderecoArquivo && <button onClick={()=>abrirPdf(c.EnderecoArquivo)} className="p-0.5 text-red-400 hover:text-red-600 rounded" title="Abrir Desenho PDF"><FileText size={11}/></button>}
               </div>
             </td>
+            <td className="p-1 px-1.5 text-center">
+               <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${level === 0 ? 'bg-gray-100 text-gray-600' : level === 1 ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}>
+                 {level + 1}
+               </span>
+               {isPeca && <span className="ml-1 text-[8px] text-emerald-600 font-bold uppercase bg-emerald-100 px-1 py-0.5 rounded">Peça</span>}
+            </td>
             <td className="p-1 px-1.5 text-[10px] font-mono font-bold text-[#32423D] truncate max-w-[90px]" title={c.CodMatFabricante}>
               {level > 0 && <span className="text-blue-400 font-bold mr-0.5">↳</span>}
               <span className={level > 0 ? 'text-blue-700' : ''}>{c.CodMatFabricante}</span>
             </td>
             <td className={`p-1 px-1.5 text-[9.5px] truncate max-w-[100px] ${level > 0 ? 'text-blue-600' : 'text-gray-600'}`} title={c.DescDetal}>
               {c.DescDetal}
-            </td>
-            <td className="p-1 px-1.5 text-center">
-               <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${level === 0 ? 'bg-gray-100 text-gray-600' : level === 1 ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}>
-                 {level + 1}
-               </span>
-               {isPeca && <span className="ml-1 text-[8px] text-emerald-600 font-bold uppercase bg-emerald-100 px-1 py-0.5 rounded">Peça</span>}
             </td>
             <td className="p-1 px-1.5 text-[10px] font-bold text-center text-[#32423D]">{c.PecaQtde||1}</td>
           </tr>
@@ -558,9 +558,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   <thead className="bg-white sticky top-0 z-10 shadow-sm border-b border-gray-200">
                     <tr>
                       <th className="p-1 px-1.5 w-12"></th>
+                      <th className={`${colsCls} text-center`}>NV</th>
                       <th className={`${colsCls} w-[130px]`}>Código</th>
                       <th className={colsCls}>Descrição</th>
-                      <th className={`${colsCls} text-center`}>NV</th>
                       <th className={`${colsCls} text-center`}>QTD</th>
                     </tr>
                   </thead>
