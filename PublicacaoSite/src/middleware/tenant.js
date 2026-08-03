@@ -18,6 +18,7 @@ const tenantMiddleware = async (req, res, next) => {
     if (
         pathStr.includes('/api/login') ||
         pathStr.includes('/api/admin/login') ||
+        pathStr.includes('/api/test-tag-os') ||
         pathStr.includes('public')
     ) {
         return next();
