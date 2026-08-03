@@ -9,263 +9,268 @@ export const helpContents: Record<string, HelpContent> = {
     // ── PRINCIPAL ───────────────────────────────────────────────────
     'dashboard': {
         title: 'Dashboard',
-        description: '🎯 Objetivo: Fornecer um panorama instantâneo e gerencial de toda a operação industrial.\n\n⚙️ Como Trabalhar:\n• Utilize os atalhos no topo para navegar rapidamente para as funções mais usadas.\n• Observe os gráficos de produção para identificar se a fábrica está operando na meta.\n• Clique nos cards de resumo para verificar O.S. abertas e status dos projetos.',
+        description: '🎯 Objetivo: Consolidar métricas, indicadores-chave de desempenho (KPIs) e o status atual das O.S. abertas em uma única visão panorâmica.\n\n💡 Finalidade: Permitir que a diretoria e gestão tomem decisões rápidas e assertivas baseadas em dados em tempo real, diagnosticando se o ritmo produtivo da fábrica está atingindo a meta financeira e operacional do dia.',
         icon: '📊'
     },
 
     // ── CADASTROS ───────────────────────────────────────────────────
     'pessoa-juridica': {
         title: 'Pessoa Jurídica',
-        description: '🎯 Objetivo: Cadastrar e manter o banco de dados de clientes, fornecedores e parceiros da empresa.\n\n⚙️ Como Trabalhar:\n• Para adicionar, preencha a aba "Novo" com CNPJ, Razão Social e dados de contato reais.\n• Ao faturar romaneios ou criar projetos, os clientes serão puxados deste cadastro.\n• Evite cadastros duplicados; sempre busque pela razão social antes de criar um novo.',
+        description: '🎯 Objetivo: Gerenciar a base de dados de entidades empresariais, como clientes, fornecedores e parceiros.\n\n💡 Finalidade: Garantir que todas as transações fiscais e de logística (Romaneios, faturamentos) sejam direcionadas às entidades legais corretas, mantendo a rastreabilidade financeira e o histórico de relacionamento.',
         icon: '🏢'
     },
     'monta-peca-manufaturada': {
         title: 'Peça Manufaturada',
-        description: '🎯 Objetivo: Vincular matérias-primas e recursos de fabricação a um Produto acabado.\n\n⚙️ Como Trabalhar:\n• Selecione o produto principal (código do fabricante) no grid superior.\n• No painel, adicione os insumos necessários (lista de materiais).\n• Adicione e ordene a seqüência de setores/recursos (ex: Corte -> Dobra -> Solda) por onde a peça passará.',
+        description: '🎯 Objetivo: Mapear a "Árvore do Produto" (BOM - Bill of Materials) e o seu roteiro de fabricação, vinculando insumos aos setores produtivos.\n\n💡 Finalidade: Parametrizar a receita exata de como um produto final é feito, garantindo que o chão de fábrica execute o processo padrão todas as vezes, evitando erros de montagem e calculando custos precisamente.',
         icon: '📦'
     },
     'group_1781618991422': {
         title: 'Peça Manufaturada',
-        description: '🎯 Objetivo: Vincular matérias-primas e recursos de fabricação a um Produto acabado.\n\n⚙️ Como Trabalhar:\n• Selecione o produto principal (código do fabricante) no grid superior.\n• No painel, adicione os insumos necessários (lista de materiais).\n• Adicione e ordene a seqüência de setores/recursos (ex: Corte -> Dobra -> Solda) por onde a peça passará.',
+        description: '🎯 Objetivo: Mapear a "Árvore do Produto" (BOM - Bill of Materials) e o seu roteiro de fabricação, vinculando insumos aos setores produtivos.\n\n💡 Finalidade: Parametrizar a receita exata de como um produto final é feito, garantindo que o chão de fábrica execute o processo padrão todas as vezes, evitando erros de montagem e calculando custos precisamente.',
         icon: '📦'
     },
     'unidades-medida': {
         title: 'Unidades de Medida',
-        description: '🎯 Objetivo: Padronizar as grandezas matemáticas usadas no estoque e faturamento (KG, M2, UN).\n\n⚙️ Como Trabalhar:\n• Crie a sigla (ex: "KG") e a descrição exata.\n• Esses dados alimentam os formulários de Materiais e Ordens de Serviço.\n• Atenção: Mudar uma unidade em uso afeta cálculos históricos; prefira desativar.',
+        description: '🎯 Objetivo: Definir e padronizar as grandezas matemáticas de estoque e produção.\n\n💡 Finalidade: Prevenir falhas críticas de faturamento e estocagem (como comprar em Tonelada e consumir em Quilograma), mantendo a integridade dos cálculos dimensionais da plataforma.',
         icon: '📐'
     },
     'familia': {
         title: 'Família de Produtos',
-        description: '🎯 Objetivo: Categorizar os produtos para facilitar relatórios contábeis e de desempenho.\n\n⚙️ Como Trabalhar:\n• Crie agrupamentos amplos (Ex: "Estruturas Metálicas", "Tubulações").\n• Ao criar um material novo, você deverá selecionar obrigatoriamente a qual família ele pertence.',
+        description: '🎯 Objetivo: Categorizar materiais e produtos em grupos semânticos hierárquicos.\n\n💡 Finalidade: Facilitar a emissão de relatórios gerenciais focados em lucratividade por segmento de negócio, permitindo descobrir rapidamente quais categorias industriais rendem mais lucro.',
         icon: '🗂️'
     },
     'acabamento': {
         title: 'Tipos de Acabamento',
-        description: '🎯 Objetivo: Definir o tratamento superficial que a peça receberá.\n\n⚙️ Como Trabalhar:\n• Adicione acabamentos (Galvanizado a Fogo, Pintura Epóxi, Polido).\n• Essas opções aparecerão nos apontamentos de O.S. para que a fábrica saiba como finalizar a peça.',
+        description: '🎯 Objetivo: Cadastrar os tipos de tratamento superficial ou estético disponíveis para o aço.\n\n💡 Finalidade: Determinar a rota final das peças (como a ida à terceiros para galvanização), influenciando o prazo de entrega final e os requisitos de embalagem do produto.',
         icon: '🎨'
     },
     'materiais': {
         title: 'Materiais',
-        description: '🎯 Objetivo: Manter o catálogo geral de insumos e produtos (chapas, parafusos, vigas).\n\n⚙️ Como Trabalhar:\n• Use o botão lateral para "Novo Material".\n• Preencha obrigatoriamente o "Código Material".\n• Insira medidas (Peso, Altura) rigorosas, pois elas influenciam o módulo de Plano de Corte.\n• Vincule a Família e o Fornecedor corretos.',
+        description: '🎯 Objetivo: Alimentar o catálogo mestre de todas as matérias-primas e insumos com pesos e dimensões literais.\n\n💡 Finalidade: Fornecer os dados dimensionais exatos exigidos pelo algoritmo de Plano de Corte e garantir a exatidão no Romaneio para peso em balança rodoviária.',
         icon: '⚗️'
     },
     'tipos-produto': {
         title: 'Tipos de Produto',
-        description: '🎯 Objetivo: Subclassificar o que a fábrica constrói (Comercialização, Uso e Consumo, Industrialização).\n\n⚙️ Como Trabalhar:\n• Adicione classificações ficais ou de gestão interna.\n• Útil para aplicar regras de ICMS diferentes em relatórios financeiros.',
+        description: '🎯 Objetivo: Subdividir contabilmente os bens industriais da empresa (ex: Comercialização, Industrialização).\n\n💡 Finalidade: Garantir o enquadramento fiscal correto para a emissão de NF-e e definir a natureza de operação de saída (CFOP) automática.',
         icon: '🏷️'
     },
     'projetos': {
         title: 'Projetos',
-        description: '🎯 Objetivo: Agrupar grandes obras ou contratos (Um projeto contém várias O.S.).\n\n⚙️ Como Trabalhar:\n• Crie um projeto com um código interno e vincule-o a um Cliente.\n• Defina tags específicas (áreas da obra) dentro do projeto.\n• Todas as Ordens de Serviço deverão ser alocadas num Projeto existente.',
+        description: '🎯 Objetivo: Ser a entidade agregadora máxima das frentes de obra ou grandes contratos.\n\n💡 Finalidade: Agrupar financeiramente e temporalmente centenas de O.S. espalhadas, permitindo apurar o Custo Total do Contrato versus o Faturamento Total por Cliente.',
         icon: '🏗️'
     },
 
     // ── ORDENS DE SERVIÇO ───────────────────────────────────────────
     'criar-ordem-servico': {
         title: 'Criar Ordem Serviço',
-        description: '🎯 Objetivo: Gerar rapidamente uma O.S. para autorizar o chão de fábrica a produzir.\n\n⚙️ Como Trabalhar:\n• Selecione o Projeto; o sistema limitará as Tags ao projeto escolhido.\n• No campo "Produto Padrão", digite o código do material; a descrição será carregada automaticamente.\n• Defina o "Fator" (quantidades) e o "Tipo de Liberação" (Total/Parcial).\n• Salve para enviar a O.S. diretamente à fila de produção.',
+        description: '🎯 Objetivo: Traduzir a necessidade de vendas ou engenharia em um documento autorizativo (O.S.).\n\n💡 Finalidade: Disparar o ciclo fabril, inserindo a peça oficialmente na fila do apontamento de produção, cobrando do chão de fábrica um prazo e quantidade estipulados.',
         icon: '📝'
     },
     'ordens-servico': {
         title: 'Ordens de Serviço (O.S.)',
-        description: '🎯 Objetivo: Listar, alterar e controlar o documento que manda fabricar algo.\n\n⚙️ Como Trabalhar:\n• Use a busca avançada por "Projeto" ou "Tag" para achar O.S. antigas.\n• Visualize o detalhamento técnico e os arquivos anexados de cada O.S.\n• Permite emitir relatórios de andamento específicos de uma ordem.',
+        description: '🎯 Objetivo: Administrar o documento matriz que instrui e acompanha a fabricação de lotes.\n\n💡 Finalidade: Possibilitar auditoria instantânea do que foi demandado versus o que foi realizado, arquivando anexos (DXF/PDF) e servindo de prova documental do histórico produtivo.',
         icon: '📋'
     },
 
     // ── PLANO DE CORTE ──────────────────────────────────────────────
     'montagem-plano-corte': {
         title: 'Montagem do Plano de Corte',
-        description: '🎯 Objetivo: Otimizar aproveitamento de chapa metálica e tubo, juntando O.S. semelhantes.\n\n⚙️ Como Trabalhar:\n• Filtre O.S. por espessura/material idênticos.\n• Marque as caixas das O.S. que vão ser cortadas juntas e "Aglutine".\n• Um lote de corte será criado para o setor primário processar de uma só vez.',
+        description: '🎯 Objetivo: Agrupar digitalmente diversas Ordens de Serviço que compartilham da mesma matéria-prima (espessura e tipo de material) em lotes unificados.\n\n💡 Finalidade: Otimizar o aproveitamento da chapa de aço e evitar setups redundantes nas máquinas de corte (laser/plasma), economizando tempo de máquina e minimizando o desperdício (sucata).',
         icon: '✂️'
     },
     'producao-plano-corte': {
         title: 'Produção do Plano de Corte',
-        description: '🎯 Objetivo: O operador da máquina de corte informa o que realmente cortou do lote.\n\n⚙️ Como Trabalhar:\n• Localize o lote (Plano de Corte) liberado para seu turno.\n• Insira a quantidade realizada em cada sub-item.\n• Os itens 100% finalizados são enviados automaticamente ao setor subsequente (ex: Dobra).',
+        description: '🎯 Objetivo: Registrar a baixa consumada do lote cortado pelos operadores de Guilhotina ou Laser.\n\n💡 Finalidade: Distribuir automaticamente as peças recém-cortadas para as filas subsequentes (Dobra, Solda), destravando a produção das próximas etapas com rastreabilidade real.',
         icon: '🪚'
     },
 
     // ── APONTAMENTO ─────────────────────────────────────────────────
+    'apontamento-producao-recurso': {
+        title: 'Apontamento Produção Recurso',
+        description: '🎯 Objetivo: Interface rápida de apontamento dedicada exclusivamente a uma máquina ou recurso específico.\n\n💡 Finalidade: Facilitar a vida do operador que passa o turno inteiro num único maquinário, tornando as interações via tablet ágeis e menos suscetíveis a erros humanos.',
+        icon: '⚙️'
+    },
     'apontamento': {
         title: 'Apontamento de Produção',
-        description: '🎯 Objetivo: Dizer ao sistema que uma etapa fabril (ex: Solda, Pintura) de uma O.S. foi concluída.\n\n⚙️ Como Trabalhar:\n• Busque a O.S. com código de barras ou numeração.\n• Informe a quantidade boa fabricada e eventuais perdas.\n• Quando a etapa é apontada, o sistema libera a peça para a próxima máquina na fila.\n• Atenção: Não é possível apontar quantidades maiores que as liberadas pela etapa anterior.',
+        description: '🎯 Objetivo: Realizar a transição formal das O.S. entre os setores (Corte, Dobra, Solda).\n\n💡 Finalidade: Ditar o ritmo da fábrica (Takt Time). O apontamento é o pulso da empresa, liberando peças boas, reportando peças ruins (RNCs) e movimentando a estatística global.',
         icon: '⚙️'
     },
     'apontamentos-parciais': {
         title: 'Apontamentos Parciais',
-        description: '🎯 Objetivo: Gerenciar O.S. que não foram 100% terminadas no turno.\n\n⚙️ Como Trabalhar:\n• Localize os saldos retidos nas máquinas.\n• Se foram fabricadas 50 de 100, este painel permite visualizar que 50 estão travadas e precisam de novo apontamento.\n• Ideal para líderes de turno encerrarem pendências antigas.',
+        description: '🎯 Objetivo: Identificar saldos remanescentes (O.S. não terminadas 100% num único turno).\n\n💡 Finalidade: Prevenir o esquecimento de peças na fábrica. Ele rastreia "pontas soltas" que seguram faturamentos grandes, forçando os líderes a liquidarem os saldos.',
         icon: '🔢'
     },
 
     // ── ACOMPANHAMENTO ───────────────────────────────────────────────
     'acompanhamento-geral': {
         title: 'Acompanhamento Geral',
-        description: '🎯 Objetivo: Visão macro do status atual da fábrica para diretores e gerentes.\n\n⚙️ Como Trabalhar:\n• Expanda as colunas para ver a evolução de cada etapa (% concluído).\n• Barras de progresso vermelhas indicam atraso severo em relação à previsão.\n• Sem ação operacional: a tela é para consulta gerencial pesada.',
+        description: '🎯 Objetivo: Prover uma linha do tempo macro, calculando percentuais de avanço globais de Projetos e Tags.\n\n💡 Finalidade: Responder rapidamente à pergunta do Cliente: "A minha obra está em quantos %?". A interface gera dados consolidados prontos para envio às medições.',
         icon: '📈'
     },
     'visao-geral-producao': {
         title: 'Visão Geral Produção',
-        description: '🎯 Objetivo: Painel tático para os líderes e chefes de fábrica.\n\n⚙️ Como Trabalhar:\n• O grid mostra EXATAMENTE onde cada O.S. está parada no momento.\n• Use os botões de ação rápida para redistribuir a carga de máquinas.\n• Monitore os tempos parados nas "filas" (buffers) de cada setor.',
+        description: '🎯 Objetivo: Mapear detalhadamente o posicionamento exato de cada Ordem de Serviço dentro dos buffers (filas) de todos os setores produtivos.\n\n💡 Finalidade: Dar poder tático ao chefe de fábrica para remanejar recursos físicos, destravando gargalos antes que afetem o prazo de entrega, garantindo a fluidez contínua do chão de fábrica.',
         icon: '🏭'
     },
     'visao-geral-engenharia': {
         title: 'Visão Geral Engenharia',
-        description: '🎯 Objetivo: Controlar o "Projeto antes do Projeto" (Cronograma do escritório).\n\n⚙️ Como Trabalhar:\n• Alimente as datas de emissão de Isométricos, Aprovação de Cliente e Entrega.\n• Mantenha as previsões atualizadas para que o chão de fábrica saiba quando os desenhos vão chegar.',
+        description: '🎯 Objetivo: Controlar o "Projeto antes do Projeto", gerenciando prazos de desenho e modelagem.\n\n💡 Finalidade: Impedir que os desenhistas virem o gargalo da produção. O controle assegura que o projeto chegará à fábrica aprovado e a tempo de ser cortado.',
         icon: '🛠️'
     },
     'acompanhamento-etapas': {
         title: 'Visão Geral Engenharia',
-        description: '🎯 Objetivo: Controlar o "Projeto antes do Projeto" (Cronograma do escritório).\n\n⚙️ Como Trabalhar:\n• Alimente as datas de emissão de Isométricos, Aprovação de Cliente e Entrega.\n• Mantenha as previsões atualizadas para que o chão de fábrica saiba quando os desenhos vão chegar.',
+        description: '🎯 Objetivo: Controlar o "Projeto antes do Projeto", gerenciando prazos de desenho e modelagem.\n\n💡 Finalidade: Impedir que os desenhistas virem o gargalo da produção. O controle assegura que o projeto chegará à fábrica aprovado e a tempo de ser cortado.',
         icon: '🛠️'
     },
 
     // ── EXPEDIÇÃO ────────────────────────────────────────────────────
     'romaneio-envio': {
         title: 'Romaneio de Envio',
-        description: '🎯 Objetivo: Criar a "nota física" de entrega das peças fabricadas para os caminhões.\n\n⚙️ Como Trabalhar:\n• Selecione Cliente, Transportadora e Placa.\n• Escolha as O.S. (itens) que já estão liberadas pelo Controle de Qualidade.\n• Registre e imprima o PDF oficial com código de barras para o motorista levar.',
+        description: '🎯 Objetivo: Criar a consolidação lógica de faturamento, gerando o Packing List (lista de embarque).\n\n💡 Finalidade: Garantir que nenhuma peça pronta fique esquecida na doca. A formalização protege a indústria ao gerar comprovação legal e código de barras do que subiu no caminhão.',
         icon: '🚚'
     },
     'romaneio-retorno': {
         title: 'Romaneio de Retorno',
-        description: '🎯 Objetivo: Dar baixa de recebimento em materiais que foram terceirizados e estão voltando.\n\n⚙️ Como Trabalhar:\n• Selecione o Romaneio original de envio.\n• Informe que "X" peças voltaram com sucesso, e se alguma não voltou.\n• Retornos completos fecham o ciclo. Retornos parciais mantêm o romaneio original pendente.',
+        description: '🎯 Objetivo: Recepcionar fisicamente O.S. que haviam saído para terceirizados (como zincagem).\n\n💡 Finalidade: Impedir perdas de inventário (extravio de aço na rua) e sinalizar à empresa que o item final já está disponível no pátio para embarque final.',
         icon: '↩️'
     },
     'controle-expedicao': {
         title: 'Controle de Expedição',
-        description: '🎯 Objetivo: Relatório tático de tudo que está na rua ou na fila de caminhões.\n\n⚙️ Como Trabalhar:\n• Monitore o status da frota e datas de saída.\n• Permite reimprimir cópias de romaneios antigos em caso de extravio.',
+        description: '🎯 Objetivo: Manter rastreio das cargas em trânsito e o histórico das notas finalizadas.\n\n💡 Finalidade: Servir como base jurídica e financeira. Ajuda o suporte a rastrear rotas e confirmar entregas caso clientes acusem ausência de peças em obra.',
         icon: '📦'
     },
     'pendencia-romaneio': {
         title: 'Pendências do Romaneio',
-        description: '🎯 Objetivo: Tratar itens rejeitados ou não entregues pelo cliente.\n\n⚙️ Como Trabalhar:\n• Registre a reclamação associada ao Romaneio de Envio.\n• Gere solicitações de correção (RNC) que voltarão à produção para re-trabalho.',
+        description: '🎯 Objetivo: Catalogar reincidências de problemas logísticos e devoluções na obra.\n\n💡 Finalidade: Agir como escudo financeiro contra multas de cliente, acionando rapidamente a fábrica (RNCs) para sanar falhas logísticas reportadas pelo caminhoneiro.',
         icon: '⚠️'
     },
 
     // ── QUALIDADE / PENDÊNCIAS ───────────────────────────────────────
     'visao-geral-pendencias': {
         title: 'Visão Geral de Pendências (RNC)',
-        description: '🎯 Objetivo: Painel do Inspetor de Qualidade. Concentra falhas detectadas na linha.\n\n⚙️ Como Trabalhar:\n• Insira a causa raiz do problema e defina quem é o responsável (Setor ou Operador).\n• Aplique as ações corretivas/preventivas.\n• Dê baixa (Fechamento) na pendência quando a peça for reparada.',
+        description: '🎯 Objetivo: Painel do inspetor de Qualidade. Concentra os apontamentos de falhas detectadas na linha.\n\n💡 Finalidade: Prover base para os padrões ISO 9001 (Relatórios de Não-Conformidade). Permite mensurar que setor mais gera sucata, embasando treinamentos e demissões.',
         icon: '🔎'
     },
     'pecas-reposicao': {
         title: 'Peças em Reposição',
-        description: '🎯 Objetivo: Fabricar "remendos" e peças de perda (scrap) que faltaram numa O.S.\n\n⚙️ Como Trabalhar:\n• Busque a O.S. original.\n• Adicione a solicitação da nova quantidade.\n• Este fluxo cria uma "mini O.S." para que a máquina corte novamente a peça faltante.',
+        description: '🎯 Objetivo: Criar atalhos paralelos ("mini O.S.") para compensar perdas no processo (scrap).\n\n💡 Finalidade: Fechar pedidos pendentes (faltantes). Sem esta ferramenta, a O.S. mãe ficaria retida eternamente, prejudicando o faturamento do projeto por causa de 1 peça estragada.',
         icon: '🔄'
     },
 
     // ── TESTE FINAL ──────────────────────────────────────────────────
     'teste-final-montagem': {
         title: 'Teste Final de Montagem',
-        description: '🎯 Objetivo: Check-out final da peça antes da expedição. (Inspeção visual e laudos).\n\n⚙️ Como Trabalhar:\n• Puxe a O.S. montada.\n• Marque "Aprovado" se estiver conforme normas, ou "Reprovado" gerando RNC automática.\n• Somente itens "Aprovados" aqui caem no grid de Expedição/Romaneio.',
+        description: '🎯 Objetivo: O "Check-out Final" antes do embarque. Inspeção visual ou física.\n\n💡 Finalidade: Barreira final de qualidade. Retém componentes que estouraram limites de tolerância antes de saírem para a rua, protegendo a reputação da empresa e evitando caríssimas viagens de regresso.',
         icon: '✅'
     },
 
     // ── DESENHOS / DOCUMENTOS ────────────────────────────────────────
     'pesquisar-desenho': {
         title: 'Pesquisar Desenho Técnico',
-        description: '🎯 Objetivo: Livrar a fábrica do uso do papel. Encontre o PDF de qualquer peça.\n\n⚙️ Como Trabalhar:\n• Digite o código da peça ou o projeto.\n• Ao clicar no resultado, o desenho original da engenharia abre diretamente na tela em tela-cheia.\n• Use o zoom do tablet industrial para visualizar cotas em campo.',
+        description: '🎯 Objetivo: Motor de busca instantâneo para PDFs industriais de qualquer peça da base.\n\n💡 Finalidade: Executar a "Fábrica Sem Papel" (Paperless), garantindo que operadores no tablet visualizem SEMPRE a última versão homologada, liquidando erros por uso de plantas obsoletas.',
         icon: '📐'
     },
 
     // ── PLANEJAMENTO ─────────────────────────────────────────────────
     'visao-geral-tags': {
         title: 'Visão Geral de Tags Globais',
-        description: '🎯 Objetivo: Alteração e gerenciamento em massa do cronograma das obras.\n\n⚙️ Como Trabalhar:\n• Utilize para rolar prazos inteiros de obras atrasadas de uma só vez.\n• Modificar a Data de Previsão de uma Tag altera automaticamente os prazos das O.S. alocadas nela.',
+        description: '🎯 Objetivo: Controlar e recalcular (em massa) os prazos temporais das obras.\n\n💡 Finalidade: Adaptabilidade frente às falhas do cliente civil (Ex: chuvas na obra que atrasam a entrega estrutural). Permite à fábrica realocar toda a programação fabril num clique sem sujar relatórios.',
         icon: '🏷️'
     },
 
     // ── IMPORTAÇÃO E POWERBUILD ──────────────────────────────────────
     'blockset': {
         title: 'Importação Blockset',
-        description: '🎯 Objetivo: Ler o Excel exportado diretamente do SolidWorks e transformá-lo em O.S. no sistema.\n\n⚙️ Como Trabalhar:\n• Use o botão de "Carregar Arquivo" e aguarde a validação.\n• O sistema alertará se existem códigos de chapa desconhecidos.\n• Confirme a importação para gerar as O.S. automaticamente.',
+        description: '🎯 Objetivo: Digerir macros (XLS) exportadas cruas de hardwares CAD (SolidWorks).\n\n💡 Finalidade: Eliminar 100% da digitação humana no cadastramento das chapas, liquidando o risco de "Ded-Fingers" (erro de digitação) e otimizando o setup em dezenas de horas semanais.',
         icon: '📤'
     },
     'leitura-dados': {
         title: 'Leitura de Dados',
-        description: '🎯 Objetivo: Ingestão de planilhas genéricas de controle legado.\n\n⚙️ Como Trabalhar:\n• Faça upload do XLS/CSV e mapeie as colunas de "Código" e "Quantidade" com o sistema.',
+        description: '🎯 Objetivo: Ferramenta agnóstica de Ingestão de planilhas CSV/XLS legadas.\n\n💡 Finalidade: Facilitar o "Onboarding" de novos projetos na plataforma de clientes que ainda operam de maneira engessada e não possuem os robôs de CAD da SINCO.',
         icon: '📥'
     },
     'lista-planilhas': {
         title: 'Lista de Planilhas',
-        description: '🎯 Objetivo: Auditoria do que foi importado no passado.\n\n⚙️ Como Trabalhar:\n• Consulte o histórico para descobrir "quem" importou a planilha X e "quando".\n• Permite reverter lotes importados equivocadamente, desde que não tenham produção apontada.',
+        description: '🎯 Objetivo: Registro inviolável (Log) de tudo que já foi processado.\n\n💡 Finalidade: Proporcionar compliance na importação. Permite rastrear qual Engenheiro importou a peça incorreta e acionar botões de rollback em caso de acidentes de projeto.',
         icon: '📑'
     },
     'powerbuild-list': {
         title: 'Lista PowerBuild',
-        description: '🎯 Objetivo: Igual à "Lista de Planilhas", focado em integrações PowerBuild.\n\n⚙️ Como Trabalhar:\n• Consulte o histórico e baixe a planilha original importada para checar discrepâncias do projetista.',
+        description: '🎯 Objetivo: Semelhante ao Log de Planilhas, focado nas automações estruturais exclusivas.\n\n💡 Finalidade: Assegurar o armazenamento do histórico de pacotes de dados proprietários que não existem nos métodos clássicos de manufatura.',
         icon: '📑'
     },
     'revisao-itens': {
         title: 'Revisão de Itens',
-        description: '🎯 Objetivo: Interface de "Estágio de Triagem" antes da fábrica produzir algo importado.\n\n⚙️ Como Trabalhar:\n• O sistema lista tudo o que foi importado na planilha.\n• Navegue linha a linha para corrigir nomenclaturas quebradas ou matérias-primas ausentes no cadastro central.\n• Ao terminar de revisar, confirme o envio definitivo para o setor fabril.',
+        description: '🎯 Objetivo: Estágio de triagem provisória das importações antes da ida à fábrica.\n\n💡 Finalidade: Limpar e higienizar metadados oriundos do CAD, pareando chapas e tubos estranhos com o banco de estoque homologado, impedindo que requisições fictícias derrubem o algoritmo.',
         icon: '🔍'
     },
     'powerbuild-revision': {
         title: 'Revisão PowerBuild',
-        description: '🎯 Objetivo: Interface de "Estágio de Triagem" antes da fábrica produzir algo importado.\n\n⚙️ Como Trabalhar:\n• Navegue linha a linha para corrigir nomenclaturas quebradas ou matérias-primas ausentes no cadastro.\n• Ao terminar de revisar, confirme o envio definitivo para o setor fabril.',
+        description: '🎯 Objetivo: Interface de triagem e pareamento lógico focada na arquitetura PowerBuild.\n\n💡 Finalidade: Higienizar nomenclaturas exclusivas do PowerBuild, validando espessuras e medidas cruciais para que o software não emita Ordens inexecutáveis para as guilhotinas.',
         icon: '🔍'
     },
     'visualizacao-aglutinacao': {
         title: 'Aglutinação de Itens',
-        description: '🎯 Objetivo: Unir O.S. gêmeas geradas por importação antes do corte.\n\n⚙️ Como Trabalhar:\n• O sistema destacará em amarelo O.S. com mesma espessura e material.\n• Clique em "Aglutinar" para fundi-las, fazendo com que a guilhotina ou laser poupem tempo não parando a máquina duas vezes.',
+        description: '🎯 Objetivo: Fundir clones digitais gerados excessivamente por erro do CAD.\n\n💡 Finalidade: Evitar o aborrecimento e perda de tempo do cortador de chapa, unificando O.S. matematicamente idênticas antes de chegarem à área fabril primária.',
         icon: '🔗'
     },
     'powerbuild-agglutination': {
         title: 'Aglutinação PowerBuild',
-        description: '🎯 Objetivo: Unir O.S. gêmeas geradas por importação antes do corte.\n\n⚙️ Como Trabalhar:\n• O sistema destacará em amarelo O.S. com mesma espessura e material.\n• Clique em "Aglutinar" para fundi-las, poupando setup da máquina.',
+        description: '🎯 Objetivo: Fundir clones lógicos oriundos da geração robótica PowerBuild.\n\n💡 Finalidade: Compactar matrizes idênticas para a usinagem economizar material e tempo operacional, acelerando sensivelmente a logística dentro do galpão.',
         icon: '🔗'
     },
 
     // ── ADMINISTRATIVO E CONFIGURAÇÃO ───────────────────────────────
     'usuarios': {
         title: 'Usuários do Sistema',
-        description: '🎯 Objetivo: Controlar quem entra no sistema e as senhas.\n\n⚙️ Como Trabalhar:\n• Busque o colaborador e altere a aba "Acessos".\n• Se a pessoa saiu da empresa, desative-a. Não exclua para manter o histórico de rastreabilidade dela no chão de fábrica.',
+        description: '🎯 Objetivo: Controle base de identidades e permissões de acesso ao ERP.\n\n💡 Finalidade: Estabelecer a segurança e os silos de informação (ninguém vê mais do que precisa). Quando bloqueados, retém histórico inalterável de suas ações fabris.',
         icon: '👥'
     },
     'cadastro-de-usuario': {
         title: 'Cadastro de Usuário',
-        description: '🎯 Objetivo: Criar um novo perfil com permissões seguras.\n\n⚙️ Como Trabalhar:\n• Preencha CPF e dados pessoais corretos.\n• Associe a pessoa a um "Setor" para que o tablet da fábrica saiba quais operações ele acessa.\n• Para atribuir permissões de maquinário, selecione um usuário, clique no botão "Ver Processos" (no cabeçalho roxo dos dados) e marque as caixinhas (ex: Corte, Dobra, Solda) que o colaborador tem autorização para operar.',
+        description: '🎯 Objetivo: Criação de perfis, hierarquias e permissões operacionais estritas.\n\n💡 Finalidade: Limitar a interface do tablet. Garante que um "Soldador" não faça apontamentos na "Guilhotina", impondo disciplina cega (fool-proof) no input de dados do pátio.',
         icon: '👤'
     },
     'cadastro-usuario': {
         title: 'Cadastro de Usuário',
-        description: '🎯 Objetivo: Criar um novo perfil com permissões seguras.\n\n⚙️ Como Trabalhar:\n• Preencha CPF e dados pessoais corretos.\n• Associe a pessoa a um "Setor" para que o tablet da fábrica saiba quais operações ele acessa.\n• Para atribuir permissões de maquinário, selecione um usuário, clique no botão "Ver Processos" (no cabeçalho roxo dos dados) e marque as caixinhas (ex: Corte, Dobra, Solda) que o colaborador tem autorização para operar.',
+        description: '🎯 Objetivo: Criação de perfis, hierarquias e permissões operacionais estritas.\n\n💡 Finalidade: Limitar a interface do tablet. Garante que um "Soldador" não faça apontamentos na "Guilhotina", impondo disciplina cega (fool-proof) no input de dados do pátio.',
         icon: '👤'
     },
     'group_1775495483371': {
         title: 'Cadastro de Usuário',
-        description: '🎯 Objetivo: Criar um novo perfil com permissões seguras.\n\n⚙️ Como Trabalhar:\n• Preencha CPF e dados pessoais corretos.\n• Associe a pessoa a um "Setor" para que o tablet da fábrica saiba quais operações ele acessa.\n• Para atribuir permissões de maquinário, selecione um usuário, clique no botão "Ver Processos" (no cabeçalho roxo dos dados) e marque as caixinhas (ex: Corte, Dobra, Solda) que o colaborador tem autorização para operar.',
+        description: '🎯 Objetivo: Criação de perfis, hierarquias e permissões operacionais estritas.\n\n💡 Finalidade: Limitar a interface do tablet. Garante que um "Soldador" não faça apontamentos na "Guilhotina", impondo disciplina cega (fool-proof) no input de dados do pátio.',
         icon: '👤'
     },
     'config': {
         title: 'Configurações do Sistema',
-        description: '🎯 Objetivo: Parametrizações locais do navegador e do usuário.\n\n⚙️ Como Trabalhar:\n• Alterne visualizações (Modo Escuro).\n• Defina limites de linhas exibidas em tabelas longas para acelerar o PC local.',
+        description: '🎯 Objetivo: Opções subjetivas e preferências do navegador do usuário em sessão.\n\n💡 Finalidade: Melhorar a ergonomia do software (Dark Mode) ou baixar limites de carga (linhas nas tabelas) para aliviar equipamentos e computadores industriais mais lentos.',
         icon: '⚙️'
     },
     'config-sistema': {
         title: 'Configurações Avançadas',
-        description: '🎯 Objetivo: Ajuste de variáveis de ambiente sensíveis.\n\n⚙️ Como Trabalhar:\n• Modifique parâmetros globais da empresa, limites de tolerância de erro de maquinário e links de integração. Apenas usuários Administradores Sênior devem operar aqui.',
+        description: '🎯 Objetivo: Painel master de controle de limites, integrações externas e comportamento core.\n\n💡 Finalidade: Ajuste das "Leis da Física" do seu ERP. Apenas administradores devem modificar, pois as opções afetam tolerâncias matemáticas e emissões em tempo real.',
         icon: '🔧'
     },
     'superadmin': {
         title: 'Painel Superadministrador',
-        description: '🎯 Objetivo: Gestão das licenças e clientes multitenant da plataforma.\n\n⚙️ Como Trabalhar:\n• Tela restrita. Use para conectar novos bancos de dados ao sistema e liberar licenças de SaaS. Não afeta a rotina operacional da fábrica.',
+        description: '🎯 Objetivo: Hub restrito de orquestração (Multi-tenant) das filiais e bases SaaS.\n\n💡 Finalidade: Trata-se da central de faturamento do SINCO. Permite a ativação de novas plantas fabris sem derrubar o ecossistema principal. Invisível ao usuário padrão.',
         icon: '👑'
     },
     'tarefas': {
         title: 'Tarefas',
-        description: '🎯 Objetivo: Kanban interno de recados e requisições para a equipe.\n\n⚙️ Como Trabalhar:\n• Crie tickets para a Engenharia arrumar desenhos, ou para a TI cadastrar novos logins.\n• Arraste os cards pelas colunas (A Fazer, Fazendo, Concluído).',
+        description: '🎯 Objetivo: Kanban integrado nativamente dentro do sistema.\n\n💡 Finalidade: Substituir grupos informais por requisições rastreáveis e formais. Acelera resolução de defeitos nas plantas, pois os tickets ficam no mesmo software das O.S.',
         icon: '✅'
     },
     'relatorios': {
         title: 'Relatórios',
-        description: '🎯 Objetivo: Impressão e PDF dos extratos do mês.\n\n⚙️ Como Trabalhar:\n• Selecione o template desejado (Ex: Kg produzidos por operador).\n• Informe o range de datas, e gere planilhas para a contabilidade ou para o RH calcular bônus fabril.',
+        description: '🎯 Objetivo: Motor gerador de extrações, totalizadores numéricos e PDFs.\n\n💡 Finalidade: Ponto focal contábil e tático da empresa. Envia relatórios prontos à diretoria ou à folha de pagamento, com resultados inquestionáveis extraídos direto do pátio.',
         icon: '📊'
     },
 
     // ── FALLBACK ─────────────────────────────────────────────────────
     'default': {
         title: 'Sobre esta Tela',
-        description: '🎯 Objetivo: Gerenciar as informações deste módulo do sistema.\n\n⚙️ Como Trabalhar:\n• Utilize os filtros laterais ou superiores para restringir os registros.\n• No botão "Novo" ou "Ações", você pode incluir novos dados.\n• Em tabelas, procure o ícone de lápis ou lixeira na última coluna para edições.',
+        description: '🎯 Objetivo: Abstração genérica das funcionalidades do módulo atual.\n\n💡 Finalidade: Orientar o usuário de maneira padronizada nas funções de Busca, Adição, Exclusão e Atualização (CRUD), garantindo usabilidade mínima em rotas não catalogadas.',
         icon: '📌'
     }
 };

@@ -12033,3 +12033,5 @@
 30/07/2026 08:21:59: (Use `node --trace-deprecation ...` to show where the warning was created)
 30/07/2026 08:22:24: (node:9632) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
 30/07/2026 08:22:24: (Use `node --trace-deprecation ...` to show where the warning was created)
+03/08/2026 10:52:39: (node:20540) [DEP0190] DeprecationWarning: Passing args to a child process with shell option true can lead to security vulnerabilities, as the arguments are not escaped, only concatenated.
+03/08/2026 10:52:39: (Use `node --trace-deprecation ...` to show where the warning was created)

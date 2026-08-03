@@ -84592,3 +84592,5 @@
 30/07/2026 08:22:25: [dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
 30/07/2026 08:22:25: Server running on port 3000 and listening on all interfaces(0.0.0.0)
 30/07/2026 08:22:25: Connected to MySQL database
+03/08/2026 10:52:39: [dotenv@17.2.3] injecting env (12) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+03/08/2026 10:52:39: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal

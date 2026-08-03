@@ -14,8 +14,6 @@ interface Recurso {
   CodigoProcessoFabricacao?: string;
   Fabrica: string;
   DataLiberada: string;
-  Setup?: number;
-  TempoPadrao?: number;
   DataCriacao?: string;
   CriadoPor?: string;
 }
@@ -24,9 +22,7 @@ const emptyForm: Recurso = {
   processofabricacao: '',
   CodigoProcessoFabricacao: '',
   Fabrica: 'NAO',
-  DataLiberada: 'NAO',
-  Setup: 0,
-  TempoPadrao: 0
+  DataLiberada: 'NAO'
 };
 
 export default function RecursoFabricacaoPage() {
@@ -406,36 +402,7 @@ export default function RecursoFabricacaoPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Setup (min)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="Setup"
-                        value={formData.Setup === undefined ? '' : formData.Setup}
-                        onChange={handleInputChange}
-                        className={inputBaseClass + " border-gray-200"}
-                        placeholder="Ex: 15"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Tempo Padrão (min)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        name="TempoPadrao"
-                        value={formData.TempoPadrao === undefined ? '' : formData.TempoPadrao}
-                        onChange={handleInputChange}
-                        className={inputBaseClass + " border-gray-200"}
-                        placeholder="Ex: 5"
-                      />
-                    </div>
-                  </div>
+
                 </div>
 
                 <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
@@ -476,8 +443,6 @@ export default function RecursoFabricacaoPage() {
                   <th className="px-2 py-1 text-left text-[9px] font-semibold text-white uppercase tracking-wider hidden md:table-cell">Código</th>
                   <th className="px-2 py-1 text-center text-[9px] font-semibold text-white uppercase tracking-wider hidden md:table-cell">Fábrica</th>
                   <th className="px-2 py-1 text-center text-[9px] font-semibold text-white uppercase tracking-wider hidden md:table-cell">Data Liberada</th>
-                  <th className="px-2 py-1 text-right text-[9px] font-semibold text-white uppercase tracking-wider hidden sm:table-cell w-20">Setup</th>
-                  <th className="px-2 py-1 text-right text-[9px] font-semibold text-white uppercase tracking-wider hidden sm:table-cell w-20">T. Padrão</th>
                   <th className="px-2 py-1 text-right text-[9px] font-semibold text-white uppercase tracking-wider">Ações</th>
                 </tr>
               </thead>
@@ -549,26 +514,6 @@ export default function RecursoFabricacaoPage() {
                               <option value="NAO">NÃO</option>
                             </select>
                           </td>
-                          <td className="px-2 py-1 text-right hidden sm:table-cell">
-                            <input 
-                              type="number" 
-                              step="0.01" 
-                              name="Setup" 
-                              value={editFormData.Setup === undefined ? '' : editFormData.Setup} 
-                              onChange={handleInputInline} 
-                              className="w-full px-1.5 py-1 rounded border border-gray-300 text-[10px] text-right focus:border-[#32423D] outline-none" 
-                            />
-                          </td>
-                          <td className="px-2 py-1 text-right hidden sm:table-cell">
-                            <input 
-                              type="number" 
-                              step="0.01" 
-                              name="TempoPadrao" 
-                              value={editFormData.TempoPadrao === undefined ? '' : editFormData.TempoPadrao} 
-                              onChange={handleInputInline} 
-                              className="w-full px-1.5 py-1 rounded border border-gray-300 text-[10px] text-right focus:border-[#32423D] outline-none" 
-                            />
-                          </td>
                           <td className="px-2 py-1">
                             <div className="flex items-center justify-end gap-1">
                               <button
@@ -608,12 +553,6 @@ export default function RecursoFabricacaoPage() {
                             <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${recurso.DataLiberada === 'SIM' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600'}`}>
                               {recurso.DataLiberada === 'NÂO' || recurso.DataLiberada === 'NAO' ? 'NÃO' : recurso.DataLiberada}
                             </span>
-                          </td>
-                          <td className="px-3 py-1 text-right hidden sm:table-cell text-[11px] text-gray-600 font-medium">
-                            {recurso.Setup ?? '-'}
-                          </td>
-                          <td className="px-3 py-1 text-right hidden sm:table-cell text-[11px] text-gray-600 font-medium">
-                            {recurso.TempoPadrao ?? '-'}
                           </td>
                           
                           <td className="px-3 py-1">

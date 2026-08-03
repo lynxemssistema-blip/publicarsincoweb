@@ -919,7 +919,6 @@ export default function ProjetoPage() {
  onChange={(e) => setSearchFilters(prev => ({ ...prev, projeto: e.target.value.toUpperCase() }))}
  onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- placeholder="PROJ-00X"
  />
  </div>
  <div>
@@ -930,7 +929,7 @@ export default function ProjetoPage() {
  onChange={(e) => setSearchFilters(prev => ({ ...prev, descProjeto: e.target.value.toUpperCase() }))}
  onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- placeholder="Detalhes..."
+ 
  />
  </div>
  <div>
@@ -941,7 +940,7 @@ export default function ProjetoPage() {
  onChange={(e) => setSearchFilters(prev => ({ ...prev, cliente: e.target.value.toUpperCase() }))}
  onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- placeholder="ALFATEC, SIEMENS..."
+ 
  />
  </div>
  <div>
@@ -952,7 +951,7 @@ export default function ProjetoPage() {
  onChange={(e) => setSearchFilters(prev => ({ ...prev, cnpj: e.target.value }))}
  onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- placeholder="00.000.000/0001-00"
+ 
  />
  </div>
  <div>

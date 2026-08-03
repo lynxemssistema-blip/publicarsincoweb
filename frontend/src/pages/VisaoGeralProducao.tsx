@@ -1138,7 +1138,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       return;
     }
     try {
-      const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
+      const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`, { headers: getAuthHeaders() })).json();
       if (r.success) {
         setExpandedTagsOs(prev => ({ ...prev, [idTag]: r.data }));
         setExpandedOsItems({});
@@ -1152,13 +1152,13 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
   const fetchOsForProject = async (idProj: number) => {
  setLoadOsDetails(true);
  try {
- const r = await (await fetch(`${API_BASE}/visao-geral/projeto/${idProj}/ordens-servico?t=${Date.now()}`, { cache: 'no-store' })).json();
+ const r = await (await fetch(`${API_BASE}/visao-geral/projeto/${idProj}/ordens-servico?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
  if (r.success) {
  setOsDetailsModal({ type: 'projeto', id: idProj, osList: r.data });
  } else {
  setOsDetailsModal({ type: 'projeto', id: idProj, osList: [] });
  }
- } catch {
+ } catch (e) {
  console.error(e);
  setOsDetailsModal({ type: 'projeto', id: idProj, osList: [] });
  } finally {
@@ -1169,7 +1169,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
  const fetchTags = async (projId: number) => {
  setLoadTags(true);
  try {
- const r = await (await fetch(`${API_BASE}/acompanhamento/projeto/${projId}/tags?t=${Date.now()}`)).json();
+ const r = await (await fetch(`${API_BASE}/acompanhamento/projeto/${projId}/tags?t=${Date.now()}`, { headers: getAuthHeaders() })).json();
  if (r.success) setTags(r.data);
  else { setTags([]); setMsg({ ok: false, t: r.message }); }
  } catch {
@@ -2362,15 +2362,15 @@ const salvarDatasBulkTags = async () => {
     return (
       <React.Fragment key={t.IdTag}>
         <tr className={`group hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'}`}>
-          <td colSpan={2} className="px-4 py-3 border-b border-slate-200">
-            <div className="flex flex-col gap-2.5">
+          <td colSpan={2} className="px-3 py-1 border-b border-slate-200">
+            <div className="flex flex-col gap-1">
               {/* LINHA 1: Tag Name, Status, Badges (Previsão & Qtd. OS) Próximos */}
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <div className={`w-2.5 h-2.5 rounded-full shadow-sm shrink-0 ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                  <span className="font-black text-slate-800 text-sm truncate">{t.Tag}</span>
-                  <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold">Cod: {t.IdTag}</span>
-                  {t.StatusTag && <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">{t.StatusTag}</span>}
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <div className={`w-2 h-2 rounded-full shadow-sm shrink-0 ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                  <span className="font-black text-slate-800 text-xs truncate max-w-[400px]" title={t.Tag}>{t.Tag}</span>
+                  <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[8.5px] px-1 py-0 rounded font-bold leading-tight">Cod: {t.IdTag}</span>
+                  {t.StatusTag && <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[8.5px] px-1 py-0 rounded font-bold uppercase leading-tight">{t.StatusTag}</span>}
                   
                   {/* BADGES DE PREVISÃO E QTD. OS BEM PRÓXIMOS DOS DADOS DA TAG */}
                   <div className="flex items-center gap-2 ml-2 bg-slate-100 border border-slate-200 rounded-md px-2 py-0.5 shadow-xs">
@@ -2414,17 +2414,7 @@ const salvarDatasBulkTags = async () => {
                   >
                     <Edit3 size={11} /> Plan. Eng/Proj.
                   </button>
-                  <button 
-                    type="button"
-                    onClick={(e) => { 
-                      e.stopPropagation(); 
-                      setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: !prev[t.IdTag] }));
-                    }}
-                    className={`px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors shadow-sm ${showPlanningDatesTag[t.IdTag] ? 'bg-indigo-700 text-white border border-indigo-800' : 'bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-800'}`}
-                    title="Montar Datas de Planejamento dos Recursos desta Tag (Inline)"
-                  >
-                    <Calendar size={11} /> Montar Datas
-                  </button>
+
                   <button type="button" 
                     onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
                     className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
@@ -2452,17 +2442,18 @@ const salvarDatasBulkTags = async () => {
                 </div>
               </div>
 
-              {/* LINHA 2: Descrição da Tag */}
-              {t.DescTag && <div className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed" title={t.DescTag}>{t.DescTag}</div>}
-
-              {/* LINHA 3: CAMPO DE DIGITAÇÃO DE OBSERVAÇÃO AUTOMÁTICO */}
-              <div className="flex items-center gap-2 max-w-3xl">
-                <span className="text-[9.5px] font-bold text-slate-400 uppercase shrink-0">Obs:</span>
-                <input 
-                  type="text"
-                  placeholder="Digite a observação para esta Tag..."
-                  defaultValue={t.Observacao || ''}
-                  onBlur={async (e) => {
+              {/* LINHA 2 e 3: Descrição da Tag & OBS Juntas para economizar espaço vertical */}
+              <div className="flex flex-col gap-0.5 mt-0.5">
+                {t.DescTag && <div className="text-[10px] text-slate-500 line-clamp-1 leading-tight" title={t.DescTag}>{t.DescTag}</div>}
+                
+                {/* CAMPO DE DIGITAÇÃO DE OBSERVAÇÃO AUTOMÁTICO */}
+                <div className="flex items-center gap-1.5 max-w-3xl mt-0.5">
+                  <span className="text-[9px] font-bold text-slate-400 uppercase shrink-0">Obs:</span>
+                  <input 
+                    type="text"
+                    placeholder="Digite a observação para esta Tag..."
+                    defaultValue={t.Observacao || ''}
+                    onBlur={async (e) => {
                     const val = e.target.value;
                     if (val !== (t.Observacao || '')) {
                       try {
@@ -2480,405 +2471,10 @@ const salvarDatasBulkTags = async () => {
                   className="w-full bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-indigo-400 rounded px-2.5 py-0.5 text-[11px] text-slate-700 outline-none transition-all placeholder:text-slate-300 shadow-xs"
                 />
               </div>
+              </div>
             </div>
           </td>
         </tr>
-
-        {/* ══ ROW INDEPENDENTE EXPANSÍVEL: MONTAR DATAS DE PLANEJAMENTO DA TAG (SEM MODAL POPUP) ══ */}
-        {Boolean(showPlanningDatesTag[t.IdTag]) && (
-          <tr key={`planning-row-${t.IdTag}`} className="bg-indigo-50/70">
-            <td colSpan={2} className="p-3 border-b-2 border-indigo-300">
-              <div className="bg-white p-4 rounded-xl border border-indigo-200 shadow-md text-slate-800">
-                {/* Header */}
-                <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-200">
-                  <div className="flex items-center gap-2">
-                    <div className="p-1.5 bg-indigo-100 text-indigo-800 rounded-lg">
-                      <Calendar size={16} />
-                    </div>
-                    <div>
-                      <h5 className="font-black text-xs uppercase tracking-wide text-slate-800">
-                        Montar Datas de Planejamento dos Recursos — Tag {t.Tag} (Código #{t.IdTag})
-                      </h5>
-                      <p className="text-[10px] text-slate-500 font-medium">
-                        Defina os dias por setor e ajuste a ordem da sequência de produção
-                      </p>
-                    </div>
-                  </div>
-                  <button 
-                    type="button"
-                    onClick={() => setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: false }))}
-                    className="px-2 py-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors text-xs font-bold flex items-center gap-1"
-                  >
-                    <X size={14} /> Fechar
-                  </button>
-                </div>
-
-                {/* Controls: Modo Progressivo / Regressivo & Data Base */}
-                <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 mb-4 flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-black text-slate-600 uppercase tracking-wider">Modo de Planejamento:</span>
-                    <div className="flex bg-white p-1 rounded-md border border-slate-300 shadow-xs">
-                      <button 
-                        type="button"
-                        onClick={() => setTagPlanningModes(prev => ({ ...prev, [t.IdTag]: 'progressivo' }))}
-                        className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${(tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? 'bg-[#32423D] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}
-                      >
-                        Progressivo (1º → Último)
-                      </button>
-                      <button 
-                        type="button"
-                        onClick={() => setTagPlanningModes(prev => ({ ...prev, [t.IdTag]: 'regressivo' }))}
-                        className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${(tagPlanningModes[t.IdTag] || 'progressivo') === 'regressivo' ? 'bg-[#32423D] text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'}`}
-                      >
-                        Regressivo (Último → 1º)
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <label className="text-[10px] font-black text-slate-600 uppercase tracking-wider">
-                      {(tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? 'Data Inicial Base (1º Recurso):' : 'Data Final Alvo (Último Recurso):'}
-                    </label>
-                    <input 
-                      type="date" 
-                      value={tagBaseDateInputs[t.IdTag] || ((tagPlanningModes[t.IdTag] || 'progressivo') === 'progressivo' ? new Date().toISOString().split('T')[0] : (t.DataPrevisao ? brToIso(t.DataPrevisao) : new Date().toISOString().split('T')[0]))}
-                      onChange={e => setTagBaseDateInputs(prev => ({ ...prev, [t.IdTag]: e.target.value }))}
-                      className="bg-white border border-slate-300 focus:border-[#32423D] rounded px-3 py-1.5 text-xs text-slate-800 font-bold outline-none shadow-xs"
-                    />
-                  </div>
-                </div>
-
-                {/* Table of Active Sectors */}
-                {(() => {
-                  const activeSectorsRaw = ALL_TAG_SECTORS.filter(s => {
-                    const val = String((t as any)[s.flagField] ?? (t as any)['flag' + s.key] ?? (t as any)['txt' + s.key] ?? '');
-                    return val === '1' || val === 'S' || val === 'Sim' || (t as any)[s.flagField] === 1;
-                  });
-                  const activeSectors = activeSectorsRaw.length > 0 ? activeSectorsRaw : ALL_TAG_SECTORS;
-
-                  const tagCustomOrder = customSectorOrdersTag[t.IdTag] || [];
-                  let orderedSectors = [...activeSectors];
-                  if (tagCustomOrder.length > 0) {
-                    orderedSectors.sort((a, b) => {
-                      const idxA = tagCustomOrder.indexOf(a.key);
-                      const idxB = tagCustomOrder.indexOf(b.key);
-                      if (idxA === -1) return 1;
-                      if (idxB === -1) return -1;
-                      return idxA - idxB;
-                    });
-                  }
-
-                  const parseLocalDateStr = (isoDateStr: string) => {
-                    if (!isoDateStr) return new Date();
-                    const parts = isoDateStr.split('-').map(Number);
-                    if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
-                      return new Date(parts[0], parts[1] - 1, parts[2]);
-                    }
-                    return new Date();
-                  };
-
-                  const getInitialDaysForSector = (tag: any, sectorKey: string) => {
-                    const { pi, pf } = getSavedEntitySectorDates(tag, sectorKey);
-                    if (pi && pf) {
-                      const isoPi = pi.includes('/') ? brToIso(pi) : pi;
-                      const isoPf = pf.includes('/') ? brToIso(pf) : pf;
-                      const d1 = parseLocalDateStr(isoPi);
-                      const d2 = parseLocalDateStr(isoPf);
-                      if (!isNaN(d1.getTime()) && !isNaN(d2.getTime())) {
-                        const diffMs = d2.getTime() - d1.getTime();
-                        const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-                        if (diffDays > 0) return String(diffDays);
-                      }
-                    }
-                    return '1';
-                  };
-
-                  const formatLocalDateIso = (d: Date) => {
-                    const y = d.getFullYear();
-                    const m = String(d.getMonth() + 1).padStart(2, '0');
-                    const day = String(d.getDate()).padStart(2, '0');
-                    return `${y}-${m}-${day}`;
-                  };
-
-                  const currentMode = tagPlanningModes[t.IdTag] || 'progressivo';
-                  const todayIso = formatLocalDateIso(new Date());
-
-                  const baseDateVal = tagBaseDateInputs[t.IdTag] || (currentMode === 'progressivo' ? todayIso : (t.DataPrevisao ? (t.DataPrevisao.includes('/') ? brToIso(t.DataPrevisao) : t.DataPrevisao) : todayIso));
-
-                  let schedule: any[] = [];
-                  if (currentMode === 'progressivo') {
-                    let currentStart = parseLocalDateStr(baseDateVal);
-
-                    schedule = orderedSectors.map(s => {
-                      const daysKey = `${t.IdTag}-${s.key}`;
-                      const defaultDays = getInitialDaysForSector(t, s.key);
-                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] ?? defaultDays, 10));
-                      const startDateStr = formatLocalDateIso(currentStart);
-                      const endDateObj = new Date(currentStart);
-                      endDateObj.setDate(endDateObj.getDate() + numDays);
-                      const endDateStr = formatLocalDateIso(endDateObj);
-
-                      currentStart = new Date(endDateObj);
-
-                      return {
-                        ...s,
-                        numDays,
-                        startDateStr,
-                        endDateStr,
-                        startDateBr: isoToBr(startDateStr),
-                        endDateBr: isoToBr(endDateStr)
-                      };
-                    });
-                  } else {
-                    let currentEnd = parseLocalDateStr(baseDateVal);
-
-                    const revSchedule: any[] = [];
-                    for (let i = orderedSectors.length - 1; i >= 0; i--) {
-                      const s = orderedSectors[i];
-                      const daysKey = `${t.IdTag}-${s.key}`;
-                      const defaultDays = getInitialDaysForSector(t, s.key);
-                      const numDays = Math.max(1, parseInt(tagSectorDaysMap[daysKey] ?? defaultDays, 10));
-                      const endDateStr = formatLocalDateIso(currentEnd);
-                      const startDateObj = new Date(currentEnd);
-                      startDateObj.setDate(startDateObj.getDate() - numDays);
-                      const startDateStr = formatLocalDateIso(startDateObj);
-
-                      currentEnd = new Date(startDateObj);
-
-                      revSchedule.unshift({
-                        ...s,
-                        numDays,
-                        startDateStr,
-                        endDateStr,
-                        startDateBr: isoToBr(startDateStr),
-                        endDateBr: isoToBr(endDateStr)
-                      });
-                    }
-                    schedule = revSchedule;
-                  }
-
-                  const finalPrevDateBr = schedule.length > 0 ? schedule[schedule.length - 1].endDateBr : '';
-
-                  const moveUp = (idx: number) => {
-                    if (idx <= 0) return;
-                    const keys = orderedSectors.map(s => s.key);
-                    const temp = keys[idx];
-                    keys[idx] = keys[idx - 1];
-                    keys[idx - 1] = temp;
-                    setCustomSectorOrdersTag(prev => ({ ...prev, [t.IdTag]: keys }));
-                  };
-
-                  const moveDown = (idx: number) => {
-                    if (idx >= orderedSectors.length - 1) return;
-                    const keys = orderedSectors.map(s => s.key);
-                    const temp = keys[idx];
-                    keys[idx] = keys[idx + 1];
-                    keys[idx + 1] = temp;
-                    setCustomSectorOrdersTag(prev => ({ ...prev, [t.IdTag]: keys }));
-                  };
-
-                  const executeSaveAction = async () => {
-                    if (!t || !schedule || schedule.length === 0) return;
-                    setIsSaving(true);
-
-                    try {
-                      const updates: { field: string; value: string }[] = [];
-
-                      schedule.forEach(item => {
-                        if (item.piField && item.startDateBr) {
-                          updates.push({ field: item.piField, value: item.startDateBr });
-                          (t as any)[item.piField] = item.startDateBr;
-                          if (item.piField === 'PlanejadoInicioPUNSIONADEIRA') {
-                            updates.push({ field: 'PlanejadoInicioPunsionadeira', value: item.startDateBr });
-                          }
-                          if (item.piField === 'PlanejadoInicioGALVANIZAR') {
-                            updates.push({ field: 'PlanejadoInicioGalvanizar', value: item.startDateBr });
-                          }
-                        }
-                        if (item.pfField && item.endDateBr) {
-                          updates.push({ field: item.pfField, value: item.endDateBr });
-                          (t as any)[item.pfField] = item.endDateBr;
-                          if (item.pfField === 'PlanejadoFinalPUNSIONADEIRA') {
-                            updates.push({ field: 'PlanejadoFinalPunsionadeira', value: item.endDateBr });
-                          }
-                          if (item.pfField === 'PlanejadoFinalGALVANIZAR') {
-                            updates.push({ field: 'PlanejadoFinalGalvanizar', value: item.endDateBr });
-                          }
-                        }
-                      });
-
-                      if (schedule.length > 0) {
-                        const lastEndDateBr = schedule[schedule.length - 1].endDateBr;
-                        updates.push({ field: 'DataPrevisao', value: lastEndDateBr });
-                        t.DataPrevisao = lastEndDateBr;
-                      }
-
-                      // Update local React state for immediate UI feedback
-                      setTags(prev => prev.map(tItem => {
-                        if (tItem.IdTag === t.IdTag) {
-                          const updated = { ...tItem };
-                          updates.forEach(u => { (updated as any)[u.field] = u.value; });
-                          return updated;
-                        }
-                        return tItem;
-                      }));
-
-                      if (selProj) {
-                        setProjetos(prev => prev.map(p => {
-                          if (p.IdProjeto === selProj.IdProjeto) {
-                            const updated = { ...p };
-                            updates.forEach(u => { (updated as any)[u.field] = u.value; });
-                            return updated;
-                          }
-                          return p;
-                        }));
-                      }
-
-                      // 1. Save on Tag (MySQL)
-                      const respTag = await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/setor-data-bulk`, {
-                        method: 'PUT',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({ updates })
-                      });
-                      const resTag = await respTag.json();
-
-                      if (!respTag.ok || !resTag.success) {
-                        Swal.fire({
-                          icon: 'error',
-                          title: 'Erro de Salvamento',
-                          text: resTag.message || 'Erro ao salvar datas no Projeto/Tag.',
-                          confirmButtonColor: '#32423D'
-                        });
-                        return;
-                      }
-
-                      // 2. Propagate to OSs and Items of OSs (MySQL)
-                      const respOS = await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/propagar-datas-os`, {
-                        method: 'PUT',
-                        headers: getAuthHeaders(),
-                        body: JSON.stringify({ updates })
-                      });
-                      const resOS = await respOS.json();
-
-                      if (!respOS.ok || !resOS.success) {
-                        Swal.fire({
-                          icon: 'error',
-                          title: 'Erro de Propagação',
-                          text: resOS.message || 'Erro ao propagar datas para Ordens de Serviço.',
-                          confirmButtonColor: '#32423D'
-                        });
-                        return;
-                      }
-
-                      Swal.fire({
-                        icon: 'success',
-                        title: 'Sucesso',
-                        text: 'Datas de planejamento salvas com SUCESSO no banco de dados para o Projeto, Tag, Ordens de Serviço e Itens!',
-                        confirmButtonColor: '#32423D'
-                      });
-
-                      fetchProj();
-
-                      if (selProj) fetchTags(selProj.IdProjeto);
-
-                      setShowPlanningDatesTag(prev => ({ ...prev, [t.IdTag]: false }));
-                    } catch (err) {
-                      console.error('Erro ao salvar planejamento:', err);
-                      Swal.fire({
-                        icon: 'error',
-                        title: 'Erro',
-                        text: 'Erro ao salvar datas de planejamento.',
-                        confirmButtonColor: '#32423D'
-                      });
-                    } finally {
-                      setIsSaving(false);
-                    }
-                  };
-
-                  return (
-                    <>
-                      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white shadow-xs">
-                        <table className="w-full text-left text-xs border-collapse">
-                          <thead className="bg-slate-100 text-slate-700 uppercase font-black text-[9.5px] tracking-wider border-b border-slate-200">
-                            <tr>
-                              <th className="px-3 py-2 text-center w-16 border-r border-slate-200">Ordem</th>
-                              <th className="px-3.5 py-2 border-r border-slate-200">Recurso (Setor Ativo)</th>
-                              <th className="px-3.5 py-2 text-center border-r border-slate-200 w-36">Dias de Produção</th>
-                              <th className="px-3.5 py-2 text-center w-64">Intervalo de Datas (Início → Fim)</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-100 bg-white">
-                            {schedule.map((item, idx) => (
-                              <tr key={item.key} className="hover:bg-slate-50 transition-colors">
-                                <td className="px-2 py-1.5 text-center border-r border-slate-100 bg-slate-50/50">
-                                  <div className="flex items-center justify-center gap-1">
-                                    <button 
-                                      type="button"
-                                      onClick={() => moveUp(idx)} 
-                                      disabled={idx === 0}
-                                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-20 hover:bg-slate-200 rounded transition-colors" 
-                                      title="Subir Recurso"
-                                    >
-                                      <ArrowUp size={12} />
-                                    </button>
-                                    <button 
-                                      type="button"
-                                      onClick={() => moveDown(idx)} 
-                                      disabled={idx === schedule.length - 1}
-                                      className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-20 hover:bg-slate-200 rounded transition-colors" 
-                                      title="Descer Recurso"
-                                    >
-                                      <ArrowDown size={12} />
-                                    </button>
-                                  </div>
-                                </td>
-                                <td className="px-3.5 py-2 font-bold text-slate-800 border-r border-slate-100 uppercase flex items-center gap-2">
-                                  <span className="w-2 h-2 rounded-full bg-[#32423D] shrink-0" />
-                                  <span>{item.label}</span>
-                                </td>
-                                <td className="px-3.5 py-2 text-center border-r border-slate-100 bg-slate-50/30">
-                                  <div className="inline-flex items-center gap-1.5 justify-center">
-                                    <input 
-                                      type="number" 
-                                      min={1} 
-                                      value={tagSectorDaysMap[`${t.IdTag}-${item.key}`] ?? getInitialDaysForSector(t, item.key)}
-                                      onChange={e => setTagSectorDaysMap(prev => ({ ...prev, [`${t.IdTag}-${item.key}`]: e.target.value }))}
-                                      className="w-16 text-center font-bold text-slate-800 bg-white border border-slate-300 rounded px-2 py-1 text-xs outline-none focus:border-[#32423D]"
-                                    />
-                                    <span className="text-[10px] text-slate-400 font-bold uppercase">dias</span>
-                                  </div>
-                                </td>
-                                <td className="px-3.5 py-2 text-center font-mono font-bold text-indigo-700 bg-indigo-50/30 text-xs">
-                                  {item.startDateBr} até {item.endDateBr}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {/* Footer action */}
-                      <div className="mt-4 flex items-center justify-between pt-3 border-t border-slate-200">
-                        <span className="text-xs font-bold text-slate-700">
-                          Data Final Prevista da Tag: <span className="text-emerald-700 font-black">{finalPrevDateBr || '—'}</span>
-                        </span>
-                        <button 
-                          type="button"
-                          onClick={executeSaveAction}
-                          disabled={isSaving}
-                          className="px-5 py-2 bg-[#32423D] hover:bg-[#32423D]/90 text-white rounded-lg text-xs font-bold shadow-md transition-colors flex items-center gap-2 disabled:opacity-50"
-                          title="Salvar datas na Tag, nas OSs e nos Itens das OSs"
-                        >
-                          {isSaving ? <Loader className="animate-spin" size={14} /> : <CheckCircle size={14} />} Salvar Datas (Tag + OSs + Itens)
-                        </button>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            </td>
-          </tr>
-        )}
 
 {/* ══ ROW EXPANSIVEL DE SETORES DA TAG ══ */}
         {expandedTagSectors[t.IdTag] && (() => {
