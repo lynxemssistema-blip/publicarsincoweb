@@ -4827,15 +4827,10 @@ const queryPool = req.tenantDbPool || pool;
         // 1. Fetch Projects (Base data + Native Tags count/percentages)
         const [projetos] = await queryPool.execute(`
             SELECT
-                p.IdProjeto, p.Projeto, p.DescProjeto, 
+                p.*,
                 CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa,
-                p.DataPrevisao, p.DataCriacao,
-                TRIM(p.Finalizado) as Finalizado, p.DataFinalizado, p.liberado, p.StatusProj, p.DescStatus,
-
+                TRIM(p.Finalizado) as Finalizado, 
                 COUNT(t.IdTag) AS QtdeTags,
-                COALESCE(p.QtdeTagsExecutadas, 0) AS QtdeTagsExecutadas,
-                COALESCE(p.QtdePecasExecutadas, 0) AS QtdePecasExecutadas,
-                
                 COALESCE(SUM(CAST(NULLIF(t.qtdetotal,'') AS DECIMAL(10,2))), 0) AS qtdetotalpecas
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
@@ -4970,44 +4965,44 @@ const queryPool = req.tenantDbPool || pool;
                 qtderncPendente: rncS.qtderncPendente || 0,
                 qtderncFinalizada: rncS.qtderncFinalizada || 0,
 
-                TotalCorte: osS.TotalCorte || 0, ExecCorte: osS.ExecCorte || 0,
-                PlanejadoInicioCorte: osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: osS.RealizadoInicioCorte || null, RealizadoFinalCorte: osS.RealizadoFinalCorte || null,
+                TotalCorte: p.CorteTotalExecutar ?? osS.TotalCorte ?? 0, ExecCorte: p.CorteTotalExecutado ?? osS.ExecCorte ?? 0,
+                PlanejadoInicioCorte: p.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: p.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: p.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: p.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
                 flagCorte: osS.flagCorte || 0,
 
-                TotalDobra: osS.TotalDobra || 0, ExecDobra: osS.ExecDobra || 0,
-                PlanejadoInicioDobra: osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: osS.RealizadoInicioDobra || null, RealizadoFinalDobra: osS.RealizadoFinalDobra || null,
+                TotalDobra: p.DobraTotalExecutar ?? osS.TotalDobra ?? 0, ExecDobra: p.DobraTotalExecutado ?? osS.ExecDobra ?? 0,
+                PlanejadoInicioDobra: p.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: p.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: p.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: p.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
                 flagDobra: osS.flagDobra || 0,
 
-                TotalSolda: osS.TotalSolda || 0, ExecSolda: osS.ExecSolda || 0,
-                PlanejadoInicioSolda: osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: osS.RealizadoInicioSolda || null, RealizadoFinalSolda: osS.RealizadoFinalSolda || null,
+                TotalSolda: p.SoldaTotalExecutar ?? osS.TotalSolda ?? 0, ExecSolda: p.SoldaTotalExecutado ?? osS.ExecSolda ?? 0,
+                PlanejadoInicioSolda: p.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: p.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: p.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: p.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
                 flagSolda: osS.flagSolda || 0,
 
-                TotalPintura: osS.TotalPintura || 0, ExecPintura: osS.ExecPintura || 0,
-                PlanejadoInicioPintura: osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: osS.RealizadoInicioPintura || null, RealizadoFinalPintura: osS.RealizadoFinalPintura || null,
+                TotalPintura: p.PinturaTotalExecutar ?? osS.TotalPintura ?? 0, ExecPintura: p.PinturaTotalExecutado ?? osS.ExecPintura ?? 0,
+                PlanejadoInicioPintura: p.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: p.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: p.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: p.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
                 flagPintura: osS.flagPintura || 0,
 
-                TotalMontagem: osS.TotalMontagem || 0, ExecMontagem: osS.ExecMontagem || 0,
-                PlanejadoInicioMontagem: osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: osS.RealizadoFinalMontagem || null,
+                TotalMontagem: p.MontagemTotalExecutar ?? osS.TotalMontagem ?? 0, ExecMontagem: p.MontagemTotalExecutado ?? osS.ExecMontagem ?? 0,
+                PlanejadoInicioMontagem: p.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: p.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: p.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: p.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
                 flagMontagem: osS.flagMontagem || 0,
 
-                TotalCorteaLaser: osS.TotalCorteaLaser || 0, ExecCorteaLaser: osS.ExecCorteaLaser || 0,
-                PlanejadoInicioCorteaLaser: osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: osS.RealizadoFinalCorteaLaser || null,
+                TotalCorteaLaser: p.CorteaLaserTotalExecutar ?? osS.TotalCorteaLaser ?? 0, ExecCorteaLaser: p.CorteaLaserTotalExecutado ?? osS.ExecCorteaLaser ?? 0,
+                PlanejadoInicioCorteaLaser: p.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: p.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: p.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: p.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
                 flagCorteaLaser: osS.flagCorteaLaser || 0,
 
-                TotalPunsionadeira: osS.TotalPunsionadeira || 0, ExecPunsionadeira: osS.ExecPunsionadeira || 0,
-                PlanejadoInicioPunsionadeira: osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: osS.PlanejadoFinalPunsionadeira || null,
-                RealizadoInicioPunsionadeira: osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: osS.RealizadoFinalPunsionadeira || null,
+                TotalPunsionadeira: p.PunsionadeiraTotalExecutar ?? osS.TotalPunsionadeira ?? 0, ExecPunsionadeira: p.PunsionadeiraTotalExecutado ?? osS.ExecPunsionadeira ?? 0,
+                PlanejadoInicioPunsionadeira: p.PlanejadoInicioPunsionadeira || osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: p.PlanejadoFinalPunsionadeira || osS.PlanejadoFinalPunsionadeira || null,
+                RealizadoInicioPunsionadeira: p.RealizadoInicioPunsionadeira || osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: p.RealizadoFinalPunsionadeira || osS.RealizadoFinalPunsionadeira || null,
                 flagPunsionadeira: osS.flagPunsionadeira || 0,
 
-                TotalGalvanizar: osS.TotalGalvanizar || 0, ExecGalvanizar: osS.ExecGalvanizar || 0,
-                PlanejadoInicioGalvanizar: osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: osS.PlanejadoFinalGalvanizar || null,
-                RealizadoInicioGalvanizar: osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: osS.RealizadoFinalGalvanizar || null,
+                TotalGalvanizar: p.GalvanizarTotalExecutar ?? osS.TotalGalvanizar ?? 0, ExecGalvanizar: p.GalvanizarTotalExecutado ?? osS.ExecGalvanizar ?? 0,
+                PlanejadoInicioGalvanizar: p.PlanejadoInicioGalvanizar || osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: p.PlanejadoFinalGalvanizar || osS.PlanejadoFinalGalvanizar || null,
+                RealizadoInicioGalvanizar: p.RealizadoInicioGalvanizar || osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: p.RealizadoFinalGalvanizar || osS.RealizadoFinalGalvanizar || null,
                 flagGalvanizar: osS.flagGalvanizar || 0,
             };
 
@@ -5175,29 +5170,29 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 flagPunsionadeira: osS.flagPunsionadeira || 0,
                 flagGalvanizar: osS.flagGalvanizar || 0,
 
-                PlanejadoInicioCorte: osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: osS.RealizadoInicioCorte || null, RealizadoFinalCorte: osS.RealizadoFinalCorte || null,
-                CorteTotalExecutado: osS.CorteTotalExecutado || 0, CorteTotalExecutar: osS.CorteTotalExecutar || 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
+                PlanejadoInicioCorte: t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
+                CorteTotalExecutado: t.CorteTotalExecutado ?? osS.CorteTotalExecutado ?? 0, CorteTotalExecutar: t.CorteTotalExecutar ?? osS.CorteTotalExecutar ?? 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
 
-                PlanejadoInicioDobra: osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: osS.RealizadoInicioDobra || null, RealizadoFinalDobra: osS.RealizadoFinalDobra || null,
-                DobraTotalExecutado: osS.DobraTotalExecutado || 0, DobraTotalExecutar: osS.DobraTotalExecutar || 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
+                PlanejadoInicioDobra: t.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: t.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: t.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: t.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
+                DobraTotalExecutado: t.DobraTotalExecutado ?? osS.DobraTotalExecutado ?? 0, DobraTotalExecutar: t.DobraTotalExecutar ?? osS.DobraTotalExecutar ?? 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
 
-                PlanejadoInicioSolda: osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: osS.RealizadoInicioSolda || null, RealizadoFinalSolda: osS.RealizadoFinalSolda || null,
-                SoldaTotalExecutado: osS.SoldaTotalExecutado || 0, SoldaTotalExecutar: osS.SoldaTotalExecutar || 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
+                PlanejadoInicioSolda: t.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: t.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: t.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: t.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
+                SoldaTotalExecutado: t.SoldaTotalExecutado ?? osS.SoldaTotalExecutado ?? 0, SoldaTotalExecutar: t.SoldaTotalExecutar ?? osS.SoldaTotalExecutar ?? 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
 
-                PlanejadoInicioPintura: osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: osS.RealizadoInicioPintura || null, RealizadoFinalPintura: osS.RealizadoFinalPintura || null,
-                PinturaTotalExecutado: osS.PinturaTotalExecutado || 0, PinturaTotalExecutar: osS.PinturaTotalExecutar || 0, SumQtdePintura: osS.SumQtdePintura || 0,
+                PlanejadoInicioPintura: t.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: t.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: t.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: t.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
+                PinturaTotalExecutado: t.PinturaTotalExecutado ?? osS.PinturaTotalExecutado ?? 0, PinturaTotalExecutar: t.PinturaTotalExecutar ?? osS.PinturaTotalExecutar ?? 0, SumQtdePintura: osS.SumQtdePintura || 0,
 
-                PlanejadoInicioMontagem: osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: osS.RealizadoFinalMontagem || null,
-                MontagemTotalExecutado: osS.MontagemTotalExecutado || 0, MontagemTotalExecutar: osS.MontagemTotalExecutar || 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
+                PlanejadoInicioMontagem: t.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: t.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: t.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: t.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
+                MontagemTotalExecutado: t.MontagemTotalExecutado ?? osS.MontagemTotalExecutado ?? 0, MontagemTotalExecutar: t.MontagemTotalExecutar ?? osS.MontagemTotalExecutar ?? 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
 
-                PlanejadoInicioCorteaLaser: osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: osS.RealizadoFinalCorteaLaser || null,
-                CorteaLaserTotalExecutado: osS.CorteaLaserTotalExecutado || 0, CorteaLaserTotalExecutar: osS.CorteaLaserTotalExecutar || 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
+                PlanejadoInicioCorteaLaser: t.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: t.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: t.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: t.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
+                CorteaLaserTotalExecutado: t.CorteaLaserTotalExecutado ?? osS.CorteaLaserTotalExecutado ?? 0, CorteaLaserTotalExecutar: t.CorteaLaserTotalExecutar ?? osS.CorteaLaserTotalExecutar ?? 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
 
                 PlanejadoInicioPUNSIONADEIRA: osS.PlanejadoInicioPUNSIONADEIRA || null, PlanejadoFinalPUNSIONADEIRA: osS.PlanejadoFinalPUNSIONADEIRA || null,
                 RealizadoInicioPUNSIONADEIRA: osS.RealizadoInicioPUNSIONADEIRA || null, RealizadoFinalPUNSIONADEIRA: osS.RealizadoFinalPUNSIONADEIRA || null,
@@ -9950,7 +9945,7 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
         };
     }
 
-    const { projeto, tag, os, item, search, status, codMatFabricante, dataPlanejamento, page = 1, limit = 50 } = req.query;
+    const { projeto, tag, os, item, search, status, codMatFabricante, dataPlanejamentoInicio, dataPlanejamentoFim, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const offsetNum = (pageNum - 1) * limitNum;
@@ -10008,14 +10003,21 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
             params.push(`%${codMatFabricante}%`);
         }
 
-        // Filtro Data Planejamento
-        if (dataPlanejamento) {
+                // Filtro Data Planejamento Range
+        if (dataPlanejamentoInicio && dataPlanejamentoFim) {
             const setorUpper = setor.charAt(0).toUpperCase() + setor.slice(1);
             whereClause += ` AND (
-                STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') <= ? OR 
-                DATE(osi.PlanejadoInicio${setorUpper}) <= ?
+                (STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') >= ? AND STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') <= ?) OR 
+                (DATE(osi.PlanejadoInicio${setorUpper}) >= ? AND DATE(osi.PlanejadoInicio${setorUpper}) <= ?)
             )`;
-            params.push(dataPlanejamento, dataPlanejamento);
+            params.push(dataPlanejamentoInicio, dataPlanejamentoFim, dataPlanejamentoInicio, dataPlanejamentoFim);
+        } else if (dataPlanejamentoInicio) {
+            const setorUpper = setor.charAt(0).toUpperCase() + setor.slice(1);
+            whereClause += ` AND (
+                STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') = ? OR 
+                DATE(osi.PlanejadoInicio${setorUpper}) = ?
+            )`;
+            params.push(dataPlanejamentoInicio, dataPlanejamentoInicio);
         }
 
         const [countResult] = await req.tenantDbPool.execute(`
@@ -10583,27 +10585,36 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
             if (projetoId) await updateEntityRow('projetos', 'IdProjeto', projetoId);
         };
 
-        if (targetType === 'os') {
-            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', targetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', targetId);
+        const idsToUpdate = (targetType === 'tag' && Array.isArray(targetIds) && targetIds.length > 0) ? targetIds : [targetId];
 
-            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [targetId]).catch(() => [[]]);
+        for (const currentTargetId of idsToUpdate) {
+            if (targetType === 'os') {
+            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', currentTargetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', currentTargetId);
+
+            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [currentTargetId]).catch(() => [[]]);
             if (osRows && osRows[0]) {
                 await updateParentHierarchy(null, osRows[0].IdTag, osRows[0].IdProjeto);
             }
         } else if (targetType === 'tag') {
-            await updateFieldsForEntity('tags', 'IdTag', targetId);
-            await updateFieldsForEntity('ordemservico', 'IdTag', targetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdTag', targetId);
+            await updateFieldsForEntity('tags', 'IdTag', currentTargetId);
+            await updateFieldsForEntity('ordemservico', 'IdTag', currentTargetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdTag', currentTargetId);
 
-            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [targetId]).catch(() => [[]]);
+            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [currentTargetId]).catch(() => [[]]);
             if (tagRows && tagRows[0]) {
                 await updateParentHierarchy(null, null, tagRows[0].IdProjeto);
             }
+        } else if (targetType === 'projeto') {
+            await updateFieldsForEntity('projetos', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('tags', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('ordemservico', 'IdProjeto', currentTargetId, "AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('ordemservicoitem', 'IdProjeto', currentTargetId, "AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado NOT IN ('C', 'S'))");
+            await updateParentHierarchy(null, null, currentTargetId);
         } else if (targetType === 'item') {
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', targetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', currentTargetId);
 
-            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [targetId]).catch(() => [[]]);
+            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [currentTargetId]).catch(() => [[]]);
             if (itemRows && itemRows[0]) {
                 let osId = itemRows[0].IdOrdemServico;
                 let tagId = itemRows[0].IdTag;
@@ -10627,6 +10638,8 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 await updateParentHierarchy(osId, tagId, projetoId);
             }
         }
+
+                }
 
         await conn.commit();
         console.log(`[Planejamento Setores] Salvo com sucesso para ${targetType} ID=${targetId} com ${sectors.length} setores e propagado na hierarquia`);
@@ -12254,7 +12267,77 @@ app.post('/api/producao/reposicao', tenantMiddleware, async (req, res) => {
     }
 });
 
+
+// ==========================================
+// LIMITES DE TEMPO DIARIO DE PRODUCAO
+// ==========================================
+
+app.get('/api/config/limites-recursos', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [rows] = await queryPool.execute('SELECT id, recurso, limite_minutos, visivel FROM producaorecursodiario');
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('[API] Erro ao buscar limites:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar limites' });
+    }
+});
+
+app.get('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [rows] = await queryPool.execute('SELECT id, recurso, limite_minutos, visivel FROM producaorecursodiario WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Não encontrado' });
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao buscar limite' });
+    }
+});
+
+app.post('/api/config/limites-recursos', tenantMiddleware, async (req, res) => {
+    const { recurso, limite_minutos, visivel } = req.body;
+    if (!recurso || limite_minutos === undefined) {
+        return res.status(400).json({ success: false, message: 'Parâmetros inválidos' });
+    }
+
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [result] = await queryPool.execute('INSERT INTO producaorecursodiario (recurso, limite_minutos, visivel) VALUES (?, ?, ?)', [recurso, limite_minutos, visivel || 'SIM']);
+        res.json({ success: true, message: 'Criado com sucesso', id: result.insertId });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+             return res.status(400).json({ success: false, message: 'Já existe um limite para este recurso' });
+        }
+        res.status(500).json({ success: false, message: 'Erro ao salvar limite: ' + error.message });
+    }
+});
+
+app.put('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const { recurso, limite_minutos, visivel } = req.body;
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        await queryPool.execute('UPDATE producaorecursodiario SET recurso = ?, limite_minutos = ?, visivel = ? WHERE id = ?', [recurso, limite_minutos, visivel || 'SIM', req.params.id]);
+        res.json({ success: true, message: 'Atualizado com sucesso' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+             return res.status(400).json({ success: false, message: 'Já existe um limite para este recurso' });
+        }
+        res.status(500).json({ success: false, message: 'Erro ao atualizar' });
+    }
+});
+
+app.delete('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        await queryPool.execute('DELETE FROM producaorecursodiario WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Excluído com sucesso' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao excluir' });
+    }
+});
+
 // Configuração - UPDATE
+
 // MENU CONFIGURATION
 // GET Menu Structure
 // COPY-ON-FIRST-READ: Se o banco ativo não tiver menu próprio, retorna o menu do lynxlocal como template.
@@ -16483,36 +16566,22 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 EngenhariaTotalTempo = (SELECT COALESCE(SUM(oi.EngenhariaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 EngenhariaDiasProducao = (SELECT CASE WHEN SUM(oi.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(oi.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
-                -- Pecas Executadas: minimo entre setores ativos.
+                -- Pecas Executadas: Somente soma QtdeTotal se TODOS os recursos ativos estiverem concluidos ('C' ou 'S')
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
-                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSolda,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtCorteaLaser,'')!='1' AND IFNULL(oi.txtPUNSIONADEIRA,'')!='1' AND IFNULL(oi.txtGALVANIZAR,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
-                            THEN oi.QtdeTotal
-                            ELSE
-                                CASE WHEN LEAST(
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPUNSIONADEIRA, '')='1' THEN oi.PunsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
-                                ) >= 999999999 THEN 0
-                                ELSE LEAST(
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPUNSIONADEIRA, '')='1' THEN oi.PunsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
-                                )
-                                END
+                            WHEN (
+                                (IFNULL(oi.txtCorte,'') != '1' OR IFNULL(oi.sttxtCorte,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtDobra,'') != '1' OR IFNULL(oi.sttxtDobra,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtSolda,'') != '1' OR IFNULL(oi.sttxtSolda,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtPintura,'') != '1' OR IFNULL(oi.sttxtPintura,'') IN ('C','S')) AND
+                                (IFNULL(oi.TxtMontagem,'') != '1' OR IFNULL(oi.sttxtMontagem,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtCorteaLaser,'') != '1' OR IFNULL(oi.sttxtCorteaLaser,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtPUNSIONADEIRA,'') != '1' OR IFNULL(oi.sttxtPUNSIONADEIRA,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtGALVANIZAR,'') != '1' OR IFNULL(oi.sttxtGALVANIZAR,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtEngenharia,'') != '1' OR IFNULL(oi.sttxtEngenharia,'') IN ('C','S'))
+                            ) THEN oi.QtdeTotal
+                            ELSE 0
                         END
                     ), 0)
                     FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')

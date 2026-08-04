@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { User, Lock, Loader2, ArrowRight, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,14 @@ export default function LoginPage() {
  const [username, setUsername] = useState('');
  const [password, setPassword] = useState('');
  const [loading, setLoading] = useState(false);
+ const inputRef = useRef<HTMLInputElement>(null);
+
+ useEffect(() => {
+   // Attempt focus after animations settle
+   setTimeout(() => {
+     inputRef.current?.focus();
+   }, 500);
+ }, []);
 
  const handleSubmit = async (e: React.FormEvent) => {
  e.preventDefault();
@@ -132,6 +141,7 @@ export default function LoginPage() {
  value={username}
  onChange={e => setUsername(e.target.value)}
  autoComplete="username"
+ ref={inputRef}
  />
  </div>
  </div>

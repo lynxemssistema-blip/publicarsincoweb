@@ -156,7 +156,8 @@ useEffect(() => {
  const [clienteFilter, setClienteFilter] = useState('');
  const [itemFilter, setItemFilter] = useState('');
  const [codMatFabricanteFilter, setCodMatFabricanteFilter] = useState('');
- const [dataPlanejamentoFilter, setDataPlanejamentoFilter] = useState('');
+ const [dataPlanejamentoInicio, setDataPlanejamentoInicio] = useState('');
+ const [dataPlanejamentoFim, setDataPlanejamentoFim] = useState('');
  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente' | 'concluido'>('pendente');
  const [groupBy, setGroupBy] = useState<'os' | 'projeto' | 'tag' | 'cliente' | 'produto_principal'>('os');
    const checkPredecessorStatus = (item: any, currentSetor: any) => {
@@ -483,7 +484,8 @@ useEffect(() => {
  if (itemFilter) params.set('item', itemFilter);
  if (codMatFabricanteFilter) params.set('codMatFabricante', codMatFabricanteFilter);
  if (statusFilter !== 'todos') params.set('status', statusFilter);
- if (dataPlanejamentoFilter) params.set('dataPlanejamento', dataPlanejamentoFilter);
+ if (dataPlanejamentoInicio) params.set('dataPlanejamentoInicio', dataPlanejamentoInicio);
+ if (dataPlanejamentoFim) params.set('dataPlanejamentoFim', dataPlanejamentoFim);
  
  // Paginação
  params.set('page', String(page));
@@ -520,7 +522,7 @@ useEffect(() => {
  setLoading(false);
  }
  }
- }, [setorAtivo, projetoFilter, tagFilter, osFilter, planoCorteFilter, statusFilter, itemFilter, clienteFilter, codMatFabricanteFilter, dataPlanejamentoFilter, page]);
+ }, [setorAtivo, projetoFilter, tagFilter, osFilter, planoCorteFilter, statusFilter, itemFilter, clienteFilter, codMatFabricanteFilter, dataPlanejamentoInicio, dataPlanejamentoFim, page]);
 
  const handleCancelLoad = () => {
  if (abortControllerRef.current) {
@@ -534,7 +536,7 @@ useEffect(() => {
  // Auto-load removido intencionalmente para performance
  // Só carrega se houver page load de outra tela (com params) ou se o usuário clicar em pesquisar
  useEffect(() => {
- const fields = [planoCorteFilter, projetoFilter, tagFilter, osFilter, itemFilter, clienteFilter, codMatFabricanteFilter, dataPlanejamentoFilter];
+ const fields = [planoCorteFilter, projetoFilter, tagFilter, osFilter, itemFilter, clienteFilter, codMatFabricanteFilter, dataPlanejamentoInicio, dataPlanejamentoFim];
  const filledFieldsCount = fields.filter(f => f.trim().length > 0).length;
 
  // Se a página mudou via paginação, busca automaticamente se houver filtros válidos ou se uma busca já foi iniciada
@@ -575,7 +577,7 @@ useEffect(() => {
  }, []);
 
  // Check if any filter is active
- const hasActiveFilters = planoCorteFilter || projetoFilter || tagFilter || osFilter || itemFilter || codMatFabricanteFilter || clienteFilter || dataPlanejamentoFilter || statusFilter !== 'pendente';
+ const hasActiveFilters = planoCorteFilter || projetoFilter || tagFilter || osFilter || itemFilter || codMatFabricanteFilter || clienteFilter || dataPlanejamentoInicio || dataPlanejamentoFim || statusFilter !== 'pendente';
 
  // Fetch item details when opening modal
  const selectItem = async (item: ApontamentoItem) => {
@@ -926,7 +928,7 @@ useEffect(() => {
  }, 500);
  return () => clearTimeout(timeoutId);
  }
- }, [searchQuery1, searchQuery2, pendenciaModalOpen, clienteFilter, codMatFabricanteFilter, dataPlanejamentoFilter, fetchItens, hasSearched, itemFilter, osFilter, planoCorteFilter, projetoFilter, tagFilter]); // eslint-disable-line react-hooks/exhaustive-deps
+ }, [searchQuery1, searchQuery2, pendenciaModalOpen, clienteFilter, codMatFabricanteFilter, dataPlanejamentoInicio, dataPlanejamentoFim, fetchItens, hasSearched, itemFilter, osFilter, planoCorteFilter, projetoFilter, tagFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
  const handleNovaPendencia = () => {
  setIdRncEdicao(null);
@@ -1089,30 +1091,7 @@ useEffect(() => {
  </div>
  )}
 
- {/* Setor Tabs */}
- <AnimatePresence>
-{showTabs && (
-      <div className="bg-white rounded-md shadow-sm border border-gray-100 p-2 overflow-hidden mb-2">
-        <div className="flex items-center gap-3 bg-gray-50/50 p-2 rounded-lg border border-gray-100">
-          <label className="text-xs font-semibold text-gray-700 uppercase">Recurso de Fabricação:</label>
-          <select
-              value={setorAtivo}
-              onChange={(e) => {
-                  setSetorAtivo(e.target.value);
-                  setPage(1);
-                  setHasSearched(false);
-              }}
-              className="px-3 py-1.5 border border-gray-300 rounded text-sm focus:outline-none focus:border-[#567469] focus:ring-1 focus:ring-[#567469]"
-          >
-              {recursosList.map((r, idx) => {
-                  const val = r.processofabricacao.toLowerCase().replace(/\s+/g, '');
-                  return <option key={idx} value={val}>{r.processofabricacao}</option>;
-              })}
-          </select>
-        </div>
-      </div>
-    )}
- </AnimatePresence>
+ 
  </>
  )}
 
@@ -1151,207 +1130,260 @@ useEffect(() => {
  className="bg-white rounded-md shadow-sm border border-gray-100 p-4 overflow-hidden shrink-0"
  >
  <div className="flex flex-wrap items-end gap-3">
- {/* Plano de Corte Filter */}
- <div className="flex-1 min-w-[200px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Plano de Corte</label>
- <div className="flex items-center gap-2">
- <div className="relative flex-1">
- <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
- <div className="relative flex items-center w-full">
- <input
- type="search"
- placeholder="Digite a descrição..."
- value={planoCorteFilter}
- onChange={(e) => setPlanoCorteFilter(e.target.value)}
- className="w-full pl-8 pr-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
- />
- {planoCorteFilter && (
- <button onClick={() => {
- const e = { target: { value: '' } };
- ((e) => setPlanoCorteFilter(e.target.value))(e);
- }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
- </div>
- </div>
- {planoCorteFilter && (
- <button onClick={() => setPlanoCorteFilter('')} className="p-1.5 rounded border border-gray-200 text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
- <X size={14} />
- </button>
- )}
- </div>
- </div>
+  {/* Recurso de Fabricação Filter */}
+  <div className="min-w-[200px]">
+    <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Recurso de Fabricação</label>
+    <select
+        value={setorAtivo}
+        onChange={(e) => {
+            setSetorAtivo(e.target.value);
+            setPage(1);
+            setHasSearched(false);
+        }}
+        className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
+    >
+        {recursosList.map((r, idx) => {
+            const val = r.processofabricacao.toLowerCase().replace(/\s+/g, '');
+            return <option key={idx} value={val}>{r.processofabricacao}</option>;
+        })}
+    </select>
+  </div>
 
- {/* Projeto Filter */}
- <div className="min-w-[150px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Projeto</label>
- <input
- type="search"
- placeholder="Digite o projeto..."
- value={projetoFilter}
- onChange={(e) => { setProjetoFilter(e.target.value); setTagFilter(''); setOsFilter(''); }}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
- />
- </div>
+  {/* OS Filter */}
+  <div className="min-w-[120px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Ordem de Serviço</label>
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite a OS..."
+  value={osFilter}
+  onChange={(e) => setOsFilter(e.target.value)}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {osFilter && (
+  <button onClick={() => {
+  const e = { target: { value: '' } };
+  ((e) => setOsFilter(e.target.value))(e);
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* Tag Filter */}
- <div className="min-w-[150px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Tag</label>
- <input
- type="search"
- placeholder="Digite a tag..."
- value={tagFilter}
- onChange={(e) => { setTagFilter(e.target.value); setOsFilter(''); }}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
- />
- </div>
+  {/* Cliente Filter */}
+  <div className="min-w-[150px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Cliente</label>
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite o cliente..."
+  value={clienteFilter}
+  onChange={(e) => setClienteFilter(e.target.value)}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {clienteFilter && (
+  <button onClick={() => {
+  const e = { target: { value: '' } };
+  ((e) => setClienteFilter(e.target.value))(e);
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* OS Filter */}
- <div className="min-w-[120px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Ordem de Serviço</label>
- <div className="relative flex items-center w-full">
- <input
- type="search"
- placeholder="Digite a OS..."
- value={osFilter}
- onChange={(e) => setOsFilter(e.target.value)}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
- />
- {osFilter && (
- <button onClick={() => {
- const e = { target: { value: '' } };
- ((e) => setOsFilter(e.target.value))(e);
- }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
- </div>
- </div>
+  {/* Cod. Produto Filter */}
+  <div className="min-w-[120px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Cód. Produto</label>
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite o código..."
+  value={codMatFabricanteFilter}
+  onChange={(e) => setCodMatFabricanteFilter(e.target.value)}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {codMatFabricanteFilter && (
+  <button onClick={() => {
+  const e = { target: { value: '' } };
+  ((e) => setCodMatFabricanteFilter(e.target.value))(e);
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* Cliente Filter */}
- <div className="min-w-[120px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Cliente</label>
- <div className="relative flex items-center w-full">
- <input
- type="search"
- placeholder="Digite o cliente..."
- value={clienteFilter}
- onChange={(e) => setClienteFilter(e.target.value)}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
- />
- {clienteFilter && (
- <button onClick={() => {
- const e = { target: { value: '' } };
- ((e) => setClienteFilter(e.target.value))(e);
- }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
- </div>
- </div>
+  {/* Projeto Filter */}
+  <div className="min-w-[150px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Projeto</label>
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite o projeto..."
+  value={projetoFilter}
+  onChange={(e) => { setProjetoFilter(e.target.value); setTagFilter(''); setOsFilter(''); }}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {projetoFilter && (
+  <button onClick={() => {
+  setProjetoFilter('');
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* Cod. Produto Filter */}
- <div className="min-w-[120px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Cód. Produto</label>
- <div className="relative flex items-center w-full">
- <input
- type="search"
- placeholder="Digite o código..."
- value={codMatFabricanteFilter}
- onChange={(e) => setCodMatFabricanteFilter(e.target.value)}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
- />
- {codMatFabricanteFilter && (
- <button onClick={() => {
- const e = { target: { value: '' } };
- ((e) => setCodMatFabricanteFilter(e.target.value))(e);
- }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
- <X size={14} />
- </button>
- )}
- </div>
- </div>
+  {/* Tag Filter */}
+  <div className="min-w-[150px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Tag</label>
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite a tag..."
+  value={tagFilter}
+  onChange={(e) => { setTagFilter(e.target.value); setOsFilter(''); }}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {tagFilter && (
+  <button onClick={() => {
+  setTagFilter('');
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* Data Planejamento Filter */}
- {setorAtivo !== 'mapa' && setorAtivo !== 'mapaproducao' && (
- <div className="min-w-[130px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">
- Data Planej. {setorInfo.label}
- </label>
- <input
- type="date"
- value={dataPlanejamentoFilter}
- onChange={(e) => setDataPlanejamentoFilter(e.target.value)}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
- />
- </div>
- )}
+  {/* Plano de Corte Filter */}
+  <div className="flex-1 min-w-[200px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Plano de Corte</label>
+  <div className="flex items-center gap-2">
+  <div className="relative flex-1">
+  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+  <div className="relative flex items-center w-full">
+  <input
+  type="search"
+  placeholder="Digite a descrição..."
+  value={planoCorteFilter}
+  onChange={(e) => setPlanoCorteFilter(e.target.value)}
+  className="w-full pl-8 pr-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50 pr-6"
+  />
+  {planoCorteFilter && (
+  <button onClick={() => {
+  const e = { target: { value: '' } };
+  ((e) => setPlanoCorteFilter(e.target.value))(e);
+  }} className="absolute right-1.5 text-slate-400 hover:text-red-500 transition-colors bg-transparent border-none" title="Limpar">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
+  {planoCorteFilter && (
+  <button onClick={() => setPlanoCorteFilter('')} className="p-1.5 rounded border border-gray-200 text-red-500 hover:text-red-700 hover:bg-red-50 hover:border-red-200 bg-white shadow-sm transition-colors" title="Limpar pesquisa">
+  <X size={14} />
+  </button>
+  )}
+  </div>
+  </div>
 
- {/* Group By */}
- <div className="min-w-[120px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Agrupar Por</label>
- <select
- value={groupBy}
- onChange={(e) => setGroupBy(e.target.value as Record<string, unknown>)}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs font-bold text-[#32423D] bg-[#E0E800]/20 border-blue-200"
- >
- <option value="os">Ordem Serviço</option>
- <option value="projeto">Projeto</option>
- <option value="tag">Tag</option>
- <option value="cliente">Cliente</option>
- <option value="produto_principal">Produto Principal</option>
- </select>
- </div>
+  {/* Data Planejamento Range Filter */}
+  {setorAtivo !== 'mapa' && setorAtivo !== 'mapaproducao' && (
+  <div className="min-w-[220px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">
+  Data Planejamento
+  </label>
+  <div className="flex items-center gap-1">
+    <div className="relative flex-1">
+      <input
+      type="date"
+      value={dataPlanejamentoInicio}
+      onChange={(e) => setDataPlanejamentoInicio(e.target.value)}
+      className="w-full pl-2 pr-6 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
+      title="Data Inicial"
+      />
+      {dataPlanejamentoInicio && (
+        <button onClick={() => setDataPlanejamentoInicio('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 bg-white" title="Limpar">
+          <X size={14} />
+        </button>
+      )}
+    </div>
+    <span className="text-gray-400 text-xs">-</span>
+    <div className="relative flex-1">
+      <input
+      type="date"
+      value={dataPlanejamentoFim}
+      onChange={(e) => setDataPlanejamentoFim(e.target.value)}
+      className="w-full pl-2 pr-6 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
+      title="Data Final"
+      />
+      {dataPlanejamentoFim && (
+        <button onClick={() => setDataPlanejamentoFim('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-400 hover:text-red-500 bg-white" title="Limpar">
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  </div>
+  </div>
+  )}
 
- {/* Status Filter */}
- <div className="min-w-[100px]">
- <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Status</label>
- <select
- value={statusFilter}
- onChange={(e) => setStatusFilter(e.target.value as 'todos' | 'pendente' | 'concluido')}
- className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs"
- >
- <option value="todos">Todos</option>
- <option value="pendente">Pendentes</option>
- <option value="concluido">Concluídos</option>
- </select>
- </div>
+  {/* Group By */}
+  <div className="min-w-[120px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Agrupar Por</label>
+  <select
+  value={groupBy}
+  onChange={(e) => setGroupBy(e.target.value as any)}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs font-bold text-[#32423D] bg-[#E0E800]/20 border-blue-200"
+  >
+  <option value="os">Ordem Serviço</option>
+  <option value="projeto">Projeto</option>
+  <option value="tag">Tag</option>
+  <option value="cliente">Cliente</option>
+  <option value="produto_principal">Produto Principal</option>
+  </select>
+  </div>
 
- {/* Clear Filters */}
- {hasActiveFilters && (
- <button
- onClick={clearFilters}
- className="flex items-center gap-1 px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
- >
- <XCircle size={14} />
- Limpar
- </button>
- )}
+  {/* Status Filter */}
+  <div className="min-w-[100px]">
+  <label className="block text-[10px] font-bold text-gray-500 mb-0.5">Status</label>
+  <select
+  value={statusFilter}
+  onChange={(e) => setStatusFilter(e.target.value as any)}
+  className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs"
+  >
+  <option value="todos">Todos</option>
+  <option value="pendente">Pendentes</option>
+  <option value="concluido">Concluídos</option>
+  </select>
+  </div>
 
- {/* Action Buttons (Right) */}
- <div className="flex items-center gap-2 ml-auto">
- {/* Planejamento Button */}
- <button
- onClick={() => setSetorAtivo('planejamento')}
- className="flex items-center gap-1.5 px-2 py-0.5 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 rounded shadow-sm transition-colors"
- >
- <Calendar size={14} />
- Planejamento
- </button>
- 
- {/* Search Button */}
- <button
- onClick={handleSearch}
- disabled={loading}
- className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50 rounded shadow-sm transition-colors"
- >
- {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
- Pesquisar
- </button>
- </div>
- </div>
- </motion.div>
+  {/* Clear Filters */}
+  {hasActiveFilters && (
+  <button
+  onClick={clearFilters}
+  className="flex items-center gap-1 px-2 py-1.5 text-xs text-red-600 hover:bg-red-50 rounded transition-colors"
+  >
+  <XCircle size={14} />
+  Limpar
+  </button>
+  )}
+
+  {/* Action Buttons (Right) */}
+  <div className="flex items-center gap-2 ml-auto">
+  {/* Search Button */}
+  <button
+  onClick={handleSearch}
+  disabled={loading}
+  className="flex items-center gap-2 px-4 py-1.5 text-xs font-bold bg-emerald-100 border border-emerald-200 text-emerald-800 hover:bg-emerald-200 disabled:opacity-50 rounded shadow-sm transition-colors"
+  >
+  {loading ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+  Pesquisar
+  </button>
+  </div>
+  </div>
+</motion.div>
  )}
  </AnimatePresence>
 
@@ -1384,8 +1416,8 @@ useEffect(() => {
  {!loading && itens.length > 0 && setorAtivo !== 'mapa' && (
  <div className="bg-gray-100 px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-black text-gray-500 uppercase sticky top-0 z-20 border-b border-gray-200 shadow-sm min-w-max">
  <span className="w-10 shrink-0 text-center">OS</span>
- <span className="w-32 shrink-0 sticky left-0 bg-gray-100 z-30">Projeto</span>
- <span className="w-40 shrink-0">Cliente/Empresa</span>
+ <span className="w-40 shrink-0 sticky left-0 bg-gray-100 z-30 border-r border-gray-200">Cliente/Empresa</span>
+ <span className="w-32 shrink-0">Projeto</span>
  <span className="w-24 shrink-0">Tag</span>
  <span className="w-[140px] shrink-0">Código</span>
  <span className="w-6 shrink-0 text-center">PDF</span>
@@ -1393,12 +1425,10 @@ useEffect(() => {
  <span className="w-16 shrink-0 text-center">Apontar</span>
  <span className="w-10 shrink-0 text-center">Qt</span>
  <span className="w-14 shrink-0 text-center">Prod.</span>
- <span className="w-28 shrink-0">Material</span>
  <span className="w-12 shrink-0 text-center">Esp.</span>
  <span className="w-48 shrink-0">Descrição</span>
- <span className="w-20 shrink-0 text-center">Data Planej.</span>
- <span className="w-12 shrink-0 text-center">%</span>
- <span className="w-28 shrink-0 text-right pr-2">Ação</span>
+ <span className="w-24 shrink-0 text-center">Data Planej.</span>
+ <span className="w-44 shrink-0 text-right pr-2">Ação</span>
  </div>
  )}
 
@@ -1442,13 +1472,12 @@ useEffect(() => {
  {/* Mapa Header */}
  <div className="bg-gray-100 px-2 py-1 flex items-center gap-1.5 text-[10px] font-black text-gray-500 uppercase sticky top-0 z-20 border-b border-gray-200 min-w-max">
  <span className="w-10 shrink-0 text-center">OS</span>
- <span className="w-32 shrink-0 sticky left-0 z-30 bg-gray-100 border-r border-gray-200">Projeto</span>
- <span className="w-40 shrink-0">Cliente/Empresa</span>
+ <span className="w-40 shrink-0 sticky left-0 z-30 bg-gray-100 border-r border-gray-200">Cliente/Empresa</span>
+ <span className="w-32 shrink-0">Projeto</span>
  <span className="w-24 shrink-0">Tag</span>
  <span className="w-[140px] shrink-0">Código</span>
  <span className="w-8 shrink-0 text-center">PDF</span>
  <span className="w-12 shrink-0 text-center">PC</span>
- <span className="w-28 shrink-0">Material</span>
  <span className="w-48 shrink-0">Descrição</span>
  <span className="w-16 shrink-0 text-center">Apontar</span>
  <span className="w-10 shrink-0 text-center">Qt</span>
@@ -1457,7 +1486,7 @@ useEffect(() => {
  {visibleSetores.includes('solda') && <span className="w-14 shrink-0 text-center bg-orange-100 rounded py-0.5">Solda</span>}
  {visibleSetores.includes('pintura') && <span className="w-14 shrink-0 text-center bg-green-100 rounded py-0.5">Pintura</span>}
  {visibleSetores.includes('montagem') && <span className="w-14 shrink-0 text-center bg-red-100 rounded py-0.5">Montag.</span>}
- <span className="w-28 shrink-0 text-right pr-2">Ação</span>
+ <span className="w-44 shrink-0 text-right pr-2">Ação</span>
  </div>
 
  {/* Mapa Items */}
@@ -1499,11 +1528,11 @@ useEffect(() => {
  {item.IdOrdemServico}
  </span>
 
- <span className="w-32 shrink-0 overflow-hidden text-ellipsis text-[10px] font-bold text-[#32423D] bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap sticky left-0 z-10 border-r border-white" title={item.Projeto}>
- {item.Projeto || '-'}
- </span>
- <span className="w-40 shrink-0 overflow-hidden text-ellipsis text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded uppercase whitespace-nowrap" title={item.Cliente}>
+ <span className="w-40 shrink-0 overflow-hidden text-ellipsis text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded uppercase whitespace-nowrap sticky left-0 z-10 border-r border-white" title={item.Cliente}>
  {item.Cliente || '-'}
+ </span>
+ <span className="w-32 shrink-0 overflow-hidden text-ellipsis text-[10px] font-bold text-[#32423D] bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Projeto}>
+ {item.Projeto || '-'}
  </span>
  <span className="w-24 shrink-0 overflow-hidden text-ellipsis text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Tag}>
  {item.Tag || '-'}
@@ -1532,9 +1561,7 @@ useEffect(() => {
  <span className="w-12 shrink-0 text-center text-[10px] text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded truncate" title={item.PlanoCorte}>
  {item.PlanoCorte || '-'}
  </span>
- <span className="w-28 shrink-0 text-[10px] font-bold text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded truncate">
- {item.MaterialSW || '-'}
- </span>
+ 
  <span className="w-48 shrink-0 text-gray-700 truncate text-[10px]">
  {item.DescResumo?.trim() || '-'}
  </span>
@@ -1622,7 +1649,7 @@ useEffect(() => {
  )}
  
  {/* Actions */}
- <div className="flex gap-1 items-center justify-end w-28 shrink-0 pr-2">
+ <div className="flex gap-1 items-center justify-end w-44 shrink-0 pr-2">
  <div className="flex gap-0.5">
  {item.EnderecoArquivo && (
  <>
@@ -1758,11 +1785,11 @@ useEffect(() => {
  </span>
  </div>
 
- <span className="w-32 shrink-0 overflow-hidden text-ellipsis text-[10px] font-bold text-[#32423D] bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap sticky left-0 z-10 border-r border-white" title={item.Projeto}>
- {item.Projeto || '-'}
- </span>
- <span className="w-40 shrink-0 overflow-hidden text-ellipsis text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded uppercase whitespace-nowrap" title={item.Cliente}>
+ <span className="w-40 shrink-0 overflow-hidden text-ellipsis text-[10px] text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded uppercase whitespace-nowrap sticky left-0 z-10 border-r border-white" title={item.Cliente}>
  {item.Cliente || '-'}
+ </span>
+ <span className="w-32 shrink-0 overflow-hidden text-ellipsis text-[10px] font-bold text-[#32423D] bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Projeto}>
+ {item.Projeto || '-'}
  </span>
  <span className="w-24 shrink-0 overflow-hidden text-ellipsis text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded whitespace-nowrap" title={item.Tag}>
  {item.Tag || '-'}
@@ -1837,11 +1864,7 @@ useEffect(() => {
  </span>
  </div>
 
- <div className="w-28 shrink-0 flex items-center">
- <span className="text-[10px] font-bold text-[#32423D] bg-[#E0E800]/20 px-1.5 py-0.5 rounded truncate">
- {item.MaterialSW || '-'}
- </span>
- </div>
+ 
 
  {/* Espessura */}
  <div className="w-12 shrink-0 text-center text-[10px] text-gray-600">
@@ -1854,25 +1877,12 @@ useEffect(() => {
  </span>
 
  {/* Data Planejamento */}
- <div className="w-20 shrink-0 text-center text-[10px] text-gray-700 font-bold">
+ <div className="w-24 shrink-0 text-center text-[10px] text-gray-700 font-bold truncate">
  {item.DataPlanejamento ? formatDate(item.DataPlanejamento) : '-'}
  </div>
 
- {/* Progress */}
- <div className="w-12 shrink-0">
- <div className="flex items-center gap-1">
- <div className="flex-1 h-1 bg-gray-200 rounded-full overflow-hidden">
- <div
- className={`h-full rounded-full transition-all ${getProgressColor(percentual)}`}
- style={{ width: `${Math.min(percentual, 100)}%` }}
- />
- </div>
- <span className="text-[8px] text-gray-500 w-6 font-bold">{percentual}%</span>
- </div>
- </div>
-
  {/* Actions */}
- <div className="flex gap-1 items-center justify-end w-28 shrink-0 pr-2">
+ <div className="flex gap-1 items-center justify-end w-44 shrink-0 pr-2">
  <div className="flex gap-0.5">
  {item.EnderecoArquivo && (
  <>

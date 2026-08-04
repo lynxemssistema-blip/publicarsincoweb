@@ -115,9 +115,25 @@ export default function ApontamentoProducaoPage() {
  // visibleSetores is derived from the global config (replaces per-component state)
  const visibleSetores: string[] = processosVisiveis;
  // filteredSetores: the tabs to show (always include 'mapa' + 'mapaproducao', filter sectors by config)
- const filteredSetores = setores.filter(s => s.id === 'mapa' || s.id === 'mapaproducao' || s.id === 'planejamento' || processosVisiveis.includes(s.id));
- const [setorAtivo, setSetorAtivo] = useState<Setor>('mapa');
- const [itens, setItens] = useState<ApontamentoItem[]>([]);
+ const filteredSetores = setores.filter(s => s.id === 'mapa' || s.id === 'mapaproducao' || s.id === 'planejamento' || processosVisiveis.includes(s.id));  const [setorAtivo, setSetorAtivo] = useState<Setor>('mapa');
+  const [limitesSetores, setLimitesSetores] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    fetch('/api/config/limites-recursos')
+      .then(res => res.json())
+      .then(data => {
+        if(data.success) {
+          const limites: Record<string, number> = {};
+          data.data.forEach((l: any) => {
+            limites[l.recurso.toLowerCase().replace(/\s+/g, '')] = l.limite_minutos;
+          });
+          setLimitesSetores(limites);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  const [itens, setItens] = useState<ApontamentoItem[]>([]);
  const abortControllerRef = useRef<AbortController | null>(null);
  const [loading, setLoading] = useState(false);
  const [hasSearched, setHasSearched] = useState(false);
@@ -2101,8 +2117,7 @@ export default function ApontamentoProducaoPage() {
               0
             )) || 0;
 
-            const limitesSalvos = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
-            const limiteDiarioVal = limitesSalvos[setorKey] ?? 500;
+            const limiteDiarioVal = limitesSetores[setorKey] ?? 500;
 
             return (
               <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 my-2.5 flex items-center justify-between shadow-xs">

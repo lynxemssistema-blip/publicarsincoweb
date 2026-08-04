@@ -5,7 +5,8 @@ import { X, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Calendar } from 'lucid
 interface SectorProductionModalProps {
   modalData: {
     title: string;
-    targetType?: 'os' | 'tag' | 'item';
+    targetType?: 'os' | 'tag' | 'item' | 'projeto';
+    allTags?: any[];
     targetId?: number;
     sectors: any[];
     isLiberado?: boolean;
@@ -33,11 +34,15 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   const [calcMode, setCalcMode] = useState<'auto' | 'manual'>('auto');
   const [autoDirection, setAutoDirection] = useState<'progressive' | 'regressive'>('progressive');
   const [targetDeadlineIso, setTargetDeadlineIso] = useState<string>('');
-  const [excludeWeekendsHolidays, setExcludeWeekendsHolidays] = useState<boolean>(false);
+    const [incluirSabado, setIncluirSabado] = useState<boolean>(false);
+  const [incluirDomingo, setIncluirDomingo] = useState<boolean>(false);
+  const [incluirFeriado, setIncluirFeriado] = useState<boolean>(false);
   const [sectors, setSectors] = useState<any[]>([]);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [activeDragIndex, setActiveDragIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [applyLevel, setApplyLevel] = useState<'item' | 'os' | 'tag' | 'projeto'>('item');
+  const [selectedTags, setSelectedTags] = useState<number[]>([]);
 
   const parseDateStr = (str?: string | null): Date | null => {
     if (!str || str === '—') return null;
@@ -98,27 +103,29 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const isWeekendOrHoliday = (date: Date, exclude: boolean): boolean => {
-    if (!exclude) return false;
+  const isWeekendOrHoliday = (date: Date, incSab: boolean, incDom: boolean, incFer: boolean): boolean => {
     const day = date.getDay();
-    if (day === 0 || day === 6) return true;
+    if (day === 6 && !incSab) return true; // Sábado
+    if (day === 0 && !incDom) return true; // Domingo
 
     const m = date.getMonth() + 1;
     const d = date.getDate();
     const fixed = ['1-1', '4-21', '5-1', '9-7', '10-12', '11-2', '11-15', '11-20', '12-25'];
-    return fixed.includes(`${m}-${d}`);
+    if (fixed.includes(`${m}-${d}`) && !incFer) return true; // Feriado
+
+    return false;
   };
 
-  const addBusinessDays = (startIso: string, daysCount: number, exclude: boolean): string => {
+  const addBusinessDays = (startIso: string, daysCount: number, incSab: boolean, incDom: boolean, incFer: boolean): string => {
     const dt = parseDateStr(startIso);
     if (!dt) return startIso;
-    while (exclude && isWeekendOrHoliday(dt, true)) {
+    while (isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
       dt.setDate(dt.getDate() + 1);
     }
     let added = 1;
     while (added < daysCount) {
       dt.setDate(dt.getDate() + 1);
-      if (!isWeekendOrHoliday(dt, exclude)) {
+      if (!isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
         added++;
       }
     }
@@ -128,16 +135,16 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const subtractBusinessDays = (endIso: string, daysCount: number, exclude: boolean): string => {
+  const subtractBusinessDays = (endIso: string, daysCount: number, incSab: boolean, incDom: boolean, incFer: boolean): string => {
     const dt = parseDateStr(endIso);
     if (!dt) return endIso;
-    while (exclude && isWeekendOrHoliday(dt, true)) {
+    while (isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
       dt.setDate(dt.getDate() - 1);
     }
     let subbed = 1;
     while (subbed < daysCount) {
       dt.setDate(dt.getDate() - 1);
-      if (!isWeekendOrHoliday(dt, exclude)) {
+      if (!isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
         subbed++;
       }
     }
@@ -147,11 +154,11 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const getNextBusinessDay = (isoStr: string, exclude: boolean): string => {
+  const getNextBusinessDay = (isoStr: string, incSab: boolean, incDom: boolean, incFer: boolean): string => {
     const dt = parseDateStr(isoStr);
     if (!dt) return isoStr;
     dt.setDate(dt.getDate() + 1);
-    while (exclude && isWeekendOrHoliday(dt, true)) {
+    while (isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
       dt.setDate(dt.getDate() + 1);
     }
     const yyyy = dt.getFullYear();
@@ -160,11 +167,11 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return `${yyyy}-${mm}-${dd}`;
   };
 
-  const getPreviousBusinessDay = (isoStr: string, exclude: boolean): string => {
+  const getPreviousBusinessDay = (isoStr: string, incSab: boolean, incDom: boolean, incFer: boolean): string => {
     const dt = parseDateStr(isoStr);
     if (!dt) return isoStr;
     dt.setDate(dt.getDate() - 1);
-    while (exclude && isWeekendOrHoliday(dt, true)) {
+    while (isWeekendOrHoliday(dt, incSab, incDom, incFer)) {
       dt.setDate(dt.getDate() - 1);
     }
     const yyyy = dt.getFullYear();
@@ -177,7 +184,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     list: any[],
     direction: 'progressive' | 'regressive' = autoDirection,
     deadlineIso: string = targetDeadlineIso,
-    excludeWH: boolean = excludeWeekendsHolidays
+    incSab: boolean = incluirSabado, incDom: boolean = incluirDomingo, incFer: boolean = incluirFeriado
   ): any[] => {
     const updated = list.map(item => ({ ...item }));
     if (updated.length === 0) return updated;
@@ -192,7 +199,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (curr.pi) {
             const isoPi = toIsoInput(curr.pi);
             if (isoPi) {
-              const endIso = addBusinessDays(isoPi, dias, excludeWH);
+              const endIso = addBusinessDays(isoPi, dias, incSab, incDom, incFer);
               curr.pi = toBrDisplay(isoPi);
               curr.pf = toBrDisplay(endIso);
             }
@@ -202,8 +209,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (prev && prev.pf) {
             const prevPfIso = toIsoInput(prev.pf);
             if (prevPfIso) {
-              const nextPiIso = getNextBusinessDay(prevPfIso, excludeWH);
-              const nextPfIso = addBusinessDays(nextPiIso, dias, excludeWH);
+              const nextPiIso = getNextBusinessDay(prevPfIso, incluirSabado, incluirDomingo, incluirFeriado);
+              const nextPfIso = addBusinessDays(nextPiIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
               curr.pi = toBrDisplay(nextPiIso);
               curr.pf = toBrDisplay(nextPfIso);
             }
@@ -226,7 +233,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
 
         if (i === updated.length - 1) {
           const pfIso = currentEndIso;
-          const piIso = subtractBusinessDays(pfIso, dias, excludeWH);
+          const piIso = subtractBusinessDays(pfIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
           curr.pf = toBrDisplay(pfIso);
           curr.pi = toBrDisplay(piIso);
         } else {
@@ -234,8 +241,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (nextRes && nextRes.pi) {
             const nextPiIso = toIsoInput(nextRes.pi);
             if (nextPiIso) {
-              const pfIso = getPreviousBusinessDay(nextPiIso, excludeWH);
-              const piIso = subtractBusinessDays(pfIso, dias, excludeWH);
+              const pfIso = getPreviousBusinessDay(nextPiIso, incluirSabado, incluirDomingo, incluirFeriado);
+              const piIso = subtractBusinessDays(pfIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
               curr.pf = toBrDisplay(pfIso);
               curr.pi = toBrDisplay(piIso);
             }
@@ -258,6 +265,12 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   
 
   // Exibe diretamente as datas de inicio e fim de cada recurso ativo da OS sem calculos encadeados
+  useEffect(() => {
+    if (modalData?.targetType === 'tag' && modalData?.targetId) {
+      setSelectedTags([Number(modalData.targetId)]);
+    }
+  }, [modalData]);
+
   useEffect(() => {
     if (modalData && modalData.sectors) {
       const initial = modalData.sectors.map(s => {
@@ -360,18 +373,15 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
 
   const handleDirectionChange = (direction: 'progressive' | 'regressive') => {
     setAutoDirection(direction);
-    setSectors(prev => recalculateAutomaticChain(prev, direction, targetDeadlineIso, excludeWeekendsHolidays));
+    setSectors(prev => recalculateAutomaticChain(prev, direction, targetDeadlineIso, incluirSabado, incluirDomingo, incluirFeriado));
   };
 
   const handleDeadlineDateChange = (isoDate: string) => {
     setTargetDeadlineIso(isoDate);
-    setSectors(prev => recalculateAutomaticChain(prev, 'regressive', isoDate, excludeWeekendsHolidays));
+    setSectors(prev => recalculateAutomaticChain(prev, 'regressive', isoDate, incluirSabado, incluirDomingo, incluirFeriado));
   };
 
-  const handleExcludeWeekendsToggle = (checked: boolean) => {
-    setExcludeWeekendsHolidays(checked);
-    setSectors(prev => recalculateAutomaticChain(prev, autoDirection, targetDeadlineIso, checked));
-  };
+  
 
   const handleModeToggle = (mode: 'auto' | 'manual') => {
     setCalcMode(mode);
@@ -389,12 +399,24 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     setSaving(true);
     try {
       if (modalData.targetType && modalData.targetId) {
+        let finalTargetType = modalData.targetType;
+        let finalTargetId = modalData.targetId;
+
+        // Se o modal foi aberto para um item, aplica o applyLevel
+        if (modalData.targetType === 'item' && modalData.item) {
+          finalTargetType = applyLevel;
+          if (applyLevel === 'os') finalTargetId = modalData.item.IdOrdemServico;
+          else if (applyLevel === 'tag') finalTargetId = modalData.item.IdTag;
+          else if (applyLevel === 'projeto') finalTargetId = modalData.item.IdProjeto;
+        }
+
         const res = await fetch('/api/salvar-setores-planejamento', {
           method: 'POST',
           headers: getAuthHeaders(),
           body: JSON.stringify({
-            targetType: modalData.targetType,
-            targetId: modalData.targetId,
+            targetType: finalTargetType,
+            targetId: finalTargetId,
+            targetIds: finalTargetType === 'tag' ? selectedTags : undefined,
             sectors
           })
         });
@@ -432,37 +454,80 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           </button>
         </div>
 
-        {/* MODE TOGGLE BAR */}
-        <div className="bg-slate-100/90 px-5 py-2.5 border-b border-slate-200 flex flex-col gap-2">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
-              Modo de Cálculo de Datas:
-            </span>
-            <div className="flex items-center bg-white p-1 rounded-lg border border-slate-300 shadow-xs gap-1">
-              <button
-                type="button"
-                onClick={() => handleModeToggle('auto')}
-                className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
-                  calcMode === 'auto'
-                    ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <span>⚡ Processo Automático</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => handleModeToggle('manual')}
-                className={`px-3 py-1 text-xs font-black rounded-md transition-all flex items-center gap-1.5 ${
-                  calcMode === 'manual'
-                    ? 'bg-[#32423D] text-[#E0E800] shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
-                }`}
-              >
-                <span>📝 Processo Manual</span>
-              </button>
+        {/* MODE TOGGLE BAR E NIVEL DE APLICAÇÃO */}
+        <div className="bg-slate-100/90 px-5 py-2.5 border-b border-slate-200 flex flex-col gap-3">
+          
+          {modalData.targetType === 'tag' && modalData.allTags && modalData.allTags.length > 0 && (
+            <div className="flex flex-col gap-1 mb-2">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">Aplicar planejamento às seguintes Tags:</span>
+              <div className="flex flex-wrap gap-2 max-h-[80px] overflow-y-auto p-1 bg-white border border-slate-300 rounded-lg shadow-inner">
+                <label className="flex items-center gap-1.5 cursor-pointer px-2 py-0.5 rounded transition-colors hover:bg-slate-50">
+                  <input type="checkbox" checked={selectedTags.length === modalData.allTags.length} onChange={(e) => {
+                    if (e.target.checked) setSelectedTags(modalData.allTags!.map(t => Number(t.IdTag)));
+                    else setSelectedTags([Number(modalData.targetId)]);
+                  }} className="w-3.5 h-3.5 rounded border-slate-300 text-[#32423D] focus:ring-[#32423D]" />
+                  <span className="text-[10px] font-black text-slate-800">TODAS</span>
+                </label>
+                {modalData.allTags.map((t: any) => (
+                  <label key={t.IdTag} className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-0.5 rounded border border-slate-200 transition-colors">
+                    <input type="checkbox" checked={selectedTags.includes(Number(t.IdTag))} 
+                      disabled={Number(t.IdTag) === Number(modalData.targetId)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedTags(prev => [...prev, Number(t.IdTag)]);
+                        else setSelectedTags(prev => prev.filter(id => id !== Number(t.IdTag)));
+                      }} className="w-3 h-3 rounded border-slate-300 text-[#32423D] focus:ring-[#32423D]" />
+                    <span className="text-[10px] font-bold text-slate-700">TAG {t.IdTag}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {modalData.targetType === 'item' && modalData.item && (
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                Aplicar planejamento em:
+              </span>
+              <div className="flex items-center bg-white p-1 rounded-lg border border-slate-300 shadow-xs gap-1">
+                <button
+                  type="button"
+                  onClick={() => setApplyLevel('item')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'item' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                >
+                  Somente Item
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApplyLevel('os')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'os' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                  title={modalData.item.IdOrdemServico ? "Toda a OS" : "OS não informada"}
+                  disabled={!modalData.item.IdOrdemServico}
+                >
+                  OS Inteira
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApplyLevel('tag')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'tag' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                  title={modalData.item.IdTag ? "Toda a Tag" : "Tag não informada"}
+                  disabled={!modalData.item.IdTag}
+                >
+                  Tag Inteira
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setApplyLevel('projeto')}
+                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'projeto' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
+                  title={modalData.item.IdProjeto ? "Todo o Projeto" : "Projeto não informado"}
+                  disabled={!modalData.item.IdProjeto}
+                >
+                  Projeto Inteiro
+                </button>
+              </div>
+            </div>
+          )}
+
+          
 
           {/* PAINEL DE SUB-OPÇÕES DO PROCESSO AUTOMÁTICO */}
           {calcMode === 'auto' && (
@@ -509,16 +574,48 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 </div>
               )}
 
-              <label className="flex items-center gap-1.5 cursor-pointer font-extrabold text-slate-700 hover:text-slate-900 select-none">
-                <input
-                  type="checkbox"
-                  checked={excludeWeekendsHolidays}
-                  disabled={modalData.isLiberado}
-                                                              onChange={(e) => handleExcludeWeekendsToggle(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
-                />
-                <span className="text-[10.5px]">Excluir Sábados, Domingos e Feriados</span>
-              </label>
+              <div className="flex items-center gap-3 bg-white px-2 py-1 rounded border border-slate-200">
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mr-1">Incluir:</span>
+                <label className="flex items-center gap-1 cursor-pointer font-bold text-slate-700 hover:text-slate-900 select-none">
+                  <input
+                    type="checkbox"
+                    checked={incluirSabado}
+                    disabled={modalData.isLiberado}
+                    onChange={(e) => {
+                      setIncluirSabado(e.target.checked);
+                      setSectors(prev => recalculateAutomaticChain(prev, autoDirection, targetDeadlineIso, e.target.checked, incluirDomingo, incluirFeriado));
+                    }}
+                    className="w-3 h-3 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
+                  />
+                  <span className="text-[10px]">Sábado</span>
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer font-bold text-slate-700 hover:text-slate-900 select-none">
+                  <input
+                    type="checkbox"
+                    checked={incluirDomingo}
+                    disabled={modalData.isLiberado}
+                    onChange={(e) => {
+                      setIncluirDomingo(e.target.checked);
+                      setSectors(prev => recalculateAutomaticChain(prev, autoDirection, targetDeadlineIso, incluirSabado, e.target.checked, incluirFeriado));
+                    }}
+                    className="w-3 h-3 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
+                  />
+                  <span className="text-[10px]">Domingo</span>
+                </label>
+                <label className="flex items-center gap-1 cursor-pointer font-bold text-slate-700 hover:text-slate-900 select-none">
+                  <input
+                    type="checkbox"
+                    checked={incluirFeriado}
+                    disabled={modalData.isLiberado}
+                    onChange={(e) => {
+                      setIncluirFeriado(e.target.checked);
+                      setSectors(prev => recalculateAutomaticChain(prev, autoDirection, targetDeadlineIso, incluirSabado, incluirDomingo, e.target.checked));
+                    }}
+                    className="w-3 h-3 rounded text-[#32423D] focus:ring-[#32423D] border-slate-300 cursor-pointer"
+                  />
+                  <span className="text-[10px]">Feriado</span>
+                </label>
+              </div>
             </div>
           )}
         </div>

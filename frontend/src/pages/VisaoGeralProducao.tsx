@@ -979,6 +979,56 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
     });
   };
 
+  const getProjectSectors = (p: any) => {
+    const SECTOR_ORDER = [
+      { key: 'Corte', label: 'Corte', rawExec: p.CorteTotalExecutado, rawAExec: p.CorteTotalExecutar },
+      { key: 'Dobra', label: 'Dobra', rawExec: p.DobraTotalExecutado, rawAExec: p.DobraTotalExecutar },
+      { key: 'Solda', label: 'Solda', rawExec: p.SoldaTotalExecutado, rawAExec: p.SoldaTotalExecutar },
+      { key: 'Pintura', label: 'Pintura', rawExec: p.PinturaTotalExecutado, rawAExec: p.PinturaTotalExecutar },
+      { key: 'Montagem', label: 'Montagem', rawExec: p.MontagemTotalExecutado, rawAExec: p.MontagemTotalExecutar },
+      { key: 'CorteaLaser', label: 'Corte a Laser', rawExec: p.CorteaLaserTotalExecutado, rawAExec: p.CorteaLaserTotalExecutar },
+      { key: 'Punsionadeira', label: 'Punsionadeira', rawExec: p.PUNSIONADEIRATotalExecutado ?? p.PunsionadeiraTotalExecutado, rawAExec: p.PUNSIONADEIRATotalExecutar ?? p.PunsionadeiraTotalExecutar },
+      { key: 'Galvanizar', label: 'Galvanizar', rawExec: p.GALVANIZARTotalExecutado ?? p.GalvanizarTotalExecutado, rawAExec: p.GALVANIZARTotalExecutar ?? p.GalvanizarTotalExecutar },
+    ];
+
+    const projQty = parseFloat(p.qtdetotalpecas ?? p.QtdePecasTags) || 1;
+    const isFin = p.Finalizado?.trim() === 'C' || p.Finalizado?.trim() === 'S';
+
+    const activeSectors = SECTOR_ORDER.filter(s => checkSectorActive(p, s.key));
+
+    return activeSectors.map((s, idx) => {
+      const dbExec = toNum({ val: s.rawExec });
+      const dbAExec = toNum({ val: s.rawAExec });
+      let exec = 0;
+      let aExec = 0;
+      if (isFin) {
+        exec = dbExec > 0 ? dbExec : projQty;
+        aExec = 0;
+      } else {
+        if (dbExec > 0 || dbAExec > 0) {
+          exec = dbExec;
+          aExec = dbAExec;
+        } else {
+          aExec = 0;
+        }
+      }
+      const { pi, pf, minProd } = getSectorPlanningDates(p, s.key);
+      const dias = getSectorDiasProducao(p, s.key);
+      return { key: s.key, label: s.label, exec, aExec, dias, pi, pf, minProd };
+    });
+  };
+
+  const openProjectSectorsModal = async (p: any) => {
+    const projectSectors = getProjectSectors(p);
+    
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (PROJETO #${p.IdProjeto} - ${p.Projeto})`,
+      targetType: 'projeto',
+      targetId: p.IdProjeto,
+      sectors: projectSectors
+    });
+  };
+
       const openTagSectorsModal = async (t: any) => {
     let items: any[] = [];
     try {
@@ -1016,7 +1066,8 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       title: `PRODUÇÃO POR SETOR/RECURSO (TAG #${t.IdTag} — ${t.Tag})`,
       targetType: 'tag',
       targetId: t.IdTag,
-      sectors: mergedSectors
+      sectors: mergedSectors,
+      allTags: tags
     });
   };
 
@@ -1969,6 +2020,9 @@ const salvarDatasBulkTags = async () => {
  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProj(p); setMsg(null); setActionModal('temposProducaoProj'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-blue-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Exibir Produção em Minutos">
  <Clock size={10} className="pointer-events-none" /> T.Prod
  </button>
+ <button type="button" onClick={(e) => { e.stopPropagation(); openProjectSectorsModal(p); }} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-emerald-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Produção por Setores">
+ <Activity size={10} className="pointer-events-none" /> Prod. Setores
+ </button>
  </div>
  </td>
  <td className="px-3 py-3 align-middle text-center border-r border-slate-100">
@@ -2413,6 +2467,14 @@ const salvarDatasBulkTags = async () => {
                     title="Planejar Projetista e Engenharia"
                   >
                     <Edit3 size={11} /> Plan. Eng/Proj.
+                  </button>
+
+                  <button type="button" 
+                    onClick={(e) => { e.stopPropagation(); openTagSectorsModal(t); }}
+                    className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Produção por Setores (Tag)"
+                  >
+                    <Activity size={11} /> Prod. Setores
                   </button>
 
                   <button type="button" 

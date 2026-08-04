@@ -57,20 +57,24 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
  const planoCorteFiltroDC: 'corte' | 'chaparia' = filtro === 'chaparia' ? 'chaparia' : 'corte';
  const mostrarPowerBuild = localStorage.getItem(LS_POWER_BUILD) === 'Sim';
 
- // 2. Regras de negócio: busca da API com fallback para localStorage
- fetch('/api/config')
- .then(res => res.json())
- .then(data => {
- // Setores padrão: TODOS os setores (produção + engenharia) visíveis
- const ENG_SETORES_DEFAULT = ['medicao', 'isometrico', 'engenharia', 'aprovacao', 'acabamento', 'expedicao'];
- let processosVisiveis = ['corte', 'dobra', 'solda', 'pintura', 'montagem', ...ENG_SETORES_DEFAULT];
- let restringirApontamento = false;
+  // 2. Regras de negócio: busca da API com fallback para localStorage
+  Promise.all([
+    fetch('/api/config').then(res => res.json()).catch(() => ({ success: false })),
+    fetch('/api/config/limites-recursos').then(res => res.json()).catch(() => ({ success: false }))
+  ])
+  .then(([configData, limitesData]) => {
+    const ENG_SETORES_DEFAULT = ['medicao', 'isometrico', 'engenharia', 'aprovacao', 'acabamento', 'expedicao'];
+    let engProcessosVisiveis = [...ENG_SETORES_DEFAULT];
+    let mfgProcessosVisiveis = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
+    let restringirApontamento = false;
 
- // Tenta ler local primeiro caso seja banco legado ou falha na API
- const localProcessos = localStorage.getItem(LS_PROCESSOS);
- if (localProcessos) {
- try { processosVisiveis = JSON.parse(localProcessos); } catch (_) {}
- }
+  const localProcessos = localStorage.getItem(LS_PROCESSOS);
+  if (localProcessos) {
+    try { 
+      const parsed = JSON.parse(localProcessos); 
+      engProcessosVisiveis = parsed.filter((p: string) => ENG_SETORES_DEFAULT.includes(p));
+    } catch (_) {}
+  }
  const localRestringir = localStorage.getItem(LS_RESTRINGIR);
  if (localRestringir) restringirApontamento = localRestringir === 'Sim';
 
@@ -80,36 +84,41 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
  try { nomesProcessosEngenharia = { ...nomesProcessosEngenharia, ...JSON.parse(localNomes) }; } catch (_) {}
  }
 
- if (data.success && data.config) {
- const cfg = data.config;
- try {
- if (cfg.ProcessosVisiveis) {
- try {
- processosVisiveis = JSON.parse(cfg.ProcessosVisiveis);
- } catch (_) {}
- }
- } catch (_) {}
+  if (configData.success && configData.config) {
+    const cfg = configData.config;
+    try {
+      if (cfg.ProcessosVisiveis) {
+        try {
+          const parsed = JSON.parse(cfg.ProcessosVisiveis);
+          engProcessosVisiveis = parsed.filter((p: string) => ENG_SETORES_DEFAULT.includes(p));
+        } catch (_) {}
+      }
+    } catch (_) {}
+    restringirApontamento = cfg.RestringirApontamentoSemSaldoAnterior === 'Sim';
+  }
 
- setConfig({
- processosVisiveis,
- restringirApontamento: cfg.RestringirApontamentoSemSaldoAnterior === 'Sim',
- planoCorteFiltroDC,
- maxRegistros: maxReg,
- mostrarPowerBuild,
- nomesProcessosEngenharia,
- loaded: true,
- });
- } else {
- setConfig({
- processosVisiveis,
- restringirApontamento,
- planoCorteFiltroDC,
- maxRegistros: maxReg,
- mostrarPowerBuild,
- nomesProcessosEngenharia,
- loaded: true
- });
- }
+  // Combine limites
+  if (limitesData.success && limitesData.data) {
+    // Only keep manufacturing resources that are visible
+    const visibleMfg = limitesData.data
+      .filter((r: any) => r.visivel === 'SIM')
+      .map((r: any) => r.recurso.toLowerCase().replace(/\s+/g, ''));
+    if (visibleMfg.length > 0) {
+      mfgProcessosVisiveis = visibleMfg;
+    }
+  }
+
+  const processosVisiveis = [...mfgProcessosVisiveis, ...engProcessosVisiveis];
+
+    setConfig({
+      processosVisiveis,
+      restringirApontamento,
+      planoCorteFiltroDC,
+      maxRegistros: maxReg,
+      mostrarPowerBuild,
+      nomesProcessosEngenharia,
+      loaded: true
+    });
  })
  .catch(() => {
  // Fallback total se API offline

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { User, Lock, Loader2, ArrowRight, ShieldCheck, Database, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -25,6 +25,15 @@ export default function LoginAcessoPage({ onAuthSuccess }: LoginAcessoProps) {
  const [password, setPassword] = useState('');
  const [loading, setLoading] = useState(false);
  const [success, setSuccess] = useState(false);
+
+ const inputRef = useRef<HTMLInputElement>(null);
+
+ useEffect(() => {
+   // Attempt focus after animations settle
+   setTimeout(() => {
+     inputRef.current?.focus();
+   }, 500);
+ }, []);
 
  // Banco de dados ativo (lido do usuário logado ou localStorage)
  const getActiveDb = (): string => {
@@ -223,6 +232,7 @@ export default function LoginAcessoPage({ onAuthSuccess }: LoginAcessoProps) {
  onChange={e => setUsername(e.target.value)}
  autoComplete="username"
  autoFocus
+ ref={inputRef}
  />
  </div>
  </div>

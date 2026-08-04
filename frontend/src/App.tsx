@@ -29,6 +29,7 @@ import ConfiguracaoPage from './pages/Configuracao';
 import ConfiguracaoSistemaPage from './pages/ConfiguracaoSistema';
 import UsuarioPage from './pages/Usuario';
 import CameraPage from './pages/Camera';
+import ProducaoDiariaRecursoPage from './pages/ProducaoDiariaRecurso';
 import SuperadminPage from './pages/Superadmin';
 import RomaneioPage from './pages/Romaneio';
 import PendenciaRomaneioPage from './pages/PendenciaRomaneio';
@@ -312,6 +313,8 @@ function AppContent() {
         return <ProjetoPage />;
       case 'recursos-fabricacao':
         return <RecursoFabricacaoPage />;
+      case 'producao-diaria-recurso':
+        return <ProducaoDiariaRecursoPage />;
       case 'tipos-produto':
         return <TipoProdutoPage />;
       case 'tipos-transporte':
