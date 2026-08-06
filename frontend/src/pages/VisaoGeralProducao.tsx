@@ -1,3 +1,4 @@
+import ProdSetoresModal from '../components/ProdSetoresModal';
 import SectorProductionModal from '../components/SectorProductionModal';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -316,6 +317,9 @@ export default function VisaoGeralProducao() {
   const osModalItemsCache = useRef<Record<string | number, any[]>>({});
   const [sectorModal, setSectorModal] = useState<{ title: string; sectors: { key: string; label: string; exec: number; aExec: number }[] } | null>(null);
   const [expandedTagsOs, setExpandedTagsOs] = useState<{ [key: number]: Record<string, unknown>[] | null }>({});
+  const [selectedTagsForSectors, setSelectedTagsForSectors] = useState<number[]>([]);
+  const [showProdSetoresModal, setShowProdSetoresModal] = useState(false);
+  const [selProjForSectors, setSelProjForSectors] = useState<any>(null);
   const [showSearchFilters, setShowSearchFilters] = useState<boolean>(true);
   const [expandedOsItems, setExpandedOsItems] = useState<{ [key: string]: Record<string, unknown>[] | null }>({});
   const [expandedTagSectors, setExpandedTagSectors] = useState<{ [key: number]: boolean }>({});
@@ -1130,7 +1134,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       targetType: 'item',
       targetId: item.IdOrdemServicoItem,
       sectors: activeSectors,
-      isLiberado: item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM'
+      isLiberado: item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S'
     });
   };
 
@@ -2101,9 +2105,11 @@ const salvarDatasBulkTags = async () => {
  <CalendarDays size={12} className="pointer-events-none" /> Tarf
  </button>
  </div>
- {!isFin ? (
+ {!isFin ? (<>
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('fin'); }} className="text-[9px] text-emerald-600 hover:bg-emerald-50 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-transparent hover:border-emerald-200 mt-0.5"><CheckCircle size={10} className="pointer-events-none"/> Finalizar Proj.</button>
- ) : (
+  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProjForSectors(p); setShowProdSetoresModal(true); }} className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-emerald-200 mt-0.5 ml-1" title="Ao selecionar esta opção todas as tags terão suas datas de planejamento modificadas em seus recursos ativos, propagando em efeito cascata para os OS e itens da OS">
+    <Activity size={10} className="pointer-events-none"/> Prod. Setores
+  </button></>) : (
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('cancelFin'); }} className="text-[9px] text-orange-600 hover:bg-orange-50 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-transparent hover:border-orange-200 mt-0.5"><RotateCcw size={10} className="pointer-events-none"/> Cancelar Fin.</button>
  )}
  </div>
@@ -2225,9 +2231,11 @@ const salvarDatasBulkTags = async () => {
  </div>
  <div className="flex flex-col gap-1 w-full sm:w-auto border-l border-slate-200 pl-3 shrink-0 items-start">
  <div className="flex gap-2 w-full flex-wrap">
- {!isFin ? (
+ {!isFin ? (<>
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('fin'); }} className="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold uppercase underline decoration-emerald-300 flex items-center gap-1 transition-colors"><CheckCircle size={12} className="pointer-events-none"/> Finalizar Projeto</button>
- ) : (
+  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProjForSectors(p); setShowProdSetoresModal(true); }} className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-emerald-200 mt-0.5 ml-1" title="Ao selecionar esta opção todas as tags terão suas datas de planejamento modificadas em seus recursos ativos, propagando em efeito cascata para os OS e itens da OS">
+    <Activity size={10} className="pointer-events-none"/> Prod. Setores
+  </button></>) : (
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('cancelFin'); }} className="text-[10px] text-orange-600 hover:text-orange-800 font-bold uppercase underline decoration-orange-300 flex items-center gap-1 transition-colors"><RotateCcw size={12} className="pointer-events-none"/> Cancelar Finalização</button>
  )}
  <button type="button" onClick={() => { setSelProj(p); setRncForm({ descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '' }); setMsg(null); fetchRncs(p.IdProjeto, 'VISAOGERALPROJ'); setActionModal('addRnc'); }} className="text-[10px] text-red-600 hover:text-red-800 font-bold uppercase underline decoration-red-300 flex items-center gap-1 transition-colors"><ShieldAlert size={12} className="pointer-events-none"/> Gerar Pendência</button>
@@ -2421,6 +2429,7 @@ const salvarDatasBulkTags = async () => {
               {/* LINHA 1: Tag Name, Status, Badges (Previsão & Qtd. OS) Próximos */}
               <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  <input type="checkbox" className="w-3 h-3 cursor-pointer mr-1" checked={selectedTagsForSectors.includes(t.IdTag)} onChange={(e) => { e.stopPropagation(); if (e.target.checked) setSelectedTagsForSectors(prev => [...prev, t.IdTag]); else setSelectedTagsForSectors(prev => prev.filter(id => id !== t.IdTag)); }} title="Selecionar para Prod. Setores" />
                   <div className={`w-2 h-2 rounded-full shadow-sm shrink-0 ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                   <span className="font-black text-slate-800 text-xs truncate max-w-[400px]" title={t.Tag}>{t.Tag}</span>
                   <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[8.5px] px-1 py-0 rounded font-bold leading-tight">Cod: {t.IdTag}</span>
@@ -2735,9 +2744,7 @@ const salvarDatasBulkTags = async () => {
                             <tr>
                               <td colSpan={12} className="p-0 border-b border-slate-200">
                                 <div className="px-0 py-3 bg-[#f0f4f8] shadow-inner border-y border-[#dbeafe]">
-                                  <h5 className="text-[11px] font-extrabold text-sky-900 mb-2 flex items-center gap-2 px-3 tracking-wide">
-                                    <List size={12} className="text-[#3b82f6]" /> Itens da OS: {os.IdOrdemServico}
-                                  </h5>
+                                  
                                   <div className="overflow-x-auto rounded border border-slate-300">
                                     <table className="w-full text-[9px] text-left whitespace-nowrap">
                                       <thead className="bg-sky-100/90 text-sky-950 uppercase font-extrabold tracking-wider text-[8.5px] border-b border-sky-200">
@@ -3161,6 +3168,7 @@ const salvarDatasBulkTags = async () => {
     </div>
   )}
 
+{showProdSetoresModal && (<ProdSetoresModal onClose={() => { setShowProdSetoresModal(false); setSelProjForSectors(null); }} projeto={selProjForSectors} selectedTagsIds={selectedTagsForSectors} />)}
   </div>
   );
 }

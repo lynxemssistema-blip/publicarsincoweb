@@ -4857,43 +4857,43 @@ const queryPool = req.tenantDbPool || pool;
                 /* Corte */
                 COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorte,
                 COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorte,
-                MIN(osi.PlanejadoInicioCorte) as PlanejadoInicioCorte, MAX(osi.PlanejadoFinalCorte) as PlanejadoFinalCorte,
-                MIN(osi.RealizadoInicioCorte) as RealizadoInicioCorte, MAX(osi.RealizadoFinalCorte) as RealizadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
                 MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) as flagCorte,
 
                 /* Dobra */
                 COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalDobra,
                 COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecDobra,
-                MIN(osi.PlanejadoInicioDobra) as PlanejadoInicioDobra, MAX(osi.PlanejadoFinalDobra) as PlanejadoFinalDobra,
-                MIN(osi.RealizadoInicioDobra) as RealizadoInicioDobra, MAX(osi.RealizadoFinalDobra) as RealizadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
                 MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) as flagDobra,
 
                 /* Solda */
                 COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalSolda,
                 COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecSolda,
-                MIN(osi.PlanejadoInicioSolda) as PlanejadoInicioSolda, MAX(osi.PlanejadoFinalSolda) as PlanejadoFinalSolda,
-                MIN(osi.RealizadoInicioSolda) as RealizadoInicioSolda, MAX(osi.RealizadoFinalSolda) as RealizadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
                 MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) as flagSolda,
 
                 /* Pintura */
                 COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPintura,
                 COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPintura,
-                MIN(osi.PlanejadoInicioPintura) as PlanejadoInicioPintura, MAX(osi.PlanejadoFinalPintura) as PlanejadoFinalPintura,
-                MIN(osi.RealizadoInicioPintura) as RealizadoInicioPintura, MAX(osi.RealizadoFinalPintura) as RealizadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
                 MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) as flagPintura,
 
                 /* Montagem */
                 COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalMontagem,
                 COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecMontagem,
-                MIN(osi.PlanejadoInicioMontagem) as PlanejadoInicioMontagem, MAX(osi.PlanejadoFinalMontagem) as PlanejadoFinalMontagem,
-                MIN(osi.RealizadoInicioMontagem) as RealizadoInicioMontagem, MAX(osi.RealizadoFinalMontagem) as RealizadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
                 MAX(CASE WHEN osi.TxtMontagem = '1' OR osi.TxtMontagem = 'S' THEN 1 ELSE 0 END) as flagMontagem,
 
                 /* Corte a Laser */
                 COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorteaLaser,
                 COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorteaLaser,
-                MIN(osi.PlanejadoInicioCorteaLaser) as PlanejadoInicioCorteaLaser, MAX(osi.PlanejadoFinalCorteaLaser) as PlanejadoFinalCorteaLaser,
-                MIN(osi.RealizadoInicioCorteaLaser) as RealizadoInicioCorteaLaser, MAX(osi.RealizadoFinalCorteaLaser) as RealizadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
                 MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
 
                 /* Punsionadeira */
@@ -4912,6 +4912,7 @@ const queryPool = req.tenantDbPool || pool;
 
             FROM ordemservico os
             LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            INNER JOIN tags t ON os.IdTag = t.IdTag AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE os.IdProjeto IN (${inClause}) 
               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
               AND os.IdTag IS NOT NULL /* (Conta apenas OS vinculada a tag) */
@@ -5051,6 +5052,15 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
                 QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS,
                 qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
+                txtCORTE, txtDOBRA, txtPINTURA, txtPUNSIONADEIRA, txtCorteaLaser, txtGALVANIZAR,
+                PlanejadoInicioCorte, PlanejadoFinalCorte,
+                PlanejadoInicioDobra, PlanejadoFinalDobra,
+                PlanejadoInicioSolda, PlanejadoFinalSolda,
+                PlanejadoInicioPintura, PlanejadoFinalPintura,
+                PlanejadoInicioMontagem, PlanejadoFinalMontagem,
+                PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA,
+                PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser,
+                PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR,
                 ${observacaoExpr},
                 PlanejadoInicioMedicao,   PlanejadoFinalMedicao,   RealizadoInicioMedicao,   RealizadoFinalMedicao,
                 PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, RealizadoFinalIsometrico,
@@ -5087,57 +5097,57 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) as flagGalvanizar,
 
                 /* Corte */
-                MIN(osi.PlanejadoInicioCorte) as PlanejadoInicioCorte, MAX(osi.PlanejadoFinalCorte) as PlanejadoFinalCorte,
-                MIN(osi.RealizadoInicioCorte) as RealizadoInicioCorte, MAX(osi.RealizadoFinalCorte) as RealizadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
                 COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorte,
 
                 /* Dobra */
-                MIN(osi.PlanejadoInicioDobra) as PlanejadoInicioDobra, MAX(osi.PlanejadoFinalDobra) as PlanejadoFinalDobra,
-                MIN(osi.RealizadoInicioDobra) as RealizadoInicioDobra, MAX(osi.RealizadoFinalDobra) as RealizadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
                 COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutar,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeDobra,
 
                 /* Solda */
-                MIN(osi.PlanejadoInicioSolda) as PlanejadoInicioSolda, MAX(osi.PlanejadoFinalSolda) as PlanejadoFinalSolda,
-                MIN(osi.RealizadoInicioSolda) as RealizadoInicioSolda, MAX(osi.RealizadoFinalSolda) as RealizadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
                 COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeSolda,
 
                 /* Pintura */
-                MIN(osi.PlanejadoInicioPintura) as PlanejadoInicioPintura, MAX(osi.PlanejadoFinalPintura) as PlanejadoFinalPintura,
-                MIN(osi.RealizadoInicioPintura) as RealizadoInicioPintura, MAX(osi.RealizadoFinalPintura) as RealizadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
                 COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePintura,
 
                 /* Montagem */
-                MIN(osi.PlanejadoInicioMontagem) as PlanejadoInicioMontagem, MAX(osi.PlanejadoFinalMontagem) as PlanejadoFinalMontagem,
-                MIN(osi.RealizadoInicioMontagem) as RealizadoInicioMontagem, MAX(osi.RealizadoFinalMontagem) as RealizadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
                 COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutar,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeMontagem,
 
                 /* Corte a Laser */
-                MIN(osi.PlanejadoInicioCorteaLaser) as PlanejadoInicioCorteaLaser, MAX(osi.PlanejadoFinalCorteaLaser) as PlanejadoFinalCorteaLaser,
-                MIN(osi.RealizadoInicioCorteaLaser) as RealizadoInicioCorteaLaser, MAX(osi.RealizadoFinalCorteaLaser) as RealizadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
                 COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorteaLaser,
 
                 /* Punsionadeira */
-                MIN(osi.PlanejadoInicioPUNSIONADEIRA) as PlanejadoInicioPUNSIONADEIRA, MAX(osi.PlanejadoFinalPUNSIONADEIRA) as PlanejadoFinalPUNSIONADEIRA,
-                MIN(osi.RealizadoInicioPUNSIONADEIRA) as RealizadoInicioPUNSIONADEIRA, MAX(osi.RealizadoFinalPUNSIONADEIRA) as RealizadoFinalPUNSIONADEIRA,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPUNSIONADEIRA,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPUNSIONADEIRA,
                 COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePunsionadeira,
 
                 /* Galvanizar */
-                MIN(osi.PlanejadoInicioGALVANIZAR) as PlanejadoInicioGALVANIZAR, MAX(osi.PlanejadoFinalGALVANIZAR) as PlanejadoFinalGALVANIZAR,
-                MIN(osi.RealizadoInicioGALVANIZAR) as RealizadoInicioGALVANIZAR, MAX(osi.RealizadoFinalGALVANIZAR) as RealizadoFinalGALVANIZAR,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalGALVANIZAR,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalGALVANIZAR,
                 COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutado,
                 COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutar,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutar,
                 COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
@@ -5169,6 +5179,13 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 flagCorteaLaser: osS.flagCorteaLaser || 0,
                 flagPunsionadeira: osS.flagPunsionadeira || 0,
                 flagGalvanizar: osS.flagGalvanizar || 0,
+                
+                txtCORTE: t.txtCORTE,
+                txtDOBRA: t.txtDOBRA,
+                txtPINTURA: t.txtPINTURA,
+                txtPUNSIONADEIRA: t.txtPUNSIONADEIRA,
+                txtCorteaLaser: t.txtCorteaLaser,
+                txtGALVANIZAR: t.txtGALVANIZAR,
 
                 PlanejadoInicioCorte: t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
                 RealizadoInicioCorte: t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
@@ -10441,7 +10458,8 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
     }
 
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
 
@@ -10722,7 +10740,8 @@ app.post('/api/apontamento-parcial', tenantMiddleware, async (req, res) => {
     }
 
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
 
@@ -10851,7 +10870,8 @@ app.post('/api/apontamento-parcial', tenantMiddleware, async (req, res) => {
 app.delete('/api/apontamentos-parciais/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
         
@@ -16955,6 +16975,114 @@ app.get('/api/ordemservico/projetos/:id/tempos-producao', tenantMiddleware, asyn
 });
 
 // Start Server
+
+// ==========================================
+// SALVAR DATAS DE PLANEJAMENTO EM LOTE (PROD SETORES)
+// ==========================================
+app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
+    try {
+        const projetoId = req.params.id;
+        const { tagIds, datas } = req.body;
+
+        if (!tagIds || tagIds.length === 0) {
+            return res.status(400).json({ error: 'Nenhuma tag informada.' });
+        }
+
+        const tagsInClause = tagIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',');
+        if (!tagsInClause) return res.status(400).json({ error: 'IDs de tags inválidos.' });
+
+        const SECTORS_DB = {
+          'Corte': { osTxt: 'txtCorte', planIni: 'PlanejadoInicioCorte', planFim: 'PlanejadoFinalCorte', diasProd: 'CorteDiasProducao' },
+          'Dobra': { osTxt: 'txtDobra', planIni: 'PlanejadoInicioDobra', planFim: 'PlanejadoFinalDobra', diasProd: 'DobraDiasProducao' },
+          'Solda': { osTxt: 'txtSolda', planIni: 'PlanejadoInicioSolda', planFim: 'PlanejadoFinalSolda', diasProd: 'SoldaDiasProducao' },
+          'Pintura': { osTxt: 'txtPintura', planIni: 'PlanejadoInicioPintura', planFim: 'PlanejadoFinalPintura', diasProd: 'PinturaDiasProducao' },
+          'Montagem': { osTxt: 'TxtMontagem', planIni: 'PlanejadoInicioMontagem', planFim: 'PlanejadoFinalMontagem', diasProd: 'MontagemDiasProducao' },
+          'Punsionadeira': { osTxt: 'txtPUNSIONADEIRA', planIni: 'PlanejadoInicioPUNSIONADEIRA', planFim: 'PlanejadoFinalPUNSIONADEIRA', diasProd: 'PunsionadeiraDiasProducao' },
+          'CorteaLaser': { osTxt: 'txtCorteaLaser', planIni: 'PlanejadoInicioCorteaLaser', planFim: 'PlanejadoFinalCorteaLaser', diasProd: 'CorteaLaserDiasProducao' },
+          'Galvanizar': { osTxt: 'txtGALVANIZAR', planIni: 'PlanejadoInicioGALVANIZAR', planFim: 'PlanejadoFinalGALVANIZAR', diasProd: 'GalvanizarDiasProducao' }
+        };
+
+        const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
+        await conn.beginTransaction();
+
+        try {
+            for (const sectorId of Object.keys(datas)) {
+                const sec = SECTORS_DB[sectorId];
+                if (!sec) continue;
+                
+                const ini = datas[sectorId].ini;
+                const fim = datas[sectorId].fim;
+                if (!ini && !fim) continue; 
+
+                // Convert YYYY-MM-DD to DD/MM/YYYY
+                const iniBr = ini ? ini.split('-').reverse().join('/') : null;
+                const fimBr = fim ? fim.split('-').reverse().join('/') : null;
+
+                // For tags table
+                const updateTagsParams = [];
+                let setClauseTags = [];
+                
+                if (iniBr) { 
+                    setClauseTags.push(`${sec.planIni} = CASE WHEN NULLIF(${sec.planIni}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') < STR_TO_DATE(${sec.planIni}, '%d/%m/%Y') THEN ? ELSE ${sec.planIni} END`);
+                    updateTagsParams.push(iniBr, iniBr, iniBr); 
+                }
+                if (fimBr) {
+                    setClauseTags.push(`${sec.planFim} = CASE WHEN NULLIF(${sec.planFim}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') > STR_TO_DATE(${sec.planFim}, '%d/%m/%Y') THEN ? ELSE ${sec.planFim} END`);
+                    updateTagsParams.push(fimBr, fimBr, fimBr);
+                }
+
+                
+                if (iniBr || fimBr) {
+                    setClauseTags.push(`${sec.diasProd} = DATEDIFF(STR_TO_DATE(${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(${sec.planIni}, '%d/%m/%Y'))`);
+                }
+                if (setClauseTags.length > 0) {
+                    const queryTags = `UPDATE tags SET ${setClauseTags.join(', ')} WHERE IdTag IN (${tagsInClause})`;
+                    await conn.query(queryTags, updateTagsParams);
+                }
+
+                // For ordemservicoitem table
+                const updateOsiParams = [];
+                let setClauseOsi = [];
+
+                if (iniBr) { 
+                    setClauseOsi.push(`osi.${sec.planIni} = CASE WHEN NULLIF(osi.${sec.planIni}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') < STR_TO_DATE(osi.${sec.planIni}, '%d/%m/%Y') THEN ? ELSE osi.${sec.planIni} END`);
+                    updateOsiParams.push(iniBr, iniBr, iniBr); 
+                }
+                if (fimBr) {
+                    setClauseOsi.push(`osi.${sec.planFim} = CASE WHEN NULLIF(osi.${sec.planFim}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') > STR_TO_DATE(osi.${sec.planFim}, '%d/%m/%Y') THEN ? ELSE osi.${sec.planFim} END`);
+                    updateOsiParams.push(fimBr, fimBr, fimBr);
+                }
+
+                
+                if (iniBr || fimBr) {
+                    setClauseOsi.push(`osi.${sec.diasProd} = DATEDIFF(STR_TO_DATE(osi.${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(osi.${sec.planIni}, '%d/%m/%Y'))`);
+                }
+                if (setClauseOsi.length > 0) {
+                    const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
+                    await conn.query(queryOSI, updateOsiParams);
+
+                    // ALSO update the ordemservico table directly
+                    let setClauseOs = setClauseOsi.map(clause => clause.replace(/osi\./g, 'os.'));
+                    const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
+                    await conn.query(queryOS, updateOsiParams);
+                }
+            }
+
+            await conn.commit();
+            res.json({ success: true, message: 'Datas salvas com sucesso' });
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
+        }
+
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT} and listening on all interfaces(0.0.0.0)`);
     try {

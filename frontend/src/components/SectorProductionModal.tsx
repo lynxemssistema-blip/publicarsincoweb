@@ -209,7 +209,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (prev && prev.pf) {
             const prevPfIso = toIsoInput(prev.pf);
             if (prevPfIso) {
-              const nextPiIso = getNextBusinessDay(prevPfIso, incluirSabado, incluirDomingo, incluirFeriado);
+              const nextPiIso = prevPfIso;
               const nextPfIso = addBusinessDays(nextPiIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
               curr.pi = toBrDisplay(nextPiIso);
               curr.pf = toBrDisplay(nextPfIso);
@@ -241,7 +241,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (nextRes && nextRes.pi) {
             const nextPiIso = toIsoInput(nextRes.pi);
             if (nextPiIso) {
-              const pfIso = getPreviousBusinessDay(nextPiIso, incluirSabado, incluirDomingo, incluirFeriado);
+              const pfIso = nextPiIso;
               const piIso = subtractBusinessDays(pfIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
               curr.pf = toBrDisplay(pfIso);
               curr.pi = toBrDisplay(piIso);
@@ -337,7 +337,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     list[index].dias = diasVal;
 
     if (calcMode === 'auto') {
-      setSectors(recalculateAutomaticChain(list, index));
+      setSectors(recalculateAutomaticChain(list, autoDirection));
     } else {
       setSectors(list);
     }
@@ -354,7 +354,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
         const newPfIso = addDaysToIso(isoPi, dias - 1);
         list[index].pf = toBrDisplay(newPfIso);
       }
-      setSectors(recalculateAutomaticChain(list, index));
+      setSectors(recalculateAutomaticChain(list, autoDirection));
     } else {
       setSectors(list);
     }
@@ -365,7 +365,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     list[index].pf = newPfBr;
 
     if (calcMode === 'auto') {
-      setSectors(recalculateAutomaticChain(list, index + 1));
+      setSectors(recalculateAutomaticChain(list, autoDirection));
     } else {
       setSectors(list);
     }
@@ -620,6 +620,9 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           )}
         </div>
 
+        
+        
+
         {/* MODAL BODY */}
         <div className="p-5 bg-slate-50/50 max-h-[65vh] overflow-y-auto">
           {sectors.length === 0 ? (
@@ -733,32 +736,48 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                           </div>
                         </td>
 
-                        {/* COLUNA 3: INTERVALO DE DATAS (FORMATO DD/MM/AAAA EXPLICITO PARA O NAVEGADOR) */}
+                        {/* COLUNA 3: INTERVALO DE DATAS */}
                         <td className="px-2 py-1.5 text-center border-r border-slate-100">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* DATA INÍCIO (INPUT FORMATO DD/MM/AAAA) */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
+                            {/* DATA INÍCIO */}
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
                               <input
-                                type="text"
+                                type="date"
                                 placeholder="Início"
-                                value={s.pi || ''}
+                                value={toIsoInput(s.pi) || ''}
                                 disabled={modalData.isLiberado}
-                                                              onChange={(e) => handlePiChange(idx, e.target.value)}
-                                className="w-[70px] bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
+                                onChange={(e) => handlePiChange(idx, toBrDisplay(e.target.value))}
+                                className="w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer"
                               />
                             </div>
 
                             <span className="text-slate-400 font-bold text-xs shrink-0">→</span>
 
-                            {/* DATA FIM (INPUT FORMATO DD/MM/AAAA) */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all">
+                            {/* DATA FIM */}
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
                               <input
-                                type="text"
+                                type="date"
                                 placeholder="Fim"
-                                value={s.pf || ''}
+                                value={toIsoInput(s.pf) || ''}
                                 disabled={modalData.isLiberado}
-                                                              onChange={(e) => handlePfChange(idx, e.target.value)}
-                                className="w-[70px] bg-transparent text-xs font-black text-slate-900 border-none outline-none focus:ring-0 p-0 text-center tracking-wide"
+                                onChange={(e) => {
+                                  const newPfBr = toBrDisplay(e.target.value);
+                                  const list = sectors.map(sec => ({ ...sec }));
+                                  list[idx].pf = newPfBr;
+                                  
+                                  const isoPi = toIsoInput(list[idx].pi);
+                                  const isoPf = e.target.value;
+                                  if (isoPi && isoPf) {
+                                    list[idx].dias = calcDaysBetween(isoPi, isoPf);
+                                  }
+                                  
+                                  if (calcMode === 'auto') {
+                                    setSectors(recalculateAutomaticChain(list, autoDirection, targetDeadlineIso, incluirSabado, incluirDomingo, incluirFeriado));
+                                  } else {
+                                    setSectors(list);
+                                  }
+                                }}
+                                className="w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer"
                               />
                             </div>
                           </div>
