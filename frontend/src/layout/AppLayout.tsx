@@ -36,7 +36,16 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
     }, []);
 
     // Resolve o help content para a página ativa
-    const pageHelp = helpContents[activePageId] || helpContents['default'];
+    const pageHelp = useMemo(() => {
+        if (helpContents[activePageId]) return helpContents[activePageId];
+        
+        const normalizedLabel = activeLabel?.toLowerCase().trim();
+        const matchedKey = Object.keys(helpContents).find(key => 
+            helpContents[key].title.toLowerCase().trim() === normalizedLabel
+        );
+        
+        return matchedKey ? helpContents[matchedKey] : helpContents['default'];
+    }, [activePageId, activeLabel]);
 
     // Ref para o scroll container do sidebar desktop
     const sidebarScrollRef = useRef<HTMLDivElement>(null);
@@ -381,7 +390,7 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                                             className="text-muted-foreground/40 group-hover/title:text-primary/60 transition-colors mt-0.5 shrink-0"
                                         />
                                     </div>
-                                    <p className="text-muted-foreground text-xs mt-0 font-medium">Plataforma de Gerenciamento Especializado</p>
+
 
                                     {/* Tooltip de Objetivo da Tela */}
                                     <AnimatePresence>

@@ -5038,38 +5038,40 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
         const queryPool = req.tenantDbPool || pool;
         const tenantDb = req.tenantDb || 'default';
 
-        // Build column list defensively — check if Observacao exists before using it
-        let observacaoExpr = 'NULL AS Observacao';
-        try {
-            const [cols] = await req.tenantDbPool.execute(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'Observacao'"
-            );
-            if (cols.length > 0) observacaoExpr = 'Observacao';
-        } catch (_) { /* fallback to NULL */ }
+        // Build column list defensively for dynamic columns in 'tags' table
+        const [tagsCols] = await req.tenantDbPool.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags'"
+        );
+        const tagsSet = new Set(tagsCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        const safeTagCol = (colName) => tagsSet.has(colName.toLowerCase()) ? colName : `NULL AS ${colName}`;
 
         const [tagsRaw] = await req.tenantDbPool.execute(`
             SELECT
-                IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
+                IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, 
+                ${safeTagCol('StatusTag')},
                 QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS,
                 qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
-                txtCORTE, txtDOBRA, txtPINTURA, txtPUNSIONADEIRA, txtCorteaLaser, txtGALVANIZAR,
-                PlanejadoInicioCorte, PlanejadoFinalCorte,
-                PlanejadoInicioDobra, PlanejadoFinalDobra,
-                PlanejadoInicioSolda, PlanejadoFinalSolda,
-                PlanejadoInicioPintura, PlanejadoFinalPintura,
-                PlanejadoInicioMontagem, PlanejadoFinalMontagem,
-                PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA,
-                PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser,
-                PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR,
-                ${observacaoExpr},
-                PlanejadoInicioMedicao,   PlanejadoFinalMedicao,   RealizadoInicioMedicao,   RealizadoFinalMedicao,
-                PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, RealizadoFinalIsometrico,
-                PlanejadoInicioAprovacao,  PlanejadoFinalAprovacao,  RealizadoInicioAprovacao,  RealizadoFinalAprovacao,
-                PlanejadoInicioAcabamento, PlanejadoFinalAcabamento, RealizadoInicioAcabamento, RealizadoFinalAcabamento,
-                PlanejadoInicioExpedicao,  PlanejadoFinalExpedicao,  RealizadoInicioExpedicao,  realizadoFinalExpedicao
+                ${safeTagCol('txtCORTE')}, ${safeTagCol('txtDOBRA')}, ${safeTagCol('txtPINTURA')}, ${safeTagCol('txtPUNSIONADEIRA')}, ${safeTagCol('txtCorteaLaser')}, ${safeTagCol('txtGALVANIZAR')},
+                ${safeTagCol('PlanejadoInicioCorte')}, ${safeTagCol('PlanejadoFinalCorte')},
+                ${safeTagCol('PlanejadoInicioDobra')}, ${safeTagCol('PlanejadoFinalDobra')},
+                ${safeTagCol('PlanejadoInicioSolda')}, ${safeTagCol('PlanejadoFinalSolda')},
+                ${safeTagCol('PlanejadoInicioPintura')}, ${safeTagCol('PlanejadoFinalPintura')},
+                ${safeTagCol('PlanejadoInicioMontagem')}, ${safeTagCol('PlanejadoFinalMontagem')},
+                ${safeTagCol('PlanejadoInicioPUNSIONADEIRA')}, ${safeTagCol('PlanejadoFinalPUNSIONADEIRA')},
+                ${safeTagCol('PlanejadoInicioCorteaLaser')}, ${safeTagCol('PlanejadoFinalCorteaLaser')},
+                ${safeTagCol('PlanejadoInicioGALVANIZAR')}, ${safeTagCol('PlanejadoFinalGALVANIZAR')},
+                ${safeTagCol('Observacao')},
+                ${safeTagCol('PlanejadoInicioMedicao')},   ${safeTagCol('PlanejadoFinalMedicao')},   ${safeTagCol('RealizadoInicioMedicao')},   ${safeTagCol('RealizadoFinalMedicao')},
+                ${safeTagCol('PlanejadoInicioIsometrico')}, ${safeTagCol('PlanejadoFinalIsometrico')}, ${safeTagCol('RealizadoInicioIsometrico')}, ${safeTagCol('RealizadoFinalIsometrico')},
+                ${safeTagCol('PlanejadoInicioAprovacao')},  ${safeTagCol('PlanejadoFinalAprovacao')},  ${safeTagCol('RealizadoInicioAprovacao')},  ${safeTagCol('RealizadoFinalAprovacao')},
+                ${safeTagCol('PlanejadoInicioAcabamento')}, ${safeTagCol('PlanejadoFinalAcabamento')}, ${safeTagCol('RealizadoInicioAcabamento')}, ${safeTagCol('RealizadoFinalAcabamento')},
+                ${safeTagCol('PlanejadoInicioExpedicao')},  ${safeTagCol('PlanejadoFinalExpedicao')},  ${safeTagCol('RealizadoInicioExpedicao')},  ${safeTagCol('realizadoFinalExpedicao')}
             FROM tags
             WHERE IdProjeto = ?
-              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
+              AND (${tagsSet.has('tagjaexcluida') ? "TagJaExcluida IS NULL OR TRIM(TagJaExcluida) NOT IN ('1', 'SIM', 'S')" : "1=1"})
+              AND (${tagsSet.has('statustag') ? "StatusTag IS NULL OR (CAST(StatusTag AS CHAR) NOT LIKE '%EXCLU%' AND CAST(StatusTag AS CHAR) NOT LIKE '%CANCEL%')" : "1=1"})
             ORDER BY IdTag ASC
         `, [req.params.projetoId]);
 

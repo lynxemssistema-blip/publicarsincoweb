@@ -244,10 +244,15 @@ export default function CriarOrdemServicoPage() {
 
   return (
     <div className="space-y-6 h-full flex flex-col min-h-0 bg-gray-50 p-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-[#32423D] flex items-center gap-2">
-          <Plus size={24} /> Criar Ordem Serviço
-        </h1>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-xl font-bold text-[#32423D] flex items-center gap-2">
+            <Plus size={24} /> Criar Ordem Serviço
+          </h1>
+          <p className="text-gray-500 text-xs mt-1">
+            Cadastre novas ordens de serviço, definindo projeto, endereçamento e os dados principais do produto.
+          </p>
+        </div>
       </div>
 
       {message && (

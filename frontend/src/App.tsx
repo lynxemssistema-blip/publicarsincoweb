@@ -97,8 +97,9 @@ function AppContent() {
           }
 
           
-          // Force add 'recursos-fabricacao' if missing
-          if (!savedMenu.find(item => item.id === 'recursos-fabricacao')) {
+          // Force add 'recursos-fabricacao' if missing (deep search to prevent duplicates if inside folders)
+          const hasRecursos = JSON.stringify(savedMenu).includes('"recursos-fabricacao"');
+          if (!hasRecursos) {
             const rfItem = defaultMenuItems.find(item => item.id === 'recursos-fabricacao');
             if (rfItem) {
               savedMenu.push(rfItem);
@@ -190,11 +191,14 @@ function AppContent() {
             user.superadmin === 'S' ||
             user.login?.toLowerCase() === 'superadmin';
           if (isSuperDefault) {
-            setMenuItems(sortMenuRecursive(defaultMenuItems));
+            const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao');
+            setMenuItems(sortMenuRecursive(superFiltered));
           } else {
             // Qualquer outro usuário: menu sem SuperAdmin
             const filtered = defaultMenuItems.filter(item =>
               item.id !== 'superadmin' &&
+              item.id !== 'tipos-transporte' &&
+              item.id !== 'recursos-fabricacao' &&
               !(item.id === 'controle-expedicao' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2') &&
               !(item.id === 'teste-final-montagem' && user.dbName !== 'lynxlocal' && user.dbName !== 'alfatec2')
             );
@@ -209,11 +213,14 @@ function AppContent() {
           user.superadmin === 'S' ||
           user.login?.toLowerCase() === 'superadmin';
         if (isSuperFallback) {
-          setMenuItems(sortMenuRecursive(defaultMenuItems));
+          const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao');
+          setMenuItems(sortMenuRecursive(superFiltered));
           return;
         }
         const filtered = defaultMenuItems.filter(item => {
           if (item.id === 'superadmin') return false;
+          if (item.id === 'tipos-transporte') return false;
+          if (item.id === 'recursos-fabricacao') return false;
           
           return true;
         });
@@ -269,7 +276,6 @@ function AppContent() {
     // Limpa flag de autenticação local ao fazer logoff
     const dbName = user?.dbName || '';
     sessionStorage.removeItem(`sinco_local_auth_${dbName}`);
-    setIsLocallyAuthenticated(false);
     logout();
   };
 

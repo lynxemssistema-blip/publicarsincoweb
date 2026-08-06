@@ -2753,9 +2753,6 @@ const salvarDatasBulkTags = async () => {
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Cód. Mat.</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Prod. Princ.</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Medidas (E x A x L)</th>
-                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Dobras</th>
-                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Peso Un./Tot.</th>
-                                           <th className="px-1.5 py-1 border-b border-slate-300 text-center">Pint. Un./Tot.</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Acab.</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Fator</th>
                                            <th className="px-1.5 py-1 border-b border-slate-300 text-center">Lib. Eng.</th>
@@ -2779,15 +2776,6 @@ const salvarDatasBulkTags = async () => {
                                               </td>
                                               <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">
                                                 {item.Espessura || '-'} x {item.Altura || '-'} x {item.Largura || '-'}
-                                              </td>
-                                              <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.NumeroDobras || '0'}</td>
-                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                                <div className="text-slate-800">{item.PesoUnitario ? parseFloat(item.PesoUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
-                                                <div className="text-[8px] text-slate-500">{item.Peso ? parseFloat(item.Peso).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} kg</div>
-                                              </td>
-                                              <td className="px-2 py-1.5 text-center border-r border-slate-100">
-                                                <div className="text-slate-800">{item.AreaPinturaUnitario ? parseFloat(item.AreaPinturaUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
-                                                <div className="text-[8px] text-slate-500">{item.AreaPintura ? parseFloat(item.AreaPintura).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '0'} m²</div>
                                               </td>
                                               <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Acabamento || '—'}</td>
                                               <td className="px-2 py-1.5 text-center border-r border-slate-100 text-slate-600">{item.Fator || '—'}</td>

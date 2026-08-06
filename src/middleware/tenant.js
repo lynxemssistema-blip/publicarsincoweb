@@ -62,7 +62,25 @@ const tenantMiddleware = async (req, res, next) => {
             }
         }
 
-        req.tenantDbPool = db.getPoolByName(tenantDbName);
+        const originalPool = db.getPoolByName(tenantDbName);
+        req.tenantDbPool = new Proxy(originalPool, {
+            get(target, prop) {
+                if (prop === 'execute') {
+                    return (sql, params) => {
+                        return new Promise((resolve, reject) => {
+                            db.asyncLocalStorage.run({ dbName: tenantDbName, tenantId: decoded.tenantId || decoded.idEmpresa || 1 }, () => {
+                                db.execute(sql, params).then(resolve).catch(reject);
+                            });
+                        });
+                    };
+                }
+                if (typeof target[prop] === 'function') {
+                    return target[prop].bind(target);
+                }
+                return target[prop];
+            }
+        });
+        
         req.tenantUser = decoded;
 
         next();

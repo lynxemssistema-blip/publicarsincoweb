@@ -72,6 +72,16 @@ export const getMergedMenu = (savedMenu: MenuItem[]): MenuItem[] => {
   // Explicitly remove 'visao-geral-engenharia' (the new one with Network icon) as requested
   menu = menu.filter(item => item.id !== 'visao-geral-engenharia');
 
+  // Remover itens flat de plano de corte para evitar duplicidade com a pasta (dropdown)
+  menu = menu.filter(item => item.id !== 'producao-plano-corte' && item.id !== 'montagem-plano-corte');
+  
+  // Remover telas da raiz para manter apenas as do grupo Cadastro
+  menu = menu.filter(item => 
+    item.id !== 'recursos-fabricacao' && 
+    item.id !== 'tipos-transporte' && 
+    item.label !== 'Tipos Transporte'
+  );
+
   // Force add 'plano-corte' se missing
   if (!menu.find(item => item.id === 'plano-corte')) {
     const pcItem = defaultMenuItems.find(item => item.id === 'plano-corte');
@@ -106,8 +116,9 @@ export const getMergedMenu = (savedMenu: MenuItem[]): MenuItem[] => {
     }
   }
 
-  // Force add 'tipos-transporte'
-  if (!menu.find(item => item.id === 'tipos-transporte')) {
+  // Force add 'tipos-transporte' if missing (deep search to prevent duplicates if inside folders)
+  const hasTiposTransporte = JSON.stringify(savedMenu).includes('"tipos-transporte"');
+  if (!hasTiposTransporte) {
     const ttItem = defaultMenuItems.find(item => item.id === 'tipos-transporte');
     if (ttItem) {
       const tpIdx = menu.findIndex(item => item.id === 'tipos-produto');
