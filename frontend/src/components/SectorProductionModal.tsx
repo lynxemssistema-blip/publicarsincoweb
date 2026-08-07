@@ -5,8 +5,9 @@ import { X, ArrowUp, ArrowDown, TrendingUp, TrendingDown, Calendar } from 'lucid
 interface SectorProductionModalProps {
   modalData: {
     title: string;
-    targetType?: 'os' | 'tag' | 'item' | 'projeto';
+    targetType?: 'os' | 'tag' | 'item' | 'projeto' | 'tag_os_bulk';
     allTags?: any[];
+    allOs?: any[];
     targetId?: number;
     sectors: any[];
     isLiberado?: boolean;
@@ -43,6 +44,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   const [saving, setSaving] = useState(false);
   const [applyLevel, setApplyLevel] = useState<'item' | 'os' | 'tag' | 'projeto'>('item');
   const [selectedTags, setSelectedTags] = useState<number[]>([]);
+  const [selectedOs, setSelectedOs] = useState<number[]>([]);
 
   const parseDateStr = (str?: string | null): Date | null => {
     if (!str || str === '—') return null;
@@ -254,12 +256,19 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     return updated;
   };
 
-  const calcDaysBetween = (startIso: string, endIso: string): number => {
+  const calcDaysBetween = (startIso: string, endIso: string, incSab: boolean, incDom: boolean, incFer: boolean): number => {
     const d1 = parseDateStr(startIso);
     const d2 = parseDateStr(endIso);
     if (!d1 || !d2 || d2 < d1) return 1;
-    const diffMs = d2.getTime() - d1.getTime();
-    return Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+    let count = 0;
+    const curr = new Date(d1);
+    while (curr <= d2) {
+      if (!isWeekendOrHoliday(curr, incSab, incDom, incFer)) {
+        count++;
+      }
+      curr.setDate(curr.getDate() + 1);
+    }
+    return Math.max(1, count);
   };
 
   
@@ -268,6 +277,9 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   useEffect(() => {
     if (modalData?.targetType === 'tag' && modalData?.targetId) {
       setSelectedTags([Number(modalData.targetId)]);
+    }
+    if (modalData?.targetType === 'tag_os_bulk' && modalData?.allOs) {
+      setSelectedOs(modalData.allOs.map(o => o.IdOrdemServico));
     }
   }, [modalData]);
 
@@ -343,7 +355,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     }
   };
 
-      const handlePiChange = (index: number, newPiBr: string) => {
+  const handlePiChange = (index: number, newPiBr: string) => {
     const list = sectors.map(s => ({ ...s }));
     list[index].pi = newPiBr;
 
@@ -351,7 +363,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
       const isoPi = toIsoInput(newPiBr);
       if (isoPi) {
         const dias = Math.max(1, parseInt(String(list[index].dias), 10) || 1);
-        const newPfIso = addDaysToIso(isoPi, dias - 1);
+        const newPfIso = addBusinessDays(isoPi, dias, incluirSabado, incluirDomingo, incluirFeriado);
         list[index].pf = toBrDisplay(newPfIso);
       }
       setSectors(recalculateAutomaticChain(list, autoDirection));
@@ -396,36 +408,44 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
   };
 
   const handleSave = async () => {
+    if (modalData.targetType === 'tag' && selectedTags.length === 0) {
+      alert('Por favor, selecione ao menos uma Tag para aplicar o planejamento.');
+      return;
+    }
+    if (modalData.targetType === 'tag_os_bulk' && selectedOs.length === 0) {
+      alert('Por favor, selecione ao menos uma OS para aplicar o planejamento.');
+      return;
+    }
+
     setSaving(true);
     try {
-      if (modalData.targetType && modalData.targetId) {
-        let finalTargetType = modalData.targetType;
-        let finalTargetId = modalData.targetId;
+      const payload: any = {
+        targetType: modalData.targetType,
+        targetId: modalData.targetId,
+        sectors: sectors
+      };
 
-        // Se o modal foi aberto para um item, aplica o applyLevel
-        if (modalData.targetType === 'item' && modalData.item) {
-          finalTargetType = applyLevel;
-          if (applyLevel === 'os') finalTargetId = modalData.item.IdOrdemServico;
-          else if (applyLevel === 'tag') finalTargetId = modalData.item.IdTag;
-          else if (applyLevel === 'projeto') finalTargetId = modalData.item.IdProjeto;
-        }
+      if (modalData.targetType === 'tag') {
+        payload.targetIds = selectedTags;
+      } else if (modalData.targetType === 'tag_os_bulk') {
+        payload.targetIds = selectedOs;
+      } else if (modalData.targetType === 'item') {
+        payload.targetType = applyLevel;
+        if (applyLevel === 'os') payload.targetId = modalData.item.IdOrdemServico;
+        else if (applyLevel === 'tag') payload.targetId = modalData.item.IdTag;
+        else if (applyLevel === 'projeto') payload.targetId = modalData.item.IdProjeto;
+      }
 
-        const res = await fetch('/api/salvar-setores-planejamento', {
-          method: 'POST',
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            targetType: finalTargetType,
-            targetId: finalTargetId,
-            targetIds: finalTargetType === 'tag' ? selectedTags : undefined,
-            sectors
-          })
-        });
-        const r = await res.json();
-        if (!r.success) {
-          alert('Erro ao salvar planejamento: ' + (r.message || 'Erro desconhecido.'));
-          setSaving(false);
-          return;
-        }
+      const res = await fetch('/api/salvar-setores-planejamento', {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload)
+      });
+      const r = await res.json();
+      if (!r.success) {
+        alert('Erro ao salvar planejamento: ' + (r.message || 'Erro desconhecido.'));
+        setSaving(false);
+        return;
       }
       if (onSave) onSave(sectors);
       onClose();
@@ -453,6 +473,39 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
             <X size={18} />
           </button>
         </div>
+
+          {/* OS MULTI-SELECT FOR TAG_OS_BULK */}
+          {modalData.targetType === 'tag_os_bulk' && modalData.allOs && modalData.allOs.length > 0 && (
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+              <label className="block text-xs font-black text-slate-800 uppercase tracking-widest mb-3 border-l-2 border-emerald-500 pl-2">
+                Aplicar planejamento às seguintes OS:
+              </label>
+              <div className="flex flex-wrap gap-2.5">
+                <label className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-bold transition-all cursor-pointer select-none ${selectedOs.length === modalData.allOs.length ? 'bg-blue-50 border-blue-200 text-blue-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                  <input type="checkbox" className="w-3 h-3 accent-blue-600" 
+                    checked={selectedOs.length === modalData.allOs.length} 
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedOs(modalData.allOs!.map(o => o.IdOrdemServico));
+                      else setSelectedOs([]);
+                    }}
+                  />
+                  TODAS
+                </label>
+                {modalData.allOs.map(o => (
+                  <label key={o.IdOrdemServico} className={`flex items-center gap-1.5 px-3 py-1.5 rounded border text-xs font-bold transition-all cursor-pointer select-none ${selectedOs.includes(o.IdOrdemServico) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'}`}>
+                    <input type="checkbox" className="w-3 h-3 accent-indigo-600"
+                      checked={selectedOs.includes(o.IdOrdemServico)}
+                      onChange={(e) => {
+                        if (e.target.checked) setSelectedOs(prev => [...prev, o.IdOrdemServico]);
+                        else setSelectedOs(prev => prev.filter(id => id !== o.IdOrdemServico));
+                      }}
+                    />
+                    OS {o.IdOrdemServico}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
 
         {/* MODE TOGGLE BAR E NIVEL DE APLICAÇÃO */}
         <div className="bg-slate-100/90 px-5 py-2.5 border-b border-slate-200 flex flex-col gap-3">
@@ -768,7 +821,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                                   const isoPi = toIsoInput(list[idx].pi);
                                   const isoPf = e.target.value;
                                   if (isoPi && isoPf) {
-                                    list[idx].dias = calcDaysBetween(isoPi, isoPf);
+                                    list[idx].dias = calcDaysBetween(isoPi, isoPf, incluirSabado, incluirDomingo, incluirFeriado);
                                   }
                                   
                                   if (calcMode === 'auto') {

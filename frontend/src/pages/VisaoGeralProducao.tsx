@@ -320,6 +320,7 @@ export default function VisaoGeralProducao() {
   const [selectedTagsForSectors, setSelectedTagsForSectors] = useState<number[]>([]);
   const [showProdSetoresModal, setShowProdSetoresModal] = useState(false);
   const [selProjForSectors, setSelProjForSectors] = useState<any>(null);
+  const [selOsForSectors, setSelOsForSectors] = useState<any>(null);
   const [showSearchFilters, setShowSearchFilters] = useState<boolean>(true);
   const [expandedOsItems, setExpandedOsItems] = useState<{ [key: string]: Record<string, unknown>[] | null }>({});
   const [expandedTagSectors, setExpandedTagSectors] = useState<{ [key: number]: boolean }>({});
@@ -1112,6 +1113,54 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
       targetType: 'os',
       targetId: os.IdOrdemServico,
+      sectors: mergedSectors
+    });
+  };
+
+  const openBulkOsSectorsModal = async (t: any) => {
+    const osList = expandedTagsOs[t.IdTag] || [];
+    if (osList.length === 0) {
+      alert("Nenhuma Ordem de Serviço encontrada para esta Tag.");
+      return;
+    }
+
+    let items: any[] = [];
+    try {
+      const r = await (await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+      if (r.success && r.data && r.data.length > 0) {
+        items = r.data;
+        setTagItemsCache(prev => ({ ...prev, [t.IdTag]: r.data }));
+      }
+    } catch (e) {
+      console.error('Error fetching Tag items for bulk OS sector modal:', e);
+    }
+
+    const tagHeaderSectors = getTagSectors(t);
+    const itemSectors = (items && items.length > 0) ? aggregateItemsSectors(items) : [];
+
+    const map = new Map<string, any>();
+    tagHeaderSectors.forEach(s => map.set(s.key, { ...s }));
+
+    itemSectors.forEach(s => {
+      const existing = map.get(s.key);
+      if (!existing) {
+        map.set(s.key, { ...s });
+      } else {
+        if (s.dias) existing.dias = s.dias;
+        if (s.pi && s.pi !== '—') existing.pi = s.pi;
+        if (s.pf && s.pf !== '—') existing.pf = s.pf;
+        if (s.exec > 0) existing.exec = Math.max(existing.exec || 0, s.exec);
+        if (s.aExec > 0) existing.aExec = Math.max(existing.aExec || 0, s.aExec);
+        if (s.minProd > 0) existing.minProd = (existing.minProd || 0) + s.minProd;
+      }
+    });
+
+    const mergedSectors = Array.from(map.values());
+    setSectorModal({
+      title: `PRODUÇÃO POR SETOR/RECURSO (OS DA TAG #${t.IdTag} — ${t.Tag})`,
+      targetType: 'tag_os_bulk',
+      targetId: t.IdTag,
+      allOs: osList,
       sectors: mergedSectors
     });
   };
@@ -2024,9 +2073,11 @@ const salvarDatasBulkTags = async () => {
  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProj(p); setMsg(null); setActionModal('temposProducaoProj'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-blue-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Exibir Produção em Minutos">
  <Clock size={10} className="pointer-events-none" /> T.Prod
  </button>
+ {!isFin && (
  <button type="button" onClick={(e) => { e.stopPropagation(); openProjectSectorsModal(p); }} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-emerald-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Produção por Setores">
- <Activity size={10} className="pointer-events-none" /> Prod. Setores
+ <Activity size={10} className="pointer-events-none" /> Prod. Recursos
  </button>
+ )}
  </div>
  </td>
  <td className="px-3 py-3 align-middle text-center border-r border-slate-100">
@@ -2057,11 +2108,6 @@ const salvarDatasBulkTags = async () => {
  </div>
  <div className={`text-xs font-black flex items-center gap-1.5 transition-colors ${p.QtdeOS > 0 ? 'text-[#32423D] group-hover:text-[#32423D]/70' : 'text-slate-800'}`}>
  {p.QtdeOS || 0}
- {p.QtdeOS > 0 && (
- <span className="text-[8px] bg-blue-100 text-[#32423D] px-1 py-0.5 rounded leading-none group-hover:bg-[#32423D] group-hover:text-white transition-colors uppercase">
- Exibir
- </span>
- )}
  </div>
  <span className={`text-[8px] font-medium uppercase transition-colors ${p.QtdeOS > 0 ? 'text-blue-400 group-hover:text-[#32423D]' : 'text-slate-400'}`}>Total OS</span>
  </div>
@@ -2107,9 +2153,7 @@ const salvarDatasBulkTags = async () => {
  </div>
  {!isFin ? (<>
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('fin'); }} className="text-[9px] text-emerald-600 hover:bg-emerald-50 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-transparent hover:border-emerald-200 mt-0.5"><CheckCircle size={10} className="pointer-events-none"/> Finalizar Proj.</button>
-  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProjForSectors(p); setShowProdSetoresModal(true); }} className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-emerald-200 mt-0.5 ml-1" title="Ao selecionar esta opção todas as tags terão suas datas de planejamento modificadas em seus recursos ativos, propagando em efeito cascata para os OS e itens da OS">
-    <Activity size={10} className="pointer-events-none"/> Prod. Setores
-  </button></>) : (
+ </>) : (
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('cancelFin'); }} className="text-[9px] text-orange-600 hover:bg-orange-50 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-transparent hover:border-orange-200 mt-0.5"><RotateCcw size={10} className="pointer-events-none"/> Cancelar Fin.</button>
  )}
  </div>
@@ -2233,9 +2277,7 @@ const salvarDatasBulkTags = async () => {
  <div className="flex gap-2 w-full flex-wrap">
  {!isFin ? (<>
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('fin'); }} className="text-[10px] text-emerald-600 hover:text-emerald-800 font-bold uppercase underline decoration-emerald-300 flex items-center gap-1 transition-colors"><CheckCircle size={12} className="pointer-events-none"/> Finalizar Projeto</button>
-  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProjForSectors(p); setShowProdSetoresModal(true); }} className="text-[9px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-2 py-1.5 font-bold uppercase flex items-center justify-center gap-1 transition-colors rounded-lg border border-emerald-200 mt-0.5 ml-1" title="Ao selecionar esta opção todas as tags terão suas datas de planejamento modificadas em seus recursos ativos, propagando em efeito cascata para os OS e itens da OS">
-    <Activity size={10} className="pointer-events-none"/> Prod. Setores
-  </button></>) : (
+ </>) : (
  <button type="button" onClick={() => { setSelProj(p); setMsg(null); setActionModal('cancelFin'); }} className="text-[10px] text-orange-600 hover:text-orange-800 font-bold uppercase underline decoration-orange-300 flex items-center gap-1 transition-colors"><RotateCcw size={12} className="pointer-events-none"/> Cancelar Finalização</button>
  )}
  <button type="button" onClick={() => { setSelProj(p); setRncForm({ descricao: '', setor: 'Corte', usuario: '', tipoTarefa: '', dataExec: '' }); setMsg(null); fetchRncs(p.IdProjeto, 'VISAOGERALPROJ'); setActionModal('addRnc'); }} className="text-[10px] text-red-600 hover:text-red-800 font-bold uppercase underline decoration-red-300 flex items-center gap-1 transition-colors"><ShieldAlert size={12} className="pointer-events-none"/> Gerar Pendência</button>
@@ -2421,6 +2463,7 @@ const salvarDatasBulkTags = async () => {
  <tbody className="divide-y divide-slate-100">
   {filteredTags.map((t, idx) => {
     const tFin = t.Finalizado?.trim() !== '';
+    const isProjFin = selProj?.Finalizado?.trim() === 'C' || selProj?.Finalizado?.trim() === 'S';
     return (
       <React.Fragment key={t.IdTag}>
         <tr className={`group hover:bg-slate-50 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafcfd]'}`}>
@@ -2429,7 +2472,7 @@ const salvarDatasBulkTags = async () => {
               {/* LINHA 1: Tag Name, Status, Badges (Previsão & Qtd. OS) Próximos */}
               <div className="flex flex-wrap items-center justify-between gap-1.5">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <input type="checkbox" className="w-3 h-3 cursor-pointer mr-1" checked={selectedTagsForSectors.includes(t.IdTag)} onChange={(e) => { e.stopPropagation(); if (e.target.checked) setSelectedTagsForSectors(prev => [...prev, t.IdTag]); else setSelectedTagsForSectors(prev => prev.filter(id => id !== t.IdTag)); }} title="Selecionar para Prod. Setores" />
+                  <input type="checkbox" className="w-3 h-3 cursor-pointer mr-1" checked={selectedTagsForSectors.includes(t.IdTag)} onChange={(e) => { e.stopPropagation(); if (e.target.checked) setSelectedTagsForSectors(prev => [...prev, t.IdTag]); else setSelectedTagsForSectors(prev => prev.filter(id => id !== t.IdTag)); }} title="Selecionar para Prod. Recursos" />
                   <div className={`w-2 h-2 rounded-full shadow-sm shrink-0 ${tFin ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                   <span className="font-black text-slate-800 text-xs truncate max-w-[400px]" title={t.Tag}>{t.Tag}</span>
                   <span className="bg-slate-100 border border-slate-200 text-slate-500 text-[8.5px] px-1 py-0 rounded font-bold leading-tight">Cod: {t.IdTag}</span>
@@ -2478,13 +2521,15 @@ const salvarDatasBulkTags = async () => {
                     <Edit3 size={11} /> Plan. Eng/Proj.
                   </button>
 
-                  <button type="button" 
-                    onClick={(e) => { e.stopPropagation(); openTagSectorsModal(t); }}
-                    className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
-                    title="Produção por Setores (Tag)"
-                  >
-                    <Activity size={11} /> Prod. Setores
-                  </button>
+                  {!isProjFin && (
+                    <button type="button" 
+                      onClick={(e) => { e.stopPropagation(); openTagSectorsModal(t); }}
+                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                      title="Produção por Setores (Tag)"
+                    >
+                      <Activity size={11} /> Prod. Recursos
+                    </button>
+                  )}
 
                   <button type="button" 
                     onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
@@ -2613,9 +2658,16 @@ const salvarDatasBulkTags = async () => {
           <tr>
             <td colSpan={2} className="p-0 border-b border-slate-200">
               <div className="p-4 bg-slate-50 shadow-inner">
-                <h4 className="text-xs font-bold text-slate-800 mb-3 flex items-center gap-2">
-                  <List size={14} className="text-[#32423D]" /> Ordens de Serviço para a Tag {t.Tag}
-                </h4>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                    <List size={14} className="text-[#32423D]" /> Ordens de Serviço para a Tag {t.Tag}
+                  </h4>
+                  {!isProjFin && (
+                    <button type="button" onClick={(e) => { e.stopPropagation(); openBulkOsSectorsModal(t); }} className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 transition-colors">
+                      <Activity size={12} /> Prod. Recursos
+                    </button>
+                  )}
+                </div>
                 <div className="overflow-x-auto rounded border border-slate-200">
                   <table className="w-full text-[10px] text-left whitespace-nowrap">
                     <thead className="bg-slate-200 text-slate-700 uppercase font-bold tracking-wider text-[9px]">
@@ -2675,13 +2727,15 @@ const salvarDatasBulkTags = async () => {
                               </span>
                             </td>
                             <td className="px-2 py-2 text-center border-r border-slate-100">
-                               <button type="button" 
-                                 onClick={(e) => { e.stopPropagation(); setSelOs(os); setMsg(null); setActionModal('temposProducaoOs'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }}
-                                 className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[8.5px] font-bold flex items-center justify-center gap-1 transition-colors w-full"
-                                 title="Exibir Produção em Minutos"
-                               >
-                                 <Clock size={10} /> Tempo Prod.
-                               </button>
+                               <div className="flex flex-col gap-1">
+                                 <button type="button" 
+                                   onClick={(e) => { e.stopPropagation(); setSelOs(os); setMsg(null); setActionModal('temposProducaoOs'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }}
+                                   className="bg-blue-50 hover:bg-blue-100 border border-blue-200 text-blue-700 px-2 py-0.5 rounded text-[8.5px] font-bold flex items-center justify-center gap-1 transition-colors w-full"
+                                   title="Exibir Produção em Minutos"
+                                 >
+                                   <Clock size={10} /> Tempo Prod.
+                                 </button>
+                               </div>
                             </td>
                           </tr>
                           {/* ROW EXPANSIVEL DE SETORES DA OS */}
@@ -2794,17 +2848,19 @@ const salvarDatasBulkTags = async () => {
                                                   </span>
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center w-28">
-                                                  <button
-                                                    type="button"
-                                                    onClick={(e) => { 
-                                                      e.stopPropagation(); 
-                                                      openItemSectorsModal(item);
-                                                    }}
-                                                    className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
-                                                    title="Exibir Produção dos Setores / Recursos deste Item"
-                                                  >
-                                                    <Activity size={9} /> Prod. Setores
-                                                  </button>
+                                                  {!isProjFin && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={(e) => { 
+                                                        e.stopPropagation(); 
+                                                        openItemSectorsModal(item);
+                                                      }}
+                                                      className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
+                                                      title="Exibir Produção dos Setores / Recursos deste Item"
+                                                    >
+                                                      <Activity size={9} /> Prod. Recursos
+                                                    </button>
+                                                  )}
                                                 </td>
                                             </tr>
                                             {/* ══ ROW INDEPENDENTE: PRODUÇÃO DOS SETORES DO ITEM DA OS ══ */}
@@ -3156,7 +3212,7 @@ const salvarDatasBulkTags = async () => {
     </div>
   )}
 
-{showProdSetoresModal && (<ProdSetoresModal onClose={() => { setShowProdSetoresModal(false); setSelProjForSectors(null); }} projeto={selProjForSectors} selectedTagsIds={selectedTagsForSectors} />)}
+{showProdSetoresModal && (<ProdSetoresModal onClose={() => { setShowProdSetoresModal(false); setSelProjForSectors(null); setSelOsForSectors(null); }} projeto={selProjForSectors} selectedTagsIds={selectedTagsForSectors} osAlvo={selOsForSectors} />)}
   </div>
   );
 }

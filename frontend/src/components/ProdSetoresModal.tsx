@@ -42,40 +42,61 @@ const isoToBr = (isoStr: string) => {
   } catch(e) { return isoStr; }
 };
 
-export default function ProdSetoresModal({ onClose, projeto, selectedTagsIds }) {
+export default function ProdSetoresModal({ onClose, projeto, selectedTagsIds, osAlvo }: any) {
   const [loading, setLoading] = useState(true);
   const [projectTags, setProjectTags] = useState<any[]>([]);
+  const [osItems, setOsItems] = useState<any[]>([]);
   const [sectorDates, setSectorDates] = useState<any>({});
   
   useEffect(() => {
-    if (!projeto) return;
+    if (!projeto && !osAlvo) return;
     setLoading(true);
-    // Busca todas as tags do projeto
-    axios.get(`/api/acompanhamento/projeto/${projeto.IdProjeto}/tags?t=${new Date().getTime()}&limit=500`, { headers: getAuthHeaders() })
-      .then(res => {
-         const tagsData = Array.isArray(res.data) ? res.data : (res.data.data || []);
-         setProjectTags(tagsData);
-         setLoading(false);
-      })
-      .catch(err => {
-         console.error('Erro ao buscar tags do projeto:', err);
-         setLoading(false);
-      });
-  }, [projeto]);
+    if (osAlvo) {
+      // Busca itens da OS
+      axios.get(`/api/visao-geral/tag/${osAlvo.IdTag}/itens?t=${new Date().getTime()}&limit=500`, { headers: getAuthHeaders() })
+        .then(res => {
+           const itemsData = Array.isArray(res.data) ? res.data : (res.data.data || []);
+           // Filtrar os itens que pertencem a esta OS
+           const myItems = itemsData.filter((i:any) => i.IdOrdemServico === osAlvo.IdOrdemServico);
+           setOsItems(myItems);
+           setLoading(false);
+        })
+        .catch(err => {
+           console.error('Erro ao buscar itens da OS:', err);
+           setLoading(false);
+        });
+    } else {
+      // Busca todas as tags do projeto
+      axios.get(`/api/acompanhamento/projeto/${projeto.IdProjeto}/tags?t=${new Date().getTime()}&limit=500`, { headers: getAuthHeaders() })
+        .then(res => {
+           const tagsData = Array.isArray(res.data) ? res.data : (res.data.data || []);
+           setProjectTags(tagsData);
+           setLoading(false);
+        })
+        .catch(err => {
+           console.error('Erro ao buscar tags do projeto:', err);
+           setLoading(false);
+        });
+    }
+  }, [projeto, osAlvo]);
 
   const targetTags = selectedTagsIds && selectedTagsIds.length > 0 
     ? projectTags.filter(t => selectedTagsIds.includes(t.IdTag)) 
     : projectTags;
 
   useEffect(() => {
-    if (loading || targetTags.length === 0) return;
+    if (loading) return;
+    if (!osAlvo && targetTags.length === 0) return;
+    if (osAlvo && osItems.length === 0) return;
 
-    const newDates = {};
+    const newDates: any = {};
     SECTORS.forEach(sec => {
       let minDate = '';
       let maxDate = '';
 
-      targetTags.forEach(t => {
+      const dataSource = osAlvo ? osItems : targetTags;
+
+      dataSource.forEach(t => {
          const ini = isoToBr(t[sec.planIni]);
          const fim = isoToBr(t[sec.planFim]);
          
@@ -87,17 +108,20 @@ export default function ProdSetoresModal({ onClose, projeto, selectedTagsIds }) 
     });
 
     setSectorDates(newDates);
-  }, [targetTags, loading]);
+  }, [targetTags, osItems, loading, osAlvo]);
 
   const handleSave = async () => {
-      if (targetTags.length === 0) return;
+      if (!osAlvo && targetTags.length === 0) return;
       try {
-          const payload = {
-              tagIds: targetTags.map(t => t.IdTag),
-              datas: sectorDates
-          };
+          const payload: any = { datas: sectorDates };
+          if (osAlvo) {
+            payload.osIds = [osAlvo.IdOrdemServico];
+          } else {
+            payload.tagIds = targetTags.map(t => t.IdTag);
+          }
           await axios.put(`/api/projetos/${projeto.IdProjeto}/datas-planejamento`, payload, { headers: getAuthHeaders() });
-          alert('Datas de planejamento e Itens de OS atualizados com sucesso em cascata!');
+          alert('Datas de planejamento atualizadas com sucesso em cascata!');
+          onClose();
       } catch (err) {
           console.error(err);
           alert('Erro ao salvar as datas de planejamento.');
@@ -111,7 +135,7 @@ export default function ProdSetoresModal({ onClose, projeto, selectedTagsIds }) 
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2">
               <Calendar size={20} />
-              Planejamento de Setores (Prod. Setores)
+              Planejamento de Setores (Prod. Recursos)
             </h2>
             <p className="text-xs text-white/70 mt-1">
               {projeto && `Projeto: ${projeto.NomeProjeto || projeto.DescricaoProjeto || projeto.IdProjeto}`}

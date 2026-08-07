@@ -3643,7 +3643,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
 
                 columns.push(col);
                 values.push(val);
-                placeholders.push('é');
+                placeholders.push('?');
             }
         });
 
@@ -3651,12 +3651,12 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
         if (req.file) {
             columns.push('EnderecoLogo');
             values.push('/uploads/' + req.file.filename);
-            placeholders.push('é');
+            placeholders.push('?');
         }
 
         // Metadata
         const now = getCurrentDateTimeBR();
-        columns.push('DtCad'); values.push(now); placeholders.push('é');
+        columns.push('DtCad'); values.push(now); placeholders.push('?');
 
         const sql = `INSERT INTO pessoajuridica (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
 
@@ -10453,7 +10453,7 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
 
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
 app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) => {
-    const { targetType, targetId, sectors } = req.body;
+    const { targetType, targetId, sectors, targetIds } = req.body;
 
     if (!targetType || !targetId || !Array.isArray(sectors)) {
         return res.status(400).json({ success: false, message: 'Parâmetros targetType, targetId e sectors são obrigatórios.' });
@@ -10549,40 +10549,47 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 for (const s of sectors) {
                     let rawName = String(s.key || s.label || '').trim();
                     let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-                    if (rawName.toLowerCase() === 'montagem') recName = 'Montagem';
-                    else if (rawName.toLowerCase() === 'corte') recName = 'Corte';
-                    else if (rawName.toLowerCase() === 'dobra') recName = 'Dobra';
-                    else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
-                    else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
-                    else if (rawName.toLowerCase() === 'galvanizar') recName = 'GALVANIZAR';
-                    else if (rawName.toLowerCase() === 'punsionadeira') recName = 'PUNSIONADEIRA';
-                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') recName = 'CorteaLaser';
+                    let diasName = recName;
+                    if (rawName.toLowerCase() === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
+                    else if (rawName.toLowerCase() === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
+                    else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
+                    else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
+                    else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
+                    else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
+                    else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
+                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                     const colPi = `PlanejadoInicio${recName}`;
                     const colPf = `PlanejadoFinal${recName}`;
+                    const colDias = `${diasName}DiasProducao`;
 
                     const itemPiBr = formatBr(s.pi);
                     const itemPfBr = formatBr(s.pf);
+                    const valDias = parseInt(String(s.dias), 10) || 1;
+                    
+                    // Always push days update so parent hierarchy matches the latest saved sector's days
+                    updates.push(`\`${colDias}\` = ?`);
+                    params.push(valDias);
 
                     const itemPiDt = parseBrDate(itemPiBr);
                     const itemPfDt = parseBrDate(itemPfBr);
 
-                    // Check Start Date: If item date is SMALLER (earlier) than parent date, update parent!
-                    if (itemPiBr && itemPiDt) {
-                        const parentPiBr = formatBr(parentRow[colPi]);
-                        const parentPiDt = parseBrDate(parentPiBr);
+                    // Verifica as datas existentes no pai (caso existam)
+                    const parentPiBr = parentRow[colPi];
+                    const parentPfBr = parentRow[colPf];
+                    const parentPiDt = parseBrDate(parentPiBr);
+                    const parentPfDt = parseBrDate(parentPfBr);
 
+                    // Start Date: Só atualiza se o pai não tiver data ou se a nova data for mais antiga
+                    if (itemPiBr && itemPiDt) {
                         if (!parentPiDt || itemPiDt < parentPiDt) {
                             updates.push(`\`${colPi}\` = ?`);
                             params.push(itemPiBr);
                         }
                     }
 
-                    // Check End Date: If item date is GREATER (later) than parent date, update parent!
+                    // End Date: Só atualiza se o pai não tiver data ou se a nova data for mais recente
                     if (itemPfBr && itemPfDt) {
-                        const parentPfBr = formatBr(parentRow[colPf]);
-                        const parentPfDt = parseBrDate(parentPfBr);
-
                         if (!parentPfDt || itemPfDt > parentPfDt) {
                             updates.push(`\`${colPf}\` = ?`);
                             params.push(itemPfBr);
@@ -10605,10 +10612,10 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
             if (projetoId) await updateEntityRow('projetos', 'IdProjeto', projetoId);
         };
 
-        const idsToUpdate = (targetType === 'tag' && Array.isArray(targetIds) && targetIds.length > 0) ? targetIds : [targetId];
+        const idsToUpdate = ((targetType === 'tag' || targetType === 'tag_os_bulk') && Array.isArray(targetIds) && targetIds.length > 0) ? targetIds : [targetId];
 
         for (const currentTargetId of idsToUpdate) {
-            if (targetType === 'os') {
+            if (targetType === 'os' || targetType === 'tag_os_bulk') {
             await updateFieldsForEntity('ordemservico', 'IdOrdemServico', currentTargetId);
             await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', currentTargetId);
 
@@ -16984,14 +16991,16 @@ app.get('/api/ordemservico/projetos/:id/tempos-producao', tenantMiddleware, asyn
 app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
     try {
         const projetoId = req.params.id;
-        const { tagIds, datas } = req.body;
+        const { tagIds, osIds, datas } = req.body;
 
-        if (!tagIds || tagIds.length === 0) {
-            return res.status(400).json({ error: 'Nenhuma tag informada.' });
+        if ((!tagIds || tagIds.length === 0) && (!osIds || osIds.length === 0)) {
+            return res.status(400).json({ error: 'Nenhuma tag ou OS informada.' });
         }
 
-        const tagsInClause = tagIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',');
-        if (!tagsInClause) return res.status(400).json({ error: 'IDs de tags inválidos.' });
+        const tagsInClause = tagIds ? tagIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',') : '';
+        const osInClause = osIds ? osIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',') : '';
+        
+        if (!tagsInClause && !osInClause) return res.status(400).json({ error: 'IDs de tags ou OS inválidos.' });
 
         const SECTORS_DB = {
           'Corte': { osTxt: 'txtCorte', planIni: 'PlanejadoInicioCorte', planFim: 'PlanejadoFinalCorte', diasProd: 'CorteDiasProducao' },
@@ -17038,7 +17047,7 @@ app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
                 if (iniBr || fimBr) {
                     setClauseTags.push(`${sec.diasProd} = DATEDIFF(STR_TO_DATE(${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(${sec.planIni}, '%d/%m/%Y'))`);
                 }
-                if (setClauseTags.length > 0) {
+                if (setClauseTags.length > 0 && tagsInClause) {
                     const queryTags = `UPDATE tags SET ${setClauseTags.join(', ')} WHERE IdTag IN (${tagsInClause})`;
                     await conn.query(queryTags, updateTagsParams);
                 }
@@ -17061,13 +17070,23 @@ app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
                     setClauseOsi.push(`osi.${sec.diasProd} = DATEDIFF(STR_TO_DATE(osi.${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(osi.${sec.planIni}, '%d/%m/%Y'))`);
                 }
                 if (setClauseOsi.length > 0) {
-                    const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
-                    await conn.query(queryOSI, updateOsiParams);
-
-                    // ALSO update the ordemservico table directly
                     let setClauseOs = setClauseOsi.map(clause => clause.replace(/osi\./g, 'os.'));
-                    const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
-                    await conn.query(queryOS, updateOsiParams);
+
+                    if (tagsInClause) {
+                        const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
+                        await conn.query(queryOSI, updateOsiParams);
+
+                        const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
+                        await conn.query(queryOS, updateOsiParams);
+                    }
+
+                    if (osInClause) {
+                        const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdOrdemServico IN (${osInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
+                        await conn.query(queryOSI, updateOsiParams);
+
+                        const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdOrdemServico IN (${osInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
+                        await conn.query(queryOS, updateOsiParams);
+                    }
                 }
             }
 

@@ -63,7 +63,7 @@ export const defaultMenuItems: MenuItem[] = [
     { id: 'superadmin', icon: 'ShieldAlert', label: 'Superadmin', href: '/superadmin' },
     { id: 'tarefas', icon: 'ListTodo', label: 'Tarefas', href: '/tarefas' },
     { id: 'teste-final-montagem', icon: 'ClipboardCheck', label: 'Teste Final Montagem', href: '/teste-final-montagem' },
-    { id: 'recursos-fabricacao', icon: 'Settings2', label: 'Recursos de Fabricação', href: '/recursos-fabricacao' },
+
     { id: 'producao-diaria-recurso', icon: 'Activity', label: 'Produção Diaria Recurso', href: '/producao-diaria-recurso' },
     { id: 'tipos-produto', icon: 'Boxes', label: 'Tipos Produto', href: '/tipos-produto' },
     { id: 'tipos-transporte', icon: 'Truck', label: 'Tipos Transporte', href: '/tipos-transporte' },
