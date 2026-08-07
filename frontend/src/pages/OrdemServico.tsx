@@ -2493,25 +2493,13 @@ function OrdemServicoContent() {
                                                         </button>
                                                     )}
                                                     {/* Botão Manutenção de Tempos de Produção — somente OS não liberadas */}
-                                                    {(() => {
-                                                        const osLiberada = os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM';
-                                                        return osLiberada ? (
-                                                            <span
-                                                                className="w-8 h-8 rounded flex items-center justify-center bg-gray-100 text-gray-300 cursor-not-allowed"
-                                                                title="Tempos bloqueados — OS já liberada"
-                                                            >
-                                                                <Clock size={14} />
-                                                            </span>
-                                                        ) : (
-                                                            <button
-                                                                onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
-                                                                className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
-                                                                title="Manutenção de Tempos de Produção"
-                                                            >
-                                                                <Clock size={14} />
-                                                            </button>
-                                                        );
-                                                    })()}
+                                                    <button
+                                                        onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
+                                                        className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
+                                                        title="Manutenção de Tempos de Produção"
+                                                    >
+                                                        <Clock size={14} />
+                                                    </button>
                                                 </div>
 
                                                 <span
