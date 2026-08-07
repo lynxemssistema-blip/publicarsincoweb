@@ -9,6 +9,38 @@ const db = require('./config/db');
 const pool = db;
 const tenantMiddleware = require('./middleware/tenant');
 
+// ─── CAMPO AUXILIAR DIÁRIO (em memória, por banco) ───────────────────────────
+// Chave: "{dbName}_{IdOrdemServicoItem}_{setor}_{YYYY-MM-DD}"
+// Valor: minutos acumulados e APROVADOS hoje para este item/setor/banco
+// Reset automático: novo dia = nova chave = valor 0 automaticamente
+const dailyMinProdMap = new Map();
+
+/**
+ * Obtém os minutos acumulados hoje para um item/setor/banco.
+ * @param {string} dbName  - Nome do banco do tenant (ex: "lynxlocal")
+ * @param {number} idItem  - IdOrdemServicoItem
+ * @param {string} setor   - Nome do setor em lowercase (ex: "galvanizar")
+ * @returns {number} minutos já acumulados hoje (0 se é o primeiro do dia)
+ */
+function getDailyAccumulated(dbName, idItem, setor) {
+    const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const key = `${dbName}_${idItem}_${setor}_${today}`;
+    return dailyMinProdMap.get(key) || 0;
+}
+
+/**
+ * Incrementa o acumulado diário após um apontamento aprovado.
+ */
+function addDailyAccumulated(dbName, idItem, setor, minutos) {
+    const today = new Date().toISOString().slice(0, 10);
+    const key = `${dbName}_${idItem}_${setor}_${today}`;
+    const prev = dailyMinProdMap.get(key) || 0;
+    dailyMinProdMap.set(key, prev + minutos);
+    console.log(`[DailyMinProd] ${key} → ${prev} + ${minutos} = ${prev + minutos} min`);
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+
 function toIsoDate(val) {
     if (!val || typeof val !== 'string') return null;
     val = val.trim();
@@ -24,6 +56,7 @@ function toIsoDate(val) {
 const matrizRoutes = require('./routes/matrizRoutes');
 const blocksetRoutes = require('./routes/blocksetRoutes');
 const pecaManufaturadaRoutes = require('./routes/pecaManufaturada');
+const tiposTransporteRoutes = require('./routes/tiposTransporte');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
 const multer = require('multer');
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -127,6 +160,7 @@ app.use((req, res, next) => {
 });
 
 // Apply Tenant Middleware to all API routes
+
 app.use('/api', tenantMiddleware);
 
 // Admin Routes
@@ -138,12 +172,13 @@ app.use('/api/blockset', blocksetRoutes);
 // Peça Manufaturada Routes (modularizado)
 app.locals.pool = pool;
 app.use('/api/peca-manufaturada', pecaManufaturadaRoutes);
+app.use('/api/config/veiculo', tiposTransporteRoutes);
 
-// ReposiÃƒÂ§ÃƒÂ£o Routes
-app.get('/api/reposicao/itens', async (req, res) => {
+// Reposià§ão Routes
+app.get('/api/reposicao/itens', tenantMiddleware, async (req, res) => {
     try {
         const query = `
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, Projeto, DescEmpresa, Tag, DescTag, 
                 CodMatFabricante, DescResumo, DescDetal, Espessura, 
                 MaterialSW, EnderecoArquivo, EnderecoArquivoItemOrdemServico,
                 CriadoPor, DataCriacao, QtdeTotal, SetorReposicao, 
@@ -157,16 +192,36 @@ app.get('/api/reposicao/itens', async (req, res) => {
             WHERE Reposicao = 'S' 
               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')
         `;
-        const [rows] = await pool.query(query);
+        const [rows] = await req.tenantDbPool.query(query);
         console.log(`[DEBUG REPOSICAO] tenantId was unused | rows.length: ${rows.length}`);
+                // Auto-sync dynamic columns for all returned resources PLUS hardcoded legacy ones
+        const hardcodedLegacy = ['CorteaLaser', 'PUNSIONADEIRA', 'GALVANIZAR', 'Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'Engenharia', 'Isometrico', 'Medicao', 'Acabamento', 'Aprovacao'];
+        const allResources = rows.map(r => r.processofabricacao).filter(Boolean);
+        for (const legacy of hardcodedLegacy) {
+            allResources.push(legacy);
+        }
+
+        const dbName = req.tenantDbPool?.pool?.config?.connectionConfig?.database || 'default';
+        for (const rawResource of allResources) {
+            if (!rawResource) continue;
+            const resName = rawResource.trim().replace(/\s+/g, '');
+            if (!resName) continue;
+            
+            const cacheKey = `${dbName}_${resName}`;
+            if (!syncedTenantResources.has(cacheKey)) {
+                await ensureDynamicResourceColumns(req.tenantDbPool, rawResource);
+                syncedTenantResources.set(cacheKey, true);
+            }
+        }
+        
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('Erro ao buscar itens de reposiÃƒÂ§ÃƒÂ£o:', error);
-        res.status(500).json({ success: false, message: 'Erro interno no servidor ao buscar reposiÃƒÂ§ÃƒÂ£o.' });
+        console.error('Erro ao buscar itens de reposià§ão:', error);
+        res.status(500).json({ success: false, message: 'Erro interno no servidor ao buscar reposià§ão.' });
     }
 });
 
-app.delete('/api/reposicao/itens/:id', async (req, res) => {
+app.delete('/api/reposicao/itens/:id', tenantMiddleware, async (req, res) => {
     let connection;
     try {
         const { id } = req.params;
@@ -198,13 +253,13 @@ app.delete('/api/reposicao/itens/:id', async (req, res) => {
 });
 
 
-app.post('/api/reposicao/apontamento', async (req, res) => {
+app.post('/api/reposicao/apontamento', tenantMiddleware, async (req, res) => {
     let connection;
     try {
         const { IdOrdemServicoItem, quantidadeApontada } = req.body;
         
         if (!IdOrdemServicoItem || !quantidadeApontada || quantidadeApontada <= 0) {
-            return res.status(400).json({ success: false, message: 'Dados invÃƒÂ¡lidos para o apontamento.' });
+            return res.status(400).json({ success: false, message: 'Dados inválidos para o apontamento.' });
         }
 
         connection = await pool.getConnection();
@@ -212,7 +267,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         // 1. Validar e capturar o Item
         const [items] = await connection.query(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdMaterial, QtdeTotal, cortetotalexecutado, cortetotalexecutar, 
                    sttxtCorte, IdOrdemservicoReposicao, IdOrdemServicoItemReposicao, IdPendenciaReposicao
             FROM ordemservicoitem 
             WHERE IdOrdemServicoItem = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*') FOR UPDATE
@@ -220,14 +275,14 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         if (items.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ success: false, message: 'PeÃƒÂ§a de reposiÃƒÂ§ÃƒÂ£o nÃƒÂ£o localizada.' });
+            return res.status(404).json({ success: false, message: 'Peà§a de reposià§ão não localizada.' });
         }
 
         const item = items[0];
         
         if (item.sttxtCorte === 'C') {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Este item de reposiÃƒÂ§ÃƒÂ£o jÃƒÂ¡ estÃƒÂ¡ concluÃƒÂ­do.' });
+            return res.status(400).json({ success: false, message: 'Este item de reposià§ão já está concluà­do.' });
         }
 
         const atualExecutado = Number(item.cortetotalexecutado) || 0;
@@ -236,7 +291,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         if (quantidadeApontada > limiteMaximo) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: `A quantidade informada excede o limite restante de reposiÃƒÂ§ÃƒÂ£o (${limiteMaximo}).` });
+            return res.status(400).json({ success: false, message: `A quantidade informada excede o limite restante de reposià§ão (${limiteMaximo}).` });
         }
 
         const novoCorteExecutado = atualExecutado + Number(quantidadeApontada);
@@ -276,7 +331,7 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
 
         // 4. Fechar RNC automaticamente caso 100% reposto
         if (novoCorteExecutado === qtdeTotal && item.IdPendenciaReposicao) {
-            const descFinalizacao = `RNC AutomÃƒÂ¡tica  - Encerramento do Pedido de ReposiÃƒÂ§ÃƒÂ£o de PeÃƒÂ§a da OS: ${item.IdOrdemServico} Item: ${item.IdOrdemServicoItemReposicao || ''} Concluido , Excluindo da Lista de PendÃƒÂªncia`;
+            const descFinalizacao = `RNC Automática  - Encerramento do Pedido de Reposià§ão de Peà§a da OS: ${item.IdOrdemServico} Item: ${item.IdOrdemServicoItemReposicao || ''} Concluido , Excluindo da Lista de Pendàªncia`;
             
             await connection.query(`
                 UPDATE ordemservicoitempendencia
@@ -288,16 +343,16 @@ app.post('/api/reposicao/apontamento', async (req, res) => {
                     Estatus = 'FINALIZADA'
                 WHERE IdOrdemServicoItemPendencia = ?
             `, [
-                usuarioLogado, dataAtual, descFinalizacao, usuarioLogado, 'ProduÃƒÂ§ÃƒÂ£o', item.IdPendenciaReposicao
+                usuarioLogado, dataAtual, descFinalizacao, usuarioLogado, 'Produà§ão', item.IdPendenciaReposicao
             ]);
         }
 
         await connection.commit();
-        res.json({ success: true, message: 'PeÃƒÂ§as repostas apontadas com sucesso!' });
+        res.json({ success: true, message: 'Peà§as repostas apontadas com sucesso!' });
 
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('Erro na transaction do Apontamento de ReposiÃƒÂ§ÃƒÂ£o:', error);
+        console.error('Erro na transaction do Apontamento de Reposià§ão:', error);
         res.status(500).json({ success: false, message: 'Erro interno ao processar apontamento.' });
     } finally {
         if (connection) connection.release();
@@ -361,31 +416,31 @@ const limparDiretorio = (diretorio) => {
                 fs.rmSync(filePath, { recursive: true, force: true });
             }
         }
-        console.log(`[File] DiretÃ¯Â¿Â½rio limpo: ${diretorio}`);
+        console.log(`[File] Diretório limpo: ${diretorio}`);
     } catch (err) {
-        console.error(`[File] Erro ao limpar diretÃ¯Â¿Â½rio ${diretorio}:`, err);
+        console.error(`[File] Erro ao limpar diretório ${diretorio}:`, err);
     }
 };
 
 const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
     try {
-        console.log(`[Excel] Iniciando exportaÃ¯Â¿Â½Ã¯Â¿Â½o padrÃ¯Â¿Â½o do Romaneio #${idRomaneio}`);
+        console.log(`[Excel] Iniciando exportação padr?o do Romaneio #${idRomaneio}`);
 
         // 1. Buscar Caminhos e Template
-        const [configRows] = await pool.execute(
+        const [configRows] = await req.tenantDbPool.execute(
             "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelRomaneio'"
         );
         const templatePath = configRows.length > 0 ? configRows[0].valor : null;
 
-        const [romRows] = await pool.execute(
+        const [romRows] = await req.tenantDbPool.execute(
             `SELECT * FROM romaneio WHERE idRomaneio = ?`,
             [idRomaneio]
         );
-        if (romRows.length === 0) throw new Error('Romaneio nÃ¯Â¿Â½o encontrado');
+        if (romRows.length === 0) throw new Error('Romaneio não encontrado');
         const romData = romRows[0];
 
         // 2. Buscar Itens
-        const [items] = await pool.execute(
+        const [items] = await req.tenantDbPool.execute(
             "SELECT * FROM v_rom_itens_incluidos WHERE IdRomaneio = ?",
             [idRomaneio]
         );
@@ -399,16 +454,16 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
             await workbook.xlsx.readFile(templatePath);
             worksheet = workbook.getWorksheet(1);
         } else {
-            console.warn(`[Excel] Template nÃ¯Â¿Â½o encontrado em ${templatePath}. Criando novo.`);
+            console.warn(`[Excel] Template não encontrado em ${templatePath}. Criando novo.`);
             worksheet = workbook.addWorksheet('Romaneio');
         }
 
-        // 4. Preencher CabeÃ¯Â¿Â½alho (PadrÃ¯Â¿Â½o Legado)
+        // 4. Preencher Cabe?alho (Padr?o Legado)
         const paddedId = idRomaneio.toString().padStart(5, '0');
         const fullAddress = [
             romData.EnviadoPara,
             `RUA: ${romData.endereco || ''}`,
-            `NÃ¯Â¿Â½: ${romData.numero || ''}`,
+            `N?: ${romData.numero || ''}`,
             `BAIRRO: ${romData.bairro || ''}`,
             `COMPLEMENTO: ${romData.complemento || ''}`,
             `CIDADE: ${romData.cidade || ''}`,
@@ -429,7 +484,7 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
         worksheet.getCell('M10').value = romData.PlacaVeiculo || '';
         worksheet.getCell('O12').value = romData.ObservacaoTransporte || '';
 
-        // 5. Preencher Itens (ComeÃ¯Â¿Â½a na linha 18)
+        // 5. Preencher Itens (Come?a na linha 18)
         items.forEach((item, idx) => {
             const rowIdx = 18 + idx;
 
@@ -451,13 +506,13 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
             worksheet.getCell(`W${rowIdx}`).value = item.Situacao || '';
 
             // Se quisermos copiar o estilo da linha 17 (como no VB.NET)
-            // No ExcelJS nÃ¯Â¿Â½o existe um "CopyRange" direto tÃ¯Â¿Â½o simples, 
-            // mas podemos tentar manter os estilos se o template jÃ¯Â¿Â½ tiver a linha formatada.
+            // No ExcelJS não existe um "CopyRange" direto t?o simples, 
+            // mas podemos tentar manter os estilos se o template já tiver a linha formatada.
         });
 
         // 6. Salvar
         if (!romData.ENDERECORomaneio) {
-            throw new Error('DiretÃ¯Â¿Â½rio do Romaneio nÃ¯Â¿Â½o configurado no banco de dados.');
+            throw new Error('Diretório do Romaneio não configurado no banco de dados.');
         }
 
         const fileName = `Romaneio_${paddedId}_${new Date().getTime()}.xlsx`;
@@ -478,19 +533,19 @@ const ExportarRomaneioExcelPadrao = async (idRomaneio) => {
 };
 
 // Route to Download Excel
-app.get('/api/romaneio/download-excel/:id', async (req, res) => {
+app.get('/api/romaneio/download-excel/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
             [id]
         );
 
-        if (rows.length === 0) return res.status(404).send('Romaneio nÃ¯Â¿Â½o encontrado');
+        if (rows.length === 0) return res.status(404).send('Romaneio não encontrado');
         const dir = rows[0].ENDERECORomaneio;
 
         if (!dir || !fs.existsSync(dir)) {
-            return res.status(404).send('DiretÃ¯Â¿Â½rio de arquivos nÃ¯Â¿Â½o encontrado');
+            return res.status(404).send('Diretório de arquivos não encontrado');
         }
 
         // Find the most recent xlsx file in that directory starting with Romaneio_
@@ -513,19 +568,19 @@ app.get('/api/romaneio/download-excel/:id', async (req, res) => {
 });
 
 // Route to Open Folder in Explorer
-app.post('/api/romaneio/open-folder/:id', async (req, res) => {
+app.post('/api/romaneio/open-folder/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
             [id]
         );
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Romaneio não encontrado' });
         const dir = rows[0].ENDERECORomaneio;
 
         if (!dir || !fs.existsSync(dir)) {
-            return res.status(404).json({ success: false, message: 'DiretÃ¯Â¿Â½rio nÃ¯Â¿Â½o existe no servidor' });
+            return res.status(404).json({ success: false, message: 'Diretório não existe no servidor' });
         }
 
         // Open Explorer on Windows using 'start' which is more robust
@@ -554,7 +609,7 @@ app.post('/api/romaneio/open-folder/:id', async (req, res) => {
 // --- ROUTES ---
 
 // GET /api/tarefas - List tarefas
-app.get('/api/tarefas', async (req, res) => {
+app.get('/api/tarefas', tenantMiddleware, async (req, res) => {
     try {
         const { showFinalized } = req.query;
         let estatusCondition = "Estatus = 'TarefaAberta'";
@@ -592,7 +647,7 @@ app.get('/api/tarefas', async (req, res) => {
               AND ${estatusCondition}
             ORDER BY DataCriacao DESC
         `;
-        const [rows] = await pool.execute(query);
+        const [rows] = await req.tenantDbPool.execute(query);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar tarefas:', error);
@@ -602,9 +657,9 @@ app.get('/api/tarefas', async (req, res) => {
 
 
 // GET /api/romaneio - List all
-app.get('/api/romaneio', async (req, res) => {
+app.get('/api/romaneio', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.query(
+        const [rows] = await req.tenantDbPool.query(
             "SELECT idRomaneio AS idRomaneio, Descricao AS Descricao, EnviadoPara AS EnviadoPara, DATACRIACAO AS DATACRIACAO, CriadoPor AS CriadoPor, ENDERECORomaneio AS ENDERECORomaneio, Estatus AS Estatus, Liberado AS Liberado, DataEnvio AS DataEnvio, NomeMotorista AS NomeMotorista FROM romaneio WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*') ORDER BY idRomaneio DESC"
         );
 
@@ -617,7 +672,7 @@ app.get('/api/romaneio', async (req, res) => {
 });
 
 // GET /api/romaneio/v-itens-projeto-aberto - Search available items from project
-app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
+app.get('/api/romaneio/v-itens-projeto-aberto', tenantMiddleware, async (req, res) => {
     const { projeto, tag, resumo, detalhe, codFabricante, mostrarEnviados, mostrarFinalizados } = req.query;
 
     try {
@@ -660,24 +715,24 @@ app.get('/api/romaneio/v-itens-projeto-aberto', async (req, res) => {
 
         sql += ` LIMIT 500`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching v-itens-projeto-aberto:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar itens disponÃ¯Â¿Â½veis.' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar itens disponíveis.' });
     }
 });
 
 // GET /api/romaneio/:id - Get single romaneio details
-app.get('/api/romaneio/:id', async (req, res) => {
+app.get('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT * FROM romaneio WHERE idRomaneio = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')",
             [id]
         );
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado' });
+            return res.status(404).json({ success: false, message: 'Romaneio não encontrado' });
         }
         res.json({ success: true, data: rows[0] });
     } catch (error) {
@@ -687,23 +742,23 @@ app.get('/api/romaneio/:id', async (req, res) => {
 });
 
 // POST /api/romaneio/:id/items - Add items to a Romaneio
-app.post('/api/romaneio/:id/items', async (req, res) => {
+app.post('/api/romaneio/:id/items', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { IdOrdemServicoItem, qtde, usuario } = req.body;
 
     if (!IdOrdemServicoItem || !qtde || qtde <= 0) {
-        return res.status(400).json({ success: false, message: 'Dados invÃ¯Â¿Â½lidos para inclusÃ¯Â¿Â½o.' });
+        return res.status(400).json({ success: false, message: 'Dados inválidos para inclusão.' });
     }
 
     try {
         // 1. Fetch item details and check balance from view
-        const [viewRows] = await pool.execute(
+        const [viewRows] = await req.tenantDbPool.execute(
             "SELECT * FROM v_rom_itens_disponiveis WHERE IdOrdemServicoItem = ?",
             [IdOrdemServicoItem]
         );
 
         if (viewRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Item nÃ¯Â¿Â½o encontrado ou jÃ¯Â¿Â½ finalizado.' });
+            return res.status(404).json({ success: false, message: 'Item não encontrado ou já finalizado.' });
         }
 
         const item = viewRows[0];
@@ -712,12 +767,12 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         if (qtde > saldoDisponivel) {
             return res.status(400).json({
                 success: false,
-                message: `Quantidade solicitada (${qtde}) Ã¯Â¿Â½ maior que o saldo disponÃ¯Â¿Â½vel (${saldoDisponivel}).`
+                message: `Quantidade solicitada (${qtde}) ? maior que o saldo disponível (${saldoDisponivel}).`
             });
         }
 
         // 2. UPSERT: verificar se item já existe neste romaneio (evitar duplicata)
-        const [existing] = await pool.execute(
+        const [existing] = await req.tenantDbPool.execute(
             "SELECT IdRomaneioItem, qtdeUsuario FROM romaneioitem WHERE IdRomaneio = ? AND IDOrdemServicoITEM = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1",
             [id, IdOrdemServicoItem]
         );
@@ -732,18 +787,18 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
             const novoPeso = pesoUnit * novaQtde;
             const novaArea = areaUnit * novaQtde;
 
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 "UPDATE romaneioitem SET qtdeUsuario = ?, qtdeGrid = ?, QtdeRomaneio = ?, PesoTotal = ?, AreaPinturaTotal = ? WHERE IdRomaneioItem = ?",
                 [novaQtde, novaQtde, novaQtde, novoPeso, novaArea, reg.IdRomaneioItem]
             );
             // Atualiza ordemservicoitem com referências ao romaneio
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem
                  SET idRomaneio = ?, IdRomaneioItem = ?, QtdeRomaneio = ?, EnviadoParaRomaneio = 'S'
                  WHERE IdOrdemServicoItem = ?`,
                 [id, reg.IdRomaneioItem, novaQtde, IdOrdemServicoItem]
             );
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 "INSERT INTO ordemservicoitemcontrole (IdOrdemServico, IdOrdemServicoItem, Processo, QtdeTotal, QtdeProduzida, Origem, CriadoPor, DataCriacao, D_E_L_E_T_E) VALUES (?, ?, 'Expedicao', ?, ?, 'Expedicao', ?, ?, '')",
                 [item.IdOrdemServico || null, IdOrdemServicoItem, item.QtdeTotal || qtde, qtde, usuario || 'Sistema', getCurrentDateTimeBR()]
             );
@@ -754,19 +809,19 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
         const pesoTotal = pesoUnit * qtde;
         const areaTotal = areaUnit * qtde;
 
-        const [insertResult] = await pool.execute(
+        const [insertResult] = await req.tenantDbPool.execute(
             "INSERT INTO romaneioitem (IdRomaneio, IDOrdemServicoITEM, Usuario, DataCriacao, qtdeUsuario, qtdeGrid, QtdeRomaneio, PesoUnitario, PesoTotal, AreaPintura, AreaPinturaTotal, CodMatFabricante, Situacao) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ITEM LOCALIZADO')",
             [id, IdOrdemServicoItem, usuario || 'Sistema', getCurrentDateTimeBR(), qtde, qtde, qtde, pesoUnit, pesoTotal, areaUnit, areaTotal, item.CodMatFabricante || '']
         );
         const novoIdRomaneioItem = insertResult.insertId;
         // Atualiza ordemservicoitem com referências ao romaneio
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem
              SET idRomaneio = ?, IdRomaneioItem = ?, QtdeRomaneio = ?, EnviadoParaRomaneio = 'S'
              WHERE IdOrdemServicoItem = ?`,
             [id, novoIdRomaneioItem, qtde, IdOrdemServicoItem]
         );
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO ordemservicoitemcontrole (IdOrdemServico, IdOrdemServicoItem, Processo, QtdeTotal, QtdeProduzida, Origem, CriadoPor, DataCriacao, D_E_L_E_T_E) VALUES (?, ?, 'Expedicao', ?, ?, 'Expedicao', ?, ?, '')",
             [item.IdOrdemServico || null, IdOrdemServicoItem, item.QtdeTotal || qtde, qtde, usuario || 'Sistema', getCurrentDateTimeBR()]
         );
@@ -778,7 +833,7 @@ app.post('/api/romaneio/:id/items', async (req, res) => {
 });
 
 // GET /api/romaneio/:id/inserted-items - List items already in the Romaneio
-app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
+app.get('/api/romaneio/:id/inserted-items', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { projeto, tag, resumo, detalhe, codFabricante } = req.query;
 
@@ -809,7 +864,7 @@ app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
 
         sql += ` LIMIT 200`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching inserted items:', error);
@@ -818,7 +873,7 @@ app.get('/api/romaneio/:id/inserted-items', async (req, res) => {
 });
 
 // GET /api/files/open-pdf/:idRomaneioItem - Open PDF drawing for a romaneio item
-app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
+app.get('/api/files/open-pdf/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const fs = require('fs');
     const path = require('path');
@@ -826,20 +881,20 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
     console.log(`[FILES] Request to open PDF for Item: ${idRomaneioItem}`);
 
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT EnderecoArquivo FROM v_rom_itens_incluidos WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
         );
 
         if (rows.length === 0 || !rows[0].EnderecoArquivo) {
             console.warn(`[FILES] No EnderecoArquivo found for Item: ${idRomaneioItem}`);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o associado a este item.' });
+            return res.status(404).json({ success: false, message: 'Arquivo não associado a este item.' });
         }
 
         const originalEndereco = rows[0].EnderecoArquivo;
         let endereco = originalEndereco;
 
-        // NormalizaÃ¯Â¿Â½Ã¯Â¿Â½o baseada na lÃ¯Â¿Â½gica VB.NET original
+        // Normalização baseada na l?gica VB.NET original
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
             endereco = endereco.split(ext).join(".PDF");
@@ -865,18 +920,18 @@ app.get('/api/files/open-pdf/:idRomaneioItem', async (req, res) => {
             console.error(`[FILES] File NOT found: ${endereco}`);
             res.status(404).json({
                 success: false,
-                message: `Arquivo PDF nÃ¯Â¿Â½o encontrado. Favor verificar se o caminho estÃ¯Â¿Â½ acessÃ¯Â¿Â½vel: ${endereco}`,
+                message: `Arquivo PDF não encontrado. Favor verificar se o caminho est? acess?vel: ${endereco}`,
                 path: endereco
             });
         }
     } catch (error) {
         console.error('[FILES] Fatal error opening PDF:', error);
-        res.status(500).json({ success: false, message: 'Erro ao processar solicitaÃ¯Â¿Â½Ã¯Â¿Â½o do desenho.' });
+        res.status(500).json({ success: false, message: 'Erro ao processar solicitação do desenho.' });
     }
 });
 
 // GET /api/files/open-3d/:idRomaneioItem - Open original 3D drawing
-app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
+app.get('/api/files/open-3d/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const fs = require('fs');
     const path = require('path');
@@ -884,14 +939,14 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
     console.log(`[FILES] Request to open 3D for Item: ${idRomaneioItem}`);
 
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT EnderecoArquivo FROM v_rom_itens_incluidos WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
         );
 
         if (rows.length === 0 || !rows[0].EnderecoArquivo) {
             console.warn(`[FILES] No EnderecoArquivo found for Item: ${idRomaneioItem}`);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o associado a este item.' });
+            return res.status(404).json({ success: false, message: 'Arquivo não associado a este item.' });
         }
 
         const endereco = rows[0].EnderecoArquivo;
@@ -912,7 +967,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
             console.error(`[FILES] 3D File NOT found: ${endereco}`);
             res.status(404).json({
                 success: false,
-                message: `Arquivo original nÃ¯Â¿Â½o encontrado no servidor: ${endereco}`,
+                message: `Arquivo original não encontrado no servidor: ${endereco}`,
                 path: endereco
             });
         }
@@ -922,7 +977,7 @@ app.get('/api/files/open-3d/:idRomaneioItem', async (req, res) => {
     }
 });
 // PUT /api/romaneio/item/:idRomaneioItem/observacao - Update observation
-app.put('/api/romaneio/item/:idRomaneioItem/observacao', async (req, res) => {
+app.put('/api/romaneio/item/:idRomaneioItem/observacao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { observacao } = req.body;
@@ -944,7 +999,7 @@ app.put('/api/romaneio/item/:idRomaneioItem/observacao', async (req, res) => {
 });
 
 // POST /api/romaneio/item/:idRomaneioItem/estorno - Estorno de quantidade
-app.post('/api/romaneio/item/:idRomaneioItem/estorno', async (req, res) => {
+app.post('/api/romaneio/item/:idRomaneioItem/estorno', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const { qtdeEstorno, usuario } = req.body;
     let conn = null;
@@ -1040,7 +1095,7 @@ app.post('/api/romaneio/item/:idRomaneioItem/estorno', async (req, res) => {
 });
 
 // POST /api/romaneio/item/:idRomaneioItem/alterar-qtde - Alterar (subtrair) qtdeUsuario e devolver saldo à OS
-app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', async (req, res) => {
+app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     const { qtdeAlterar, usuario } = req.body;
     let conn = null;
@@ -1112,9 +1167,9 @@ app.post('/api/romaneio/item/:idRomaneioItem/alterar-qtde', async (req, res) => 
     }
 });
 
-app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
+app.delete('/api/romaneio/item/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
-    const { usuario } = req.query; // Pega o usuÃ¯Â¿Â½rio da query string ou header se disponÃ¯Â¿Â½vel
+    const { usuario } = req.query; // Pega o usuário da query string ou header se disponível
     const connection = await pool.getConnection();
 
     console.log(`[DELETE] Request to delete Item: ${idRomaneioItem} by User: ${usuario}`);
@@ -1122,7 +1177,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
     try {
         await connection.beginTransaction();
 
-        // 1. Validar se o item existe e obter dados bÃ¯Â¿Â½sicos
+        // 1. Validar se o item existe e obter dados b?sicos
         const [itemRows] = await connection.execute(
             "SELECT IdRomaneio, IDOrdemServicoITEM, qtdeUsuario FROM romaneioitem WHERE IdRomaneioItem = ?",
             [idRomaneioItem]
@@ -1130,7 +1185,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (itemRows.length === 0) {
             await connection.rollback();
-            return res.status(404).json({ success: false, message: 'Item nÃ¯Â¿Â½o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Item não encontrado.' });
         }
 
         const item = itemRows[0];
@@ -1146,7 +1201,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (controleRows[0].total > 0) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'JÃ¯Â¿Â½ existe retorno deste Item, nÃ¯Â¿Â½o pode ser excluÃ¯Â¿Â½do.' });
+            return res.status(400).json({ success: false, message: 'Já existe retorno deste Item, não pode ser excluído.' });
         }
 
         // 3. Validar Bloqueio (Status do Romaneio - Liberado)
@@ -1157,7 +1212,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         if (romaneioRows.length > 0 && romaneioRows[0].Liberado === 'S') {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Este Romaneio jÃ¯Â¿Â½ estÃ¯Â¿Â½ Liberado e nÃ¯Â¿Â½o permite exclusÃ¯Â¿Â½o de itens.' });
+            return res.status(400).json({ success: false, message: 'Este Romaneio já est? Liberado e não permite exclusão de itens.' });
         }
 
         // 4. Soft Delete do Item
@@ -1166,7 +1221,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
             [usuario || 'Sistema', idRomaneioItem]
         );
 
-        // 5. Atualizar Saldo na Ordem de ServiÃ¯Â¿Â½o (ordemservicoitem)
+        // 5. Atualizar Saldo na Ordem de Serviço (ordemservicoitem)
         const [osItemRows] = await connection.execute(
             "SELECT RomaneioTotalEnviado, RomaneioSaldoEnviar FROM ordemservicoitem WHERE IdOrdemServicoItem = ?",
             [idOSItem]
@@ -1220,7 +1275,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 
         await connection.commit();
         console.log(`[DELETE] Item ${idRomaneioItem} deleted successfully.`);
-        res.json({ success: true, message: 'Item excluÃ¯Â¿Â½do com sucesso e saldos atualizados.' });
+        res.json({ success: true, message: 'Item excluído com sucesso e saldos atualizados.' });
 
     } catch (error) {
         await connection.rollback();
@@ -1232,7 +1287,7 @@ app.delete('/api/romaneio/item/:idRomaneioItem', async (req, res) => {
 });
 
 // POST /api/admin/shutdown - Shut down background processes
-app.post('/api/admin/shutdown', async (req, res) => {
+app.post('/api/admin/shutdown', tenantMiddleware, async (req, res) => {
     console.log('[SYSTEM] =4 Shutdown requested by admin.');
     res.json({ success: true, message: 'Encerrando servidores...' });
 
@@ -1263,14 +1318,14 @@ app.post('/api/admin/shutdown', async (req, res) => {
 });
 
 // POST /api/romaneio/open - Open Folder on Server
-app.post('/api/romaneio/open', async (req, res) => {
+app.post('/api/romaneio/open', tenantMiddleware, async (req, res) => {
     const { id, path: clientPath } = req.body;
     try {
         let folderPath = clientPath || null;
 
         // Se o frontend não enviou o path, busca no banco pelo id
         if (!folderPath && id) {
-            const [rows] = await pool.execute(
+            const [rows] = await req.tenantDbPool.execute(
                 "SELECT ENDERECORomaneio FROM romaneio WHERE idRomaneio = ? LIMIT 1",
                 [id]
             );
@@ -1305,7 +1360,7 @@ app.post('/api/romaneio/open', async (req, res) => {
 });
 
 // POST /api/romaneio - Create New
-app.post('/api/romaneio', async (req, res) => {
+app.post('/api/romaneio', tenantMiddleware, async (req, res) => {
     const data = req.body;
     let conn;
     try {
@@ -1326,7 +1381,7 @@ app.post('/api/romaneio', async (req, res) => {
             conn.release(); // Important to release before returning
             return res.status(400).json({
                 success: false,
-                message: `Caminho raiz nÃ¯Â¿Â½o encontrado: ${rootPath}. Verifique a configuraÃ¯Â¿Â½Ã¯Â¿Â½o do sistema.`
+                message: `Caminho raiz não encontrado: ${rootPath}. Verifique a configuração do sistema.`
             });
         }
 
@@ -1397,12 +1452,12 @@ app.post('/api/romaneio', async (req, res) => {
 });
 
 // PUT /api/romaneio/:id - Update
-app.put('/api/romaneio/:id', async (req, res) => {
+app.put('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const data = req.body;
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE romaneio SET 
                 Descricao = ?, EnviadoPara = ?, endereco = ?, numero = ?, 
                 bairro = ?, complemento = ?, cidade = ?, estado = ?, 
@@ -1430,14 +1485,14 @@ app.put('/api/romaneio/:id', async (req, res) => {
 });
 
 // DELETE /api/romaneio/:id - Soft Delete romaneio
-app.delete('/api/romaneio/:id', async (req, res) => {
+app.delete('/api/romaneio/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
-        await pool.query(
+        await req.tenantDbPool.query(
             "UPDATE romaneio SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ? WHERE idRomaneio = ?",
             [getCurrentDateTimeBR(), id]
         );
-        res.json({ success: true, message: 'Romaneio excluÃ¯Â¿Â½do com sucesso' });
+        res.json({ success: true, message: 'Romaneio excluído com sucesso' });
     } catch (error) {
         console.error('Error deleting romaneio:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir romaneio' });
@@ -1445,11 +1500,11 @@ app.delete('/api/romaneio/:id', async (req, res) => {
 });
 
 // PUT /api/romaneio/:id/action - Perform specific actions (Status Workflow)
-app.put('/api/romaneio/:id/action', async (req, res) => {
+app.put('/api/romaneio/:id/action', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { action, usuario } = req.body;
     if (!action) {
-        return res.status(400).json({ success: false, message: 'AÃ¯Â¿Â½Ã¯Â¿Â½o nÃ¯Â¿Â½o especificada.' });
+        return res.status(400).json({ success: false, message: 'A??o não especificada.' });
     }
 
     let updateQuery = "";
@@ -1463,7 +1518,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 const { dadosEnvio } = req.body;
 
                 // Pre-check: Verify if already registered or sent
-                const [checkRows] = await pool.execute(
+                const [checkRows] = await req.tenantDbPool.execute(
                     "SELECT idRomaneio, NomeMotorista, DataEnvio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1477,7 +1532,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                         console.log(`[Validation] Bloqueio registrar ID ${id}: Motorista=${r.NomeMotorista}, Data=${r.DataEnvio}`);
                         return res.status(400).json({
                             success: false,
-                            message: `Este Romaneio jÃ¯Â¿Â½ possui registro de envio e nÃ¯Â¿Â½o pode ser alterado. (Motorista: ${r.NomeMotorista || 'N/A'} | Data: ${r.DataEnvio || 'N/A'}). O processo foi finalizado.`
+                            message: `Este Romaneio já possui registro de envio e não pode ser alterado. (Motorista: ${r.NomeMotorista || 'N/A'} | Data: ${r.DataEnvio || 'N/A'}). O processo foi finalizado.`
                         });
                     }
                 }
@@ -1520,34 +1575,34 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                     // Actually, user said mandatory. So if no data, we should probably fail or assume it's a pre-check.
                     // But for safety, I'll keep the old one OR duplicate. 
                     // Let's assume frontend WILL send data. If not, it might be a simple status change? 
-                    // No, "os novos campos tambem serÃ¯Â¿Â½o obrigatorios".
+                    // No, "os novos campos tambem ser?o obrigatorios".
                     if (!req.body.dadosEnvio) {
-                        return res.status(400).json({ success: false, message: 'Dados do transporte sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios para registrar.' });
+                        return res.status(400).json({ success: false, message: 'Dados do transporte s?o obrigatórios para registrar.' });
                     }
                 }
                 break;
 
             case 'liberar':
                 // 1. Check current status
-                const [currentRows] = await pool.execute(
+                const [currentRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, D_E_L_E_T_E, NomeMotorista, DataEnvio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
 
                 if (currentRows.length === 0) {
-                    return res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado.' });
+                    return res.status(404).json({ success: false, message: 'Romaneio não encontrado.' });
                 }
 
                 const current = currentRows[0];
 
                 // Validation 1: Check if soft deleted
                 if (current.D_E_L_E_T_E === '*') {
-                    return res.status(400).json({ success: false, message: 'NÃ¯Â¿Â½o Ã¯Â¿Â½ possÃ¯Â¿Â½vel liberar um romaneio excluÃ¯Â¿Â½do.' });
+                    return res.status(400).json({ success: false, message: 'Não ? possível liberar um romaneio excluído.' });
                 }
 
                 // Validation 2: Check if already finalized
                 if (current.Estatus === 'F') {
-                    return res.status(400).json({ success: false, message: 'Romaneio jÃ¯Â¿Â½ finalizado. NÃ¯Â¿Â½o Ã¯Â¿Â½ possÃ¯Â¿Â½vel liberar.' });
+                    return res.status(400).json({ success: false, message: 'Romaneio já finalizado. Não ? possível liberar.' });
                 }
 
                 // Validation 3: Check if registered (Motorista and Date)
@@ -1557,17 +1612,17 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
                 // Validation 4: Check if already released (Condition 1)
                 if (current.Liberado === 'S') {
-                    return res.status(400).json({ success: false, message: 'O romaneio jÃ¯Â¿Â½ consta como Liberado. O processo nÃ¯Â¿Â½o pode ser repetido.' });
+                    return res.status(400).json({ success: false, message: 'O romaneio já consta como Liberado. O processo não pode ser repetido.' });
                 }
 
                 // Validation 5: Check if there are items (Condition 2)
-                const [itemRows] = await pool.execute(
+                const [itemRows] = await req.tenantDbPool.execute(
                     "SELECT COUNT(*) as count FROM romaneioitem WHERE IdRomaneio = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*')",
                     [id]
                 );
 
                 if (itemRows[0].count === 0) {
-                    return res.status(400).json({ success: false, message: 'O romaneio nÃ¯Â¿Â½o possui itens vinculados. LiberaÃ¯Â¿Â½Ã¯Â¿Â½o interrompida. Por favor, adicione itens antes de prosseguir.' });
+                    return res.status(400).json({ success: false, message: 'O romaneio não possui itens vinculados. Liberação interrompida. Por favor, adicione itens antes de prosseguir.' });
                 }
 
                 // Proceed with update
@@ -1577,14 +1632,14 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
             case 'cancelar_lib':
                 // 1. Fetch current details
-                const [abortRows] = await pool.execute(
+                const [abortRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, ENDERECORomaneio FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
 
                 if (abortRows.length === 0) {
-                    console.log(`[Action] ERRO: Romaneio #${id} nÃ¯Â¿Â½o localizado no banco de dados para cancelar liberaÃ¯Â¿Â½Ã¯Â¿Â½o.`);
-                    return res.status(404).json({ success: false, message: `Romaneio #${id} nÃ¯Â¿Â½o encontrado no banco de dados.` });
+                    console.log(`[Action] ERRO: Romaneio #${id} não localizado no banco de dados para cancelar liberação.`);
+                    return res.status(404).json({ success: false, message: `Romaneio #${id} não encontrado no banco de dados.` });
                 }
 
                 const abort = abortRows[0];
@@ -1597,21 +1652,21 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 const abortLiberado = getAbortVal(abort, 'Liberado');
                 const abortEstatus = getAbortVal(abort, 'Estatus');
 
-                console.log(`[Action] Cancelar LiberaÃ¯Â¿Â½Ã¯Â¿Â½o ID: ${id} | Estatus: "${abortEstatus}" | Liberado: "${abortLiberado}"`);
+                console.log(`[Action] Cancelar Liberação ID: ${id} | Estatus: "${abortEstatus}" | Liberado: "${abortLiberado}"`);
 
                 // STRICT VALIDATION
                 if (abortEstatus === 'F') {
-                    return res.status(400).json({ success: false, message: `O Romaneio #${id} jÃ¯Â¿Â½ estÃ¯Â¿Â½ FINALIZADO e nÃ¯Â¿Â½o pode ser cancelado.` });
+                    return res.status(400).json({ success: false, message: `O Romaneio #${id} já est? FINALIZADO e não pode ser cancelado.` });
                 }
 
                 if (abortLiberado !== 'S') {
-                    return res.status(400).json({ success: false, message: `O Romaneio #${id} nÃ¯Â¿Â½o consta como liberado (Status DB: "${abortLiberado}"). LiberaÃ¯Â¿Â½Ã¯Â¿Â½o nÃ¯Â¿Â½o pode ser cancelada.` });
+                    return res.status(400).json({ success: false, message: `O Romaneio #${id} não consta como liberado (Status DB: "${abortLiberado}"). Liberação não pode ser cancelada.` });
                 }
 
                 // 2. Perform cleanup if released
                 if (abort.ENDERECORomaneio) {
                     const pdfPath = path.join(abort.ENDERECORomaneio, 'PDF');
-                    console.log(`[Action] Limpando diretÃ¯Â¿Â½rio de PDFs: ${pdfPath}`);
+                    console.log(`[Action] Limpando diretório de PDFs: ${pdfPath}`);
                     limparDiretorio(pdfPath);
                 }
 
@@ -1623,7 +1678,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
 
             case 'cancelar_registro':
                 // Valida: so permitido quando romaneio esta Registrado (tem motorista, nao liberado, nao finalizado)
-                const [crRows] = await pool.execute(
+                const [crRows] = await req.tenantDbPool.execute(
                     "SELECT Estatus, Liberado, NomeMotorista FROM romaneio WHERE idRomaneio = ?",
                     [id]
                 );
@@ -1661,7 +1716,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 break;
 
             case 'atualizar':
-                // For now, maybe just update status to 'Atualizado'? Or just a touch? 
+                // For now, maybe just update status to 'Atualizado'é Or just a touch? 
                 // "Atualizar Docs" might imply checking files on disk. For now, let's just log it.
                 // Keeping status as is or setting to 'Docs Atualizados' if desired.
                 // Let's keep it simple: just return success for now or update a timestamp.
@@ -1687,10 +1742,10 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 }
 
             default:
-                return res.status(400).json({ success: false, message: 'AÃ¯Â¿Â½Ã¯Â¿Â½o invÃ¯Â¿Â½lida.' });
+                return res.status(400).json({ success: false, message: 'A??o inválida.' });
         }
 
-        const [result] = await pool.execute(updateQuery, params);
+        const [result] = await req.tenantDbPool.execute(updateQuery, params);
 
         // --- Post-Action Logic: Excel Export for 'liberar' ---
         let excelResult = null;
@@ -1699,7 +1754,7 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
         }
 
         if (result.affectedRows > 0) {
-            let successMessage = `AÃ¯Â¿Â½Ã¯Â¿Â½o '${action}' realizada com sucesso!`;
+            let successMessage = `A??o '${action}' realizada com sucesso!`;
             if (action === 'liberar') {
                 successMessage = excelResult?.success
                     ? `Romaneio liberado e Excel gerado com sucesso: ${excelResult.fileName}`
@@ -1711,19 +1766,19 @@ app.put('/api/romaneio/:id/action', async (req, res) => {
                 excel: excelResult
             });
         } else {
-            res.status(404).json({ success: false, message: 'Romaneio nÃ¯Â¿Â½o encontrado.' });
+            res.status(404).json({ success: false, message: 'Romaneio não encontrado.' });
         }
 
     } catch (error) {
         console.error(`Error performing action ${action} on romaneio ${id}:`, error);
-        res.status(500).json({ success: false, message: 'Erro ao processar aÃ¯Â¿Â½Ã¯Â¿Â½o.' });
+        res.status(500).json({ success: false, message: 'Erro ao processar ação.' });
     }
 });
 
 // --- ROMANEIO-RETORNO ROUTES ---
 
 // GET /api/romaneio-retorno/items - List items for return control
-app.get('/api/romaneio-retorno/items', async (req, res) => {
+app.get('/api/romaneio-retorno/items', tenantMiddleware, async (req, res) => {
     const { romaneio, projeto, tag, numDoc, mostrarConcluidos } = req.query;
     try {
         let sql = `SELECT * FROM view_retorno_itens WHERE 1=1
@@ -1757,7 +1812,7 @@ app.get('/api/romaneio-retorno/items', async (req, res) => {
 
         sql += ` ORDER BY IdRomaneio DESC, IdRomaneioItem ASC LIMIT 500`;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[RETORNO] Erro ao buscar itens:', error);
@@ -1766,10 +1821,10 @@ app.get('/api/romaneio-retorno/items', async (req, res) => {
 });
 
 // GET /api/romaneio-retorno/history/:idRomaneioItem - List movement history for an item
-app.get('/api/romaneio-retorno/history/:idRomaneioItem', async (req, res) => {
+app.get('/api/romaneio-retorno/history/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT * FROM romaneioitemcontrole 
              WHERE IdRomaneioItem = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
              ORDER BY DataCriacao DESC`,
@@ -1777,13 +1832,13 @@ app.get('/api/romaneio-retorno/history/:idRomaneioItem', async (req, res) => {
         );
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('[RETORNO] Erro ao buscar histÃ¯Â¿Â½rico:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar histÃ¯Â¿Â½rico do item.' });
+        console.error('[RETORNO] Erro ao buscar histórico:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar histórico do item.' });
     }
 });
 
 // POST /api/romaneio-retorno/process - Mark item as returned/processed
-app.post('/api/romaneio-retorno/process', async (req, res) => {
+app.post('/api/romaneio-retorno/process', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem, qtdeRetorno, observacao, usuario, tipoRetorno } = req.body;
     const connection = await pool.getConnection();
 
@@ -1797,13 +1852,13 @@ app.post('/api/romaneio-retorno/process', async (req, res) => {
         );
 
         if (itemRows.length === 0) {
-            throw new Error('Item do romaneio nÃ¯Â¿Â½o encontrado.');
+            throw new Error('Item do romaneio não encontrado.');
         }
 
         const item = itemRows[0];
         const novaQtdeRetorno = (Number(item.QtdeTotalRetorno) || 0) + Number(qtdeRetorno);
 
-        // 2. Inserir no histÃ¯Â¿Â½rico (romaneioitemcontrole)
+        // 2. Inserir no histórico (romaneioitemcontrole)
         await connection.execute(
             `INSERT INTO romaneioitemcontrole (
                 IdRomaneioItem, IDOrdemServicoITEM, QtdeIdentificadores, DataCriacao, 
@@ -1830,7 +1885,7 @@ app.post('/api/romaneio-retorno/process', async (req, res) => {
 });
 
 // POST /api/romaneio-retorno/registrar-retorno — Registra qtde de retorno em romaneioitemcontrole
-app.post('/api/romaneio-retorno/registrar-retorno', async (req, res) => {
+app.post('/api/romaneio-retorno/registrar-retorno', tenantMiddleware, async (req, res) => {
     const { idRomaneioItem, idRomaneio, qtdeGrid, usuario, nomeCompleto } = req.body;
     const connection = await pool.getConnection();
     try {
@@ -1878,7 +1933,7 @@ app.post('/api/romaneio-retorno/registrar-retorno', async (req, res) => {
 });
 
 // DELETE /api/romaneio-retorno/history/:idControle - Cancel a return entry
-app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
+app.delete('/api/romaneio-retorno/history/:idControle', tenantMiddleware, async (req, res) => {
     const { idControle } = req.params;
     const { usuario } = req.query;
     const connection = await pool.getConnection();
@@ -1893,7 +1948,7 @@ app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
         );
 
         if (ctrlRows.length === 0) {
-            throw new Error('Registro de histÃ¯Â¿Â½rico nÃ¯Â¿Â½o encontrado.');
+            throw new Error('Registro de histórico não encontrado.');
         }
 
         const ctrl = ctrlRows[0];
@@ -1932,10 +1987,10 @@ app.delete('/api/romaneio-retorno/history/:idControle', async (req, res) => {
 });
 
 // GET /api/romaneio-retorno/controle/:idOrdemServicoItem - busca romaneioitemcontrole pelo IdOrdemServicoItem
-app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', async (req, res) => {
+app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItem } = req.params;
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT ric.*, ri.QtdeUsuario AS QtdeAtualItem, ri.IdRomaneioItem
              FROM romaneioitemcontrole ric
              LEFT JOIN romaneioitem ri ON ri.IdRomaneioItem = ric.IdRomaneioItem
@@ -1952,7 +2007,7 @@ app.get('/api/romaneio-retorno/controle/:idOrdemServicoItem', async (req, res) =
 });
 
 // POST /api/romaneio-retorno/estorno/:idControle - Estorna um registro de romaneioitemcontrole
-app.post('/api/romaneio-retorno/estorno/:idControle', async (req, res) => {
+app.post('/api/romaneio-retorno/estorno/:idControle', tenantMiddleware, async (req, res) => {
     const { idControle } = req.params;
     const { usuario, observacao, qtdeEstorno } = req.body;
     const connection = await pool.getConnection();
@@ -2010,7 +2065,7 @@ app.post('/api/romaneio-retorno/estorno/:idControle', async (req, res) => {
     }
 });
 
-// ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o do Sistema (Admin only)
+// Configuração do Sistema (Admin only)
 const configuracaoSistemaRouter = require('./routes/configuracao-sistema');
 app.use('/api/configuracao-sistema', configuracaoSistemaRouter);
 
@@ -2300,7 +2355,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
 
             // Check if Superadmin in central DB
             const isSuper = await isUserSuperadmin(login);
-            // Admin em lynxlocal (fallback local) é considerado superadmin nativo do sistema
+            // Admin em lynxlocal (fallback local) ? considerado superadmin nativo do sistema
             const isLocalAdmin = login.toLowerCase() === 'admin';
             const isSuperFinal = isSuper || isLocalAdmin;
 
@@ -2424,7 +2479,7 @@ app.post('/api/admin/login', async (req, res) => {
 app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
     const { dbName } = req.body;
     if (!dbName) {
-        return res.status(400).json({ success: false, message: 'dbName ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'dbName à© obrigatà³rio' });
     }
 
     const authHeader = req.headers['authorization'];
@@ -2450,7 +2505,7 @@ app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
         return res.json({ success: true, token });
     } catch (err) {
         console.error('[ADMIN IMPERSONATE] Token error:', err);
-        return res.status(401).json({ success: false, message: 'Token de superadmin invÃƒÂ¡lido' });
+        return res.status(401).json({ success: false, message: 'Token de superadmin inválido' });
     }
 });
 
@@ -2473,7 +2528,7 @@ app.get('/api/superadmin/bancos-ativos', async (req, res) => {
 });
 
 // POST /api/superadmin/switch-db — gera novo token JWT com o dbName solicitado (apenas SuperAdmin)
-app.post('/api/superadmin/switch-db', async (req, res) => {
+app.post('/api/superadmin/switch-db', tenantMiddleware, async (req, res) => {
     try {
         if (!req.tenantUser?.isSuperadmin) {
             return res.status(403).json({ success: false, message: 'Acesso restrito a SuperAdmins.' });
@@ -2481,7 +2536,7 @@ app.post('/api/superadmin/switch-db', async (req, res) => {
 
         const { dbName } = req.body;
         if (!dbName) {
-            return res.status(400).json({ success: false, message: 'dbName é obrigatório.' });
+            return res.status(400).json({ success: false, message: 'dbName ? obrigatório.' });
         }
 
         // Validate that the target DB exists and is active
@@ -2958,12 +3013,12 @@ async function syncUserToCentral(userData, tenantDbHost = null, tenantDbName = n
     }
 }
 
-// --- CRUD: UsuÃ¯Â¿Â½rio (with Central Sync) ---
+// --- CRUD: Usu?rio (with Central Sync) ---
 
 // LIST All Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status 
              FROM usuario 
              WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
@@ -2972,25 +3027,25 @@ app.get('/api/usuario', tenantMiddleware, async (req, res) => {
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching usuarios:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar usuÃ¯Â¿Â½rios' });
+        res.status(500).json({ success: false, message: 'Erro ao listar usuários' });
     }
 });
 
 // GET One User
 app.get('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status FROM usuario WHERE idUsuario = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'UsuÃ¯Â¿Â½rio nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Usu?rio não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching usuario:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar usuÃ¯Â¿Â½rio' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar usuário' });
     }
 });
 
@@ -3008,7 +3063,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
 
     try {
         // Check NomeCompleto duplicado
-        const [existingName] = await pool.execute(
+        const [existingName] = await req.tenantDbPool.execute(
             "SELECT NomeCompleto FROM usuario WHERE NomeCompleto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [NomeCompleto.trim()]
         );
@@ -3017,7 +3072,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         // Check Login duplicado
-        const [existingLogin] = await pool.execute(
+        const [existingLogin] = await req.tenantDbPool.execute(
             "SELECT idUsuario FROM usuario WHERE Login = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [Login.trim()]
         );
@@ -3033,7 +3088,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO usuario (
                 NomeCompleto, Login, Senha, TipoUsuario, Setor, email,
                 Descricao, Sigla, DataCadastro, CriadoPor, status,
@@ -3088,7 +3143,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         // Obter senha real caso a enviada seja placeholder ou vazia
         let senhaFinal = Senha;
         if (!Senha || Senha.trim() === '' || Senha === '••••••••') {
-            const [userRows] = await db.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
+            const [userRows] = await req.tenantDbPool.execute('SELECT Senha FROM usuario WHERE idUsuario = ?', [id]);
             if (userRows.length > 0) {
                 senhaFinal = userRows[0].Senha;
             }
@@ -3127,10 +3182,10 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         sql += ' WHERE idUsuario = ?';
         values.push(id);
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
 
         // Sync to Central DB (async)
-        const [userRows] = await pool.execute(
+        const [userRows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [id]
         );
         if (userRows.length > 0) {
@@ -3150,13 +3205,13 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
 
         // Sync delete to Central DB (async)
-        const [userRows] = await db.execute(
+        const [userRows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, Login, Senha, NomeCompleto FROM usuario WHERE idUsuario = ?', [req.params.id]
         );
         if (userRows.length > 0) {
@@ -3430,7 +3485,7 @@ app.get('/api/admin/schema/history', authenticateAdmin, async (req, res) => {
         sql += ' ORDER BY data_execucao DESC LIMIT ?';
         params.push(limit);
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (err) {
         res.status(500).json({ success: false, message: err.message });
@@ -3442,7 +3497,7 @@ app.get('/api/admin/schema/history', authenticateAdmin, async (req, res) => {
 // POST /api/manutencao/recalcular-qtde-os
 // Body: { chave: 'SincoMasterKey2026!' }
 // ══════════════════════════════════════════════════════════════════════════════
-app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
+app.post('/api/manutencao/recalcular-qtde-os', tenantMiddleware, async (req, res) => {
     const MANUT_KEY = 'SincoMasterKey2026!';
     const { chave } = req.body;
 
@@ -3454,7 +3509,7 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // Atualiza QtdeOS e QtdeOSExecutadas em TODAS as tags de uma vez
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags t
             SET
                 QtdeOS = (
@@ -3479,13 +3534,13 @@ app.post('/api/manutencao/recalcular-qtde-os', async (req, res) => {
         res.status(500).json({ success: false, message: e.message });
     }
 });
-// --- CRUD: Pessoa JurÃ¯Â¿Â½dica ---
+// --- CRUD: Pessoa Jur?dica ---
 
 // LIST (Read All)
-app.get('/api/pj', async (req, res) => {
+app.get('/api/pj', tenantMiddleware, async (req, res) => {
     try {
         // FIXED: Used EnderecoLogo instead of LogoUrl
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdPessoa, RazaoSocial, NomeFantasia, Cnpj, Cidade, Estado, Telefone, EnderecoLogo FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY IdPessoa DESC"
         );
         res.json({ success: true, data: rows });
@@ -3496,29 +3551,29 @@ app.get('/api/pj', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/pj/options', async (req, res) => {
+app.get('/api/pj/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdPessoa as id, RazaoSocial as label FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching pj options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de fornecedor' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de fornecedor' });
     }
 });
 
 // GET ONE (Read Single)
-app.get('/api/pj/:id', async (req, res) => {
+app.get('/api/pj/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM pessoajuridica WHERE IdPessoa = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Registro nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Registro não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching PJ:', error);
@@ -3551,7 +3606,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
     const data = req.body;
 
     if (!data.RazaoSocial) {
-        return res.status(400).json({ success: false, message: 'RazÃ¯Â¿Â½o Social Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Raz?o Social ? obrigatória' });
     }
 
     // Basic Server-Side Validation
@@ -3559,12 +3614,12 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
     if (data.Cnpj) {
         const cnpjClean = data.Cnpj.replace(/[^\d]+/g, '');
         if (cnpjClean.length !== 14) {
-            return res.status(400).json({ success: false, message: 'CNPJ deve conter 14 dÃ¯Â¿Â½gitos.' });
+            return res.status(400).json({ success: false, message: 'CNPJ deve conter 14 d?gitos.' });
         }
     }
     // Validate Email regex
     if (data.Email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.Email)) {
-        return res.status(400).json({ success: false, message: 'Formato de e-mail invÃ¯Â¿Â½lido.' });
+        return res.status(400).json({ success: false, message: 'Formato de e-mail inválido.' });
     }
 
     try {
@@ -3605,7 +3660,7 @@ app.post('/api/pj', upload.single('Logo'), async (req, res) => {
 
         const sql = `INSERT INTO pessoajuridica (${columns.join(', ')}) VALUES (${placeholders.join(', ')})`;
 
-        const [result] = await pool.execute(sql, values);
+        const [result] = await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Cadastrado com sucesso', id: result.insertId });
 
     } catch (error) {
@@ -3656,7 +3711,7 @@ app.put('/api/pj/:id', upload.single('Logo'), async (req, res) => {
 
         const sql = `UPDATE pessoajuridica SET ${updates.join(', ')} WHERE IdPessoa = ?`;
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Atualizado com sucesso' });
 
     } catch (error) {
@@ -3666,16 +3721,16 @@ app.put('/api/pj/:id', upload.single('Logo'), async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/pj/:id', async (req, res) => {
+app.delete('/api/pj/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body; // Expect user from body
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE pessoajuridica SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdPessoa = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Registro excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Registro excluído' });
     } catch (error) {
         console.error('Error deleting PJ:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -3685,9 +3740,9 @@ app.delete('/api/pj/:id', async (req, res) => {
 // --- CRUD: Unidade de Medida ---
 
 // LIST (Read All)
-app.get('/api/medida', async (req, res) => {
+app.get('/api/medida', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdMedida, TipoMedida, DescMedida, IdEmpresa, DataCriacao, CriadoPor FROM medida WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IdMedida DESC"
         );
         res.json({ success: true, data: rows });
@@ -3698,29 +3753,29 @@ app.get('/api/medida', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/medida/options', async (req, res) => {
+app.get('/api/medida/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT TipoMedida as id, CONCAT(TipoMedida, ' - ', COALESCE(DescMedida, '')) as label FROM medida WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoMedida"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching medida options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de unidade' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de unidade' });
     }
 });
 
 // GET ONE (Read Single)
-app.get('/api/medida/:id', async (req, res) => {
+app.get('/api/medida/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM medida WHERE IdMedida = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Unidade de medida nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Unidade de medida não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching medida:', error);
@@ -3729,20 +3784,20 @@ app.get('/api/medida/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/medida', async (req, res) => {
+app.post('/api/medida', tenantMiddleware, async (req, res) => {
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
     if (!TipoMedida) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida ? obrigatório' });
     }
 
     if (TipoMedida.length > 3) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no mÃ¯Â¿Â½ximo 3 caracteres' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no m?ximo 3 caracteres' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO medida (TipoMedida, DescMedida, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, now, getCtxNomeCompleto()]
         );
@@ -3754,20 +3809,20 @@ app.post('/api/medida', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/medida/:id', async (req, res) => {
+app.put('/api/medida/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { TipoMedida, DescMedida, IdEmpresa } = req.body;
 
     if (!TipoMedida) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida ? obrigatório' });
     }
 
     if (TipoMedida.length > 3) {
-        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no mÃ¯Â¿Â½ximo 3 caracteres' });
+        return res.status(400).json({ success: false, message: 'Tipo da medida deve ter no m?ximo 3 caracteres' });
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE medida SET TipoMedida = ?, DescMedida = ?, IdEmpresa = ? WHERE IdMedida = ?',
             [TipoMedida.toUpperCase().trim(), DescMedida?.trim() || null, IdEmpresa || null, id]
         );
@@ -3779,87 +3834,87 @@ app.put('/api/medida/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/medida/:id', async (req, res) => {
+app.delete('/api/medida/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE medida SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMedida = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Unidade de medida excluÃ¯Â¿Â½da' });
+        res.json({ success: true, message: 'Unidade de medida excluída' });
     } catch (error) {
         console.error('Error deleting medida:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
     }
 });
 
-// --- CRUD: FamÃ¯Â¿Â½lia ---
+// --- CRUD: Fam?lia ---
 
 // LIST (Read All)
-app.get('/api/familia', async (req, res) => {
+app.get('/api/familia', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdFamilia, DescFamilia, IdEmpresa, DataCriacao, CriadoPor FROM familia WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IdFamilia DESC"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching familia list:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar famÃ¯Â¿Â½lias' });
+        res.status(500).json({ success: false, message: 'Erro ao listar fam?lias' });
     }
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/familia/options', async (req, res) => {
+app.get('/api/familia/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdFamilia as id, DescFamilia as label FROM familia WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY DescFamilia"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching familia options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de famÃ¯Â¿Â½lia' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de fam?lia' });
     }
 });
 
 // GET ONE (Read Single)
-app.get('/api/familia/:id', async (req, res) => {
+app.get('/api/familia/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM familia WHERE IdFamilia = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'FamÃ¯Â¿Â½lia nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Fam?lia não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching familia:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar famÃ¯Â¿Â½lia' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar fam?lia' });
     }
 });
 
 // CREATE (Insert)
-app.post('/api/familia', async (req, res) => {
+app.post('/api/familia', tenantMiddleware, async (req, res) => {
     const { DescFamilia, IdEmpresa } = req.body;
 
     if (!DescFamilia) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o da famÃ¯Â¿Â½lia Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o da fam?lia ? obrigatória' });
     }
 
     if (DescFamilia.length > 50) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 50 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 50 caracteres' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO familia (DescFamilia, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?)',
             [DescFamilia.trim(), IdEmpresa || null, now, getCtxNomeCompleto()]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia cadastrada com sucesso', id: result.insertId });
+        res.json({ success: true, message: 'Fam?lia cadastrada com sucesso', id: result.insertId });
     } catch (error) {
         console.error('Error creating familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao cadastrar: ' + error.message });
@@ -3867,24 +3922,24 @@ app.post('/api/familia', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/familia/:id', async (req, res) => {
+app.put('/api/familia/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { DescFamilia, IdEmpresa } = req.body;
 
     if (!DescFamilia) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o da famÃ¯Â¿Â½lia Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o da fam?lia ? obrigatória' });
     }
 
     if (DescFamilia.length > 50) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 50 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 50 caracteres' });
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE familia SET DescFamilia = ?, IdEmpresa = ? WHERE IdFamilia = ?',
             [DescFamilia.trim(), IdEmpresa || null, id]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia atualizada com sucesso' });
+        res.json({ success: true, message: 'Fam?lia atualizada com sucesso' });
     } catch (error) {
         console.error('Error updating familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
@@ -3892,16 +3947,16 @@ app.put('/api/familia/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/familia/:id', async (req, res) => {
+app.delete('/api/familia/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE familia SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdFamilia = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'FamÃ¯Â¿Â½lia excluÃ¯Â¿Â½da' });
+        res.json({ success: true, message: 'Fam?lia excluída' });
     } catch (error) {
         console.error('Error deleting familia:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -3911,9 +3966,9 @@ app.delete('/api/familia/:id', async (req, res) => {
 // --- CRUD: Acabamento ---
 
 // LIST (Read All)
-app.get('/api/acabamento', async (req, res) => {
+app.get('/api/acabamento', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IDAcabamento, DescAcabamento, Status, IdEmpresa, DataCriacao, CriadoPor FROM acabamento WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY IDAcabamento DESC"
         );
         res.json({ success: true, data: rows });
@@ -3924,29 +3979,29 @@ app.get('/api/acabamento', async (req, res) => {
 });
 
 // OPTIONS (for dropdown)
-app.get('/api/acabamento/options', async (req, res) => {
+app.get('/api/acabamento/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IDAcabamento as id, DescAcabamento as label FROM acabamento WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY DescAcabamento"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching acabamento options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar opÃ¯Â¿Â½Ã¯Â¿Â½es de acabamento' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar op??es de acabamento' });
     }
 });
 
 // GET ONE (Read Single)
-app.get('/api/acabamento/:id', async (req, res) => {
+app.get('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM acabamento WHERE IDAcabamento = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Acabamento nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Acabamento não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching acabamento:', error);
@@ -3955,20 +4010,20 @@ app.get('/api/acabamento/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/acabamento', async (req, res) => {
+app.post('/api/acabamento', tenantMiddleware, async (req, res) => {
     const { DescAcabamento, IdEmpresa } = req.body;
 
     if (!DescAcabamento) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o do acabamento Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o do acabamento ? obrigatória' });
     }
 
     if (DescAcabamento.length > 200) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 200 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 200 caracteres' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO acabamento (DescAcabamento, Status, IdEmpresa, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [DescAcabamento.trim(), 'A', IdEmpresa || null, now, getCtxNomeCompleto()]
         );
@@ -3980,20 +4035,20 @@ app.post('/api/acabamento', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/acabamento/:id', async (req, res) => {
+app.put('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { DescAcabamento, IdEmpresa } = req.body;
 
     if (!DescAcabamento) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o do acabamento Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Descri??o do acabamento ? obrigatória' });
     }
 
     if (DescAcabamento.length > 200) {
-        return res.status(400).json({ success: false, message: 'DescriÃ¯Â¿Â½Ã¯Â¿Â½o deve ter no mÃ¯Â¿Â½ximo 200 caracteres' });
+        return res.status(400).json({ success: false, message: 'Descri??o deve ter no m?ximo 200 caracteres' });
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE acabamento SET DescAcabamento = ?, IdEmpresa = ? WHERE IDAcabamento = ?',
             [DescAcabamento.trim(), IdEmpresa || null, id]
         );
@@ -4005,16 +4060,16 @@ app.put('/api/acabamento/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/acabamento/:id', async (req, res) => {
+app.delete('/api/acabamento/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE acabamento SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IDAcabamento = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Acabamento excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Acabamento excluído' });
     } catch (error) {
         console.error('Error deleting acabamento:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4028,13 +4083,13 @@ const _colCache = new Map();
 const ensureColumn = async (db, table, col, colDef) => {
     const key = `${table}.${col}`;
     if (_colCache.has(key)) return;
-    const [cols] = await db.execute(`SHOW COLUMNS FROM \`${table}\` LIKE '${col}'`);
-    if (cols.length === 0) await db.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${colDef}`);
+    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM \`${table}\` LIKE '${col}'`);
+    if (cols.length === 0) await req.tenantDbPool.execute(`ALTER TABLE \`${table}\` ADD COLUMN \`${col}\` ${colDef}`);
     _colCache.set(key, true);
 };
 
 // LIST (Read All) with JOINs
-app.get('/api/material', async (req, res) => {
+app.get('/api/material', tenantMiddleware, async (req, res) => {
     try {
         const db = req.tenantDbPool || pool;
         // Garante colunas opcionais — roda somente se a coluna ainda não existir
@@ -4044,7 +4099,7 @@ app.get('/api/material', async (req, res) => {
             ensureColumn(db, 'material', 'D_E_L_E_T_E', 'VARCHAR(1) NULL'),
         ]);
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 m.IdMaterial, m.CodMatFabricante, m.DescResumo, m.DescDetal, m.NumeroRP,
                 m.FamiliaMat, f.DescFamilia,
@@ -4067,11 +4122,11 @@ app.get('/api/material', async (req, res) => {
 });
 
 // BUSCAR por CodMatFabricante
-app.get('/api/material/busca-cod', async (req, res) => {
+app.get('/api/material/busca-cod', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search) return res.json({ success: true, data: [] });
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT * FROM material 
             WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') 
               AND CodMatFabricante = ?
@@ -4085,8 +4140,8 @@ app.get('/api/material/busca-cod', async (req, res) => {
 });
 
 
-// BUSCA LIVRE (Por cÃ³digo ou descriÃ§Ã£o)
-app.get('/api/material/busca-livre', async (req, res) => {
+// BUSCA LIVRE (Por código ou descrição)
+app.get('/api/material/busca-livre', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q || '';
         const limit = 50;
@@ -4104,7 +4159,7 @@ app.get('/api/material/busca-livre', async (req, res) => {
         
         sql += ` ORDER BY IdMaterial DESC LIMIT ${limit}`;
         
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error in material search libre:', error);
@@ -4113,20 +4168,20 @@ app.get('/api/material/busca-livre', async (req, res) => {
 });
 
 // GET PROCESSOS DO MATERIAL (Processos de Fabricacao)
-app.get('/api/material/processos/:cod', async (req, res) => {
+app.get('/api/material/processos/:cod', tenantMiddleware, async (req, res) => {
     try {
         const cod = req.params.cod;
         if (!cod) {
             return res.json({ success: true, data: [] });
         }
 
-        const [mats] = await pool.execute(
+        const [mats] = await req.tenantDbPool.execute(
             `SELECT IdMaterial FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
             [cod]
         );
         const idMaterial = mats.length > 0 ? mats[0].IdMaterial : null;
 
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT 
                 mp.IdMaterialProcesso,
                 mp.IdProcesso,
@@ -4158,16 +4213,16 @@ app.get('/api/material/processos/:cod', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/material/:id', async (req, res) => {
+app.get('/api/material/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM material WHERE IdMaterial = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Material nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Material não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching material:', error);
@@ -4176,17 +4231,17 @@ app.get('/api/material/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/material', async (req, res) => {
+app.post('/api/material', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.CodMatFabricante) {
-        return res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'C?digo do material ? obrigatório' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
 
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO material (
                 CodMatFabricante, DescResumo, DescDetal, NumeroRP,
                 FamiliaMat, CodigoJuridicoMat, 
@@ -4222,7 +4277,7 @@ app.post('/api/material', async (req, res) => {
     } catch (error) {
         console.error('Error creating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material jÃ¯Â¿Â½ existe' });
+            res.status(400).json({ success: false, message: 'C?digo do material já existe' });
         } else {
             res.status(500).json({ success: false, message: 'Erro ao cadastrar: ' + error.message });
         }
@@ -4230,18 +4285,18 @@ app.post('/api/material', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/material/:id', async (req, res) => {
+app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
     if (!data.CodMatFabricante) {
-        return res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'C?digo do material ? obrigatório' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE material SET
                 CodMatFabricante = ?, DescResumo = ?, DescDetal = ?, NumeroRP = ?,
                 FamiliaMat = ?, CodigoJuridicoMat = ?,
@@ -4278,7 +4333,7 @@ app.put('/api/material/:id', async (req, res) => {
     } catch (error) {
         console.error('Error updating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
-            res.status(400).json({ success: false, message: 'CÃ¯Â¿Â½digo do material jÃ¯Â¿Â½ existe' });
+            res.status(400).json({ success: false, message: 'C?digo do material já existe' });
         } else {
             res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
         }
@@ -4286,16 +4341,16 @@ app.put('/api/material/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/material/:id', async (req, res) => {
+app.delete('/api/material/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE material SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMaterial = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Material excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Material excluído' });
     } catch (error) {
         console.error('Error deleting material:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4313,7 +4368,7 @@ app.delete('/api/material/:id', async (req, res) => {
 
 // --- CRUD: Projetos ---
 // LIST (Read All) 
-app.get('/api/projeto', async (req, res) => {
+app.get('/api/projeto', tenantMiddleware, async (req, res) => {
     try {
         const {
             dataInicio, dataFim, projeto, descProjeto, descEmpresa,
@@ -4436,8 +4491,8 @@ app.get('/api/projeto', async (req, res) => {
         `;
 
         const [[rows], [countResult]] = await Promise.all([
-            pool.execute(sql, queryParams),
-            pool.execute(countSql, queryParams)
+            req.tenantDbPool.execute(sql, queryParams),
+            req.tenantDbPool.execute(countSql, queryParams)
         ]);
 
         res.json({
@@ -4454,9 +4509,9 @@ app.get('/api/projeto', async (req, res) => {
 });
 
 // GET ONE (Read Single)
-app.get('/api/projeto/:id', async (req, res) => {
+app.get('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             `SELECT p.*,
                 (SELECT COUNT(*) FROM ordemservicoitemcontrole c
                  INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
@@ -4470,7 +4525,7 @@ app.get('/api/projeto/:id', async (req, res) => {
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Projeto nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Projeto não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching projeto:', error);
@@ -4479,10 +4534,10 @@ app.get('/api/projeto/:id', async (req, res) => {
 });
 
 // CREATE (Insert)
-app.post('/api/projeto', async (req, res) => {
+app.post('/api/projeto', tenantMiddleware, async (req, res) => {
     const data = req.body;
     if (!data.Projeto) {
-        return res.status(400).json({ success: false, message: 'Nome do projeto ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'Nome do projeto à© obrigatà³rio' });
     }
 
     try {
@@ -4491,7 +4546,7 @@ app.post('/api/projeto', async (req, res) => {
         let idEmpresa = null;
         let descEmpresa = null;
         if (data.ClienteProjeto) {
-            const [empRows] = await pool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
+            const [empRows] = await req.tenantDbPool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
             if (empRows && empRows.length > 0) {
                 idEmpresa = empRows[0].IdPessoa;
                 descEmpresa = empRows[0].NomeFantasia;
@@ -4510,14 +4565,14 @@ app.post('/api/projeto', async (req, res) => {
                 fs.mkdirSync(path.join(EnderecoProjeto, '00-Projeto'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '01-Tags'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '02-Isometrico'));
-                fs.mkdirSync(path.join(EnderecoProjeto, '03-MediÃƒÂ§ÃƒÂ£o'));
+                fs.mkdirSync(path.join(EnderecoProjeto, '03-Medià§ão'));
                 fs.mkdirSync(path.join(EnderecoProjeto, '04-Qualidade'));
             }
         } catch (dirError) {
             console.error('Erro ao criar diretorio de projeto:', dirError);
         }
 
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO projetos (
                 Projeto, DescProjeto, ClienteProjeto, Responsavel,
                 DataPrevisao, PrazoEntrega, StatusProj, DescStatus,
@@ -4550,26 +4605,26 @@ app.post('/api/projeto', async (req, res) => {
 });
 
 // UPDATE (Put)
-app.put('/api/projeto/:id', async (req, res) => {
+app.put('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
     if (!data.Projeto) {
-        return res.status(400).json({ success: false, message: 'Nome do projeto ÃƒÂ© obrigatÃƒÂ³rio' });
+        return res.status(400).json({ success: false, message: 'Nome do projeto à© obrigatà³rio' });
     }
 
     try {
         let idEmpresa = null;
         let descEmpresa = null;
         if (data.ClienteProjeto) {
-            const [empRows] = await pool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
+            const [empRows] = await req.tenantDbPool.execute('SELECT IdPessoa, NomeFantasia FROM pessoajuridica WHERE RazaoSocial = ? LIMIT 1', [data.ClienteProjeto]);
             if (empRows && empRows.length > 0) {
                 idEmpresa = empRows[0].IdPessoa;
                 descEmpresa = empRows[0].NomeFantasia;
             }
         }
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET
                 Projeto = ?, DescProjeto = ?, ClienteProjeto = ?, Responsavel = ?,
                 DataPrevisao = ?, PrazoEntrega = ?, StatusProj = ?, DescStatus = ?,
@@ -4632,7 +4687,7 @@ app.put('/api/projeto/:id', async (req, res) => {
                 data.TelefoneEntrega || null,
                 data.HrEntrega || null,
                 data.EnderecoEntrega || null,
-                // CobranÃƒÂ§a
+                // Cobranà§a
                 data.ClienteCobranca || null,
                 data.CnpjCobranca || null,
                 data.ContatoCobranca || null,
@@ -4676,16 +4731,16 @@ app.put('/api/projeto/:id', async (req, res) => {
 });
 
 // DELETE (Soft Delete)
-app.delete('/api/projeto/:id', async (req, res) => {
+app.delete('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE projetos SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProjeto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Projeto excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Projeto excluído' });
     } catch (error) {
         console.error('Error deleting projeto:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -4700,7 +4755,7 @@ app.delete('/api/projeto/:id', async (req, res) => {
 // ─── ACOMPANHAMENTO GERAL (VISÃO GERAL PRODUÇÃO) ───
 
 // GET projetos for production overview
-app.get('/api/acompanhamento/projetos', async (req, res) => {
+app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
     try {
         const status = req.query.status; 
         const isFinalizados = req.query.finalizados === '1';
@@ -4767,156 +4822,205 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
 
 
 
-        const queryPool = req.tenantDbPool || pool;
+const queryPool = req.tenantDbPool || pool;
 
-        // Get projects with aggregated sector totals from their tags + RNC count
-        const [rows] = await db.execute(`
+        // 1. Fetch Projects (Base data + Native Tags count/percentages)
+        const [projetos] = await queryPool.execute(`
             SELECT
-                p.IdProjeto, p.Projeto, p.DescProjeto, 
+                p.*,
                 CASE WHEN TRIM(COALESCE(p.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE p.DescEmpresa END as DescEmpresa,
-                p.DataPrevisao, p.DataCriacao,
-                TRIM(p.Finalizado) as Finalizado, p.DataFinalizado, p.liberado, p.StatusProj, p.DescStatus,
-
-                /* -- Tags / Pecas nativos da tabela Projetos -- */
+                TRIM(p.Finalizado) as Finalizado, 
                 COUNT(t.IdTag) AS QtdeTags,
-                COALESCE(p.QtdeTagsExecutadas, 0) AS QtdeTagsExecutadas,
-                COALESCE((SELECT SUM(os.QtdeTotalItens) FROM ordemservico os WHERE (os.IdProjeto = p.IdProjeto OR (os.Projeto = p.Projeto AND p.Projeto IS NOT NULL)) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')), 0) AS QtdePecasTags,
-                COALESCE(p.QtdePecasExecutadas, 0) AS QtdePecasExecutadas,
-
-                /* -- OS Count -- conta apenas OS cujo IdTag pertence a uma tag do projeto */
-                COALESCE((SELECT COUNT(*) FROM ordemservico os 
-                           INNER JOIN tags t ON t.IdTag = os.IdTag 
-                            AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
-                           WHERE t.IdProjeto = p.IdProjeto
-                             AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')), 0) AS QtdeOS,
-
-                /* -- RNC -- */
-                COALESCE((SELECT COUNT(*) FROM ordemservicoitempendencia r
-                           WHERE r.IdProjeto = p.IdProjeto
-                             AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')
-                             AND r.Estatus = 'PENDENCIA'), 0) AS TotalRnc,
-
-                COALESCE((SELECT COUNT(*) FROM ordemservicoitempendencia r
-                           WHERE r.IdProjeto = p.IdProjeto
-                             AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')), 0) AS qtdernc,
-
-                COALESCE((SELECT COUNT(*) FROM ordemservicoitempendencia r
-                           WHERE r.IdProjeto = p.IdProjeto
-                             AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')
-                             AND (r.Estatus = 'PENDENCIA' OR r.Estatus IS NULL OR r.Estatus = '')), 0) AS qtderncPendente,
-
-                COALESCE((SELECT COUNT(*) FROM ordemservicoitempendencia r
-                           WHERE r.IdProjeto = p.IdProjeto
-                             AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')
-                             AND (r.Estatus LIKE '%FIN%' OR r.Estatus = 'FINALIZADA')), 0) AS qtderncFinalizada,
-                             
-                /* -- Novas req -- */
-                COALESCE(SUM(CAST(NULLIF(t.qtdetotal,'') AS DECIMAL(10,2))), 0) AS qtdetotalpecas,
-
-                /* -- Setor Corte -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorte = '1') AS TotalCorte,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorte = '1') AS ExecCorte,
-                (SELECT MIN(osi.PlanejadoInicioCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioCorte, 
-                (SELECT MAX(osi.PlanejadoFinalCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalCorte,
-                (SELECT MIN(osi.RealizadoInicioCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioCorte, 
-                (SELECT MAX(osi.RealizadoFinalCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalCorte,
-
-                /* -- Setor Dobra -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtDobra = '1') AS TotalDobra,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtDobra = '1') AS ExecDobra,
-                (SELECT MIN(osi.PlanejadoInicioDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioDobra, 
-                (SELECT MAX(osi.PlanejadoFinalDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalDobra,
-                (SELECT MIN(osi.RealizadoInicioDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioDobra, 
-                (SELECT MAX(osi.RealizadoFinalDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalDobra,
-
-                /* -- Setor Solda -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtSolda = '1') AS TotalSolda,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtSolda = '1') AS ExecSolda,
-                (SELECT MIN(osi.PlanejadoInicioSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioSolda, 
-                (SELECT MAX(osi.PlanejadoFinalSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalSolda,
-                (SELECT MIN(osi.RealizadoInicioSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioSolda, 
-                (SELECT MAX(osi.RealizadoFinalSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalSolda,
-
-                /* -- Setor Pintura -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPintura = '1') AS TotalPintura,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPintura = '1') AS ExecPintura,
-                (SELECT MIN(osi.PlanejadoInicioPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPintura, 
-                (SELECT MAX(osi.PlanejadoFinalPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPintura,
-                (SELECT MIN(osi.RealizadoInicioPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPintura, 
-                (SELECT MAX(osi.RealizadoFinalPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPintura,
-
-                /* -- Setor Montagem -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.TxtMontagem = '1') AS TotalMontagem,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.TxtMontagem = '1') AS ExecMontagem,
-                (SELECT MIN(osi.PlanejadoInicioMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioMontagem, 
-                (SELECT MAX(osi.PlanejadoFinalMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalMontagem,
-                (SELECT MIN(osi.RealizadoInicioMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioMontagem, 
-                (SELECT MAX(osi.RealizadoFinalMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalMontagem,
-
-                /* -- Setor Corte a Laser -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorteaLaser = '1') AS TotalCorteaLaser,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorteaLaser = '1') AS ExecCorteaLaser,
-                (SELECT MIN(osi.PlanejadoInicioCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioCorteaLaser, 
-                (SELECT MAX(osi.PlanejadoFinalCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalCorteaLaser,
-                (SELECT MIN(osi.RealizadoInicioCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioCorteaLaser, 
-                (SELECT MAX(osi.RealizadoFinalCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalCorteaLaser,
-
-                /* -- Setor Pulsionadeira -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS TotalPulsionadeira,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS ExecPulsionadeira,
-                (SELECT MIN(osi.PlanejadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPulsionadeira, 
-                (SELECT MAX(osi.PlanejadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPulsionadeira,
-                (SELECT MIN(osi.RealizadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPulsionadeira, 
-                (SELECT MAX(osi.RealizadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPulsionadeira,
-
-                /* -- Setor Galvanizar -- */
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtGALVANIZAR = '1') AS TotalGalvanizar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtGALVANIZAR = '1') AS ExecGalvanizar,
-                (SELECT MIN(osi.PlanejadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioGalvanizar, 
-                (SELECT MAX(osi.PlanejadoFinalGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalGalvanizar,
-                (SELECT MIN(osi.RealizadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioGalvanizar, 
-                (SELECT MAX(osi.RealizadoFinalGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalGalvanizar,
-
-
-                (SELECT MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorte,
-                (SELECT MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagDobra,
-                (SELECT MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagSolda,
-                (SELECT MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPintura,
-                (SELECT MAX(CASE WHEN osi.TxtMontagem = '1' OR osi.TxtMontagem = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagMontagem,
-                (SELECT MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorteaLaser,
-                (SELECT MAX(CASE WHEN osi.txtPULSIONADEIRA = '1' OR osi.txtPULSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPulsionadeira,
-                (SELECT MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdProjeto = p.IdProjeto AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagGalvanizar
-
+                COALESCE(SUM(CAST(NULLIF(t.qtdetotal,'') AS DECIMAL(10,2))), 0) AS qtdetotalpecas
             FROM projetos p
-            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto
-                AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
+            LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE ${where}
             GROUP BY p.IdProjeto
             ORDER BY p.IdProjeto DESC
             LIMIT 300
         `);
 
-        console.log(`[VisÃƒÂ£o Geral ProduÃƒÂ§ÃƒÂ£o] Query executada para tenant: ${req.tenantDb}. Rows found: ${rows.length}`);
+        if (projetos.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const projectIds = projetos.map(p => p.IdProjeto);
+        const inClause = projectIds.join(',');
+
+        // 2. Fetch OS / OSI Aggregations for all fetched projects
+        const [osStatsRows] = await queryPool.execute(`
+            SELECT 
+                os.IdProjeto,
+                COUNT(DISTINCT os.IdOrdemServico) AS QtdeOS,
+                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdePecasTags,
+                
+                /* Corte */
+                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorte,
+                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
+                MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) as flagCorte,
+
+                /* Dobra */
+                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalDobra,
+                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
+                MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) as flagDobra,
+
+                /* Solda */
+                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalSolda,
+                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
+                MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) as flagSolda,
+
+                /* Pintura */
+                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPintura,
+                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
+                MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) as flagPintura,
+
+                /* Montagem */
+                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalMontagem,
+                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
+                MAX(CASE WHEN osi.TxtMontagem = '1' OR osi.TxtMontagem = 'S' THEN 1 ELSE 0 END) as flagMontagem,
+
+                /* Corte a Laser */
+                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorteaLaser,
+                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
+                MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
+
+                /* Punsionadeira */
+                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPunsionadeira,
+                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPunsionadeira,
+                MIN(osi.PlanejadoInicioPUNSIONADEIRA) as PlanejadoInicioPunsionadeira, MAX(osi.PlanejadoFinalPUNSIONADEIRA) as PlanejadoFinalPunsionadeira,
+                MIN(osi.RealizadoInicioPUNSIONADEIRA) as RealizadoInicioPunsionadeira, MAX(osi.RealizadoFinalPUNSIONADEIRA) as RealizadoFinalPunsionadeira,
+                MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
+
+                /* Galvanizar */
+                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalGalvanizar,
+                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecGalvanizar,
+                MIN(osi.PlanejadoInicioGALVANIZAR) as PlanejadoInicioGalvanizar, MAX(osi.PlanejadoFinalGALVANIZAR) as PlanejadoFinalGalvanizar,
+                MIN(osi.RealizadoInicioGALVANIZAR) as RealizadoInicioGalvanizar, MAX(osi.RealizadoFinalGALVANIZAR) as RealizadoFinalGalvanizar,
+                MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) as flagGalvanizar
+
+            FROM ordemservico os
+            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            INNER JOIN tags t ON os.IdTag = t.IdTag AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
+            WHERE os.IdProjeto IN (${inClause}) 
+              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+              AND os.IdTag IS NOT NULL /* (Conta apenas OS vinculada a tag) */
+            GROUP BY os.IdProjeto
+        `);
+
+        const osStatsMap = {};
+        for (const row of osStatsRows) {
+            osStatsMap[row.IdProjeto] = row;
+        }
+
+        // 3. Fetch RNC stats
+        const [rncRows] = await queryPool.execute(`
+            SELECT 
+                r.IdProjeto,
+                COUNT(CASE WHEN r.Estatus = 'PENDENCIA' THEN 1 END) AS TotalRnc,
+                COUNT(*) AS qtdernc,
+                COUNT(CASE WHEN r.Estatus = 'PENDENCIA' OR r.Estatus IS NULL OR r.Estatus = '' THEN 1 END) AS qtderncPendente,
+                COUNT(CASE WHEN r.Estatus LIKE '%FIN%' OR r.Estatus = 'FINALIZADA' THEN 1 END) AS qtderncFinalizada
+            FROM ordemservicoitempendencia r
+            WHERE r.IdProjeto IN (${inClause})
+              AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')
+            GROUP BY r.IdProjeto
+        `);
+
+        const rncMap = {};
+        for (const row of rncRows) {
+            rncMap[row.IdProjeto] = row;
+        }
+
+        console.log(`[Visão Geral Produção] Projetos found: ${projetos.length}. OS/Item Aggregations executed.`);
 
         /* Compute percentages in JS to avoid division-by-zero in SQL */
         const pctNormal = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
         const pctSetor = (exec, sumQtde) => {
-            // sumQtde = SUM(QtdeTotal WHERE txt{Setor}='1') � universo real do setor
             return sumQtde > 0 ? Math.min(100, Math.round((exec / sumQtde) * 100)) : 0;
         };
-        const enriched = rows.map(r => ({
-            ...r,
-            PercentualTags: pctNormal(Number(r.QtdeTagsExecutadas), Number(r.QtdeTags)),
-            PercentualPecas: pctNormal(Number(r.QtdePecasExecutadas), Number(r.QtdePecasTags)),
-            PctCorte: pctSetor(Number(r.ExecCorte), Number(r.TotalCorte)),
-            PctDobra: pctSetor(Number(r.ExecDobra), Number(r.TotalDobra)),
-            PctSolda: pctSetor(Number(r.ExecSolda), Number(r.TotalSolda)),
-            PctPintura: pctSetor(Number(r.ExecPintura), Number(r.TotalPintura)),
-            PctMontagem: pctSetor(Number(r.ExecMontagem), Number(r.TotalMontagem)),
-            PctCorteaLaser: pctSetor(Number(r.ExecCorteaLaser), Number(r.TotalCorteaLaser)),
-            PctPulsionadeira: pctSetor(Number(r.ExecPulsionadeira), Number(r.TotalPulsionadeira)),
-            PctGalvanizar: pctSetor(Number(r.ExecGalvanizar), Number(r.TotalGalvanizar)),
-        }));
+
+        // 4. Merge all
+        const enriched = projetos.map(p => {
+            const osS = osStatsMap[p.IdProjeto] || {};
+            const rncS = rncMap[p.IdProjeto] || {};
+            
+            const merged = {
+                ...p,
+                QtdeOS: osS.QtdeOS || 0,
+                QtdePecasTags: osS.QtdePecasTags || 0,
+                
+                TotalRnc: rncS.TotalRnc || 0,
+                qtdernc: rncS.qtdernc || 0,
+                qtderncPendente: rncS.qtderncPendente || 0,
+                qtderncFinalizada: rncS.qtderncFinalizada || 0,
+
+                TotalCorte: p.CorteTotalExecutar ?? osS.TotalCorte ?? 0, ExecCorte: p.CorteTotalExecutado ?? osS.ExecCorte ?? 0,
+                PlanejadoInicioCorte: p.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: p.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: p.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: p.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
+                flagCorte: osS.flagCorte || 0,
+
+                TotalDobra: p.DobraTotalExecutar ?? osS.TotalDobra ?? 0, ExecDobra: p.DobraTotalExecutado ?? osS.ExecDobra ?? 0,
+                PlanejadoInicioDobra: p.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: p.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: p.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: p.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
+                flagDobra: osS.flagDobra || 0,
+
+                TotalSolda: p.SoldaTotalExecutar ?? osS.TotalSolda ?? 0, ExecSolda: p.SoldaTotalExecutado ?? osS.ExecSolda ?? 0,
+                PlanejadoInicioSolda: p.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: p.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: p.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: p.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
+                flagSolda: osS.flagSolda || 0,
+
+                TotalPintura: p.PinturaTotalExecutar ?? osS.TotalPintura ?? 0, ExecPintura: p.PinturaTotalExecutado ?? osS.ExecPintura ?? 0,
+                PlanejadoInicioPintura: p.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: p.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: p.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: p.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
+                flagPintura: osS.flagPintura || 0,
+
+                TotalMontagem: p.MontagemTotalExecutar ?? osS.TotalMontagem ?? 0, ExecMontagem: p.MontagemTotalExecutado ?? osS.ExecMontagem ?? 0,
+                PlanejadoInicioMontagem: p.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: p.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: p.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: p.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
+                flagMontagem: osS.flagMontagem || 0,
+
+                TotalCorteaLaser: p.CorteaLaserTotalExecutar ?? osS.TotalCorteaLaser ?? 0, ExecCorteaLaser: p.CorteaLaserTotalExecutado ?? osS.ExecCorteaLaser ?? 0,
+                PlanejadoInicioCorteaLaser: p.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: p.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: p.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: p.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
+                flagCorteaLaser: osS.flagCorteaLaser || 0,
+
+                TotalPunsionadeira: p.PunsionadeiraTotalExecutar ?? osS.TotalPunsionadeira ?? 0, ExecPunsionadeira: p.PunsionadeiraTotalExecutado ?? osS.ExecPunsionadeira ?? 0,
+                PlanejadoInicioPunsionadeira: p.PlanejadoInicioPunsionadeira || osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: p.PlanejadoFinalPunsionadeira || osS.PlanejadoFinalPunsionadeira || null,
+                RealizadoInicioPunsionadeira: p.RealizadoInicioPunsionadeira || osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: p.RealizadoFinalPunsionadeira || osS.RealizadoFinalPunsionadeira || null,
+                flagPunsionadeira: osS.flagPunsionadeira || 0,
+
+                TotalGalvanizar: p.GalvanizarTotalExecutar ?? osS.TotalGalvanizar ?? 0, ExecGalvanizar: p.GalvanizarTotalExecutado ?? osS.ExecGalvanizar ?? 0,
+                PlanejadoInicioGalvanizar: p.PlanejadoInicioGalvanizar || osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: p.PlanejadoFinalGalvanizar || osS.PlanejadoFinalGalvanizar || null,
+                RealizadoInicioGalvanizar: p.RealizadoInicioGalvanizar || osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: p.RealizadoFinalGalvanizar || osS.RealizadoFinalGalvanizar || null,
+                flagGalvanizar: osS.flagGalvanizar || 0,
+            };
+
+            merged.PercentualTags = pctNormal(Number(merged.QtdeTagsExecutadas), Number(merged.QtdeTags));
+            merged.PercentualPecas = pctNormal(Number(merged.QtdePecasExecutadas), Number(merged.QtdePecasTags));
+            merged.PctCorte = pctSetor(Number(merged.ExecCorte), Number(merged.TotalCorte));
+            merged.PctDobra = pctSetor(Number(merged.ExecDobra), Number(merged.TotalDobra));
+            merged.PctSolda = pctSetor(Number(merged.ExecSolda), Number(merged.TotalSolda));
+            merged.PctPintura = pctSetor(Number(merged.ExecPintura), Number(merged.TotalPintura));
+            merged.PctMontagem = pctSetor(Number(merged.ExecMontagem), Number(merged.TotalMontagem));
+            merged.PctCorteaLaser = pctSetor(Number(merged.ExecCorteaLaser), Number(merged.TotalCorteaLaser));
+            merged.PctPunsionadeira = pctSetor(Number(merged.ExecPunsionadeira), Number(merged.TotalPunsionadeira));
+            merged.PctGalvanizar = pctSetor(Number(merged.ExecGalvanizar), Number(merged.TotalGalvanizar));
+
+            return merged;
+        });
+
 
 
 
@@ -4929,119 +5033,205 @@ app.get('/api/acompanhamento/projetos', async (req, res) => {
 });
 
 // GET tags for a project in production overview
-app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
+app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
         const tenantDb = req.tenantDb || 'default';
 
-        // Build column list defensively — check if Observacao exists before using it
-        let observacaoExpr = 'NULL AS Observacao';
-        try {
-            const [cols] = await db.execute(
-                "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags' AND COLUMN_NAME = 'Observacao'"
-            );
-            if (cols.length > 0) observacaoExpr = 'Observacao';
-        } catch (_) { /* fallback to NULL */ }
+        // Build column list defensively for dynamic columns in 'tags' table
+        const [tagsCols] = await req.tenantDbPool.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags'"
+        );
+        const tagsSet = new Set(tagsCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        const safeTagCol = (colName) => tagsSet.has(colName.toLowerCase()) ? colName : `NULL AS ${colName}`;
 
-        const [rows] = await db.execute(`
+        const [tagsRaw] = await req.tenantDbPool.execute(`
             SELECT
-                IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, StatusTag,
-                (SELECT COUNT(*) FROM ordemservico os WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS QtdeOS,
+                IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, 
+                ${safeTagCol('StatusTag')},
                 QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS,
-                tags.PlanejadoInicioCorte as TagPlanejadoInicioCorte, tags.PlanejadoFinalCorte as TagPlanejadoFinalCorte,
-                tags.PlanejadoInicioDobra as TagPlanejadoInicioDobra, tags.PlanejadoFinalDobra as TagPlanejadoFinalDobra,
-                tags.PlanejadoInicioSolda as TagPlanejadoInicioSolda, tags.PlanejadoFinalSolda as TagPlanejadoFinalSolda,
-                tags.PlanejadoInicioPintura as TagPlanejadoInicioPintura, tags.PlanejadoFinalPintura as TagPlanejadoFinalPintura,
-                tags.PlanejadoInicioMontagem as TagPlanejadoInicioMontagem, tags.PlanejadoFinalMontagem as TagPlanejadoFinalMontagem,
-                tags.PlanejadoInicioCorteaLaser as TagPlanejadoInicioCorteaLaser, tags.PlanejadoFinalCorteaLaser as TagPlanejadoFinalCorteaLaser,
-                tags.PlanejadoInicioPULSIONADEIRA as TagPlanejadoInicioPULSIONADEIRA, tags.PlanejadoFinalPULSIONADEIRA as TagPlanejadoFinalPULSIONADEIRA,
-                tags.PlanejadoInicioGALVANIZAR as TagPlanejadoInicioGALVANIZAR, tags.PlanejadoFinalGALVANIZAR as TagPlanejadoFinalGALVANIZAR,
-                (SELECT COALESCE(SUM(os.QtdeTotalItens), 0) FROM ordemservico os WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as QtdeTotalPecas,
                 qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
-                  (SELECT MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorte,
-                  (SELECT MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagDobra,
-                  (SELECT MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagSolda,
-                  (SELECT MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPintura,
-                  (SELECT MAX(CASE WHEN osi.txtMontagem = '1' OR osi.txtMontagem = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagMontagem,
-                  (SELECT MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagCorteaLaser,
-                  (SELECT MAX(CASE WHEN osi.txtPULSIONADEIRA = '1' OR osi.txtPULSIONADEIRA = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagPulsionadeira,
-                  (SELECT MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as flagGalvanizar,
-                ${observacaoExpr},
-                (SELECT MIN(osi.PlanejadoInicioCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioCorte,
-                (SELECT MAX(osi.PlanejadoFinalCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalCorte,
-                (SELECT MIN(osi.RealizadoInicioCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioCorte,
-                (SELECT MAX(osi.RealizadoFinalCorte) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalCorte,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS CorteTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS CorteTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorte = '1') AS SumQtdeCorte,
-                CortePercentual,
-                (SELECT MIN(osi.PlanejadoInicioDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioDobra,
-                (SELECT MAX(osi.PlanejadoFinalDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalDobra,
-                (SELECT MIN(osi.RealizadoInicioDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioDobra,
-                (SELECT MAX(osi.RealizadoFinalDobra) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalDobra,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS DobraTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS DobraTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtDobra = '1') AS SumQtdeDobra,
-                DobraPercentual,
-                (SELECT MIN(osi.PlanejadoInicioSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioSolda,
-                (SELECT MAX(osi.PlanejadoFinalSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalSolda,
-                (SELECT MIN(osi.RealizadoInicioSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioSolda,
-                (SELECT MAX(osi.RealizadoFinalSolda) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalSolda,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS SoldaTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS SoldaTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtSolda = '1') AS SumQtdeSolda,
-                SoldaPercentual,
-                (SELECT MIN(osi.PlanejadoInicioPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPintura,
-                (SELECT MAX(osi.PlanejadoFinalPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPintura,
-                (SELECT MIN(osi.RealizadoInicioPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPintura,
-                (SELECT MAX(osi.RealizadoFinalPintura) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPintura,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PinturaTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PinturaTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPintura = '1') AS SumQtdePintura,
-                PinturaPercentual,
-                (SELECT MIN(osi.PlanejadoInicioMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioMontagem,
-                (SELECT MAX(osi.PlanejadoFinalMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalMontagem,
-                (SELECT MIN(osi.RealizadoInicioMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioMontagem,
-                (SELECT MAX(osi.RealizadoFinalMontagem) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalMontagem,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS MontagemTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS MontagemTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.TxtMontagem = '1') AS SumQtdeMontagem,
-                MontagemPercentual,
-                (SELECT MIN(osi.PlanejadoInicioCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioCorteaLaser,
-                (SELECT MAX(osi.PlanejadoFinalCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalCorteaLaser,
-                (SELECT MIN(osi.RealizadoInicioCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioCorteaLaser,
-                (SELECT MAX(osi.RealizadoFinalCorteaLaser) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalCorteaLaser,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS CorteaLaserTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS CorteaLaserTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtCorteaLaser = '1') AS SumQtdeCorteaLaser,
-                CorteaLaserPercentual,
-                (SELECT MIN(osi.PlanejadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioPULSIONADEIRA,
-                (SELECT MAX(osi.PlanejadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalPULSIONADEIRA,
-                (SELECT MIN(osi.RealizadoInicioPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioPULSIONADEIRA,
-                (SELECT MAX(osi.RealizadoFinalPULSIONADEIRA) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalPULSIONADEIRA,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PULSIONADEIRATotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.PULSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS PULSIONADEIRATotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtPULSIONADEIRA = '1') AS SumQtdePulsionadeira,
-                PULSIONADEIRAPercentual,
-                (SELECT MIN(osi.PlanejadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoInicioGALVANIZAR,
-                (SELECT MAX(osi.PlanejadoFinalGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as PlanejadoFinalGALVANIZAR,
-                (SELECT MIN(osi.RealizadoInicioGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoInicioGALVANIZAR,
-                (SELECT MAX(osi.RealizadoFinalGALVANIZAR) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) as RealizadoFinalGALVANIZAR,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS GALVANIZARTotalExecutado,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutar,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')) AS GALVANIZARTotalExecutar,
-                (SELECT COALESCE(SUM(CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2))), 0) FROM ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico WHERE os.IdTag = tags.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ') AND osi.txtGALVANIZAR = '1') AS SumQtdeGalvanizar,
-                GALVANIZARPercentual,
-                -- Datas dos setores de engenharia (para modo Tag Individual no modal de edição)
-                PlanejadoInicioMedicao,   PlanejadoFinalMedicao,   RealizadoInicioMedicao,   RealizadoFinalMedicao,
-                PlanejadoInicioIsometrico, PlanejadoFinalIsometrico, RealizadoInicioIsometrico, RealizadoFinalIsometrico,
-                PlanejadoInicioAprovacao,  PlanejadoFinalAprovacao,  RealizadoInicioAprovacao,  RealizadoFinalAprovacao,
-                PlanejadoInicioAcabamento, PlanejadoFinalAcabamento, RealizadoInicioAcabamento, RealizadoFinalAcabamento,
-                PlanejadoInicioExpedicao,  PlanejadoFinalExpedicao,  RealizadoInicioExpedicao,  realizadoFinalExpedicao
+                ${safeTagCol('txtCORTE')}, ${safeTagCol('txtDOBRA')}, ${safeTagCol('txtPINTURA')}, ${safeTagCol('txtPUNSIONADEIRA')}, ${safeTagCol('txtCorteaLaser')}, ${safeTagCol('txtGALVANIZAR')},
+                ${safeTagCol('PlanejadoInicioCorte')}, ${safeTagCol('PlanejadoFinalCorte')},
+                ${safeTagCol('PlanejadoInicioDobra')}, ${safeTagCol('PlanejadoFinalDobra')},
+                ${safeTagCol('PlanejadoInicioSolda')}, ${safeTagCol('PlanejadoFinalSolda')},
+                ${safeTagCol('PlanejadoInicioPintura')}, ${safeTagCol('PlanejadoFinalPintura')},
+                ${safeTagCol('PlanejadoInicioMontagem')}, ${safeTagCol('PlanejadoFinalMontagem')},
+                ${safeTagCol('PlanejadoInicioPUNSIONADEIRA')}, ${safeTagCol('PlanejadoFinalPUNSIONADEIRA')},
+                ${safeTagCol('PlanejadoInicioCorteaLaser')}, ${safeTagCol('PlanejadoFinalCorteaLaser')},
+                ${safeTagCol('PlanejadoInicioGALVANIZAR')}, ${safeTagCol('PlanejadoFinalGALVANIZAR')},
+                ${safeTagCol('Observacao')},
+                ${safeTagCol('PlanejadoInicioMedicao')},   ${safeTagCol('PlanejadoFinalMedicao')},   ${safeTagCol('RealizadoInicioMedicao')},   ${safeTagCol('RealizadoFinalMedicao')},
+                ${safeTagCol('PlanejadoInicioIsometrico')}, ${safeTagCol('PlanejadoFinalIsometrico')}, ${safeTagCol('RealizadoInicioIsometrico')}, ${safeTagCol('RealizadoFinalIsometrico')},
+                ${safeTagCol('PlanejadoInicioAprovacao')},  ${safeTagCol('PlanejadoFinalAprovacao')},  ${safeTagCol('RealizadoInicioAprovacao')},  ${safeTagCol('RealizadoFinalAprovacao')},
+                ${safeTagCol('PlanejadoInicioAcabamento')}, ${safeTagCol('PlanejadoFinalAcabamento')}, ${safeTagCol('RealizadoInicioAcabamento')}, ${safeTagCol('RealizadoFinalAcabamento')},
+                ${safeTagCol('PlanejadoInicioExpedicao')},  ${safeTagCol('PlanejadoFinalExpedicao')},  ${safeTagCol('RealizadoInicioExpedicao')},  ${safeTagCol('realizadoFinalExpedicao')}
             FROM tags
             WHERE IdProjeto = ?
-              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
+              AND (${tagsSet.has('tagjaexcluida') ? "TagJaExcluida IS NULL OR TRIM(TagJaExcluida) NOT IN ('1', 'SIM', 'S')" : "1=1"})
+              AND (${tagsSet.has('statustag') ? "StatusTag IS NULL OR (CAST(StatusTag AS CHAR) NOT LIKE '%EXCLU%' AND CAST(StatusTag AS CHAR) NOT LIKE '%CANCEL%')" : "1=1"})
             ORDER BY IdTag ASC
         `, [req.params.projetoId]);
+
+        if (tagsRaw.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        const tagIds = tagsRaw.map(t => t.IdTag);
+        const inClause = tagIds.join(',');
+
+        const [osStatsRows] = await req.tenantDbPool.execute(`
+            SELECT 
+                os.IdTag,
+                COUNT(DISTINCT os.IdOrdemServico) AS QtdeOS,
+                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdeTotalPecas,
+
+                /* flags */
+                MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) as flagCorte,
+                MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) as flagDobra,
+                MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) as flagSolda,
+                MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) as flagPintura,
+                MAX(CASE WHEN osi.txtMontagem = '1' OR osi.txtMontagem = 'S' THEN 1 ELSE 0 END) as flagMontagem,
+                MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
+                MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
+                MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) as flagGalvanizar,
+
+                /* Corte */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
+                COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorte,
+
+                /* Dobra */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
+                COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutar,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeDobra,
+
+                /* Solda */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
+                COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeSolda,
+
+                /* Pintura */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
+                COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePintura,
+
+                /* Montagem */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
+                COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutar,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeMontagem,
+
+                /* Corte a Laser */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
+                COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorteaLaser,
+
+                /* Punsionadeira */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPUNSIONADEIRA,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPUNSIONADEIRA,
+                COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePunsionadeira,
+
+                /* Galvanizar */
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalGALVANIZAR,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalGALVANIZAR,
+                COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutar,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutar,
+                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
+
+            FROM ordemservico os
+            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            WHERE os.IdTag IN (${inClause})
+              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            GROUP BY os.IdTag
+        `);
+
+        const osStatsMap = {};
+        for (const row of osStatsRows) {
+            osStatsMap[row.IdTag] = row;
+        }
+
+        const rows = tagsRaw.map(t => {
+            const osS = osStatsMap[t.IdTag] || {};
+            return {
+                ...t,
+                QtdeOS: osS.QtdeOS || 0,
+                QtdeTotalPecas: osS.QtdeTotalPecas || 0,
+                
+                flagCorte: osS.flagCorte || 0,
+                flagDobra: osS.flagDobra || 0,
+                flagSolda: osS.flagSolda || 0,
+                flagPintura: osS.flagPintura || 0,
+                flagMontagem: osS.flagMontagem || 0,
+                flagCorteaLaser: osS.flagCorteaLaser || 0,
+                flagPunsionadeira: osS.flagPunsionadeira || 0,
+                flagGalvanizar: osS.flagGalvanizar || 0,
+                
+                txtCORTE: t.txtCORTE,
+                txtDOBRA: t.txtDOBRA,
+                txtPINTURA: t.txtPINTURA,
+                txtPUNSIONADEIRA: t.txtPUNSIONADEIRA,
+                txtCorteaLaser: t.txtCorteaLaser,
+                txtGALVANIZAR: t.txtGALVANIZAR,
+
+                PlanejadoInicioCorte: t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
+                CorteTotalExecutado: t.CorteTotalExecutado ?? osS.CorteTotalExecutado ?? 0, CorteTotalExecutar: t.CorteTotalExecutar ?? osS.CorteTotalExecutar ?? 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
+
+                PlanejadoInicioDobra: t.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: t.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: t.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: t.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
+                DobraTotalExecutado: t.DobraTotalExecutado ?? osS.DobraTotalExecutado ?? 0, DobraTotalExecutar: t.DobraTotalExecutar ?? osS.DobraTotalExecutar ?? 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
+
+                PlanejadoInicioSolda: t.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: t.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: t.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: t.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
+                SoldaTotalExecutado: t.SoldaTotalExecutado ?? osS.SoldaTotalExecutado ?? 0, SoldaTotalExecutar: t.SoldaTotalExecutar ?? osS.SoldaTotalExecutar ?? 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
+
+                PlanejadoInicioPintura: t.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: t.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: t.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: t.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
+                PinturaTotalExecutado: t.PinturaTotalExecutado ?? osS.PinturaTotalExecutado ?? 0, PinturaTotalExecutar: t.PinturaTotalExecutar ?? osS.PinturaTotalExecutar ?? 0, SumQtdePintura: osS.SumQtdePintura || 0,
+
+                PlanejadoInicioMontagem: t.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: t.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: t.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: t.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
+                MontagemTotalExecutado: t.MontagemTotalExecutado ?? osS.MontagemTotalExecutado ?? 0, MontagemTotalExecutar: t.MontagemTotalExecutar ?? osS.MontagemTotalExecutar ?? 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
+
+                PlanejadoInicioCorteaLaser: t.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: t.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: t.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: t.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
+                CorteaLaserTotalExecutado: t.CorteaLaserTotalExecutado ?? osS.CorteaLaserTotalExecutado ?? 0, CorteaLaserTotalExecutar: t.CorteaLaserTotalExecutar ?? osS.CorteaLaserTotalExecutar ?? 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
+
+                PlanejadoInicioPUNSIONADEIRA: osS.PlanejadoInicioPUNSIONADEIRA || null, PlanejadoFinalPUNSIONADEIRA: osS.PlanejadoFinalPUNSIONADEIRA || null,
+                RealizadoInicioPUNSIONADEIRA: osS.RealizadoInicioPUNSIONADEIRA || null, RealizadoFinalPUNSIONADEIRA: osS.RealizadoFinalPUNSIONADEIRA || null,
+                PUNSIONADEIRATotalExecutado: osS.PUNSIONADEIRATotalExecutado || 0, PUNSIONADEIRATotalExecutar: osS.PUNSIONADEIRATotalExecutar || 0, SumQtdePunsionadeira: osS.SumQtdePunsionadeira || 0,
+
+                PlanejadoInicioGALVANIZAR: osS.PlanejadoInicioGALVANIZAR || null, PlanejadoFinalGALVANIZAR: osS.PlanejadoFinalGALVANIZAR || null,
+                RealizadoInicioGALVANIZAR: osS.RealizadoInicioGALVANIZAR || null, RealizadoFinalGALVANIZAR: osS.RealizadoFinalGALVANIZAR || null,
+                GALVANIZARTotalExecutado: osS.GALVANIZARTotalExecutado || 0, GALVANIZARTotalExecutar: osS.GALVANIZARTotalExecutar || 0, SumQtdeGalvanizar: osS.SumQtdeGalvanizar || 0,
+
+                CortePercentual: (Number(osS.SumQtdeCorte) > 0 ? Math.round((Number(osS.CorteTotalExecutado) || 0) / Number(osS.SumQtdeCorte) * 100) : 0).toString(),
+                DobraPercentual: (Number(osS.SumQtdeDobra) > 0 ? Math.round((Number(osS.DobraTotalExecutado) || 0) / Number(osS.SumQtdeDobra) * 100) : 0).toString(),
+                SoldaPercentual: (Number(osS.SumQtdeSolda) > 0 ? Math.round((Number(osS.SoldaTotalExecutado) || 0) / Number(osS.SumQtdeSolda) * 100) : 0).toString(),
+                PinturaPercentual: (Number(osS.SumQtdePintura) > 0 ? Math.round((Number(osS.PinturaTotalExecutado) || 0) / Number(osS.SumQtdePintura) * 100) : 0).toString(),
+                MontagemPercentual: (Number(osS.SumQtdeMontagem) > 0 ? Math.round((Number(osS.MontagemTotalExecutado) || 0) / Number(osS.SumQtdeMontagem) * 100) : 0).toString(),
+                CorteaLaserPercentual: (Number(osS.SumQtdeCorteaLaser) > 0 ? Math.round((Number(osS.CorteaLaserTotalExecutado) || 0) / Number(osS.SumQtdeCorteaLaser) * 100) : 0).toString(),
+                PUNSIONADEIRAPercentual: (Number(osS.SumQtdePunsionadeira) > 0 ? Math.round((Number(osS.PUNSIONADEIRATotalExecutado) || 0) / Number(osS.SumQtdePunsionadeira) * 100) : 0).toString(),
+                GALVANIZARPercentual: (Number(osS.SumQtdeGalvanizar) > 0 ? Math.round((Number(osS.GALVANIZARTotalExecutado) || 0) / Number(osS.SumQtdeGalvanizar) * 100) : 0).toString(),
+            };
+        });
+
 
         console.log(`[Tags] [${tenantDb}] Projeto ${req.params.projetoId}: ${rows.length} tags found`);
         res.json({ success: true, data: rows });
@@ -5053,16 +5243,16 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', async (req, res) => {
 
 
 // PUT planejar-projetista for a tag
-app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', tenantMiddleware, async (req, res) => {
     try {
         const { projetistaPlanejado, planejadoInicioEngenharia, planejadoFinalEngenharia, usuario } = req.body;
         
         if (!projetistaPlanejado || !planejadoInicioEngenharia || !planejadoFinalEngenharia) {
-            return res.status(400).json({ success: false, message: 'Todos os campos sÃƒÂ£o obrigatÃƒÂ³rios: Projetista, InÃƒÂ­cio e Fim.' });
+            return res.status(400).json({ success: false, message: 'Todos os campos são obrigatà³rios: Projetista, Inà­cio e Fim.' });
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags 
             SET ProjetistaPlanejado = ?, 
                 PlanejadoInicioEngenharia = ?, 
@@ -5071,7 +5261,7 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
         `, [projetistaPlanejado, planejadoInicioEngenharia, planejadoFinalEngenharia, req.params.idTag]);
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
+            return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         }
 
         res.json({ success: true, message: 'Projetista e datas de engenharia atualizados com sucesso.' });
@@ -5082,36 +5272,36 @@ app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', async (req, res) 
 });
 
 // PUT observacao for a project
-app.put('/api/acompanhamento/projeto/:id/observacao', async (req, res) => {
+app.put('/api/acompanhamento/projeto/:id/observacao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "UPDATE projetos SET Observacao = ? WHERE IdProjeto = ?",
             [observacao || '', id]
         );
 
         if (result.affectedRows === 0) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
 
-        res.json({ success: true, message: 'ObservaÃƒÂ§ÃƒÂ£o atualizada com sucesso.' });
+        res.json({ success: true, message: 'Observaà§ão atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating project observation:', error);
-        res.status(500).json({ success: false, message: 'Erro ao atualizar observaÃƒÂ§ÃƒÂ£o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao atualizar observaà§ão: ' + error.message });
     }
 });
 
 // PUT observacao for a tag
-app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/observacao', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { observacao } = req.body;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "UPDATE tags SET Observacao = ? WHERE IdTag = ?",
             [observacao || '', idTag]
         );
@@ -5128,31 +5318,31 @@ app.put('/api/acompanhamento/tags/:idTag/observacao', async (req, res) => {
 });
 
 // PUT alterar qtde liberada for a tag
-app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
+app.put('/api/acompanhamento/tags/:idTag/qtde', tenantMiddleware, async (req, res) => {
     try {
         const { qtdeLiberada, usuario } = req.body;
         
         if (qtdeLiberada === undefined || qtdeLiberada === null) {
-            return res.status(400).json({ success: false, message: 'A Quantidade Liberada ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'A Quantidade Liberada à© obrigatà³ria.' });
         }
 
         // Fetch current tag to calculate balance
         const queryPool = req.tenantDbPool || pool;
-        const [tagRows] = await db.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
+        const [tagRows] = await req.tenantDbPool.execute('SELECT QtdeTag FROM tags WHERE IdTag = ?', [req.params.idTag]);
         if (tagRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Tag nÃƒÂ£o encontrada.' });
+            return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         }
         
         const qtdeTag = parseFloat(tagRows[0].QtdeTag) || 0;
         const liberada = parseFloat(qtdeLiberada) || 0;
         
         if (liberada > qtdeTag) {
-            return res.status(400).json({ success: false, message: `Quantidade liberada (${liberada}) nÃƒÂ£o pode ser maior que a Quantidade da Tag (${qtdeTag}).` });
+            return res.status(400).json({ success: false, message: `Quantidade liberada (${liberada}) não pode ser maior que a Quantidade da Tag (${qtdeTag}).` });
         }
 
         const saldo = qtdeTag - liberada;
 
-        const [result] = await db.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE tags 
             SET QtdeLiberada = ?, 
                 SaldoTag = ?
@@ -5167,19 +5357,19 @@ app.put('/api/acompanhamento/tags/:idTag/qtde', async (req, res) => {
 });
 
 // PUT finalizar tag(s)
-app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
+app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res) => {
     try {
         const { idProjeto, idTag, finalizarTodas, usuario } = req.body;
         
         if (!idProjeto || !usuario) {
-            return res.status(400).json({ success: false, message: 'Projeto e UsuÃƒÂ¡rio sÃƒÂ£o obrigatÃƒÂ³rios.' });
+            return res.status(400).json({ success: false, message: 'Projeto e Usuário são obrigatà³rios.' });
         }
 
         const dataLocal = new Date().toLocaleDateString('pt-BR');
         const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5187,7 +5377,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5195,7 +5385,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE idProjeto = ? AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5203,9 +5393,9 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             `, [dataLocal, usuario, idProjeto]);
         } else {
-            if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag ÃƒÂ© obrigatÃƒÂ³rio para finalizar apenas uma.' });
+            if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag à© obrigatà³rio para finalizar apenas uma.' });
             
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE tags 
                 SET Finalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5213,7 +5403,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitem 
                 SET OrdemServicoItemFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5221,7 +5411,7 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
                 WHERE IdTag = ?
             `, [dataLocal, usuario, idTag]);
 
-            await db.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
                     DataFinalizado = ?, 
@@ -5243,10 +5433,10 @@ app.put('/api/acompanhamento/tags/finalizar', async (req, res) => {
 // =========================================================================
 
 // GET Tags for Visao Geral Engenharia
-app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
+app.get('/api/visao-geral-engenharia/tags', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 t.IdTag, t.Tag, t.DescTag, t.Projeto, t.DescEmpresa, t.TipoProduto, t.DataPrevisao, t.ProjetistaPlanejado, t.CaminhoIsometrico,
                 t.PlanejadoInicioMedicao, t.PlanejadoFinalMedicao, t.RealizadoInicioMedicao, t.RealizadoFinalMedicao,
@@ -5268,7 +5458,7 @@ app.get('/api/visao-geral-engenharia/tags', async (req, res) => {
 });
 
 // GET: Buscar TODAS as tags globalmente (para a tela de Visão Geral Global Tags)
-app.get('/api/visao-geral/tags-globais', async (req, res) => {
+app.get('/api/visao-geral/tags-globais', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.executeOnDefault(`
             SELECT 
@@ -5294,7 +5484,7 @@ app.get('/api/visao-geral/tags-globais', async (req, res) => {
 });
 
 // PUT lote update dates for Visao Geral Engenharia
-app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
+app.put('/api/visao-geral-engenharia/tags/lote', tenantMiddleware, async (req, res) => {
     try {
         const { idTags, setor, planejadoInicio, planejadoFinal, realizadoInicio, realizadoFinal, usuario } = req.body;
         
@@ -5332,7 +5522,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Nenhum dado fornecido para atualização.' });
         }
 
-        const placeholders = idTags.map(() => '?').join(',');
+        const placeholders = idTags.map(() => 'é').join(',');
         params.push(...idTags);
 
         const query = `
@@ -5342,7 +5532,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
         `;
 
         const queryPool = req.tenantDbPool || pool;
-        const [result] = await db.execute(query, params);
+        const [result] = await req.tenantDbPool.execute(query, params);
 
         // ── PROPAGAR 4 DATAS DO SETOR PARA PROJETOS (com usuário responsável) ──
         // MIN para Início | MAX para Final | usuario = NomeCompleto do usuário logado
@@ -5376,8 +5566,8 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
             const camposSetor = SETOR_MAP_LOTE[setor];
             if (camposSetor) {
                 // 1) Descobre os projetos afetados pelas tags alteradas
-                const phIds = idTags.map(() => '?').join(',');
-                const [tagProjRows] = await db.execute(
+                const phIds = idTags.map(() => 'é').join(',');
+                const [tagProjRows] = await req.tenantDbPool.execute(
                     `SELECT DISTINCT IdProjeto FROM tags WHERE IdTag IN (${phIds})`, idTags
                 );
 
@@ -5387,7 +5577,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
 
                     // 2) Para cada um dos 4 campos do setor: recalcula MIN ou MAX nas tags
                     for (const { tag, proj, usu, fn } of camposSetor) {
-                        const [[aggRow]] = await db.execute(`
+                        const [[aggRow]] = await req.tenantDbPool.execute(`
                             SELECT DATE_FORMAT(
                                 ${fn}(STR_TO_DATE(NULLIF(TRIM(\`${tag}\`),''), '%d/%m/%Y')),
                                 '%d/%m/%Y'
@@ -5406,7 +5596,7 @@ app.put('/api/visao-geral-engenharia/tags/lote', async (req, res) => {
                     }
 
                     paramsProjeto.push(IdProjeto);
-                    await db.execute(
+                    await req.tenantDbPool.execute(
                         `UPDATE projetos SET ${setProjeto.join(', ')} WHERE IdProjeto = ?`,
                         paramsProjeto
                     );
@@ -5472,13 +5662,13 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
         }
 
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
         const filePath = `/uploads/isometricos/${file.filename}`;
 
-        await db.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
+        await req.tenantDbPool.execute("UPDATE tags SET CaminhoIsometrico = ? WHERE IdTag = ?", [filePath, idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico associado com sucesso.', data: { CaminhoIsometrico: filePath } });
     } catch (error) {
@@ -5488,16 +5678,16 @@ app.post('/api/visao-geral-engenharia/tags/:idTag/isometrico', uploadIso.single(
 });
 
 // DELETE limpar isometrico
-app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res) => {
+app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const queryPool = req.tenantDbPool || pool;
         
-        const [rows] = await db.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT Finalizado FROM tags WHERE IdTag = ?", [idTag]);
         if (rows.length === 0) return res.status(404).json({ success: false, message: 'Tag não encontrada.' });
         if (rows[0].Finalizado === 'C') return res.status(400).json({ success: false, message: 'Tag já Finalizado!' });
 
-        const [tagRow] = await db.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
+        const [tagRow] = await req.tenantDbPool.execute("SELECT CaminhoIsometrico FROM tags WHERE IdTag = ?", [idTag]);
         const caminho = tagRow[0].CaminhoIsometrico;
 
         if (caminho) {
@@ -5507,7 +5697,7 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
             }
         }
 
-        await db.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
+        await req.tenantDbPool.execute("UPDATE tags SET CaminhoIsometrico = NULL WHERE IdTag = ?", [idTag]);
 
         res.json({ success: true, message: 'Desenho Isométrico removido com sucesso.', data: { CaminhoIsometrico: null } });
     } catch (error) {
@@ -5518,10 +5708,10 @@ app.delete('/api/visao-geral-engenharia/tags/:idTag/isometrico', async (req, res
 
 
 // GET RNCs for a project in production overview
-app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
+app.get('/api/visao-geral/rncs/:projetoId', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 Estatus,
@@ -5555,7 +5745,7 @@ app.get('/api/visao-geral/rncs/:projetoId', async (req, res) => {
 });
 
 // GET Todas as Pendencias globais do sistema
-app.get('/api/todas-pendencias', async (req, res) => {
+app.get('/api/todas-pendencias', tenantMiddleware, async (req, res) => {
     try {
         const { exibirFinalizadas } = req.query; // 'true' or 'false'
         
@@ -5565,7 +5755,7 @@ app.get('/api/todas-pendencias', async (req, res) => {
             statusFilter = "AND Estatus = 'FINALIZADA'";
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 IdOrdemServicoItemPendencia, IdOrdemServico, IdOrdemServicoItem, IdPLanodeCorte, IdRomaneio, IdProjeto, IdTag, CodMatFabricante,
                 Projeto, Tag, DescEmpresa, IdMaterial, DescResumo, DescDetal, Espessura,
@@ -5588,7 +5778,7 @@ app.get('/api/todas-pendencias', async (req, res) => {
 });
 
 // GET Pendencias (Origem: VISAOGERALPROJ) for a project
-app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
+app.get('/api/visao-geral/pendencias/:projetoId', tenantMiddleware, async (req, res) => {
     try {
         const origem = req.query.origem || 'VISAOGERALPROJ';
         
@@ -5599,7 +5789,7 @@ app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
             statusList = "'TarefaAberta', 'TarefaFinalizada'";
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
                 IdOrdemServicoItemPendencia AS IdRnc,
                 IdProjeto, Projeto, IdTag, Tag, DescricaoPendencia,
@@ -5622,7 +5812,7 @@ app.get('/api/visao-geral/pendencias/:projetoId', async (req, res) => {
 });
 
 // POST: Salvar ou Atualizar Pendencia da Visao Geral
-app.post('/api/visao-geral/pendencias', async (req, res) => {
+app.post('/api/visao-geral/pendencias', tenantMiddleware, async (req, res) => {
     try {
         const data = req.body;
         const now = getCurrentDateTimeBR();
@@ -5631,7 +5821,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
 
         if (idRnc) {
             // UPDATE EXISITNG
-            await pool.execute(`
+            await req.tenantDbPool.execute(`
                 UPDATE ordemservicoitempendencia SET
                     DescricaoPendencia = ?,
                     SetorResponsavel = ?,
@@ -5657,7 +5847,7 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
             const tipoRegistro = data.tipoRegistro || 'RNC';
             const estatus = data.estatus || 'PENDENCIA';
             
-            const [result] = await pool.execute(`
+            const [result] = await req.tenantDbPool.execute(`
                 INSERT INTO ordemservicoitempendencia (
                     IdProjeto, Projeto, IdTag, Tag, TipoCadastro, OrigemPendencia, Estatus, DataCriacao,
                     DescricaoPendencia, SetorResponsavel, TipoTarefa, UsuarioResponsavel, DataExecucao,
@@ -5676,13 +5866,13 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
             // Increment totals (qtdernc, qtderncPendente) on projetos, tags, ordemservico
             // Only increment legacy RNC counters if it's a legacy RNC
             if (data.idProjeto && tipoCadastro === 'RNC') {
-                await pool.execute(`UPDATE projetos SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ?`, [data.idProjeto]);
-                await pool.execute(`UPDATE tags SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
-                await pool.execute(`UPDATE ordemservico SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE projetos SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ?`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE tags SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
+                await req.tenantDbPool.execute(`UPDATE ordemservico SET qtdernc = COALESCE(qtdernc, 0) + 1, qtderncPendente = COALESCE(qtderncPendente, 0) + 1 WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`, [data.idProjeto]);
             }
         }
 
-        res.json({ success: true, message: idRnc ? 'PendÃƒÂªncia salva com sucesso!' : 'PendÃƒÂªncia criada com sucesso!' });
+        res.json({ success: true, message: idRnc ? 'Pendàªncia salva com sucesso!' : 'Pendàªncia criada com sucesso!' });
     } catch (error) {
         console.error('Error saving visao-geral pendencia:', error);
         res.status(500).json({ success: false, message: 'Erro ao salvar: ' + error.message });
@@ -5690,13 +5880,13 @@ app.post('/api/visao-geral/pendencias', async (req, res) => {
 });
 
 // PUT /api/visao-geral/pendencias/:id/finalizar
-app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
+app.put('/api/visao-geral/pendencias/:id/finalizar', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const { usuarioFin, dataFin, setorFin, descFin, idProjeto } = req.body;
     
-    // idProjeto nÃƒÂ£o ÃƒÂ© mais obrigatÃƒÂ³rio pois Tarefas podem ser genÃƒÂ©ricas (sem vinculo de projeto)
+    // idProjeto não à© mais obrigatà³rio pois Tarefas podem ser genà©ricas (sem vinculo de projeto)
     if (!usuarioFin || !dataFin || !setorFin) {
-        return res.status(400).json({ success: false, message: 'Faltam dados de finalizaÃƒÂ§ÃƒÂ£o' });
+        return res.status(400).json({ success: false, message: 'Faltam dados de finalizaà§ão' });
     }
 
     let dtFinFormatada = '';
@@ -5710,13 +5900,13 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
                 dtFinFormatada = dataFin;
             }
         } else {
-            // Provavelmente jÃƒÂ¡ veio formatada (ex: 19/03/2026) da funÃƒÂ§ÃƒÂ£o isoToBr do frontend
+            // Provavelmente já veio formatada (ex: 19/03/2026) da funà§ão isoToBr do frontend
             dtFinFormatada = dataFin;
         }
     }
 
     try {
-        await pool.execute(`
+        await req.tenantDbPool.execute(`
             UPDATE ordemservicoitempendencia SET
                 Estatus = 'Finalizada',
                 DataAcertoProjeto = ?,
@@ -5728,21 +5918,21 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
         `, [dtFinFormatada, setorFin, usuarioFin, descFin || '', dtFinFormatada, id]);
 
         // Specific legacy counters just for RNC (avoiding count pollution by Tarefas)
-        const [pendencyInfo] = await pool.execute(`SELECT TipoCadastro, IdTag, IdOrdemServico FROM ordemservicoitempendencia WHERE IdOrdemServicoItemPendencia = ?`, [id]);
+        const [pendencyInfo] = await req.tenantDbPool.execute(`SELECT TipoCadastro, IdTag, IdOrdemServico FROM ordemservicoitempendencia WHERE IdOrdemServicoItemPendencia = ?`, [id]);
         
         if (idProjeto && pendencyInfo.length > 0 && pendencyInfo[0].TipoCadastro === 'RNC') {
-            await pool.execute(`UPDATE projetos SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdProjeto = ?`, [idProjeto]);
+            await req.tenantDbPool.execute(`UPDATE projetos SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdProjeto = ?`, [idProjeto]);
             
             // Get specific Tag and OS for this pendency to update them correctly
             const pendency = pendencyInfo;
             if (pendency.length > 0) {
                 const { IdTag, IdOrdemServico } = pendency[0];
-                if (IdTag) await pool.execute(`UPDATE tags SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdTag = ?`, [IdTag]);
-                if (IdOrdemServico) await pool.execute(`UPDATE ordemservico SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdOrdemServico = ?`, [IdOrdemServico]);
+                if (IdTag) await req.tenantDbPool.execute(`UPDATE tags SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdTag = ?`, [IdTag]);
+                if (IdOrdemServico) await req.tenantDbPool.execute(`UPDATE ordemservico SET qtderncPendente = GREATEST(COALESCE(qtderncPendente,0) - 1, 0), qtderncFinalizada = COALESCE(qtderncFinalizada,0) + 1 WHERE IdOrdemServico = ?`, [IdOrdemServico]);
             }
         }
 
-        res.json({ success: true, message: 'PendÃƒÂªncia finalizada' });
+        res.json({ success: true, message: 'Pendàªncia finalizada' });
     } catch (e) {
         console.error('Finalizar erro:', e);
         res.status(500).json({ success: false, message: 'Erro no servidor' });
@@ -5750,13 +5940,13 @@ app.put('/api/visao-geral/pendencias/:id/finalizar', async (req, res) => {
 });
 
 // PUT: Atualizar DataPrevisao do projeto (e opcionalmente das tags)
-app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
+app.put('/api/visao-geral/projeto/:id/data-previsao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { dataPrevisao, atualizarTags } = req.body;
 
         if (!dataPrevisao) {
-            return res.status(400).json({ success: false, message: 'Data de previsÃƒÂ£o ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'Data de previsão à© obrigatà³ria.' });
         }
 
         await pool.executeOnDefault(
@@ -5771,21 +5961,21 @@ app.put('/api/visao-geral/projeto/:id/data-previsao', async (req, res) => {
             );
         }
 
-        res.json({ success: true, message: 'Data de previsÃƒÂ£o atualizada com sucesso.' });
+        res.json({ success: true, message: 'Data de previsão atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating DataPrevisao:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar data: ' + error.message });
     }
 });
 
-// PUT: Atualizar DataPrevisao de uma Tag especÃƒÂ­fica
-app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
+// PUT: Atualizar DataPrevisao de uma Tag especà­fica
+app.put('/api/visao-geral/tag/:idTag/data-previsao', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { dataPrevisao } = req.body;
 
         if (!dataPrevisao) {
-            return res.status(400).json({ success: false, message: 'Data de previsÃƒÂ£o ÃƒÂ© obrigatÃƒÂ³ria.' });
+            return res.status(400).json({ success: false, message: 'Data de previsão à© obrigatà³ria.' });
         }
 
         await pool.executeOnDefault(
@@ -5793,7 +5983,7 @@ app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
             [dataPrevisao, idTag]
         );
 
-        res.json({ success: true, message: 'Data de previsÃƒÂ£o da tag atualizada com sucesso.' });
+        res.json({ success: true, message: 'Data de previsão da tag atualizada com sucesso.' });
     } catch (error) {
         console.error('Error updating Tag DataPrevisao:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar data da tag: ' + error.message });
@@ -5801,7 +5991,7 @@ app.put('/api/visao-geral/tag/:idTag/data-previsao', async (req, res) => {
 });
 
 // PUT: Atualizar data planejada em lote para todas as tags sem planejamento de um projeto
-app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) => {
+app.put('/api/visao-geral/projeto/:id/bulk-update-planning', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const { updates } = req.body;
@@ -5827,21 +6017,21 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
             const valFim = dataFim || '';
 
             const queryPool = req.tenantDbPool || pool;
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE tags 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
                  WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [valIni, valIni, valFim, valFim, id]
             );
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem 
                  SET ${fields.pi} = CASE WHEN ? != '' THEN ? ELSE ${fields.pi} END,
                      ${fields.pf} = CASE WHEN ? != '' THEN ? ELSE ${fields.pf} END
@@ -5857,8 +6047,8 @@ app.put('/api/visao-geral/projeto/:id/bulk-update-planning', async (req, res) =>
     }
 });
 
-// PUT: Atualizar data planejada de um setor de uma Tag especÃƒÂ­fica
-app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
+// PUT: Atualizar data planejada de um setor de uma Tag especà­fica
+app.put('/api/visao-geral/tag/:idTag/setor-data', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { field, value } = req.body;
@@ -5871,7 +6061,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
             'PlanejadoInicioPintura',       'PlanejadoFinalPintura',
             'PlanejadoInicioMontagem',      'PlanejadoFinalMontagem',
             'PlanejadoInicioCorteaLaser',   'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioGALVANIZAR',    'PlanejadoFinalGALVANIZAR',
         ];
 
@@ -5888,7 +6078,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
                   "Pintura": "txtPintura",
                   "Montagem": "TxtMontagem",
                   "CorteaLaser": "txtCorteaLaser",
-                  "PULSIONADEIRA": "txtPULSIONADEIRA", "GALVANIZAR": "txtGALVANIZAR", "Pulsionadeira": "txtPULSIONADEIRA", "Galvanizar": "txtGALVANIZAR"
+                  "PUNSIONADEIRA": "txtPUNSIONADEIRA", "GALVANIZAR": "txtGALVANIZAR", "Punsionadeira": "txtPUNSIONADEIRA", "Galvanizar": "txtGALVANIZAR"
         };
         const sectorName = Object.keys(sectorFlagMap).find(k => field.includes(k));
         const txtFlag = sectorName ? sectorFlagMap[sectorName] : null;
@@ -5900,7 +6090,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Atualizar a TAG
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET ${field} = ? WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
             [dbValue, idTag]
         );
@@ -5913,7 +6103,7 @@ app.put('/api/visao-geral/tag/:idTag/setor-data', async (req, res) => {
 });
 
 // Propag// Propagar datas de planejamento e usuário da TAG → OS e OSItens respeitando txt{Recurso}='1'
-app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
+app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.params;
         const { setores, usuario } = req.body;
@@ -5930,23 +6120,23 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
             "Pintura": "txtPintura",
             "Montagem": "TxtMontagem",
             "CorteaLaser": "txtCorteaLaser",
-            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "PUNSIONADEIRA": "txtPUNSIONADEIRA",
             "GALVANIZAR": "txtGALVANIZAR",
             "Laser": "txtCorteaLaser",
-            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Punsionadeira": "txtPUNSIONADEIRA",
             "Galvanizar": "txtGALVANIZAR"
         };
 
         const queryPool = req.tenantDbPool || pool;
 
         // Fetch column lists for dynamic column checking
-        const [colsTag] = await db.execute('SHOW COLUMNS FROM tags');
+        const [colsTag] = await req.tenantDbPool.execute('SHOW COLUMNS FROM tags');
         const tagColNames = colsTag.map(c => c.Field);
 
-        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -5956,7 +6146,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
             const txtFlag = sectorFlagMap[sectorName];
             if (!txtFlag) continue;
 
-            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Punsionadeira' ? 'PUNSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
 
             const piField = `PlanejadoInicio${nameKey}`;
             const pfField = `PlanejadoFinal${nameKey}`;
@@ -5985,7 +6175,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 tagParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE tags SET ${tagSetClauses.join(', ')} WHERE IdTag = ? AND (Finalizado IS NULL OR Finalizado != 'C')`,
                 [...tagParams, idTag]
             );
@@ -6008,7 +6198,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdTag = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idTag]
             );
@@ -6027,7 +6217,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await db.execute(
+            const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem osi
                  INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
                  SET ${osiSetClauses.join(', ')}
@@ -6048,7 +6238,7 @@ app.post('/api/visao-geral/tag/:idTag/propagar-datas-os', async (req, res) => {
 });
 
 // Propagar datas de planejamento e usuário de uma OS específica para seus itens
-app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
+app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (req, res) => {
     try {
         const { idOs } = req.params;
         const { setores, usuario } = req.body;
@@ -6065,19 +6255,19 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
             "Pintura": "txtPintura",
             "Montagem": "TxtMontagem",
             "CorteaLaser": "txtCorteaLaser",
-            "PULSIONADEIRA": "txtPULSIONADEIRA",
+            "PUNSIONADEIRA": "txtPUNSIONADEIRA",
             "GALVANIZAR": "txtGALVANIZAR",
             "Laser": "txtCorteaLaser",
-            "Pulsionadeira": "txtPULSIONADEIRA",
+            "Punsionadeira": "txtPUNSIONADEIRA",
             "Galvanizar": "txtGALVANIZAR"
         };
 
         const queryPool = req.tenantDbPool || pool;
 
-        const [colsOS] = await db.execute('SHOW COLUMNS FROM ordemservico');
+        const [colsOS] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservico');
         const osColNames = colsOS.map(c => c.Field);
 
-        const [colsOSI] = await db.execute('SHOW COLUMNS FROM ordemservicoitem');
+        const [colsOSI] = await req.tenantDbPool.execute('SHOW COLUMNS FROM ordemservicoitem');
         const osiColNames = colsOSI.map(c => c.Field);
 
         let totalUpdated = 0;
@@ -6087,7 +6277,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
             const txtFlag = sectorFlagMap[sectorName];
             if (!txtFlag) continue;
 
-            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Pulsionadeira' ? 'PULSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
+            const nameKey = (sectorName === 'Laser' ? 'CorteaLaser' : sectorName === 'Punsionadeira' ? 'PUNSIONADEIRA' : sectorName === 'Galvanizar' ? 'GALVANIZAR' : sectorName);
 
             const piField = `PlanejadoInicio${nameKey}`;
             const pfField = `PlanejadoFinal${nameKey}`;
@@ -6115,7 +6305,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
                 osParams.push(pfDb, userName);
             }
 
-            await db.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservico SET ${osSetClauses.join(', ')} WHERE IdOrdemServico = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado != 'C')`,
                 [...osParams, idOs]
             );
@@ -6134,7 +6324,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
 
             const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
-            const [result] = await db.execute(
+            const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
                  WHERE IdOrdemServico = ?
                    AND ${exactOsiTxtFlag} = '1'
@@ -6152,47 +6342,47 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', async (req, res) => {
     }
 });
 
-app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
+app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userFinal = usuario || 'Sistema';
 
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await db.execute(
+        const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
         if (!check.length) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
         if (check[0].Finalizado && check[0].Finalizado.trim() !== '') {
             return res.status(400).json({
                 success: false,
-                message: `Este projeto jÃƒÂ¡ estÃƒÂ¡ finalizado (status: "${check[0].Finalizado}"). Nenhuma alteraÃƒÂ§ÃƒÂ£o foi realizada.`
+                message: `Este projeto já está finalizado (status: "${check[0].Finalizado}"). Nenhuma alteraà§ão foi realizada.`
             });
         }
 
         const now = getCurrentDateTimeBR();
 
-        // 2. Finalizar em transaÃƒÂ§ÃƒÂ£o
+        // 2. Finalizar em transaà§ão
         // projetos: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // tags: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [userFinal, now, id]
         );
         // ordemservico: DataFinalizacao (diferente!)
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
             [userFinal, now, id]
         );
         // ordemservicoitem: DataFinalizado
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='C', UsuarioFinalizado=?, DataFinalizado=?
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [userFinal, now, id]
@@ -6205,76 +6395,76 @@ app.post('/api/visao-geral/projeto/:id/finalizar', async (req, res) => {
     }
 });
 
-// POST: Cancelar FinalizaÃƒÂ§ÃƒÂ£o do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
-app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', async (req, res) => {
+// POST: Cancelar Finalizaà§ão do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
+app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userCancel = usuario || 'Sistema';
 
     try {
-        // 1. Verificar se estÃƒÂ¡ finalizado (condiÃƒÂ§ÃƒÂ£o para cancelar)
+        // 1. Verificar se está finalizado (condià§ão para cancelar)
         const queryPool = req.tenantDbPool || pool;
-        const [check] = await db.execute(
+        const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
         );
         if (!check.length) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
         }
         if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
             return res.status(400).json({
                 success: false,
-                message: `O projeto "${check[0].Projeto}" nÃƒÂ£o estÃƒÂ¡ finalizado. Nenhuma alteraÃƒÂ§ÃƒÂ£o foi realizada.`
+                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteraà§ão foi realizada.`
             });
         }
 
-        // 2. Desfazer finalizaÃƒÂ§ÃƒÂ£o em cascata (limpar campos)
+        // 2. Desfazer finalizaà§ão em cascata (limpar campos)
         // projetos
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
             [id]
         );
         // tags
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [id]
         );
         // ordemservico
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='', UsuarioFinalizado='', DataFinalizacao='' WHERE IdProjeto=?`,
             [id]
         );
         // ordemservicoitem
-        await db.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='', UsuarioFinalizado='', DataFinalizado=''
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [id]
         );
 
-        res.json({ success: true, message: `FinalizaÃƒÂ§ÃƒÂ£o cancelada com sucesso por ${userCancel}.` });
+        res.json({ success: true, message: `Finalizaà§ão cancelada com sucesso por ${userCancel}.` });
     } catch (error) {
         console.error('Error cancelling finalization:', error);
-        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaÃƒÂ§ÃƒÂ£o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaà§ão: ' + error.message });
     }
 });
 
 // ABRIR PASTA DO PROJETO NO SERVIDOR
 
-app.post('/api/projeto/:id/open-folder', async (req, res) => {
+app.post('/api/projeto/:id/open-folder', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT EnderecoProjeto FROM projetos WHERE IdProjeto = ?',
             [req.params.id]
         );
 
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Projeto nÃƒÂ£o encontrado' });
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado' });
         }
 
         const endereco = rows[0].EnderecoProjeto;
 
         if (!endereco) {
-            return res.status(400).json({ success: false, message: 'Projeto nÃƒÂ£o possui um endereÃƒÂ§o de pasta configurado.' });
+            return res.status(400).json({ success: false, message: 'Projeto não possui um endereà§o de pasta configurado.' });
         }
 
         const { exec } = require('child_process');
@@ -6295,11 +6485,11 @@ app.post('/api/projeto/:id/open-folder', async (req, res) => {
 });
 
 // PRE-CHECK STATUS LIBERACAO PROJETO
-app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
+app.get('/api/projeto/:id/status-liberacao', tenantMiddleware, async (req, res) => {
     try {
         const projectId = req.params.id;
 
-        const [tagRows] = await pool.execute(
+        const [tagRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
             [projectId]
         );
@@ -6309,11 +6499,11 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
             return res.json({
                 success: false,
                 liberavel: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
-        const [osRows] = await pool.execute(
+        const [osRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservico os
              INNER JOIN tags t ON t.IdTag = os.IdTag
              WHERE t.IdProjeto = ? 
@@ -6327,7 +6517,7 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
             return res.json({
                 success: false,
                 liberavel: false,
-                message: 'Não é possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
+                message: 'Não ? possível liberar este projeto. O projeto deve possuir pelo menos uma Tag e a Tag deve possuir pelo menos uma Ordem de Serviço (OS).'
             });
         }
 
@@ -6343,19 +6533,23 @@ app.get('/api/projeto/:id/status-liberacao', async (req, res) => {
 });
 
 // LIBERAR PROJETO
-app.post('/api/projeto/:id/liberar', async (req, res) => {
+app.post('/api/projeto/:id/liberar', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const projectId = req.params.id;
         const now = getCurrentDateTimeBR();
+        const dbPool = req.tenantDbPool || pool;
 
-        const [rows] = await pool.execute('SELECT liberado FROM projetos WHERE IdProjeto = ?', [projectId]);
-        if (rows.length > 0 && rows[0].liberado && rows[0].liberado.trim() !== '') {
-            return res.status(400).json({ success: false, message: 'O projeto não pode ser liberado pois o status de liberação não está vazio.' });
+        const [rows] = await dbPool.execute('SELECT liberado, Projeto FROM projetos WHERE IdProjeto = ?', [projectId]);
+        if (rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Projeto não encontrado.' });
+        }
+        if (rows[0].liberado && String(rows[0].liberado).trim().toUpperCase() === 'S') {
+            return res.status(400).json({ success: false, message: `O projeto "${rows[0].Projeto}" já está liberado.` });
         }
 
         // 1. Validação: O projeto deve possuir pelo menos uma Tag
-        const [tagRows] = await pool.execute(
+        const [tagRows] = await dbPool.execute(
             `SELECT COUNT(*) as count FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E <> '*')`,
             [projectId]
         );
@@ -6369,7 +6563,7 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
         }
 
         // 2. Validação: Pelo menos uma Tag do projeto deve possuir pelo menos uma Ordem de Serviço (OS)
-        const [osRows] = await pool.execute(
+        const [osRows] = await dbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservico os
              INNER JOIN tags t ON t.IdTag = os.IdTag
              WHERE t.IdProjeto = ? 
@@ -6386,17 +6580,20 @@ app.post('/api/projeto/:id/liberar', async (req, res) => {
             });
         }
 
-        // Lógica Não-Alfatec padrão (liberado = 'S', DataLiberacao)
-        await pool.execute(
+        // Liberar: atualiza Liberado = 'S', DataLiberacao e UsuarioCriacao (NomeCompleto do usuário logado)
+        const nomeUsuario = req.user?.NomeCompleto || req.user?.nome || usuario || 'Sistema';
+        await dbPool.execute(
             `UPDATE projetos SET 
                 liberado = 'S', 
                 DataLiberacao = ?,
                 StatusProj = 'AT',
-                DescStatus = 'Ativo'
+                DescStatus = 'Ativo',
+                CriadoPor = COALESCE(CriadoPor, ?)
             WHERE IdProjeto = ?`,
-            [now, projectId]
+            [now, nomeUsuario, projectId]
         );
 
+        console.log(`[Projeto] Projeto ${projectId} liberado (Liberado='S') por ${nomeUsuario} em ${now}`);
         res.json({ success: true, message: 'Projeto liberado com sucesso.' });
     } catch (error) {
         console.error('Error liberating project:', error);
@@ -6413,7 +6610,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             return res.status(400).json({ success: false, message: 'Status invalido. Use AT, PA ou CA.' });
         }
 
-        const [apontRows] = await pool.execute(
+        const [apontRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
              INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
              INNER JOIN ordemservico os ON os.IdOrdemServico = oi.IdOrdemServico
@@ -6443,12 +6640,12 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             : descStatus;
 
         if (status === 'AT') {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos SET StatusProj = 'AT', DescStatus = 'Ativo', liberado = 'S', DataLiberacao = ? WHERE IdProjeto = ?`,
                 [now, id]
             );
         } else {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos SET StatusProj = ?, DescStatus = ? WHERE IdProjeto = ?`,
                 [status, descStatusFinal, id]
             );
@@ -6460,13 +6657,13 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
         const tagDescStatus = descStatus; // 'Cancelado' | 'Parado' | 'Ativo'
 
         // ─── Cascata: Ordens de Serviço ───────────────────────────────────────
-        // Estatus é varchar(45) — mapear para valores legíveis
+        // Estatus ? varchar(45) — mapear para valores legíveis
         const osEstatusMap = { CA: 'Cancelado', PA: 'Parado', AT: 'Ativo' };
         const osEstatus = osEstatusMap[status] ?? 'Ativo';
 
         await Promise.all([
             // Atualiza Tags
-            pool.execute(
+            req.tenantDbPool.execute(
                 `UPDATE tags
                  SET StatusTag = ?, DescStatus = ?
                  WHERE IdProjeto = ?
@@ -6474,7 +6671,7 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
                 [tagStatus, tagDescStatus, id]
             ),
             // Atualiza Ordens de Serviço (campo correto: Estatus)
-            pool.execute(
+            req.tenantDbPool.execute(
                 `UPDATE ordemservico
                  SET Estatus = ?
                  WHERE IdProjeto = ?
@@ -6483,10 +6680,10 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
             ),
         ]);
 
-        const [[tagsAtualizadas]] = await pool.execute(
+        const [[tagsAtualizadas]] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) AS cnt FROM tags WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`, [id]
         );
-        const [[osAtualizadas]] = await pool.execute(
+        const [[osAtualizadas]] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) AS cnt FROM ordemservico WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')`, [id]
         );
 
@@ -6505,12 +6702,12 @@ app.patch('/api/projeto/:id/status', async (req, res) => {
 
 
 
-app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
+app.post('/api/projeto/:id/cancelar-liberacao', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
 
         // 1. Verificar se existem apontamentos de produção vinculados ao projeto
-        const [apontRows] = await pool.execute(
+        const [apontRows] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
              INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
              INNER JOIN ordemservico os ON os.IdOrdemServico = oi.IdOrdemServico
@@ -6521,21 +6718,21 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
         if (apontRows[0].count > 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Não é possível cancelar a liberação: este projeto já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).` 
+                message: `Não ? possível cancelar a liberação: este projeto já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).` 
             });
         }
 
         // 2. Verificar se existem Ordens de Serviço vinculadas
-        const [osRows] = await pool.execute('SELECT COUNT(*) as count FROM ordemservico WHERE IdProjeto = ?', [id]);
+        const [osRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as count FROM ordemservico WHERE IdProjeto = ?', [id]);
         if (osRows[0].count > 0) {
             return res.status(400).json({ 
                 success: false, 
-                message: `Não é possível cancelar a liberação: existem ${osRows[0].count} Ordens de Serviço vinculadas a este projeto.` 
+                message: `Não ? possível cancelar a liberação: existem ${osRows[0].count} Ordens de Serviço vinculadas a este projeto.` 
             });
         }
 
         // 3. Reverter status do projeto
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos SET 
                 liberado = '', 
                 DataLiberacao = NULL 
@@ -6553,9 +6750,9 @@ app.post('/api/projeto/:id/cancelar-liberacao', async (req, res) => {
 // --- CRUD: Tags (associadas a Projetos) ---
 
 // LIST by Project ID
-app.get('/api/projeto/:projetoId/tags', async (req, res) => {
+app.get('/api/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 IdTag, Tag, DescTag, IdProjeto, Projeto,
                 DataPrevisao, TipoProduto, UnidadeProduto,
@@ -6573,16 +6770,16 @@ app.get('/api/projeto/:projetoId/tags', async (req, res) => {
 });
 
 // GET ONE Tag
-app.get('/api/tag/:id', async (req, res) => {
+app.get('/api/tag/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM tags WHERE IdTag = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'Tag nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'Tag não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching tag:', error);
@@ -6591,7 +6788,7 @@ app.get('/api/tag/:id', async (req, res) => {
 });
 
 // CREATE Tag
-app.post('/api/tag', async (req, res) => {
+app.post('/api/tag', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.Tag || !data.IdProjeto) {
@@ -6599,7 +6796,7 @@ app.post('/api/tag', async (req, res) => {
     }
 
     try {
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO tags (
                 Tag, DescTag, IdProjeto, Projeto, DataPrevisao,
                 TipoProduto, UnidadeProduto, QtdeTag, QtdeLiberada, 
@@ -6624,7 +6821,7 @@ app.post('/api/tag', async (req, res) => {
         );
 
         // Recalcula QtdeTags no projeto após inserir a nova tag
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE projetos
              SET QtdeTags = (
                  SELECT COUNT(*) FROM tags
@@ -6644,16 +6841,16 @@ app.post('/api/tag', async (req, res) => {
 });
 
 // UPDATE Tag
-app.put('/api/tag/:id', async (req, res) => {
+app.put('/api/tag/:id', tenantMiddleware, async (req, res) => {
     const id = req.params.id;
     const data = req.body;
 
     if (!data.Tag) {
-        return res.status(400).json({ success: false, message: 'Tag Ã¯Â¿Â½ obrigatÃ¯Â¿Â½ria' });
+        return res.status(400).json({ success: false, message: 'Tag ? obrigatória' });
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE tags SET
                 Tag = ?, DescTag = ?, DataPrevisao = ?,
                 TipoProduto = ?, UnidadeProduto = ?, QtdeTag = ?, 
@@ -6683,25 +6880,25 @@ app.put('/api/tag/:id', async (req, res) => {
 });
 
 // DELETE Tag (Soft Delete)
-app.delete('/api/tag/:id', async (req, res) => {
+app.delete('/api/tag/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
         // Descobre o IdProjeto antes de deletar (para recalcular QtdeTags)
-        const [[tagRow]] = await pool.execute(
+        const [[tagRow]] = await req.tenantDbPool.execute(
             'SELECT IdProjeto FROM tags WHERE IdTag = ?',
             [req.params.id]
         );
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tags SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTag = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
 
         // Recalcula QtdeTags no projeto após a exclusão
         if (tagRow?.IdProjeto) {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE projetos
                  SET QtdeTags = (
                      SELECT COUNT(*) FROM tags
@@ -6724,22 +6921,22 @@ app.delete('/api/tag/:id', async (req, res) => {
 // --- CRUD: TipoProduto ---
 
 // OPTIONS for dropdown
-app.get('/api/tipoproduto/options', async (req, res) => {
+app.get('/api/tipoproduto/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdTipoProduto as id, TipoProduto as label FROM tipoproduto WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoProduto"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tipoproduto options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao carregar opÃ¯Â¿Â½Ã¯Â¿Â½es' });
+        res.status(500).json({ success: false, message: 'Erro ao carregar op??es' });
     }
 });
 
 // LIST
-app.get('/api/tipoproduto', async (req, res) => {
+app.get('/api/tipoproduto', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT IdTipoProduto, TipoProduto, Unidade, Descricao, DataCriacao
             FROM tipoproduto 
             WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = ''
@@ -6753,16 +6950,16 @@ app.get('/api/tipoproduto', async (req, res) => {
 });
 
 // GET ONE
-app.get('/api/tipoproduto/:id', async (req, res) => {
+app.get('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT * FROM tipoproduto WHERE IdTipoProduto = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'NÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching tipoproduto:', error);
@@ -6771,16 +6968,16 @@ app.get('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // CREATE
-app.post('/api/tipoproduto', async (req, res) => {
+app.post('/api/tipoproduto', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             'INSERT INTO tipoproduto (TipoProduto, Unidade, Descricao, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
             [TipoProduto.trim(), Unidade || null, Descricao || null, now, getCtxNomeCompleto()]
         );
@@ -6792,15 +6989,15 @@ app.post('/api/tipoproduto', async (req, res) => {
 });
 
 // UPDATE
-app.put('/api/tipoproduto/:id', async (req, res) => {
+app.put('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto Ã¯Â¿Â½ obrigatÃ¯Â¿Â½rio' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
     }
 
     try {
-        await pool.execute(
+        await req.tenantDbPool.execute(
             'UPDATE tipoproduto SET TipoProduto = ?, Unidade = ?, Descricao = ? WHERE IdTipoProduto = ?',
             [TipoProduto.trim(), Unidade || null, Descricao || null, req.params.id]
         );
@@ -6812,16 +7009,16 @@ app.put('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // DELETE (Soft)
-app.delete('/api/tipoproduto/:id', async (req, res) => {
+app.delete('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     try {
         const { usuario } = req.body;
         const now = getCurrentDateTimeBR();
 
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipoproduto SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoProduto = ?",
             [now, usuario || 'Sistema', req.params.id]
         );
-        res.json({ success: true, message: 'Tipo excluÃ¯Â¿Â½do' });
+        res.json({ success: true, message: 'Tipo excluído' });
     } catch (error) {
         console.error('Error deleting tipoproduto:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir' });
@@ -6829,12 +7026,12 @@ app.delete('/api/tipoproduto/:id', async (req, res) => {
 });
 
 // --- Rota para servir PDFs de caminhos locais ---
-// Esta rota permite abrir PDFs que estÃ¯Â¿Â½o em pastas do sistema de arquivos
-app.get('/api/pdf', async (req, res) => {
+// Esta rota permite abrir PDFs que est?o em pastas do sistema de arquivos
+app.get('/api/pdf', tenantMiddleware, async (req, res) => {
     const filePath = req.query.path;
 
     if (!filePath) {
-        return res.status(400).json({ success: false, message: 'Caminho do arquivo nÃ¯Â¿Â½o informado' });
+        return res.status(400).json({ success: false, message: 'Caminho do arquivo não informado' });
     }
 
     try {
@@ -6846,7 +7043,7 @@ app.get('/api/pdf', async (req, res) => {
             normalizedPath = normalizedPath.substring(8);
         }
 
-        // Troca extensÃ¯Â¿Â½o para .pdf se necessÃ¯Â¿Â½rio
+        // Troca extens?o para .pdf se necess?rio
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
             normalizedPath = normalizedPath.split(ext).join('.pdf');
@@ -6854,13 +7051,13 @@ app.get('/api/pdf', async (req, res) => {
 
         // Verifica se o arquivo existe
         if (!fs.existsSync(normalizedPath)) {
-            console.error('Arquivo nÃ¯Â¿Â½o encontrado:', normalizedPath);
-            return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o encontrado: ' + normalizedPath });
+            console.error('Arquivo não encontrado:', normalizedPath);
+            return res.status(404).json({ success: false, message: 'Arquivo não encontrado: ' + normalizedPath });
         }
 
-        // Verifica se Ã¯Â¿Â½ realmente um PDF
+        // Verifica se ? realmente um PDF
         if (!normalizedPath.toLowerCase().endsWith('.pdf')) {
-            return res.status(400).json({ success: false, message: 'Apenas arquivos PDF sÃ¯Â¿Â½o permitidos' });
+            return res.status(400).json({ success: false, message: 'Apenas arquivos PDF s?o permitidos' });
         }
 
         // Define headers e envia o arquivo
@@ -6877,12 +7074,12 @@ app.get('/api/pdf', async (req, res) => {
 });
 
 // --- Rota para download de DXF e arquivos 3D (SLDPRT) ---
-app.get('/api/download', async (req, res) => {
+app.get('/api/download', tenantMiddleware, async (req, res) => {
     const filePath = req.query.path;
     const type = req.query.type; // 'dxf' or 'sldprt'
 
     if (!filePath || !type) {
-        return res.status(400).json({ success: false, message: 'Caminho do arquivo ou tipo nÃ¯Â¿Â½o informado' });
+        return res.status(400).json({ success: false, message: 'Caminho do arquivo ou tipo não informado' });
     }
 
     try {
@@ -6892,7 +7089,7 @@ app.get('/api/download', async (req, res) => {
             normalizedPath = normalizedPath.substring(8);
         }
 
-        // Troca extensÃ¯Â¿Â½o para o tipo solicitado
+        // Troca extens?o para o tipo solicitado
         const targetExt = type.toLowerCase() === 'sldprt' ? '.SLDPRT' : '.DXF';
         const extensoes = [".SLDPRT", ".SLDASM", ".sldprt", ".sldasm", ".asm", ".ASM", ".psm", ".PSM", ".par", ".PAR"];
         extensoes.forEach(ext => {
@@ -6900,15 +7097,15 @@ app.get('/api/download', async (req, res) => {
         });
 
         if (!fs.existsSync(normalizedPath)) {
-            // Tenta com extensÃ¯Â¿Â½o em minÃ¯Â¿Â½scula como fallback
+            // Tenta com extens?o em min?scula como fallback
             const lowerExt = targetExt.toLowerCase();
             const altPath = normalizedPath.replace(/\.[^.]+$/, lowerExt);
 
             if (fs.existsSync(altPath)) {
                 normalizedPath = altPath;
             } else {
-                console.error('Arquivo para download nÃ¯Â¿Â½o encontrado:', normalizedPath);
-                return res.status(404).json({ success: false, message: 'Arquivo nÃ¯Â¿Â½o encontrado: ' + normalizedPath });
+                console.error('Arquivo para download não encontrado:', normalizedPath);
+                return res.status(404).json({ success: false, message: 'Arquivo não encontrado: ' + normalizedPath });
             }
         }
 
@@ -6929,12 +7126,12 @@ app.get('/api/download', async (req, res) => {
     }
 });
 
-// --- Ordens de ServiÃ¯Â¿Â½o (Somente Leitura) ---
+// --- Ordens de Serviço (Somente Leitura) ---
 
-// OPTIONS: Lista de Projetos Ã¯Â¿Â½nicos para dropdown
-app.get('/api/ordemservico/projetos', async (req, res) => {
+// OPTIONS: Lista de Projetos únicos para dropdown
+app.get('/api/ordemservico/projetos', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT Projeto as value, Projeto as label 
             FROM ordemservico 
             WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND Projeto IS NOT NULL AND Projeto != ''
@@ -6947,8 +7144,8 @@ app.get('/api/ordemservico/projetos', async (req, res) => {
     }
 });
 
-// OPTIONS: Lista de Tags Ã¯Â¿Â½nicas para dropdown
-app.get('/api/ordemservico/tags', async (req, res) => {
+// OPTIONS: Lista de Tags únicas para dropdown
+app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
     try {
         const projeto = req.query.projeto;
         let sql = `
@@ -6962,7 +7159,7 @@ app.get('/api/ordemservico/tags', async (req, res) => {
             params.push(projeto);
         }
         sql += ' ORDER BY Tag';
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -6970,34 +7167,34 @@ app.get('/api/ordemservico/tags', async (req, res) => {
     }
 });
 
-// SEARCH: Busca global em itens por cÃ¯Â¿Â½digo do documento/desenho
+// SEARCH: Busca global em itens por código do documento/desenho
 
 // OPTIONS: Lista de Projetos para Clonagem
-app.get('/api/ordemservico/projetos-clonagem', async (req, res) => {
+app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
 // OPTIONS: Lista de Tags para Clonagem
-app.get('/api/ordemservico/tags-clonagem', async (req, res) => {
+app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) => {
     try {
         const projetoId = req.query.projetoId;
         if (!projetoId) return res.json({ success: true, data: [] });
-        const [rows] = await pool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND IdProjeto = ? ORDER BY Tag", [projetoId]);
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND IdProjeto = ? ORDER BY Tag", [projetoId]);
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
-app.get('/api/ordemservico/busca-item', async (req, res) => {
+app.get('/api/ordemservico/busca-item', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search || search.length < 2) {
             return res.json({ success: true, data: [] });
         }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem, osi.IdOrdemServico, osi.CodMatFabricante, 
                 osi.DescResumo, osi.QtdeTotal, osi.Peso, osi.EnderecoArquivo,
@@ -7026,7 +7223,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
         
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO ordemservico (
                 Projeto, Tag, DescTag, Descricao, IdEmpresa, IdProjeto, IdTag, DescEmpresa,
                 EnderecoOrdemServico, CriadoPor, DataCriacao, Estatus, DataPrevisao,
@@ -7058,14 +7255,15 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
             ]
         );
         res.json({ success: true, message: 'OS cadastrada', id: result.insertId });
+
     } catch (error) {
         console.error('Error creating ordemservico:', error);
         res.status(500).json({ success: false, message: 'Erro ao cadastrar OS: ' + error.message });
     }
 });
 
-// LIST Ordens de ServiÃ¯Â¿Â½o com paginaÃ¯Â¿Â½Ã¯Â¿Â½o e filtros
-app.get('/api/ordemservico', async (req, res) => {
+// LIST Ordens de Serviço com paginação e filtros
+app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
@@ -7135,14 +7333,14 @@ app.get('/api/ordemservico', async (req, res) => {
         addDateFilter('Data_Liberacao_Engenharia', dataLiberacaoInicio, dataLiberacaoFim);
 
         // Count total
-        const [countResult] = await pool.execute(
+        const [countResult] = await req.tenantDbPool.execute(
             `SELECT COUNT(*) as total FROM ordemservico WHERE ${whereClause}`,
             params
         );
         const total = countResult[0].total;
 
-        // Query com paginaÃ§Ã£o e calculo dinÃ¢mico de itens e percentuais
-        const [rows] = await pool.execute(`
+        // Query com paginação e calculo dinÃ¢mico de itens e percentuais
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.Projeto, os.Tag, os.DescTag, os.Descricao,
                 os.Estatus, os.DataPrevisao, os.DataCriacao, os.CriadoPor,
@@ -7162,7 +7360,10 @@ app.get('/api/ordemservico', async (req, res) => {
                 os.PlanejadoInicioMontagem, os.PlanejadoFinalMontagem, os.RealizadoInicioMontagem, os.RealizadoFinalMontagem,
                 os.PlanejadoInicioENGENHARIA, os.PlanejadoFinalENGENHARIA, os.RealizadoInicioENGENHARIA, os.RealizadoFinalENGENHARIA,
                 os.PlanejadoInicioACABAMENTO, os.PlanejadoFinalACABAMENTO, os.RealizadoInicioACABAMENTO, os.RealizadoFinalACABAMENTO,
-                os.EnderecoOrdemServico, os.NumeroOPOmie
+                os.PlanejadoInicioPUNSIONADEIRA, os.PlanejadoFinalPUNSIONADEIRA, os.RealizadoInicioPUNSIONADEIRA, os.RealizadoFinalPUNSIONADEIRA,
+                os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR, os.RealizadoInicioGALVANIZAR, os.RealizadoFinalGALVANIZAR,
+                os.PlanejadoInicioCorteaLaser, os.PlanejadoFinalCorteaLaser, os.RealizadoInicioCorteaLaser, os.RealizadoFinalCorteaLaser,
+                os.EnderecoOrdemServico, os.NumeroOPOmie, os.Fator
             FROM ordemservico os
             WHERE ${whereClause}
             ORDER BY os.IdOrdemServico DESC
@@ -7174,7 +7375,7 @@ app.get('/api/ordemservico', async (req, res) => {
             for (const os of rows) {
                 try {
                     // Sequential loop ensures AsyncLocalStorage context is preserved for each tenant query
-                    const [stats] = await pool.execute(`
+                    const [stats] = await req.tenantDbPool.execute(`
                         SELECT 
                             COUNT(*) as itTotal,
                             COUNT(CASE WHEN OrdemServicoItemFinalizado = 'C' THEN 1 END) as itExec,
@@ -7202,7 +7403,7 @@ app.get('/api/ordemservico', async (req, res) => {
                     }
 
                     // Verificar se OS possui apontamentos de produção
-                    const [apontCheck] = await pool.execute(
+                    const [apontCheck] = await req.tenantDbPool.execute(
                         `SELECT COUNT(*) as count FROM ordemservicoitemcontrole c
                          INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
                          WHERE oi.IdOrdemServico = ?
@@ -7239,10 +7440,10 @@ app.get('/api/ordemservico', async (req, res) => {
     }
 });
 
-// GET ONE Ordem de ServiÃ¯Â¿Â½o
-app.get('/api/ordemservico/:id', async (req, res) => {
+// GET ONE Ordem de Serviço
+app.get('/api/ordemservico/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.*
             FROM ordemservico os
@@ -7251,7 +7452,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
 
         if (rows.length > 0) {
             const os = rows[0];
-            const [itemStats] = await pool.execute(`
+            const [itemStats] = await req.tenantDbPool.execute(`
                 SELECT 
                     COUNT(*) as itTotal,
                     COUNT(CASE WHEN OrdemServicoItemFinalizado = 'C' THEN 1 END) as itExec,
@@ -7274,7 +7475,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
 
             res.json({ success: true, data: os });
         } else {
-            res.status(404).json({ success: false, message: 'OS nÃ¯Â¿Â½o encontrada' });
+            res.status(404).json({ success: false, message: 'OS não encontrada' });
         }
     } catch (error) {
         console.error('Error fetching ordemservico:', error);
@@ -7282,7 +7483,7 @@ app.get('/api/ordemservico/:id', async (req, res) => {
     }
 });
 
-// LIST Itens de uma Ordem de ServiÃ¯Â¿Â½o
+// LIST Itens de uma Ordem de Serviço
 
 
 // ---------------------------------------------------------
@@ -7298,14 +7499,14 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         const [rows] = await connection.query('SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada.' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
 
         if (rows[0].OrdemServicoFinalizado === 'C') {
-            return res.status(400).json({ success: false, message: 'O.S. jÃƒÂ¡ Finalizada' });
+            return res.status(400).json({ success: false, message: 'O.S. já Finalizada' });
         }
 
         const dataatual = formatBR(new Date(), true);
@@ -7325,7 +7526,7 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
             WHERE IdOrdemServico = ?
         `, [IdOrdemServico]);
 
-        return res.json({ success: true, message: 'Processo FinalizaÃƒÂ§ÃƒÂ£o ConcluÃƒÂ­do' });
+        return res.json({ success: true, message: 'Processo Finalizaà§ão Concluà­do' });
 
     } catch (e) {
         console.error(e);
@@ -7335,7 +7536,7 @@ app.post('/api/ordemservico/finalizar', tenantMiddleware, async (req, res) => {
     }
 });
 
-// NOVA ROTA: Excluir/Cancelar Ordem de ServiÃƒÂ§o
+// NOVA ROTA: Excluir/Cancelar Ordem de Serviço
 // ---------------------------------------------------------
 
 // ---------------------------------------------------------
@@ -7347,14 +7548,14 @@ app.post('/api/ordemservico/cancelar-finalizacao', tenantMiddleware, async (req,
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         const [rows] = await connection.query('SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada.' });
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
 
         if (rows[0].OrdemServicoFinalizado !== 'C') {
-            return res.status(400).json({ success: false, message: 'NÃƒÂ£o HÃƒÂ¡ itens para continuar processo (OS nÃƒÂ£o finalizada).' });
+            return res.status(400).json({ success: false, message: 'Não Há itens para continuar processo (OS não finalizada).' });
         }
 
         try {
@@ -7367,7 +7568,7 @@ app.post('/api/ordemservico/cancelar-finalizacao', tenantMiddleware, async (req,
         
         await connection.query('UPDATE ordemservicoitem SET ORDEMSERVICOITEMFINALIZADO = "" WHERE IdOrdemServico = ?', [IdOrdemServico]);
 
-        return res.json({ success: true, message: 'Processo de cancelamento da FinalizaÃƒÂ§ÃƒÂ£o Executado' });
+        return res.json({ success: true, message: 'Processo de cancelamento da Finalizaà§ão Executado' });
 
     } catch (e) {
         console.error(e);
@@ -7386,7 +7587,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
         connection = await pool.getConnection();
         const { IdOrdemServico } = req.body;
 
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico é obrigatório' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ? obrigatório' });
 
         // 1. Verificar se a OS existe e está liberada
         const [osRows] = await connection.query(
@@ -7410,7 +7611,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
         if (apontRows[0].count > 0) {
             return res.status(400).json({
                 success: false,
-                message: `Não é possível cancelar a liberação: esta OS já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).`
+                message: `Não ? possível cancelar a liberação: esta OS já possui ${apontRows[0].count} apontamento(s) de produção registrado(s).`
             });
         }
 
@@ -7472,7 +7673,7 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
 // ---------------------------------------------------------
 
 // ---------------------------------------------------------
-// NOVA ROTA: Criar CÃƒÂ³pia da Ordem de ServiÃƒÂ§o (Etapa 9)
+// NOVA ROTA: Criar Cà³pia da Ordem de Serviço (Etapa 9)
 // ---------------------------------------------------------
 app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
     let connection;
@@ -7480,27 +7681,27 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, novoFator, usuarioNome, novoIdProjeto, novoIdTag, novaDescricao } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico de origem ÃƒÂ© obrigatÃƒÂ³rio' });
-        if (!novoIdProjeto || !novoIdTag) return res.status(400).json({ success: false, message: 'Projeto e Tag de destino sÃƒÂ£o obrigatÃƒÂ³rios' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico de origem à© obrigatà³rio' });
+        if (!novoIdProjeto || !novoIdTag) return res.status(400).json({ success: false, message: 'Projeto e Tag de destino são obrigatà³rios' });
         
         const fator = isNaN(parseInt(novoFator)) || parseInt(novoFator) <= 0 ? 1 : parseInt(novoFator);
         const criador = getCtxNomeCompleto() !== 'Sistema' ? getCtxNomeCompleto() : (usuarioNome || 'Sistema Web');
 
         // 1. Obter a O.S Original
         const [origOS] = await connection.query('SELECT * FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S de origem nÃƒÂ£o encontrada' });
+        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S de origem não encontrada' });
         const os = origOS[0];
 
         // 2. Obter Dados do Novo Projeto e Nova Tag
         const [rowProjeto] = await connection.query('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [novoIdProjeto]);
-        if (rowProjeto.length === 0) return res.status(404).json({ success: false, message: 'Projeto de destino nÃƒÂ£o encontrado' });
+        if (rowProjeto.length === 0) return res.status(404).json({ success: false, message: 'Projeto de destino não encontrado' });
         const { Projeto: nomeProjeto } = rowProjeto[0];
 
         const [rowTag] = await connection.query('SELECT Tag, DescTag, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag FROM tags WHERE IdTag = ?', [novoIdTag]);
-        if (rowTag.length === 0) return res.status(404).json({ success: false, message: 'Tag de destino nÃƒÂ£o encontrada' });
+        if (rowTag.length === 0) return res.status(404).json({ success: false, message: 'Tag de destino não encontrada' });
         const { Tag: nomeTag, DescTag: descTagDestino, DataPrevisao: dataPrevTag } = rowTag[0];
 
-        // 3. Inserir Header (Mestre) Limpando VariÃƒÂ¡veis de Estado
+        // 3. Inserir Header (Mestre) Limpando Variáveis de Estado
         const queryInsertMestre = `
             INSERT INTO ordemservico (
                 IdProjeto, Projeto, IdTag, Tag, DescTag, Descricao, fator, EnderecoOrdemServico, 
@@ -7523,7 +7724,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
 
         const novoId = resultInsert.insertId;
 
-        // Tentar formatar DiretÃƒÂ³rio fisÃƒÂ­co
+        // Tentar formatar Diretà³rio fisà­co
         let newEndereco = os.EnderecoOrdemServico;
         if (newEndereco) {
             const format5 = (num) => String(num).padStart(5, '0');
@@ -7546,7 +7747,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
                     await fsp.mkdir(p.join(newEndereco, sd), { recursive: true }).catch(() => {});
                 }
             } catch (e) {
-                console.log('[CloneOS] Pasta de rede inacesÃƒÂ­vel:', e.message);
+                console.log('[CloneOS] Pasta de rede inacesà­vel:', e.message);
             }
         }
 
@@ -7626,13 +7827,13 @@ app.post('/api/ordemservico/numero-op', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, NumeroOPOmie } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         await connection.query('UPDATE ordemservico SET NumeroOPOmie = ? WHERE IdOrdemServico = ?', [NumeroOPOmie || '', IdOrdemServico]);
         
         await connection.query('UPDATE ordemservicoitem SET NumeroOpOmie = ? WHERE IdOrdemServico = ?', [NumeroOPOmie || '', IdOrdemServico]);
 
-        return res.json({ success: true, message: 'NÃƒÂºmero da OP do OMIE atualizado com sucesso!' });
+        return res.json({ success: true, message: 'Nàºmero da OP do OMIE atualizado com sucesso!' });
 
     } catch (e) {
         console.error("Erro ao atualizar Numero OP Omie:", e);
@@ -7648,7 +7849,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         connection = await pool.getConnection();
         const { IdOrdemServico, Usuario } = req.body;
         
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ÃƒÂ© obrigatÃƒÂ³rio' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico à© obrigatà³rio' });
 
         // Validação adicional: Bloqueio de O.S Finalizada
         const [osStatus] = await connection.query(`SELECT OrdemServicoFinalizado FROM ordemservico WHERE IdOrdemServico = ?`, [IdOrdemServico]);
@@ -7656,7 +7857,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
             return res.status(400).json({ success: false, message: 'A OS Não pode ser excluída pois já encontra-se finalizada/concluída.' });
         }
 
-        // ValidaÃƒÂ§ÃƒÂ£o idÃƒÂªntica ao VB.NET: verificar se hÃƒÂ¡ execuÃƒÂ§ÃƒÂ£o ou plano de corte
+        // Validaà§ão idàªntica ao VB.NET: verificar se há execuà§ão ou plano de corte
         const [rows] = await connection.query(`
             SELECT 
                 count(idplanodecorte) +
@@ -7674,7 +7875,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         }
 
         if (totalExecutado > 0) {
-            // Busca apenas os planos de corte para listar na mensagem, caso haja para exibiÃƒÂ§ÃƒÂ£o de detalhes
+            // Busca apenas os planos de corte para listar na mensagem, caso haja para exibià§ão de detalhes
             const [planoRows] = await connection.query(`
                 SELECT idplanodecorte, CodMatFabricante
                 FROM ordemservicoitem 
@@ -7688,7 +7889,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
 
             return res.status(400).json({
                 success: false, 
-                message: `A OS Numero: ${IdOrdemServico} contÃƒÂ©m processos em andamento, por este motivo nÃƒÂ£o pode ser cancelada. Ver plano(s) de corte:${MsgDetalhes}`
+                message: `A OS Numero: ${IdOrdemServico} contà©m processos em andamento, por este motivo não pode ser cancelada. Ver plano(s) de corte:${MsgDetalhes}`
             });
         }
 
@@ -7703,7 +7904,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         `, [executor, dataatual, IdOrdemServico]);
 
         if (updateOS.affectedRows === 0) {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o nÃƒÂ£o encontrada ou jÃƒÂ¡ excluÃƒÂ­da.' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço não encontrada ou já excluà­da.' });
         }
 
         // Realiza o "Soft Delete" na tabela ordemservicoitem
@@ -7716,7 +7917,7 @@ app.post('/api/ordemservico/excluir', tenantMiddleware, async (req, res) => {
         // Aqui executamos o Recalculo para subtrair os totais cascateados
         await recalcularQuantidadesTotais(IdOrdemServico, connection);
 
-        return res.json({ success: true, message: 'Ordem de serviÃƒÂ§o excluÃƒÂ­da com sucesso.' });
+        return res.json({ success: true, message: 'Ordem de servià§o excluà­da com sucesso.' });
 
     } catch (e) {
         console.error(e);
@@ -7736,7 +7937,7 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
         const IdOrdemServico = req.params.id;
 
         const [origOS] = await connection.query('SELECT * FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S nÃƒÂ£o encontrada' });
+        if (origOS.length === 0) return res.status(404).json({ success: false, message: 'O.S não encontrada' });
         const os = origOS[0];
 
         const db = require('./config/db');
@@ -7747,22 +7948,22 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
         
         let templatePath = '';
 
-        // Tenta buscar da configuracaosistema primeiro (prioridade mÃ¡xima)
+        // Tenta buscar da configuracaosistema primeiro (prioridade máxima)
         const [configRows] = await connection.query("SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelOrdemServico'");
         if (configRows.length > 0 && configRows[0].valor && fs.existsSync(configRows[0].valor)) {
             templatePath = configRows[0].valor;
         } else {
-            // LÃ³gica dinÃ¢mica baseada no tenant (banco ativo)
-            const BASE_DRIVE_PATH = 'G:\\Meu Drive\\ConfiguraÃ§Ãµes';
+            // Lógica dinÃ¢mica baseada no tenant (banco ativo)
+            const BASE_DRIVE_PATH = 'G:\\Meu Drive\\ConfiguraçÃµes';
             let tenantFolder = null;
 
-            // PossÃ­veis nomes da pasta do cliente no Google Drive
+            // Possíveis nomes da pasta do cliente no Google Drive
             const possibleFolderNames = [
                 dbName, 
                 dbName.charAt(0).toUpperCase() + dbName.slice(1).toLowerCase(), 
                 dbName.toUpperCase(),
                 'Configuracao' + dbName,
-                'ConfiguraÃ§Ã£o' + dbName,
+                'Configuração' + dbName,
                 'Configuracao' + dbName.charAt(0).toUpperCase() + dbName.slice(1).toLowerCase()
             ];
 
@@ -7775,16 +7976,16 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
             }
 
             if (!tenantFolder) {
-                // Caso nÃ£o encontre pasta especÃ­fica, tenta fallback para lynxlocal
+                // Caso não encontre pasta específica, tenta fallback para lynxlocal
                 if (dbName === 'lynxlocal' || dbName === 'Lynx') {
-                    const lynxPath = 'G:\\Meu Drive\\Estrutura padrÃ£o Lynx\\023-SGQ\\023-001-FORMULARIOS\\Templat-OS-Rev03.xlsx';
+                    const lynxPath = 'G:\\Meu Drive\\Estrutura padrão Lynx\\023-SGQ\\023-001-FORMULARIOS\\Templat-OS-Rev03.xlsx';
                     if (fs.existsSync(lynxPath)) {
                         templatePath = lynxPath;
                     } else {
-                        return res.status(400).json({ success: false, message: 'Template Excel do Lynx nÃ£o encontrado.' });
+                        return res.status(400).json({ success: false, message: 'Template Excel do Lynx não encontrado.' });
                     }
                 } else {
-                    return res.status(400).json({ success: false, message: `Pasta de configuraÃ§Ã£o nÃ£o encontrada para o banco: ${dbName}` });
+                    return res.status(400).json({ success: false, message: `Pasta de configuração não encontrada para o banco: ${dbName}` });
                 }
             } else {
                 // Procurar pelo arquivo de template de OS dentro da pasta do tenant
@@ -7889,7 +8090,7 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
 
         const destPath = os.EnderecoOrdemServico;
         if (!destPath || !fs.existsSync(destPath)) {
-            return res.status(400).json({ success: false, message: 'DiretÃƒÂ³rio final da OS nÃƒÂ£o existe: ' + destPath });
+            return res.status(400).json({ success: false, message: 'Diretà³rio final da OS não existe: ' + destPath });
         }
 
         const fileName = `OS_${osString}.xlsx`;
@@ -7905,10 +8106,10 @@ app.post('/api/ordemservico/:id/excel', tenantMiddleware, async (req, res) => {
             console.error('Falha ao abrir explorer:', e);
         }
 
-        return res.json({ success: true, message: 'RelatÃƒÂ³rio Excel gerado com sucesso.', file: finalFile });
+        return res.json({ success: true, message: 'Relatà³rio Excel gerado com sucesso.', file: finalFile });
 
     } catch (e) {
-        console.error("Erro na geraÃƒÂ§ÃƒÂ£o de Excel:", e);
+        console.error("Erro na geraà§ão de Excel:", e);
         res.status(500).json({ success: false, message: e.message });
     } finally {
         if (connection) connection.release();
@@ -7924,11 +8125,11 @@ app.post('/api/ordemservico/atualizar-arquivos', tenantMiddleware, async (req, r
         const { IdOrdemServico } = req.body;
 
         const [osRows] = await connection.query('SELECT EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS nÃƒÂ£o encontrada.' });
+        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS não encontrada.' });
         
         const os = osRows[0];
         if (os.Liberado_Engenharia === 'S') {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o jÃƒÂ¡ Liberada para ProduÃƒÂ§ÃƒÂ£o, nÃƒÂ£o pode mais ser modificada!' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço já Liberada para Produà§ão, não pode mais ser modificada!' });
         }
 
         const diretorio = os.EnderecoOrdemServico;
@@ -7963,7 +8164,7 @@ app.post('/api/ordemservico/atualizar-arquivos', tenantMiddleware, async (req, r
                 
                 let origem = item.EnderecoArquivo;
                 
-                // Adapta extensÃƒÂµes
+                // Adapta extensàµes
                 const extsToReplace = ['.SLDPRT', '.SLDASM', '.ASM', '.PSM', '.PAR'];
                 for (const ext of extsToReplace) {
                     const re = new RegExp(ext.replace('.', '\.'), 'i');
@@ -8031,21 +8232,21 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
 
         const fator = parseFloat(FatorMultiplicador);
         if (isNaN(fator) || fator <= 0) {
-            return res.status(400).json({ success: false, message: 'Fator invÃƒÂ¡lido' });
+            return res.status(400).json({ success: false, message: 'Fator inválido' });
         }
 
         const [osRows] = await connection.query('SELECT IdTag, EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS nÃƒÂ£o encontrada.' });
+        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS não encontrada.' });
         
         const os = osRows[0];
         if (os.Liberado_Engenharia === 'S') {
-            return res.status(400).json({ success: false, message: 'Ordem de ServiÃƒÂ§o jÃƒÂ¡ Liberada para ProduÃƒÂ§ÃƒÂ£o, nÃƒÂ£o pode mais ser modificada!' });
+            return res.status(400).json({ success: false, message: 'Ordem de Serviço já Liberada para Produà§ão, não pode mais ser modificada!' });
         }
 
         // Verifica ITENS
         const [itemRows] = await connection.query('SELECT IdOrdemServicoItem, Qtde, AreaPintura, Peso FROM ordemservicoitem WHERE IdOrdemServico = ?', [IdOrdemServico]);
         if (itemRows.length === 0) {
-            return res.status(400).json({ success: false, message: 'NÃƒÂ£o hÃƒÂ¡ itens a serem alterados!' });
+            return res.status(400).json({ success: false, message: 'Não há itens a serem alterados!' });
         }
 
         for (const item of itemRows) {
@@ -8239,12 +8440,31 @@ app.get('/api/ordemservico/:id/fator', tenantMiddleware, async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/liberar', async (req, res) => {
+app.post('/api/ordemservico/liberar', tenantMiddleware, async (req, res) => {
     const { IdOrdemServico, IdTag, IdProjeto, Fator, EnderecoOrdemServico, TipoLiberacao } = req.body;
     let connection;
     try {
-        if (!IdOrdemServico || !Fator || !EnderecoOrdemServico || !TipoLiberacao) {
-            return res.status(400).json({ success: false, message: 'ParÃƒÂ¢metros obrigatÃƒÂ³rios ausentes.' });
+        if (!IdOrdemServico || !Fator || !TipoLiberacao) {
+            return res.status(400).json({ success: false, message: 'Parâmetros obrigatórios ausentes: IdOrdemServico, Fator e TipoLiberacao são necessários.' });
+        }
+
+        // 0. Validar se o Projeto desta OS está liberado (Liberado = 'S')
+        if (IdProjeto) {
+            const dbPool = req.tenantDbPool || pool;
+            const [projRows] = await dbPool.execute(
+                `SELECT Liberado, Projeto FROM projetos WHERE IdProjeto = ? LIMIT 1`,
+                [IdProjeto]
+            );
+            if (projRows.length > 0) {
+                const projLiberado = String(projRows[0].Liberado || '').trim().toUpperCase();
+                if (projLiberado !== 'S') {
+                    const nomeProjeto = projRows[0].Projeto || `ID ${IdProjeto}`;
+                    return res.status(400).json({
+                        success: false,
+                        message: `Não é possível liberar esta Ordem de Serviço. O Projeto "${nomeProjeto}" ainda não foi liberado. Acesse a tela de Projetos, localize o projeto e clique no ícone de liberação (✓) antes de liberar a OS.`
+                    });
+                }
+            }
         }
 
         connection = await pool.getConnection();
@@ -8257,10 +8477,10 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
         );
         if (produtoPrincipal.length === 0) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Verifique se hÃƒÂ¡ um produto principal para a Ordem de ServiÃƒÂ§o cadastrado.' });
+            return res.status(400).json({ success: false, message: 'Verifique se há um produto principal para a Ordem de Serviço cadastrado.' });
         }
 
-        // 2. Limpar DiretÃƒÂ³rios e Copiar Arquivos
+        // 2. Limpar Diretà³rios e Copiar Arquivos
         const [items] = await connection.execute(
             `SELECT EnderecoArquivo FROM ordemservicoitem WHERE IdOrdemServico = ? AND EnderecoArquivo IS NOT NULL AND EnderecoArquivo != ''`,
             [IdOrdemServico]
@@ -8394,7 +8614,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
                 await workbook.xlsx.writeFile(excelPath);
             }
         } catch (excelErr) {
-            console.error('Erro ao gerar Excel de liberaÃƒÂ§ÃƒÂ£o:', excelErr);
+            console.error('Erro ao gerar Excel de liberaà§ão:', excelErr);
         }
 
         await connection.commit();
@@ -8470,7 +8690,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
     } catch (err) {
         if (connection) await connection.rollback();
         console.error('Erro ao liberar OS:', err);
-        res.status(500).json({ success: false, message: 'Erro interno ao liberar Ordem de ServiÃƒÂ§o.' });
+        res.status(500).json({ success: false, message: 'Erro interno ao liberar Ordem de Serviço.' });
     } finally {
         if (connection) connection.release();
     }
@@ -8478,7 +8698,7 @@ app.post('/api/ordemservico/liberar', async (req, res) => {
 
 
 // ══ ROTAS BULK DE PLANEJAMENTO DE SETORES (PROJETO + TAG + OSs + ITENS DAS OSs) ══
-app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
+app.put('/api/visao-geral/tag/:id/setor-data-bulk', tenantMiddleware, async (req, res) => {
     try {
         const { updates } = req.body;
         const tagId = req.params.id;
@@ -8491,8 +8711,8 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
         const allowedFields = [
             'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
             'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
             'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
@@ -8505,9 +8725,9 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
 
         const dateColsProj = [
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioGALVANIZAR', 'PlanejadoFinalGALVANIZAR',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
             'PlanejadoInicioGalvanizar', 'PlanejadoFinalGalvanizar'
         ];
 
@@ -8537,15 +8757,15 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
         // 1. Atualizar a TAG no MySQL
         valuesTag.push(tagId);
         const sqlTag = `UPDATE tags SET ${setClausesTag.join(', ')} WHERE IdTag = ?`;
-        await db.execute(sqlTag, valuesTag);
+        await req.tenantDbPool.execute(sqlTag, valuesTag);
 
         // 2. Atualizar o PROJETO correspondente no MySQL
-        const [tagRows] = await db.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
+        const [tagRows] = await req.tenantDbPool.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]);
         if (tagRows.length > 0 && tagRows[0].IdProjeto) {
             const idProjeto = tagRows[0].IdProjeto;
             valuesProj.push(idProjeto);
             const sqlProj = `UPDATE projetos SET ${setClausesProj.join(', ')} WHERE IdProjeto = ?`;
-            await db.execute(sqlProj, valuesProj);
+            await req.tenantDbPool.execute(sqlProj, valuesProj);
         }
 
         res.json({ success: true, message: 'Datas de planejamento do Projeto e Tag salvas com sucesso no banco de dados.' });
@@ -8555,7 +8775,7 @@ app.put('/api/visao-geral/tag/:id/setor-data-bulk', async (req, res) => {
     }
 });
 
-app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
+app.put('/api/visao-geral/tag/:id/propagar-datas-os', tenantMiddleware, async (req, res) => {
     try {
         const { updates } = req.body;
         const tagId = req.params.id;
@@ -8568,8 +8788,8 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
         const allowedFields = [
             'PlanejadoInicioCorte', 'PlanejadoFinalCorte',
             'PlanejadoInicioCorteaLaser', 'PlanejadoFinalCorteaLaser',
-            'PlanejadoInicioPulsionadeira', 'PlanejadoFinalPulsionadeira',
-            'PlanejadoInicioPULSIONADEIRA', 'PlanejadoFinalPULSIONADEIRA',
+            'PlanejadoInicioPunsionadeira', 'PlanejadoFinalPunsionadeira',
+            'PlanejadoInicioPUNSIONADEIRA', 'PlanejadoFinalPUNSIONADEIRA',
             'PlanejadoInicioDobra', 'PlanejadoFinalDobra',
             'PlanejadoInicioSolda', 'PlanejadoFinalSolda',
             'PlanejadoInicioPintura', 'PlanejadoFinalPintura',
@@ -8601,11 +8821,11 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
 
         valuesOS.push(tagId);
         const sqlOS = `UPDATE ordemservico SET ${setClausesOS.join(', ')} WHERE IdTag = ?`;
-        await db.execute(sqlOS, valuesOS);
+        await req.tenantDbPool.execute(sqlOS, valuesOS);
 
         valuesItems.push(tagId);
         const sqlItems = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClausesItems.join(', ')} WHERE os.IdTag = ?`;
-        await db.execute(sqlItems, valuesItems);
+        await req.tenantDbPool.execute(sqlItems, valuesItems);
 
         res.json({ success: true, message: 'Datas propagadas com sucesso para todas as OSs e Itens da Tag!' });
     } catch (error) {
@@ -8614,10 +8834,10 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
+app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
                 os.Data_Liberacao_Engenharia, os.DataPrevisao, os.Fator, os.EnderecoOrdemServico, os.NumeroOPOmie,
@@ -8638,10 +8858,10 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
                 os.MontagemTotalExecutar, os.MontagemTotalExecutado,
                 os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
                 os.PlanejadoInicioCorte, os.PlanejadoFinalCorte,
-                os.PlanejadoInicioPULSIONADEIRA, os.PlanejadoFinalPULSIONADEIRA,
+                os.PlanejadoInicioPUNSIONADEIRA, os.PlanejadoFinalPUNSIONADEIRA,
                 os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR,
                 
-                os.PulsionadeiraTotalExecutar, os.PulsionadeiraTotalExecutado,
+                os.PunsionadeiraTotalExecutar, os.PunsionadeiraTotalExecutado,
                 os.GalvanizarTotalExecutar, os.GalvanizarTotalExecutado
             FROM ordemservico os
             LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
@@ -8656,10 +8876,10 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
+app.get('/api/visao-geral/tag/:id/itens', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const [rows] = await db.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.*, osi.OrdemServicoItemFinalizado as Finalizado
             FROM ordemservicoitem osi
@@ -8675,14 +8895,14 @@ app.get('/api/visao-geral/tag/:id/itens', async (req, res) => {
     }
 });
 
-app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
+app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (req, res) => {
     try {
         const projId = req.params.id;
         console.log(`[API] Fetching OS for project ID: ${projId}`);
         const queryPool = req.tenantDbPool || pool;
 
         // 1. Fetch the project to get its "Projeto" name
-        const [projRows] = await db.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
+        const [projRows] = await req.tenantDbPool.execute('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [projId]);
         const projName = projRows.length > 0 ? projRows[0].Projeto : null;
 
         // 2. Fetch the OSes matching either IdProjeto OR Projeto
@@ -8695,14 +8915,14 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
                 PinturaTotalExecutar, PinturaTotalExecutado,
                 MontagemTotalExecutar, MontagemTotalExecutado,
                 CorteaLaserTotalExecutar, CorteaLaserTotalExecutado,
-                PulsionadeiraTotalExecutar, PulsionadeiraTotalExecutado,
+                PunsionadeiraTotalExecutar, PunsionadeiraTotalExecutado,
                 PlanejadoInicioCorte, PlanejadoFinalCorte,
                 PlanejadoInicioDobra, PlanejadoFinalDobra,
                 PlanejadoInicioSolda, PlanejadoFinalSolda,
                 PlanejadoInicioPintura, PlanejadoFinalPintura,
                 PlanejadoInicioMontagem, PlanejadoFinalMontagem,
                 PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser,
-                PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA,
+                PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA,
                 PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR,
                 
                 GalvanizarTotalExecutar, GalvanizarTotalExecutado
@@ -8718,7 +8938,7 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
         sql += `) AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
                 ORDER BY IdOrdemServico`;
 
-        const [rows] = await db.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         console.log(`[API] Returning ${rows.length} OSes for project ${projId} (Projeto Name: ${projName})`);
         
         res.json({ success: true, data: rows });
@@ -8728,10 +8948,10 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens', async (req, res) => {
+app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
+        const [rows] = await req.tenantDbPool.execute(`
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
                 QtdeTotal, Peso, AreaPintura, Acabamento, Unidade,
                 Espessura, Altura, Largura,
                 CodMatFabricante, MaterialSW, EnderecoArquivo,
@@ -8744,9 +8964,23 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
                 txtPintura, sttxtPintura, PinturaPercentual,
                 TxtMontagem, sttxtMontagem, MontagemPercentual,
                 txtCorteaLaser, CorteaLaserPercentual,
-                txtPULSIONADEIRA, PULSIONADEIRAPercentual,
+                txtPUNSIONADEIRA, PUNSIONADEIRAPercentual,
                 txtGALVANIZAR, GALVANIZARPercentual,
-                Liberado_Engenharia
+                Liberado_Engenharia,
+                -- Tempos de produção globais
+                TempoSetup, TempoPadrao, TotalTempo,
+                -- Tempos por recurso
+                CorteTempoSetup, CorteTempoPadrao, CorteTotalTempo,
+                DobraTempoSetup, DobraTempoPadrao, DobraTotalTempo,
+                SoldaTempoSetup, SoldaTempoPadrao, SoldaTotalTempo,
+                PinturaTempoSetup, PinturaTempoPadrao, PinturaTotalTempo,
+                MontagemTempoSetup, MontagemTempoPadrao, MontagemTotalTempo,
+                CorteaLaserTempoSetup, CorteaLaserTempoPadrao, CorteaLaserTotalTempo,
+                PunsionadeiraTempoSetup, PunsionadeiraTempoPadrao, PunsionadeiraTotalTempo,
+                GalvanizarTempoSetup, GalvanizarTempoPadrao, GalvanizarTotalTempo,
+                CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia,
+                MontagemSequencia, CorteaLaserSequencia, PunsionadeiraSequencia,
+                GalvanizarSequencia, EngenhariaSequencia
             FROM ordemservicoitem 
             WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             ORDER BY IdOrdemServicoItem
@@ -8758,12 +8992,12 @@ app.get('/api/ordemservico/:id/itens', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
+app.get('/api/ordemservico/:id/itens-disponiveis', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
         const search = req.query.search || '';
         
-        const [osItems] = await pool.execute(
+        const [osItems] = await req.tenantDbPool.execute(
             `SELECT CodMatFabricante FROM ordemservicoitem WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
             [osId]
         );
@@ -8789,7 +9023,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
         const params = [];
 
         if (codigosInOS.length > 0) {
-            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'?').join(',')}) `;
+            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'é').join(',')}) `;
             params.push(...codigosInOS);
         }
 
@@ -8801,7 +9035,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
 
         sql += ` GROUP BY CodMatFabricante ORDER BY MAX(IdOrdemServicoItem) DESC LIMIT 100 `;
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (e) {
         console.error(e);
@@ -8809,7 +9043,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
+app.post('/api/ordemservico/:id/incluir-itens', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
         const osId = req.params.id;
@@ -8960,7 +9194,7 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
                 ) VALUES (
                     ?, 'Sistema', 'Sistema', NOW(),
                     'N',
-                    ${cols.map(()=>'?').join(', ')}
+                    ${cols.map(()=>'é').join(', ')}
                 )
             `;
             
@@ -8982,10 +9216,10 @@ app.post('/api/ordemservico/:id/incluir-itens', async (req, res) => {
     }
 });
 
-app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
+app.get('/api/ordemservico/:id/itens-codigos', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT CodMatFabricante 
             FROM ordemservicoitem 
             WHERE IdOrdemServico = ? 
@@ -9000,7 +9234,7 @@ app.get('/api/ordemservico/:id/itens-codigos', async (req, res) => {
     }
 });
 
-app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) => {
+app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
         const osId = req.params.id;
@@ -9035,12 +9269,12 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             }
         }
 
-        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+        const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Punsionadeira', 'Galvanizar', 'Engenharia'];
 
         function getSectorKey(procName) {
             const norm = (procName || '').trim().toUpperCase().replace(/\s+/g, '');
             if (norm.includes('CORTEALASER') || norm.includes('CORTELASER') || norm.includes('LASER')) return 'CorteaLaser';
-            if (norm.includes('PULSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Pulsionadeira';
+            if (norm.includes('PUNSIONADEIRA') || norm.includes('PUNCIONADEIRA')) return 'Punsionadeira';
             if (norm.includes('GALVANIZAR')) return 'Galvanizar';
             if (norm.includes('ENGENHARIA')) return 'Engenharia';
             if (norm.includes('CORTE')) return 'Corte';
@@ -9128,7 +9362,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
                     const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
                     const rTotalPadrao = rPadrao * qtdeTotalNum;
                     const rTotalSetup = rSetup;
-                    const rTotalTempo = ((rPadrao * qtdeTotalNum) + rSetup) * fatorNum;
+                    const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup; // Fórmula: (qtde × padrão) + setup
                     const rDiasProd = rTotalTempo > 0 ? Math.max(1, Math.ceil(rTotalTempo / 480)) : 0;
 
                     colunasDinamicasVals[`${secKey}TempoSetup`] = rSetup;
@@ -9146,7 +9380,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
 
             const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
             const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
-            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : (((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup) * fatorNum));
+            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup)); // Fórmula sem Fator
 
             await ensureColumns('ordemservicoitem', [
                 { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
@@ -9182,7 +9416,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
             
             const sqlInsert = `
                 INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
-                VALUES (${cols.map(()=>'?').join(', ')})
+                VALUES (${cols.map(()=>'é').join(', ')})
             `;
             
             const [insertRes] = await conn.execute(sqlInsert, vals);
@@ -9194,7 +9428,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
         await recalcularQuantidadesTotais(osId, conn);
 
         await conn.commit();
-        res.json({ success: true, message: `${adicionados} materiais incluÃ­dos com sucesso!`, adicionados });
+        res.json({ success: true, message: `${adicionados} materiais incluídos com sucesso!`, adicionados });
     } catch (e) {
         if (conn) await conn.rollback();
         console.error(e);
@@ -9204,7 +9438,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', async (req, res) =>
     }
 });
 
-// --- Apontamento de ProduÃ¯Â¿Â½Ã¯Â¿Â½o ---
+// --- Apontamento de Produ??o ---
 
 // Mapeamento de setores para colunas
 const setorColumns = {
@@ -9214,7 +9448,7 @@ const setorColumns = {
     pintura:       { txt: 'txtPintura',       percentual: 'PinturaPercentual',       status: 'sttxtPintura',       total: 'PinturaTotalExecutado',       executar: 'PinturaTotalExecutar',       inicio: 'RealizadoInicioPintura',       final: 'RealizadoFinalPintura',       userInicio: 'UsuarioRealizadoInicioPintura',       userFinal: 'UsuarioRealizadoFinalPintura'       },
     montagem:      { txt: 'TxtMontagem',      percentual: 'MontagemPercentual',      status: 'sttxtMontagem',      total: 'MontagemTotalExecutado',      executar: 'MontagemTotalExecutar',      inicio: 'RealizadoInicioMontagem',      final: 'RealizadoFinalMontagem',      userInicio: 'UsuarioRealizadoInicioMontagem',      userFinal: 'UsuarioRealizadoFinalMontagem'      },
     galvanizar:    { txt: 'txtGALVANIZAR',    percentual: 'GALVANIZARPercentual',    status: 'sttxtGALVANIZAR',    total: 'GALVANIZARTotalExecutado',    executar: 'GALVANIZARTotalExecutar',    inicio: 'RealizadoInicioGALVANIZAR',    final: 'RealizadoFinalGALVANIZAR',    userInicio: 'UsuarioRealizadoInicioGALVANIZAR',    userFinal: 'UsuarioRealizadoFinalGALVANIZAR'    },
-    pulsionadeira: { txt: 'txtPULSIONADEIRA', percentual: 'PULSIONADEIRAPercentual', status: 'sttxtPULSIONADEIRA', total: 'PULSIONADEIRATotalExecutado', executar: 'PULSIONADEIRATotalExecutar', inicio: 'RealizadoInicioPULSIONADEIRA', final: 'RealizadoFinalPULSIONADEIRA', userInicio: 'UsuarioRealizadoInicioPULSIONADEIRA', userFinal: 'UsuarioRealizadoFinalPULSIONADEIRA' },
+    punsionadeira: { txt: 'txtPUNSIONADEIRA', percentual: 'PUNSIONADEIRAPercentual', status: 'sttxtPUNSIONADEIRA', total: 'PUNSIONADEIRATotalExecutado', executar: 'PUNSIONADEIRATotalExecutar', inicio: 'RealizadoInicioPUNSIONADEIRA', final: 'RealizadoFinalPUNSIONADEIRA', userInicio: 'UsuarioRealizadoInicioPUNSIONADEIRA', userFinal: 'UsuarioRealizadoFinalPUNSIONADEIRA' },
     mapa:          { txt: 'txtCorte',         percentual: 'CortePercentual',         status: 'sttxtCorte',         total: 'CorteTotalExecutado',         executar: 'CorteTotalExecutar',         inicio: 'RealizadoInicioCorte',         final: 'RealizadoFinalCorte',         userInicio: 'UsuarioRealizadoInicioCorte',         userFinal: 'UsuarioRealizadoFinalCorte'         }
 };
 
@@ -9243,7 +9477,7 @@ async function atualizarMinProdCascata(conn, idItem, processoKey, inputQty, oper
         else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
         else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
         else if (rawName.toLowerCase() === 'galvanizar') recName = 'Galvanizar';
-        else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'Pulsionadeira';
+        else if (rawName.toLowerCase() === 'punsionadeira') recName = 'Punsionadeira';
         else if (rawName.toLowerCase() === 'cortealaser') recName = 'CorteaLaser';
 
         const minProdCol = `${recName}MinProd`;
@@ -9420,8 +9654,8 @@ async function inicializarPrimeiroSetor(conn, id) {
     }
 }
 
-// GET: Mapa da ProduÃ¯Â¿Â½Ã¯Â¿Â½o - visÃ¯Â¿Â½o geral de todos os processos
-app.get('/api/apontamento/mapa/producao', async (req, res) => {
+// GET: Mapa da Produ??o - vis?o geral de todos os processos
+app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => {
     const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
@@ -9496,7 +9730,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
             countJoinStr += ' LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto';
         }
 
-        const [countResult] = await pool.execute(`
+        const [countResult] = await req.tenantDbPool.execute(`
             SELECT COUNT(osi.IdOrdemServicoItem) as total
             FROM ordemservicoitem osi
             ${countJoinStr}
@@ -9504,7 +9738,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
         `, params);
         const total = countResult[0].total;
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem,
                 osi.IdOrdemServico,
@@ -9521,6 +9755,10 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
                 osi.txtSolda,
                 osi.txtPintura,
                 osi.TxtMontagem,
+                osi.CorteSequencia, osi.DobraSequencia, osi.SoldaSequencia, osi.PinturaSequencia, osi.MontagemSequencia, 
+                osi.txtCorteaLaser, osi.CorteaLaserSequencia, osi.txtPUNSIONADEIRA, osi.PunsionadeiraSequencia, 
+                osi.txtGALVANIZAR, osi.GalvanizarSequencia, osi.txtENGENHARIA, osi.EngenhariaSequencia,
+
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.CorteTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as CortePercentual,
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.DobraTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as DobraPercentual,
                 CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.SoldaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as SoldaPercentual,
@@ -9580,7 +9818,7 @@ app.get('/api/apontamento/mapa/producao', async (req, res) => {
     }
 });
 
-app.get('/api/apontamento/planejamento/diario', async (req, res) => {
+app.get('/api/apontamento/planejamento/diario', tenantMiddleware, async (req, res) => {
     try {
         const { planInicioDe, planInicioAte, planFimDe, planFimAte, setor, os, limit } = req.query;
         let query = `
@@ -9633,7 +9871,7 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
             }
         }
 
-        const [rows] = await pool.query(query, params);
+        const [rows] = await req.tenantDbPool.query(query, params);
 
         const normalizeDate = (d) => {
             if(!d) return null;
@@ -9712,7 +9950,7 @@ app.get('/api/apontamento/planejamento/diario', async (req, res) => {
     }
 });
 
-app.get('/api/apontamento/:setor', async (req, res) => {
+app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
     const setor = req.params.setor.toLowerCase();
     let setorConfig = setorColumns[setor];
 
@@ -9726,7 +9964,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         };
     }
 
-    const { projeto, tag, os, item, search, status, codMatFabricante, dataPlanejamento, page = 1, limit = 50 } = req.query;
+    const { projeto, tag, os, item, search, status, codMatFabricante, dataPlanejamentoInicio, dataPlanejamentoFim, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const offsetNum = (pageNum - 1) * limitNum;
@@ -9784,17 +10022,24 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             params.push(`%${codMatFabricante}%`);
         }
 
-        // Filtro Data Planejamento
-        if (dataPlanejamento) {
+                // Filtro Data Planejamento Range
+        if (dataPlanejamentoInicio && dataPlanejamentoFim) {
             const setorUpper = setor.charAt(0).toUpperCase() + setor.slice(1);
             whereClause += ` AND (
-                STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') <= ? OR 
-                DATE(osi.PlanejadoInicio${setorUpper}) <= ?
+                (STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') >= ? AND STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') <= ?) OR 
+                (DATE(osi.PlanejadoInicio${setorUpper}) >= ? AND DATE(osi.PlanejadoInicio${setorUpper}) <= ?)
             )`;
-            params.push(dataPlanejamento, dataPlanejamento);
+            params.push(dataPlanejamentoInicio, dataPlanejamentoFim, dataPlanejamentoInicio, dataPlanejamentoFim);
+        } else if (dataPlanejamentoInicio) {
+            const setorUpper = setor.charAt(0).toUpperCase() + setor.slice(1);
+            whereClause += ` AND (
+                STR_TO_DATE(SUBSTRING_INDEX(osi.PlanejadoInicio${setorUpper}, ' ', 1), '%d/%m/%Y') = ? OR 
+                DATE(osi.PlanejadoInicio${setorUpper}) = ?
+            )`;
+            params.push(dataPlanejamentoInicio, dataPlanejamentoInicio);
         }
 
-        const [countResult] = await pool.execute(`
+        const [countResult] = await req.tenantDbPool.execute(`
             SELECT COUNT(*) as total
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
@@ -9803,7 +10048,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
         `, params);
         const total = countResult[0].total;
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem,
                 osi.IdOrdemServico,
@@ -9837,12 +10082,42 @@ app.get('/api/apontamento/:setor', async (req, res) => {
                 osi.txtsolda as txtSolda,
                 osi.txtpintura as txtPintura,
                 osi.txtmontagem as TxtMontagem,
+
+                osi.CorteSequencia,
+                osi.DobraSequencia,
+                osi.SoldaSequencia,
+                osi.PinturaSequencia,
+                osi.MontagemSequencia,
+                osi.txtCorteaLaser,
+                osi.CorteaLaserSequencia,
+                osi.txtPUNSIONADEIRA,
+                osi.PunsionadeiraSequencia,
+                osi.txtGALVANIZAR,
+                osi.GalvanizarSequencia,
+                osi.txtENGENHARIA,
+                osi.EngenhariaSequencia,
+
                 osi.CorteTotalExecutado,
                 osi.DobraTotalExecutado,
                 osi.SoldaTotalExecutado,
                 osi.PinturaTotalExecutado,
                 osi.MontagemTotalExecutado,
-                osi.ProdutoPrincipal as IsProdutoPrincipal
+                osi.GALVANIZARTotalExecutado, osi.GALVANIZARTotalExecutar,
+                osi.PUNSIONADEIRATotalExecutado, osi.PUNSIONADEIRATotalExecutar,
+                osi.CorteaLaserTotalExecutado, osi.CorteaLaserTotalExecutar,
+                osi.CorteMinProd, osi.DobraMinProd, osi.SoldaMinProd, osi.PinturaMinProd, osi.MontagemMinProd,
+                osi.CorteaLaserMinProd, osi.PUNSIONADEIRAMinProd, osi.GALVANIZARMinProd,
+                osi.ProdutoPrincipal as IsProdutoPrincipal,
+                osi.TempoSetup, osi.TempoPadrao, osi.TotalTempo,
+                osi.CorteTempoSetup, osi.CorteTempoPadrao, osi.CorteTotalTempo,
+                osi.DobraTempoSetup, osi.DobraTempoPadrao, osi.DobraTotalTempo,
+                osi.SoldaTempoSetup, osi.SoldaTempoPadrao, osi.SoldaTotalTempo,
+                osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
+                osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
+                osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
+                osi.PunsionadeiraTempoSetup, osi.PunsionadeiraTempoPadrao, osi.PunsionadeiraTotalTempo,
+                osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
+                osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
@@ -9856,7 +10131,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             const itemIds = rows.map(r => r.IdOrdemServicoItem);
             const osIds = [...new Set(rows.map(r => r.IdOrdemServico))];
 
-            const [historyRows] = await pool.execute(`
+            const [historyRows] = await req.tenantDbPool.execute(`
                 SELECT IdOrdemServicoItem, COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as QtdeProduzidaHistory
                 FROM ordemservicoitemcontrole
                 WHERE Processo = ?
@@ -9870,7 +10145,7 @@ app.get('/api/apontamento/:setor', async (req, res) => {
                 historyMap[hr.IdOrdemServicoItem] = hr.QtdeProduzidaHistory;
             }
 
-            const [ppRows] = await pool.execute(`
+            const [ppRows] = await req.tenantDbPool.execute(`
                 SELECT IdOrdemServico, MAX(DescResumo) as NomeProdutoPrincipal
                 FROM ordemservicoitem
                 WHERE ProdutoPrincipal = 'sim'
@@ -9901,15 +10176,24 @@ app.get('/api/apontamento/:setor', async (req, res) => {
             }
         });
     } catch (error) {
+        if (error.code === 'ER_BAD_FIELD_ERROR') {
+            return res.json({ 
+                success: true, 
+                data: [], 
+                setor,
+                pagination: { total: 0, page: pageNum, limit: limitNum, totalPages: 0 },
+                message: 'Setor sem apontamentos (coluna inexistente)'
+            });
+        }
         console.error('Error fetching apontamento:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar itens para apontamento' });
     }
 });
 
 // GET: Projetos para dropdown de apontamento
-app.get('/api/apontamento/projetos/options', async (req, res) => {
+app.get('/api/apontamento/projetos/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT os.Projeto as value, os.Projeto as label 
             FROM ordemservico os
             INNER JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico
@@ -9926,7 +10210,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Tags para dropdown de apontamento
-app.get('/api/apontamento/tags/options', async (req, res) => {
+app.get('/api/apontamento/tags/options', tenantMiddleware, async (req, res) => {
     try {
         let query = `
             SELECT DISTINCT os.Tag as value, CONCAT(os.Tag, ' - ', os.DescTag) as label 
@@ -9945,7 +10229,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 
         query += ' ORDER BY os.Tag';
 
-        const [rows] = await pool.execute(query, params);
+        const [rows] = await req.tenantDbPool.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -9954,7 +10238,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Ordens de Serviço para dropdown de apontamento
-app.get('/api/apontamento/os/options', async (req, res) => {
+app.get('/api/apontamento/os/options', tenantMiddleware, async (req, res) => {
     try {
         let query = `
             SELECT DISTINCT os.IdOrdemServico as value,
@@ -9978,7 +10262,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 
         query += ' ORDER BY os.IdOrdemServico DESC';
 
-        const [rows] = await pool.execute(query, params);
+        const [rows] = await req.tenantDbPool.execute(query, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching ordens:', error);
@@ -9987,9 +10271,9 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
 });
 
 // GET: Clientes para dropdown de apontamento
-app.get('/api/apontamento/clientes/options', async (req, res) => {
+app.get('/api/apontamento/clientes/options', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT DISTINCT os.DescEmpresa as value, os.DescEmpresa as label 
             FROM ordemservico os
             INNER JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico
@@ -10006,7 +10290,7 @@ AND(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
 });
 
 // GET: Detalhes de um item + histórico de apontamentos
-app.get('/api/apontamento/item/:id/:processo', async (req, res) => {
+app.get('/api/apontamento/item/:id/:processo', tenantMiddleware, async (req, res) => {
     const { id, processo } = req.params;
     const isAll = processo.toLowerCase() === 'all';
     let setorConfig = setorColumns[processo.toLowerCase()];
@@ -10025,7 +10309,7 @@ app.get('/api/apontamento/item/:id/:processo', async (req, res) => {
     try {
         console.log(`[API] Fetching item details for ID: ${id}, Processo: ${processo} `);
         // Buscar item
-        const [itemRows] = await pool.execute(`
+        const [itemRows] = await req.tenantDbPool.execute(`
 SELECT
     osi.IdOrdemServicoItem,
     osi.IdOrdemServico,
@@ -10036,10 +10320,26 @@ SELECT
     osi.EnderecoArquivoItemOrdemServico,
     osi.QtdeTotal,
     osi.Peso,
+    osi.Fator,
     osi.txtCorte,
     osi.txtSolda,
     osi.txtPintura,
     osi.TxtMontagem,
+    osi.TempoSetup,
+    osi.TempoPadrao,
+    osi.TotalTempo,
+    osi.CorteTempoSetup, osi.CorteTempoPadrao, osi.CorteTotalTempo,
+    osi.DobraTempoSetup, osi.DobraTempoPadrao, osi.DobraTotalTempo,
+    osi.SoldaTempoSetup, osi.SoldaTempoPadrao, osi.SoldaTotalTempo,
+    osi.PinturaTempoSetup, osi.PinturaTempoPadrao, osi.PinturaTotalTempo,
+    osi.MontagemTempoSetup, osi.MontagemTempoPadrao, osi.MontagemTotalTempo,
+    osi.GalvanizarTempoSetup, osi.GalvanizarTempoPadrao, osi.GalvanizarTotalTempo,
+    osi.PunsionadeiraTempoSetup, osi.PunsionadeiraTempoPadrao, osi.PunsionadeiraTotalTempo,
+    osi.CorteaLaserTempoSetup, osi.CorteaLaserTempoPadrao, osi.CorteaLaserTotalTempo,
+    osi.EngenhariaTempoSetup, osi.EngenhariaTempoPadrao, osi.EngenhariaTotalTempo,
+    osi.CorteMinProd, osi.DobraMinProd, osi.SoldaMinProd, osi.PinturaMinProd, osi.MontagemMinProd,
+    osi.CorteaLaserMinProd, osi.PUNSIONADEIRAMinProd, osi.GALVANIZARMinProd,
+    osi.GALVANIZARTotalExecutado, osi.GALVANIZARTotalExecutar,
     osi.${setorConfig.percentual} as PercentualSetor,
     osi.${setorConfig.total} as TotalExecutado,
     osi.${setorConfig.executar} as TotalExecutar,
@@ -10085,13 +10385,19 @@ WHERE osi.IdOrdemServicoItem = ?
             ? item.QtdeTotal - totalExecutado
             : parseFloat(item.TotalExecutar);
 
+        // Campo auxiliar diário — lido da memória (por banco + item + setor + data)
+        const dbNameDet = (req.tenantUser && req.tenantUser.dbName) || process.env.DB_NAME || 'default';
+        const processoNorm = processo.toLowerCase();
+        const dailyMinProd = getDailyAccumulated(dbNameDet, id, processoNorm);
+
         const responseData = {
             item: item,
             historico: historicoRows,
             totalProduzido: totalExecutado,
-            qtdeFaltante: Math.min(item.QtdeTotal - totalExecutado, Math.max(0, totalExecutar))
+            qtdeFaltante: Math.min(item.QtdeTotal - totalExecutado, Math.max(0, totalExecutar)),
+            dailyMinProd  // minutos acumulados HOJE no campo auxiliar (começa em 0 a cada novo dia)
         };
-        console.log(`[API] Sending details for item ${id}`);
+        console.log(`[API] Sending details for item ${id} | dailyMinProd(${processoNorm})=${dailyMinProd}`);
         res.json({
             success: true,
             data: responseData
@@ -10103,7 +10409,7 @@ WHERE osi.IdOrdemServicoItem = ?
 });
 
 // GET: Listar apontamentos parciais
-app.get('/api/apontamentos-parciais', async (req, res) => {
+app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
         const [rows] = await queryPool.query(`
@@ -10147,14 +10453,15 @@ app.get('/api/apontamentos-parciais', async (req, res) => {
 
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
 app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) => {
-    const { targetType, targetId, sectors } = req.body;
+    const { targetType, targetId, sectors, targetIds } = req.body;
 
     if (!targetType || !targetId || !Array.isArray(sectors)) {
         return res.status(400).json({ success: false, message: 'Parâmetros targetType, targetId e sectors são obrigatórios.' });
     }
 
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
 
@@ -10199,7 +10506,7 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
                 else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
                 else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
-                else if (rawName.toLowerCase() === 'pulsionadeira') { recName = 'PULSIONADEIRA'; diasName = 'Pulsionadeira'; }
+                else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
                 else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                 const colPi = `PlanejadoInicio${recName}`;
@@ -10242,40 +10549,47 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 for (const s of sectors) {
                     let rawName = String(s.key || s.label || '').trim();
                     let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-                    if (rawName.toLowerCase() === 'montagem') recName = 'Montagem';
-                    else if (rawName.toLowerCase() === 'corte') recName = 'Corte';
-                    else if (rawName.toLowerCase() === 'dobra') recName = 'Dobra';
-                    else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
-                    else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
-                    else if (rawName.toLowerCase() === 'galvanizar') recName = 'GALVANIZAR';
-                    else if (rawName.toLowerCase() === 'pulsionadeira') recName = 'PULSIONADEIRA';
-                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') recName = 'CorteaLaser';
+                    let diasName = recName;
+                    if (rawName.toLowerCase() === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
+                    else if (rawName.toLowerCase() === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
+                    else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
+                    else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
+                    else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
+                    else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
+                    else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
+                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                     const colPi = `PlanejadoInicio${recName}`;
                     const colPf = `PlanejadoFinal${recName}`;
+                    const colDias = `${diasName}DiasProducao`;
 
                     const itemPiBr = formatBr(s.pi);
                     const itemPfBr = formatBr(s.pf);
+                    const valDias = parseInt(String(s.dias), 10) || 1;
+                    
+                    // Always push days update so parent hierarchy matches the latest saved sector's days
+                    updates.push(`\`${colDias}\` = ?`);
+                    params.push(valDias);
 
                     const itemPiDt = parseBrDate(itemPiBr);
                     const itemPfDt = parseBrDate(itemPfBr);
 
-                    // Check Start Date: If item date is SMALLER (earlier) than parent date, update parent!
-                    if (itemPiBr && itemPiDt) {
-                        const parentPiBr = formatBr(parentRow[colPi]);
-                        const parentPiDt = parseBrDate(parentPiBr);
+                    // Verifica as datas existentes no pai (caso existam)
+                    const parentPiBr = parentRow[colPi];
+                    const parentPfBr = parentRow[colPf];
+                    const parentPiDt = parseBrDate(parentPiBr);
+                    const parentPfDt = parseBrDate(parentPfBr);
 
+                    // Start Date: Só atualiza se o pai não tiver data ou se a nova data for mais antiga
+                    if (itemPiBr && itemPiDt) {
                         if (!parentPiDt || itemPiDt < parentPiDt) {
                             updates.push(`\`${colPi}\` = ?`);
                             params.push(itemPiBr);
                         }
                     }
 
-                    // Check End Date: If item date is GREATER (later) than parent date, update parent!
+                    // End Date: Só atualiza se o pai não tiver data ou se a nova data for mais recente
                     if (itemPfBr && itemPfDt) {
-                        const parentPfBr = formatBr(parentRow[colPf]);
-                        const parentPfDt = parseBrDate(parentPfBr);
-
                         if (!parentPfDt || itemPfDt > parentPfDt) {
                             updates.push(`\`${colPf}\` = ?`);
                             params.push(itemPfBr);
@@ -10298,27 +10612,36 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
             if (projetoId) await updateEntityRow('projetos', 'IdProjeto', projetoId);
         };
 
-        if (targetType === 'os') {
-            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', targetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', targetId);
+        const idsToUpdate = ((targetType === 'tag' || targetType === 'tag_os_bulk') && Array.isArray(targetIds) && targetIds.length > 0) ? targetIds : [targetId];
 
-            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [targetId]).catch(() => [[]]);
+        for (const currentTargetId of idsToUpdate) {
+            if (targetType === 'os' || targetType === 'tag_os_bulk') {
+            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', currentTargetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', currentTargetId);
+
+            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [currentTargetId]).catch(() => [[]]);
             if (osRows && osRows[0]) {
                 await updateParentHierarchy(null, osRows[0].IdTag, osRows[0].IdProjeto);
             }
         } else if (targetType === 'tag') {
-            await updateFieldsForEntity('tags', 'IdTag', targetId);
-            await updateFieldsForEntity('ordemservico', 'IdTag', targetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdTag', targetId);
+            await updateFieldsForEntity('tags', 'IdTag', currentTargetId);
+            await updateFieldsForEntity('ordemservico', 'IdTag', currentTargetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdTag', currentTargetId);
 
-            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [targetId]).catch(() => [[]]);
+            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [currentTargetId]).catch(() => [[]]);
             if (tagRows && tagRows[0]) {
                 await updateParentHierarchy(null, null, tagRows[0].IdProjeto);
             }
+        } else if (targetType === 'projeto') {
+            await updateFieldsForEntity('projetos', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('tags', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('ordemservico', 'IdProjeto', currentTargetId, "AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado NOT IN ('C', 'S'))");
+            await updateFieldsForEntity('ordemservicoitem', 'IdProjeto', currentTargetId, "AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado NOT IN ('C', 'S'))");
+            await updateParentHierarchy(null, null, currentTargetId);
         } else if (targetType === 'item') {
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', targetId);
+            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', currentTargetId);
 
-            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [targetId]).catch(() => [[]]);
+            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [currentTargetId]).catch(() => [[]]);
             if (itemRows && itemRows[0]) {
                 let osId = itemRows[0].IdOrdemServico;
                 let tagId = itemRows[0].IdTag;
@@ -10343,6 +10666,8 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
             }
         }
 
+                }
+
         await conn.commit();
         console.log(`[Planejamento Setores] Salvo com sucesso para ${targetType} ID=${targetId} com ${sectors.length} setores e propagado na hierarquia`);
         res.json({ success: true, message: 'Planejamento dos setores salvo com sucesso e propagado na hierarquia.' });
@@ -10355,7 +10680,63 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
     }
 });
 
-app.post('/api/apontamento-parcial', async (req, res) => {
+
+// Função para cascatear o saldo para o próximo recurso ativo
+async function cascatearSaldoProximoRecurso(conn, item, sName, quantidadeAAdicionar) {
+    if (!item || !sName || quantidadeAAdicionar <= 0) return;
+
+    const recursos = [
+        { id: 'corte',         txtField: 'txtCorte',         seqField: 'CorteSequencia',         executarField: 'CorteTotalExecutar' },
+        { id: 'dobra',         txtField: 'txtDobra',         seqField: 'DobraSequencia',         executarField: 'DobraTotalExecutar' },
+        { id: 'solda',         txtField: 'txtSolda',         seqField: 'SoldaSequencia',         executarField: 'SoldaTotalExecutar' },
+        { id: 'pintura',       txtField: 'txtPintura',       seqField: 'PinturaSequencia',       executarField: 'PinturaTotalExecutar' },
+        { id: 'montagem',      txtField: 'TxtMontagem',      seqField: 'MontagemSequencia',      executarField: 'MontagemTotalExecutar' },
+        { id: 'cortealaser',   txtField: 'txtCorteaLaser',   seqField: 'CorteaLaserSequencia',   executarField: 'CorteaLaserTotalExecutar' },
+        { id: 'punsionadeira', txtField: 'txtPUNSIONADEIRA', seqField: 'PunsionadeiraSequencia', executarField: 'PUNSIONADEIRATotalExecutar' },
+        { id: 'galvanizar',    txtField: 'txtGALVANIZAR',    seqField: 'GalvanizarSequencia',    executarField: 'GALVANIZARTotalExecutar' },
+        { id: 'engenharia',    txtField: 'txtENGENHARIA',    seqField: 'EngenhariaSequencia',    executarField: 'ENGENHARIATotalExecutar' },
+        { id: 'usinagem',      txtField: 'txtUsinagem',      seqField: 'UsinagemSequencia',      executarField: 'UsinagemTotalExecutar' },
+        { id: 'caldeiraria',   txtField: 'txtCALDEIRARIA',   seqField: 'CaldeirariaSequencia',   executarField: 'CALDEIRARIATotalExecutar' },
+        { id: 'serralheria',   txtField: 'txtSERRALHERIA',   seqField: 'SerralheriaSequencia',   executarField: 'SERRALHERIATotalExecutar' },
+        { id: 'puncionadeira', txtField: 'txtPUNCIONADEIRA', seqField: 'PuncionadeiraSequencia', executarField: 'PUNCIONADEIRATotalExecutar' },
+        { id: 'acabamento',    txtField: 'txtACABAMENTO',    seqField: 'AcabamentoSequencia',    executarField: 'ACABAMENTOTotalExecutar' }
+    ];
+
+    const ativos = [];
+    for (const r of recursos) {
+        // Handle txtmontagem mapping in server.js vs db if needed, but DB field is TxtMontagem or txtmontagem
+        const val = String(item[r.txtField] || item[r.txtField.toLowerCase()] || '').trim().toUpperCase();
+        if (val === '1' || val === 'S') {
+            ativos.push({
+                id: r.id,
+                executarField: r.executarField,
+                seq: parseInt(item[r.seqField] || item[r.seqField.toLowerCase()]) || 999
+            });
+        }
+    }
+
+    ativos.sort((a, b) => a.seq - b.seq);
+
+    const currentResource = ativos.find(r => r.id === sName.toLowerCase());
+    if (!currentResource) return; 
+
+    const currentSeq = currentResource.seq;
+    const nextResource = ativos.find(r => r.seq > currentSeq);
+
+    if (nextResource) {
+        try {
+            await conn.execute(
+                `UPDATE ordemservicoitem SET ${nextResource.executarField} = COALESCE(${nextResource.executarField}, 0) + ? WHERE IdOrdemServicoItem = ?`,
+                [quantidadeAAdicionar, item.IdOrdemServicoItem]
+            );
+            console.log(`[Cascata] Adicionado ${quantidadeAAdicionar} em ${nextResource.executarField} (Setor: ${nextResource.id}) para OSItem: ${item.IdOrdemServicoItem}`);
+        } catch(e) {
+            console.error(`[Cascata] Falha ao atualizar saldo para o próximo recurso: `, e.message);
+        }
+    }
+}
+
+app.post('/api/apontamento-parcial', tenantMiddleware, async (req, res) => {
     const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor } = req.body;
 
     if (!IdOrdemServicoItem || !Processo || !QtdeProduzida) {
@@ -10368,7 +10749,8 @@ app.post('/api/apontamento-parcial', async (req, res) => {
     }
 
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
 
@@ -10442,7 +10824,7 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         let nextSectorName = null;
 
         if (currentPosInStatic >= 0) {
-            // Recurso é estático — usa sequência conhecida
+            // Recurso ? estático — usa sequência conhecida
             for (let i = currentPosInStatic + 1; i < allSectorKeys.length; i++) {
                 const checkConfig = setorColumns[allSectorKeys[i]];
                 if (checkConfig && checkConfig.txt && NULLIF_TRIM(item[checkConfig.txt]) === '1') {
@@ -10453,7 +10835,7 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         } else {
             // Recurso dinâmico — busca próxima coluna txt* = '1' no item após o atual
             // Como não há ordem definida, apenas logamos sem propagar
-            console.log(`[RECURSO_DINAMICO] Recurso '${processoKey}' é dinâmico — propagação de saldo para próximo setor não aplicada.`);
+            console.log(`[RECURSO_DINAMICO] Recurso '${processoKey}' ? dinâmico — propagação de saldo para próximo setor não aplicada.`);
         }
 
         if (nextSectorName) {
@@ -10477,6 +10859,9 @@ app.post('/api/apontamento-parcial', async (req, res) => {
         // 8. Recalcular totais em cascata (OS -> Tag -> Projeto)
         await recalcularQuantidadesTotais(idOS, conn);
 
+        // Cascata de Saldo
+        await cascatearSaldoProximoRecurso(conn, item, processoKey, inputQty);
+
         await conn.commit();
         console.log(`[API Apontamento Parcial] OK | Item=${IdOrdemServicoItem} | Processo=${processoKey} | Qtde=${inputQty} | NovoExecutado=${novoTotalExecutado}`);
         res.json({ success: true, message: 'Apontamento parcial registrado com sucesso.' });
@@ -10491,10 +10876,11 @@ app.post('/api/apontamento-parcial', async (req, res) => {
 });
 
 // DELETE: Excluir apontamento parcial
-app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
+app.delete('/api/apontamentos-parciais/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const queryPool = req.tenantDbPool || pool;
-    const conn = await queryPool.getConnection();
+    const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
     try {
         await conn.beginTransaction();
         
@@ -10538,8 +10924,8 @@ app.delete('/api/apontamentos-parciais/:id', async (req, res) => {
 });
 
 // POST: Registrar apontamento de produção
-app.post('/api/apontamento', async (req, res) => {
-    const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, TipoApontamento, CriadoPor } = req.body;
+app.post('/api/apontamento', tenantMiddleware, async (req, res) => {
+    const { IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, TipoApontamento, CriadoPor, LimiteDiario } = req.body;
 
     if (!IdOrdemServicoItem || !Processo || !QtdeProduzida) {
         return res.status(400).json({
@@ -10555,16 +10941,81 @@ app.post('/api/apontamento', async (req, res) => {
 
     const isMapa = Processo.toLowerCase() === 'mapa';
     const setorAtivo = !isMapa ? Processo.toLowerCase() : null;
+    // RecursoOrigem: quando MAPA é clicado na página de recurso especial (galvanizar etc.)
+    // o frontend envia o recurso de origem para apontarmos apenas aquele setor
+    const recursoOrigem = req.body.RecursoOrigem ? req.body.RecursoOrigem.toLowerCase() : null;
+    const isMapaEspecial = isMapa && recursoOrigem && setorColumns[recursoOrigem] && recursoOrigem !== 'mapa';
 
     if (!isMapa && !setorColumns[setorAtivo]) {
         return res.status(400).json({ success: false, message: 'Processo inválido' });
     }
 
+    // ─── VALIDAÇÃO DO LIMITE DIÁRIO (campo auxiliar em memória) ───────────────
+    // Só valida setores diretos (não MAPA genérico sem recursoOrigem definido)
+    const setorParaValidar = !isMapa ? setorAtivo : (isMapaEspecial ? recursoOrigem : null);
+    const dbName = (req.tenantUser && req.tenantUser.dbName) || process.env.DB_NAME || 'default';
+
+    if (setorParaValidar && LimiteDiario !== undefined && LimiteDiario !== null) {
+        const limiteDiario = parseFloat(LimiteDiario) || 0;
+        if (limiteDiario > 0) {
+            // Busca tempoPadrao/setup do item diretamente (leitura rápida, sem transação)
+            try {
+                const [quickRows] = await req.tenantDbPool.execute(
+                    `SELECT GalvanizarTempoPadrao, GalvanizarTempoSetup,
+                            PunsionadeiraTempoPadrao, PunsionadeiraTempoSetup,
+                            CorteaLaserTempoPadrao, CorteaLaserTempoSetup,
+                            CorteTempoPadrao, CorteTempoSetup,
+                            DobraTempoPadrao, DobraTempoSetup,
+                            SoldaTempoPadrao, SoldaTempoSetup,
+                            PinturaTempoPadrao, PinturaTempoSetup,
+                            MontagemTempoPadrao, MontagemTempoSetup,
+                            TempoPadrao, TempoSetup
+                     FROM ordemservicoitem WHERE IdOrdemServicoItem = ? LIMIT 1`,
+                    [IdOrdemServicoItem]
+                );
+
+                if (quickRows.length > 0) {
+                    const qi = quickRows[0];
+                    const cap = setorParaValidar.charAt(0).toUpperCase() + setorParaValidar.slice(1);
+                    // Mapa de nome especial para prefixo da coluna
+                    const PREFIXO_MAP = { galvanizar: 'Galvanizar', punsionadeira: 'Punsionadeira', cortealaser: 'CorteaLaser' };
+                    const pref = PREFIXO_MAP[setorParaValidar] || cap;
+                    const tPadrao = parseFloat(qi[`${pref}TempoPadrao`] || qi.TempoPadrao) || 0;
+                    const tSetup  = parseFloat(qi[`${pref}TempoSetup`]  || qi.TempoSetup)  || 0;
+
+                    const acumuladoHoje = getDailyAccumulated(dbName, IdOrdemServicoItem, setorParaValidar);
+                    const tempoEste = (inputQty * tPadrao) + (acumuladoHoje === 0 ? tSetup : 0);
+                    const totalComEste = acumuladoHoje + tempoEste;
+
+                    console.log(`[DailyMinProd] Validação: acumulado=${acumuladoHoje} + este=${tempoEste.toFixed(1)} = ${totalComEste.toFixed(1)} | limite=${limiteDiario}`);
+
+                    if (totalComEste > limiteDiario) {
+                        return res.status(400).json({
+                            success: false,
+                            limiteDiarioExcedido: true,
+                            message: `Limite diário excedido para o setor ${setorParaValidar.toUpperCase()}. ` +
+                                     `Já produzido hoje: ${acumuladoHoje} min. ` +
+                                     `Este apontamento adicionaria ${tempoEste.toFixed(1)} min. ` +
+                                     `Total: ${totalComEste.toFixed(1)} min vs limite de ${limiteDiario} min.`,
+                            acumuladoHoje,
+                            tempoEste: parseFloat(tempoEste.toFixed(1)),
+                            limiteDiario
+                        });
+                    }
+                }
+            } catch (validErr) {
+                // Falha na validação: loga mas não bloqueia (segurança operacional)
+                console.error('[DailyMinProd] Erro na validação prévia:', validErr.message);
+            }
+        }
+    }
+    // ──────────────────────────────────────────────────────────────────────────
+
     const conn = await pool.getConnection();
     try {
         let req_idmatriz = null;
         try {
-            const [matRows] = await pool.query('SELECT id FROM conexoes_bancos WHERE db_name = ? LIMIT 1', [req.tenantDb]);
+            const [matRows] = await req.tenantDbPool.query('SELECT id FROM conexoes_bancos WHERE db_name = ? LIMIT 1', [req.tenantDb]);
             if (matRows && matRows.length > 0) req_idmatriz = matRows[0].id;
         } catch(e) {
             console.error('[API Apontamento] Aviso: Falha ao buscar idmatriz de conexoes_bancos:', e.message);
@@ -10573,8 +11024,11 @@ app.post('/api/apontamento', async (req, res) => {
         await conn.beginTransaction();
 
         const now = getCurrentDateTimeBR();
-        // Helper: escolhe formato conforme tipo da coluna no banco
-        const getDateForSetor = (sConfig) => (sConfig && sConfig.dateType === 'date') ? getCurrentDateSQL() : getCurrentDateBR();
+        const dateSQL = getCurrentDateSQL(); // YYYY-MM-DD for DATE-type columns
+        // Helper: date format depends on column type in DB
+        // galvanizar and punsionadeira have DATE columns for Realizado* fields
+        const DATE_SETOR_KEYS = new Set(['galvanizar', 'punsionadeira', 'cortealaser']);
+        const getDateForSetor = (sName) => DATE_SETOR_KEYS.has(sName) ? dateSQL : now;
 
         // 1. Fetch item and details
         const [itemRows] = await conn.execute(`
@@ -10594,9 +11048,17 @@ osi.*,
         const item = itemRows[0];
         const qtdeTotal = parseFloat(item.QtdeTotal) || 0;
 
-        const setoresParaProcessar = isMapa
-            ? ['corte', 'dobra', 'solda', 'pintura', 'montagem']
-            : [setorAtivo];
+        const MAPA_SEQUENCE_SAFE = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
+        const setoresParaProcessar = isMapaEspecial
+            // MAPA especial: recurso não-padrão (galvanizar, punsionadeira etc.) - apontar só este setor
+            ? [recursoOrigem]
+            : isMapa
+                // MAPA padrão: somente os 5 setores seguros que têm colunas em OS/Tags/Projetos, filtrados por txt=1
+                ? MAPA_SEQUENCE_SAFE.filter(sKey => {
+                    const sCfg = setorColumns[sKey];
+                    return sCfg && sCfg.txt && NULLIF_TRIM(item[sCfg.txt]) === '1';
+                  })
+                : [setorAtivo];
 
         if (setoresParaProcessar.length === 0) {
             await conn.rollback();
@@ -10613,7 +11075,7 @@ osi.*,
         for (const sName of setoresParaProcessar) {
             const sConfig = setorColumns[sName];
             const totalExecutadoDb = parseFloat(item[sConfig.total]) || 0;
-            const dateNow = getDateForSetor(sConfig);
+            const dateNow = getDateForSetor(sName); // CORRIGIDO: passa sName (string), nao sConfig (objeto)
             const statusAtual = item[sConfig.status];
 
             if (statusAtual === 'C' && !isMapa) continue;
@@ -10623,7 +11085,7 @@ osi.*,
             // If not Mapa and no quantity to process, skip
             if (!isMapa && currentInputQty <= 0) continue;
 
-            // Determinar se este é o primeiro setor ativo do item na cadeia produtiva
+            // Determinar se este ? o primeiro setor ativo do item na cadeia produtiva
             let isFirstActiveSector = true;
             const currentIndexInSequence = sequence.indexOf(sName);
             for (let i = 0; i < currentIndexInSequence; i++) {
@@ -10660,7 +11122,7 @@ osi.*,
                 const currentIndex = sequence.indexOf(sName);
                 if (currentIndex > 0) {
                     let prevSectorName = null;
-                    // Procurar o setor anterior que é ativado para este item
+                    // Procurar o setor anterior que ? ativado para este item
                     for (let i = currentIndex - 1; i >= 0; i--) {
                         const checkSName = sequence[i];
                         const checkConfig = setorColumns[checkSName];
@@ -10677,7 +11139,7 @@ osi.*,
 
                         if (novoTotalTentativa > prevTotalExecutado) {
                             await conn.rollback();
-                            const msg = `Não é aceito apontar produção no setor '${sName.charAt(0).toUpperCase() + sName.slice(1)}' pois o setor anterior '${prevSectorName.charAt(0).toUpperCase() + prevSectorName.slice(1)}' possui apenas ${prevTotalExecutado} unidades concluídas.`;
+                            const msg = `Não ? aceito apontar produção no setor '${sName.charAt(0).toUpperCase() + sName.slice(1)}' pois o setor anterior '${prevSectorName.charAt(0).toUpperCase() + prevSectorName.slice(1)}' possui apenas ${prevTotalExecutado} unidades concluídas.`;
                             return res.status(400).json({ success: false, message: msg });
                         }
                     }
@@ -10708,35 +11170,70 @@ osi.*,
             const updateItemParams = [novoTotalExecutado, novoTotalExecutar, novoPercentual, (finalizado || isMapa) ? 'C' : '', req_idmatriz];
 
             // 5a. Realizado INICIO: gravar no item se for o primeiro apontamento do setor (campo NULL)
+            const dateForThisSetor = getDateForSetor(sName);
             if (!item[sConfig.inicio]) {
                 updateItemQuery += `, ${sConfig.inicio} = ?, ${sConfig.userInicio} = ?`;
-                updateItemParams.push(dateNow, CriadoPor || 'Sistema');
+                updateItemParams.push(dateForThisSetor, CriadoPor || 'Sistema');
             }
 
             // 5b. Realizado FINAL: gravar no item quando todas as peças do setor forem produzidas
             if (finalizado || isMapa) {
                 updateItemQuery += `, ${sConfig.final} = ?, ${sConfig.userFinal} = ?`;
-                updateItemParams.push(dateNow, CriadoPor || 'Sistema');
+                updateItemParams.push(dateForThisSetor, CriadoPor || 'Sistema');
                 if (sName === 'montagem') {
                     updateItemQuery += `, DataFinalMontagem = ?`;
-                    updateItemParams.push(dateNow);
+                    updateItemParams.push(dateForThisSetor);
                 }
             }
+
+            // Atualizar MinProd acumulado do recurso
+            let minProdCol = `${sName.charAt(0).toUpperCase() + sName.slice(1)}MinProd`;
+            if (sName === 'galvanizar') minProdCol = 'GALVANIZARMinProd';
+            else if (sName === 'punsionadeira') minProdCol = 'PUNSIONADEIRAMinProd';
+            else if (sName === 'cortealaser') minProdCol = 'CorteaLaserMinProd';
+
+            const minProdAtualDb = parseFloat(item[minProdCol]) || 0;
+            const tempoPadraoDb = parseFloat(item[`${sName.charAt(0).toUpperCase() + sName.slice(1)}TempoPadrao`] || item.TempoPadrao) || 0;
+            const tempoSetupDb = parseFloat(item[`${sName.charAt(0).toUpperCase() + sName.slice(1)}TempoSetup`] || item.TempoSetup) || 0;
+
+            const tempoApontamentoDb = tempoPadraoDb * currentInputQty;
+            let novoMinProd = 0;
+            if (minProdAtualDb === 0) {
+                novoMinProd = tempoSetupDb + tempoApontamentoDb;
+            } else {
+                novoMinProd = minProdAtualDb + tempoApontamentoDb;
+            }
+
+            updateItemQuery += `, \`${minProdCol}\` = ?`;
+            updateItemParams.push(novoMinProd);
 
             updateItemQuery += ` WHERE IdOrdemServicoItem = ?`;
             updateItemParams.push(IdOrdemServicoItem);
             await conn.execute(updateItemQuery, updateItemParams);
 
+            // ── Registrar no campo auxiliar diário (memória) ──────────────────
+            // tempoApontamentoDb = qtde × tempoPadrao (calculado acima)
+            // se for o primeiro do dia (acumulado=0), inclui setup
+            const acumDiarioAtual = getDailyAccumulated(dbName, IdOrdemServicoItem, sName);
+            const tempoParaMapDiario = tempoApontamentoDb + (acumDiarioAtual === 0 ? tempoSetupDb : 0);
+            addDailyAccumulated(dbName, IdOrdemServicoItem, sName, tempoParaMapDiario);
+            // ──────────────────────────────────────────────────────────────────
+
             // 6. Cascading Totals e Percentuais Dinâmicos (HIERARQUIA: Item -> OS -> Tag -> Projeto)
             // Utilizando o helper centralizado garantimos que QtdePecasExecutadas e Setores também recalculem em tempo real
             await recalcularQuantidadesTotais(item.IdOrdemServico, conn);
+
+            // Cascata de Saldo
+            await cascatearSaldoProximoRecurso(conn, item, sName, currentInputQty);
+            // 6b. Atualizar MinProd acumulado do recurso em cascata (Item -> OS -> Tag -> Projeto)
+            await atualizarMinProdCascata(conn, IdOrdemServicoItem, sName, currentInputQty, 'ADD');
 
             // 6a. Cascatear Realizado INICIO para OS / Tag / Projeto (somente se campo ainda NULL)
             if (!item[sConfig.inicio]) {
                 // OS: setar inicio se ainda nulo
                 await conn.execute(
                     `UPDATE ordemservico SET ${sConfig.inicio} = ? WHERE IdOrdemServico = ? AND (${sConfig.inicio} IS NULL OR ${sConfig.inicio} = '')`,
-                    [dateNow, item.IdOrdemServico]
+                    [dateForThisSetor, item.IdOrdemServico]
                 );
                 // Tag: setar inicio se ainda nulo
                 if (item.IdTag) {
@@ -10806,27 +11303,52 @@ osi.*,
             }
 
             // 7. Log de apontamento
-            const txtSetor = `txt${sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase()}`;
+            // A tabela ordemservicoitemcontrole só tem colunas txt para setores padrão:
+            // txtCorte, txtDobra, txtSolda, txtPintura, txtMontagem, txtAlmoxarifado, txtMEDICAO, txtISOMETRICO, txtENGENHARIA, txtACABAMENTO, txtAPROVACAO
+            // Setores especiais (galvanizar, punsionadeira, cortealaser) NÃO têm coluna txt — inserimos sem ela.
+            const CONTROLE_TXT_COLS = new Set([
+                'txtCorte', 'txtDobra', 'txtSolda', 'txtPintura', 'txtMontagem',
+                'txtAlmoxarifado', 'txtMEDICAO', 'txtISOMETRICO', 'txtENGENHARIA',
+                'txtACABAMENTO', 'txtAPROVACAO'
+            ]);
+            const txtSetor = sConfig.txt; // nome exato da coluna (ex: txtGALVANIZAR, txtCorte)
             const tipoAppEnv = TipoApontamento || 'Total';
-            await conn.execute(`
-                INSERT INTO ordemservicoitemcontrole(
-                    IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, ${txtSetor}, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
-                ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
-            `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            const txtColExists = CONTROLE_TXT_COLS.has(txtSetor);
+            if (txtColExists) {
+                await conn.execute(`
+                    INSERT INTO ordemservicoitemcontrole(
+                        IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, \`${txtSetor}\`, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            } else {
+                // Setor especial (galvanizar, punsionadeira, etc.): não há coluna txt — registra sem ela
+                await conn.execute(`
+                    INSERT INTO ordemservicoitemcontrole(
+                        IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E, idmatriz
+                    ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                `, [IdOrdemServicoItem, item.IdOrdemServico, sName.toLowerCase(), item.QtdeTotal, currentInputQty, tipoAppEnv, CriadoPor || 'Sistema', now, req_idmatriz]);
+            }
 
             // 8. Update tagcontrole
-            if (item.IdTag) {
-                const setorCap = sName.charAt(0).toUpperCase() + sName.slice(1).toLowerCase();
+            // Mapa de setores -> nome da coluna EXATO em tagcontrole (apenas setores que têm colunas)
+            const TAGCONTROLE_SETOR_MAP = {
+                'corte': 'Corte', 'dobra': 'Dobra', 'solda': 'Solda', 'pintura': 'Pintura',
+                'montagem': 'Montagem', 'medicao': 'MEDICAO', 'isometrico': 'ISOMETRICO',
+                'engenharia': 'ENGENHARIA', 'acabamento': 'ACABAMENTO', 'aprovacao': 'APROVACAO'
+            };
+            if (item.IdTag && TAGCONTROLE_SETOR_MAP[sName]) {
+                const setorCap = TAGCONTROLE_SETOR_MAP[sName]; // nome exato da coluna
                 const dateCol = `RealizadoFinal${setorCap}Controle`;
                 const userCol = `UsuarioRealizadoFinal${setorCap}Controle`;
                 const [tcRows] = await conn.execute('SELECT IdTagControle FROM tagcontrole WHERE IdTag = ? LIMIT 1', [item.IdTag]);
                 if (tcRows.length > 0) {
-                    await conn.execute(`UPDATE tagcontrole SET ${dateCol} = ?, ${userCol} = ? WHERE IdTagControle = ?`, [dateNow, CriadoPor || 'Sistema', tcRows[0].IdTagControle]);
+                    await conn.execute(`UPDATE tagcontrole SET \`${dateCol}\` = ?, \`${userCol}\` = ? WHERE IdTagControle = ?`, [dateNow, CriadoPor || 'Sistema', tcRows[0].IdTagControle]);
                 } else {
-                    await conn.execute(`INSERT INTO tagcontrole(IdTag, Tag, IdProjeto, Projeto, ${dateCol}, ${userCol}, DataControle) VALUES(?, ?, ?, ?, ?, ?, ?)`,
+                    await conn.execute(`INSERT INTO tagcontrole(IdTag, Tag, IdProjeto, Projeto, \`${dateCol}\`, \`${userCol}\`, DataControle) VALUES(?, ?, ?, ?, ?, ?, ?)`,
                         [item.IdTag, item.Tag, item.IdProjeto, item.Projeto, dateNow, CriadoPor || 'Sistema', dateNow]);
                 }
             }
+            // Setores especiais (galvanizar, punsionadeira, cortealaser etc.) não têm colunas em tagcontrole — log omitido
 
             // 8.5 Incrementar saldo do próximo setor (Fluxo Push)
             if (currentInputQty > 0 && (TipoApontamento !== 'Parcial')) {
@@ -10877,13 +11399,16 @@ osi.*,
         // Reference: VB.NET BancoDados.AtualizaSetoresAnteriores() logic
         if (someSectorFinalized || isMapa) {
             // Equivalent to checking viewordemservicoitemstatussetor.Resultado = 0
+            const allSectorKeys = Object.keys(setorColumns).filter(k => k !== 'mapa');
+            const checkClauses = allSectorKeys.map(key => {
+                const s = setorColumns[key];
+                // Adiciona verificações p/ 'S' ou '1', mantendo retrocompatibilidade
+                return `COALESCE(CASE WHEN (NULLIF(${s.txt}, '') = '1' OR UPPER(NULLIF(${s.txt}, '')) = 'S') AND COALESCE(${s.status}, '') != 'C' THEN 1 ELSE 0 END, 0)`;
+            }).join(' +\n        ');
+
             const [checkSectors] = await conn.execute(`
 SELECT
-    (COALESCE(CASE WHEN NULLIF(txtCorte, '') = '1' AND COALESCE(sttxtCorte, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtDobra, '') = '1' AND COALESCE(sttxtDobra, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtSolda, '') = '1' AND COALESCE(sttxtSolda, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(txtPintura, '') = '1' AND COALESCE(sttxtPintura, '') != 'C' THEN 1 ELSE 0 END, 0) +
-        COALESCE(CASE WHEN NULLIF(TxtMontagem, '') = '1' AND COALESCE(sttxtMontagem, '') != 'C' THEN 1 ELSE 0 END, 0)) as Pendentes
+    (${checkClauses}) as Pendentes
                 FROM ordemservicoitem 
                 WHERE IdOrdemServicoItem = ?
     `, [IdOrdemServicoItem]);
@@ -10977,13 +11502,13 @@ WHERE(Finalizado IS NULL OR Finalizado != 'C')
 });
 
 // DELETE: Estornar apontamento
-app.delete('/api/apontamento/:id', async (req, res) => {
+app.delete('/api/apontamento/:id', tenantMiddleware, async (req, res) => {
     const { usuario, descricao } = req.body;
     const now = getCurrentDateTimeBR();
 
     try {
         // Buscar dados do apontamento antes de deletar
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT IdOrdemServico, IdOrdemServicoItem, Processo, QtdeProduzida FROM ordemservicoitemcontrole WHERE IdOrdemServicoItemControle = ?',
             [req.params.id]
         );
@@ -10996,7 +11521,7 @@ app.delete('/api/apontamento/:id', async (req, res) => {
         const setorConfig = setorColumns[Processo.toLowerCase()];
 
         // Soft delete
-        await pool.execute(
+        await req.tenantDbPool.execute(
             `UPDATE ordemservicoitemcontrole 
              SET D_E_L_E_T_E = '*', UsuarioD_E_L_E_T_E = ?, DataD_E_L_E_T_E = ?, DescricaoEstorno = ?
     WHERE IdOrdemServicoItemControle = ? `,
@@ -11004,13 +11529,13 @@ app.delete('/api/apontamento/:id', async (req, res) => {
         );
 
         // Recalcular percentual
-        const [sumRows] = await pool.execute(`
+        const [sumRows] = await req.tenantDbPool.execute(`
             SELECT COALESCE(SUM(CAST(QtdeProduzida AS UNSIGNED)), 0) as totalProduzido
             FROM ordemservicoitemcontrole
             WHERE IdOrdemServicoItem = ? AND Processo = ? AND(D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
     `, [IdOrdemServicoItem, Processo]);
 
-        const [itemRows] = await pool.execute(
+        const [itemRows] = await req.tenantDbPool.execute(
             'SELECT QtdeTotal FROM ordemservicoitem WHERE IdOrdemServicoItem = ?',
             [IdOrdemServicoItem]
         );
@@ -11022,7 +11547,7 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 
         // Atualizar percentual, total e executar
         if (setorConfig) {
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${setorConfig.total} = ?, ${setorConfig.executar} = ?, ${setorConfig.percentual} = ? WHERE IdOrdemServicoItem = ? `,
                 [totalProduzido, novoExecutar, novoPercentual, IdOrdemServicoItem]
             );
@@ -11030,6 +11555,8 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 
         // Cascatear as alterações da remoção (percentuais dinâmicos da OS/TAG/PROJETO)
         await recalcularQuantidadesTotais(IdOrdemServico, pool);
+        // Subtrair MinProd acumulado do recurso (estorno)
+        await atualizarMinProdCascata(pool, IdOrdemServicoItem, Processo, QtdeProduzida, 'SUB');
 
         res.json({ success: true, message: 'Apontamento estornado com sucesso' });
     } catch (error) {
@@ -11039,14 +11566,14 @@ app.delete('/api/apontamento/:id', async (req, res) => {
 });
 
 // --- DASHBOARD STATS ---
-app.get('/api/dashboard/stats', async (req, res) => {
+app.get('/api/dashboard/stats', tenantMiddleware, async (req, res) => {
     try {
         // Query companies count (active only)
         // Using pool from context (tenant) or default pool
-        const [rows] = await pool.execute("SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'");
+        const [rows] = await req.tenantDbPool.execute("SELECT COUNT(*) as total FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*'");
 
         // Consulta estatísticas dos projetos
-        const [projRows] = await pool.execute(`
+        const [projRows] = await req.tenantDbPool.execute(`
             SELECT 
                 COUNT(*) as total_projetos,
                 SUM(CASE WHEN TRIM(COALESCE(liberado, '')) != 'S' THEN 1 ELSE 0 END) as sem_liberacao,
@@ -11069,18 +11596,15 @@ app.get('/api/dashboard/stats', async (req, res) => {
         res.json({ success: true, stats });
     } catch (error) {
         console.error('Error fetching dashboard stats:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar estatÃ¯Â¿Â½sticas' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar estat?sticas' });
     }
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', tenantMiddleware, (req, res) => {
     res.json({ status: 'ok', timestamp: new Date() });
 });
 
-// Root Redirect
-app.get('/', (req, res) => {
-    res.redirect('/landing.html');
-});
+// Removed Root Redirect to landing.html to allow frontend index.html to be served
 
 // Test DB
 app.get('/test-db', async (req, res) => {
@@ -11190,18 +11714,18 @@ async function ensureConfigColumns(poolRef) {
 
 // GET /api/config - Funciona em QUALQUER banco ativo
 // COPY-ON-FIRST-READ: Se o banco ativo não tiver config própria, retorna a do lynxlocal como template.
-// O vínculo é quebrado na primeira escrita (PUT /api/config ou POST /api/config/menu).
+// O vínculo ? quebrado na primeira escrita (PUT /api/config ou POST /api/config/menu).
 app.get('/api/config', tenantMiddleware, async (req, res) => {
     try {
         await ensureConfigColumns(pool);
 
         // Verifica se o tenant JÁ tem configuração própria (ao menos 1 linha com algum dado salvo)
-        const [countRows] = await pool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
+        const [countRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
             // Banco ativo tem configuração própria: usa ela diretamente
-            const [rows] = await pool.execute(
+            const [rows] = await req.tenantDbPool.execute(
                 `SELECT RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC,
                         MaxRegistros, MenuStructure, PermitirRealizadoSemPlanejamento
                  FROM configuracaosistema LIMIT 1`
@@ -11292,18 +11816,18 @@ app.post('/api/config/validar-caminho', tenantMiddleware, async (req, res) => {
     try {
         if (!caminho) return res.json({ success: false, message: 'Caminho não fornecido' });
         
-        // Verifica se é um diretório acessível
+        // Verifica se ? um diretório acessível
         const stats = require('fs').statSync(caminho, { throwIfNoEntry: false });
         if (!stats) {
             // Tenta criar se não existe
             require('fs').mkdirSync(caminho, { recursive: true });
         } else if (!stats.isDirectory()) {
-            return res.json({ success: false, message: 'O caminho existe mas não é uma pasta' });
+            return res.json({ success: false, message: 'O caminho existe mas não ? uma pasta' });
         }
         
         return res.json({ success: true, message: 'Caminho válido e acessível' });
     } catch (error) {
-        return res.json({ success: false, message: 'O caminho especificado é inválido ou você não tem permissão de acesso.' });
+        return res.json({ success: false, message: 'O caminho especificado ? inválido ou você não tem permissão de acesso.' });
     }
 });
 
@@ -11313,7 +11837,7 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 
         await ensureConfigColumns(pool);
 
-        const [existing] = await pool.execute('SELECT id FROM configuracaosistema LIMIT 1');
+        const [existing] = await req.tenantDbPool.execute('SELECT id FROM configuracaosistema LIMIT 1');
 
         const updates = [];
         const params = [];
@@ -11337,13 +11861,13 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 
         if (updates.length > 0) {
             if (existing.length > 0) {
-                await pool.execute(
+                await req.tenantDbPool.execute(
                     'UPDATE configuracaosistema SET ' + updates.join(', ') + ' WHERE id = ?',
                     [...params, existing[0].id]
                 );
             } else {
                 const defaultProcessos = JSON.stringify(['corte','dobra','solda','pintura','montagem','medicao','isometrico','engenharia','aprovacao','acabamento','expedicao']);
-                await pool.execute(
+                await req.tenantDbPool.execute(
                     `INSERT INTO configuracaosistema (RestringirApontamentoSemSaldoAnterior, ProcessosVisiveis, PlanoCorteFiltroDC, MaxRegistros, PermitirRealizadoSemPlanejamento)
                      VALUES (?, ?, 'corte', ?, ?)`,
                     [restringirApontamento || 'Não', processosVisiveis || defaultProcessos, maxRegistros || 500, permitirRealizadoSemPlanejamento || 'Sim']
@@ -11360,9 +11884,9 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 });
 
 // GET /api/config/setores - Retornar Setores
-app.get('/api/config/setores', async (req, res) => {
+app.get('/api/config/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
+        const [rows] = await req.tenantDbPool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
         res.json({ success: true, setores: rows.map(r => r.Setor) });
     } catch (error) {
         console.error('Error fetching setores:', error);
@@ -11370,10 +11894,10 @@ app.get('/api/config/setores', async (req, res) => {
     }
 });
 
-// GET /api/config/usuarios - Retornar UsuÃ¯Â¿Â½rios (Colaboradores)
-app.get('/api/config/usuarios', async (req, res) => {
+// GET /api/config/usuarios - Retornar Usu?rios (Colaboradores)
+app.get('/api/config/usuarios', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdUsuario, NomeCompleto FROM usuario WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY NomeCompleto");
         res.json({ success: true, usuarios: rows });
     } catch (error) {
         console.error('Error fetching usuarios:', error);
@@ -11382,9 +11906,9 @@ app.get('/api/config/usuarios', async (req, res) => {
 });
 
 // GET /api/config/tipostarefa - Retornar Tipos de Tarefa
-app.get('/api/config/tipostarefa', async (req, res) => {
+app.get('/api/config/tipostarefa', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT IdTipoTarefa, TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoTarefa");
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTipoTarefa, TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoTarefa");
         res.json({ success: true, tipostarefa: rows });
     } catch (error) {
         console.error('Error fetching tipos tarefa:', error);
@@ -11392,12 +11916,12 @@ app.get('/api/config/tipostarefa', async (req, res) => {
     }
 });
 
-// POST /api/producao/pendencia - Gerar PendÃ¯Â¿Â½ncia (AÃ¯Â¿Â½Ã¯Â¿Â½o 2)
-app.post('/api/producao/pendencia', async (req, res) => {
+// POST /api/producao/pendencia - Gerar Pend?ncia (A??o 2)
+app.post('/api/producao/pendencia', tenantMiddleware, async (req, res) => {
     const data = req.body;
 
     if (!data.idOrdemServicoItem || !data.descricaoPendencia) {
-        return res.status(400).json({ success: false, message: 'ID do item e descriÃ¯Â¿Â½Ã¯Â¿Â½o sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios.' });
+        return res.status(400).json({ success: false, message: 'ID do item e descri??o s?o obrigatórios.' });
     }
 
     const conn = await pool.getConnection();
@@ -11448,7 +11972,7 @@ app.post('/api/producao/pendencia', async (req, res) => {
             ];
             await conn.execute(sqlUpdateFinalizar, paramsFinalizar);
             await conn.commit();
-            return res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia finalizada com sucesso!' });
+            return res.json({ success: true, message: 'Pend?ncia finalizada com sucesso!' });
         } else if (data.idOrdemServicoItemPendencia) {
             const sqlUpdate = `
                 UPDATE ordemservicoitempendencia
@@ -11474,7 +11998,7 @@ app.post('/api/producao/pendencia', async (req, res) => {
             ];
             await conn.execute(sqlUpdate, paramsUpdate);
             await conn.commit();
-            return res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia atualizada com sucesso!' });
+            return res.json({ success: true, message: 'Pend?ncia atualizada com sucesso!' });
         }
 
         const sqlInsert = `
@@ -11513,19 +12037,19 @@ app.post('/api/producao/pendencia', async (req, res) => {
         await conn.execute(sqlInsert, params);
 
         await conn.commit();
-        res.json({ success: true, message: 'PendÃ¯Â¿Â½ncia gerada com sucesso!' });
+        res.json({ success: true, message: 'Pend?ncia gerada com sucesso!' });
 
     } catch (error) {
         if (conn) await conn.rollback();
         console.error('[POST /api/producao/pendencia] Error:', error);
-        res.status(500).json({ success: false, message: 'Erro ao gerar pendÃ¯Â¿Â½ncia.' });
+        res.status(500).json({ success: false, message: 'Erro ao gerar pend?ncia.' });
     } finally {
         if (conn) conn.release();
     }
 });
 
-// GET /api/producao/pendencias/historico - Listar pendÃ¯Â¿Â½ncias vinculadas a um item (por CodMatFabricante)
-app.get('/api/producao/pendencias/historico', async (req, res) => {
+// GET /api/producao/pendencias/historico - Listar pend?ncias vinculadas a um item (por CodMatFabricante)
+app.get('/api/producao/pendencias/historico', tenantMiddleware, async (req, res) => {
     console.log('[DEBUG] GET /historico - REACHED ROUTE!');
     try {
         const codMat = req.query.codMatFabricante;
@@ -11584,22 +12108,22 @@ app.get('/api/producao/pendencias/historico', async (req, res) => {
         console.log('[DEBUG] GET /historico - sql:', sql);
         console.log('[DEBUG] GET /historico - params:', params);
 
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
 
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching RNC history:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar histÃ¯Â¿Â½rico' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar histórico' });
     }
 });
 
-// POST /api/producao/reposicao - Gerar ReposiÃ¯Â¿Â½Ã¯Â¿Â½o
-app.post('/api/producao/reposicao', async (req, res) => {
+// POST /api/producao/reposicao - Gerar Reposi??o
+app.post('/api/producao/reposicao', tenantMiddleware, async (req, res) => {
     console.log('[POST /api/producao/reposicao] req.body chamado com:', req.body);
     const { idOrdemServicoItem, qtdeReposicao, motivo, usuario } = req.body;
 
     if (!idOrdemServicoItem || !qtdeReposicao || qtdeReposicao <= 0) {
-        return res.status(400).json({ success: false, message: 'ID do item e quantidade vÃ¯Â¿Â½lida sÃ¯Â¿Â½o obrigatÃ¯Â¿Â½rios.' });
+        return res.status(400).json({ success: false, message: 'ID do item e quantidade v?lida s?o obrigatórios.' });
     }
 
     const conn = await pool.getConnection();
@@ -11617,23 +12141,23 @@ app.post('/api/producao/reposicao', async (req, res) => {
 
         if (itemRows.length === 0) {
             await conn.rollback();
-            return res.status(404).json({ success: false, message: 'Item original nÃ¯Â¿Â½o encontrado.' });
+            return res.status(404).json({ success: false, message: 'Item original não encontrado.' });
         }
 
         const itemPai = itemRows[0];
         const qtdeAtualReposicao = Number(itemPai.QtdeReposicao) || 0;
         const novaQtdeReposicao = qtdeAtualReposicao + Number(qtdeReposicao);
 
-        // 2. Atualizar quantidade de reposiÃ¯Â¿Â½Ã¯Â¿Â½o no item pai original
+        // 2. Atualizar quantidade de reposi??o no item pai original
         await conn.execute(
             `UPDATE ordemservicoitem SET QtdeReposicao = ? WHERE IdOrdemServicoItem = ?`,
             [novaQtdeReposicao, idOrdemServicoItem].map(p => p === undefined ? '' : p)
         );
 
-        // 3. Preparar inserÃ¯Â¿Â½Ã¯Â¿Â½o do Item de ReposiÃ¯Â¿Â½Ã¯Â¿Â½o Pai
+        // 3. Preparar inser??o do Item de Reposi??o Pai
         // Clonar dados do pai ajustando QtdeTotal, Reposicao e campos de status
         const pesoOriginal = parseFloat(itemPai.Peso?.toString().replace(',', '.') || '0');
-        // Peso original da peÃ¯Â¿Â½a ou proporcional - VB.NET usa PesoUnitario * entrada. Mas QtdeTotal original do BD jÃ¯Â¿Â½ armazena Qtde do pai.
+        // Peso original da pe?a ou proporcional - VB.NET usa PesoUnitario * entrada. Mas QtdeTotal original do BD já armazena Qtde do pai.
         // Vamos usar o PesoUnitario calculado se existir ou proporcional.
 
         let pesoUnitario = parseFloat(itemPai.PesoUnitario?.toString().replace(',', '.') || '0');
@@ -11646,7 +12170,7 @@ app.post('/api/producao/reposicao', async (req, res) => {
         const novoAreaPinturaUnitario = parseFloat(itemPai.AreaPinturaUnitario?.toString().replace(',', '.') || '0');
         const novaAreaPinturaTotal = novoAreaPinturaUnitario * novoQtdeTotal;
 
-        // Limpar status de execuÃ¯Â¿Â½Ã¯Â¿Â½o dos diversos setores conforme o VB
+        // Limpar status de execu??o dos diversos setores conforme o VB
         const sqlInsertPai = `
             INSERT INTO ordemservicoitem (
                 IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag,
@@ -11752,7 +12276,7 @@ app.post('/api/producao/reposicao', async (req, res) => {
 
         // Criar a pendencia para o item na rotina do VB.NET 
         // MontarPendenciaReposicao(dgvItemOrdemservico)
-        // Optamos por simular o log mÃ¯Â¿Â½nimo na ordemservicoitempendencia ou ordemservicoitemcontrole
+        // Optamos por simular o log m?nimo na ordemservicoitempendencia ou ordemservicoitemcontrole
         await conn.execute(
             `INSERT INTO ordemservicoitemcontrole (
                 IdOrdemServicoItem, IdOrdemServico, Processo, QtdeProduzida, CriadoPor, DataCriacao, D_E_L_E_T_E, DescricaoEstorno
@@ -11761,18 +12285,88 @@ app.post('/api/producao/reposicao', async (req, res) => {
         );
 
         await conn.commit();
-        res.json({ success: true, message: `ReposiÃ¯Â¿Â½Ã¯Â¿Â½o gerada com sucesso! ${novoQtdeTotal} itens clonados para a nova reposiÃ¯Â¿Â½Ã¯Â¿Â½o.` });
+        res.json({ success: true, message: `Reposi??o gerada com sucesso! ${novoQtdeTotal} itens clonados para a nova reposi??o.` });
 
     } catch (error) {
         if (conn) await conn.rollback();
         console.error('[API] Error in POST /api/producao/reposicao:', error);
-        res.status(500).json({ success: false, message: 'Erro ao gerar reposiÃ¯Â¿Â½Ã¯Â¿Â½o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao gerar reposi??o: ' + error.message });
     } finally {
         if (conn) conn.release();
     }
 });
 
-// ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o - UPDATE
+
+// ==========================================
+// LIMITES DE TEMPO DIARIO DE PRODUCAO
+// ==========================================
+
+app.get('/api/config/limites-recursos', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [rows] = await queryPool.execute('SELECT id, recurso, limite_minutos, visivel FROM producaorecursodiario');
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('[API] Erro ao buscar limites:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar limites' });
+    }
+});
+
+app.get('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [rows] = await queryPool.execute('SELECT id, recurso, limite_minutos, visivel FROM producaorecursodiario WHERE id = ?', [req.params.id]);
+        if (rows.length === 0) return res.status(404).json({ success: false, message: 'Não encontrado' });
+        res.json({ success: true, data: rows[0] });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao buscar limite' });
+    }
+});
+
+app.post('/api/config/limites-recursos', tenantMiddleware, async (req, res) => {
+    const { recurso, limite_minutos, visivel } = req.body;
+    if (!recurso || limite_minutos === undefined) {
+        return res.status(400).json({ success: false, message: 'Parâmetros inválidos' });
+    }
+
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        const [result] = await queryPool.execute('INSERT INTO producaorecursodiario (recurso, limite_minutos, visivel) VALUES (?, ?, ?)', [recurso, limite_minutos, visivel || 'SIM']);
+        res.json({ success: true, message: 'Criado com sucesso', id: result.insertId });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+             return res.status(400).json({ success: false, message: 'Já existe um limite para este recurso' });
+        }
+        res.status(500).json({ success: false, message: 'Erro ao salvar limite: ' + error.message });
+    }
+});
+
+app.put('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const { recurso, limite_minutos, visivel } = req.body;
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        await queryPool.execute('UPDATE producaorecursodiario SET recurso = ?, limite_minutos = ?, visivel = ? WHERE id = ?', [recurso, limite_minutos, visivel || 'SIM', req.params.id]);
+        res.json({ success: true, message: 'Atualizado com sucesso' });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') {
+             return res.status(400).json({ success: false, message: 'Já existe um limite para este recurso' });
+        }
+        res.status(500).json({ success: false, message: 'Erro ao atualizar' });
+    }
+});
+
+app.delete('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res) => {
+    const queryPool = req.tenantDbPool || pool;
+    try {
+        await queryPool.execute('DELETE FROM producaorecursodiario WHERE id = ?', [req.params.id]);
+        res.json({ success: true, message: 'Excluído com sucesso' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao excluir' });
+    }
+});
+
+// Configuração - UPDATE
+
 // MENU CONFIGURATION
 // GET Menu Structure
 // COPY-ON-FIRST-READ: Se o banco ativo não tiver menu próprio, retorna o menu do lynxlocal como template.
@@ -11780,12 +12374,12 @@ app.post('/api/producao/reposicao', async (req, res) => {
 app.get('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         // Verifica se o banco ativo já tem configuração própria (ao menos 1 linha)
-        const [countRows] = await db.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
+        const [countRows] = await req.tenantDbPool.execute('SELECT COUNT(*) as cnt FROM configuracaosistema');
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
             // Banco ativo tem linha própria: usa o MenuStructure local
-            const [rows] = await db.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
+            const [rows] = await req.tenantDbPool.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
             if (rows.length > 0 && rows[0].MenuStructure) {
                 try {
                     const menu = JSON.parse(rows[0].MenuStructure);
@@ -11828,11 +12422,11 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
         await ensureConfigColumns(req.tenantDbPool);
         const menuJson = JSON.stringify(menu);
-        const [rows] = await db.execute('SELECT id FROM configuracaosistema LIMIT 1');
+        const [rows] = await req.tenantDbPool.execute('SELECT id FROM configuracaosistema LIMIT 1');
         if (rows.length > 0) {
-            await db.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
+            await req.tenantDbPool.execute('UPDATE configuracaosistema SET MenuStructure = ? WHERE id = ?', [menuJson, rows[0].id]);
         } else {
-            await db.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
+            await req.tenantDbPool.execute('INSERT INTO configuracaosistema (MenuStructure) VALUES (?)', [menuJson]);
         }
         console.log('[Config/Menu POST] Menu salvo localmente. Banco agora tem config própria.');
         res.json({ success: true });
@@ -11842,12 +12436,12 @@ app.post('/api/config/menu', tenantMiddleware, async (req, res) => {
     }
 });
 
-// --- CRUD: UsuÃ¯Â¿Â½rios ---
+// --- CRUD: Usu?rios ---
 
 // LIST Users
 app.get('/api/usuario', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT idUsuario, NomeCompleto, Login, TipoUsuario, email, status 
             FROM usuario 
             WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' 
@@ -11871,7 +12465,7 @@ app.get('/api/admin/usuarios', tenantMiddleware, async (req, res) => {
         if (NomeCompleto) { filtros.push('NomeCompleto LIKE ?'); params.push(`%${NomeCompleto}%`); }
         if (Setor)        { filtros.push('Setor LIKE ?');        params.push(`%${Setor}%`); }
 
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT idUsuario, NomeCompleto, Login, Senha, TipoUsuario, Setor, email, status,
                    Descricao, Sigla, EnderecoImagem,
                    txtCorte, txtDobra, txtSolda, txtPintura, txtMontagem, txtAlmoxarifado,
@@ -11892,20 +12486,20 @@ app.get('/api/admin/usuarios', tenantMiddleware, async (req, res) => {
 
 
 // GET ONE User
-app.get('/api/usuario/:id', async (req, res) => {
+app.get('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             'SELECT idUsuario, NomeCompleto, Login, Senha, TipoUsuario, email, status FROM usuario WHERE idUsuario = ?',
             [req.params.id]
         );
         if (rows.length > 0) {
             res.json({ success: true, data: rows[0] });
         } else {
-            res.status(404).json({ success: false, message: 'UsuÃ¯Â¿Â½rio nÃ¯Â¿Â½o encontrado' });
+            res.status(404).json({ success: false, message: 'Usu?rio não encontrado' });
         }
     } catch (error) {
         console.error('Error fetching user:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar usuÃ¯Â¿Â½rio' });
+        res.status(500).json({ success: false, message: 'Erro ao buscar usuário' });
     }
 });
 
@@ -11923,7 +12517,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
 
     try {
         // Check if NomeCompleto already exists
-        const [existingName] = await pool.execute(
+        const [existingName] = await req.tenantDbPool.execute(
             "SELECT NomeCompleto FROM usuario WHERE NomeCompleto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [NomeCompleto.trim()]
         );
@@ -11932,7 +12526,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         // Check if Login already exists
-        const [existingLogin] = await pool.execute(
+        const [existingLogin] = await req.tenantDbPool.execute(
             "SELECT idUsuario FROM usuario WHERE Login = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')",
             [Login.trim()]
         );
@@ -11941,7 +12535,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         const now = getCurrentDateTimeBR();
-        const [result] = await pool.execute(
+        const [result] = await req.tenantDbPool.execute(
             `INSERT INTO usuario (
                 NomeCompleto, Login, Senha, TipoUsuario, Setor, email,
                 Descricao, Sigla, DataCadastro, CriadoPor, status,
@@ -12011,7 +12605,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         sql += ' WHERE idUsuario = ?';
         values.push(id);
 
-        await pool.execute(sql, values);
+        await req.tenantDbPool.execute(sql, values);
         res.json({ success: true, message: 'Usuário atualizado com sucesso' });
     } catch (error) {
         console.error('Error updating user:', error);
@@ -12023,7 +12617,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
         const now = getCurrentDateTimeBR();
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuario SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = 'Sistema' WHERE idUsuario = ?",
             [now, req.params.id]
         );
@@ -12039,7 +12633,7 @@ app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 // GET /api/rnc/sectors - List all sectors from dedicated table
 app.get('/api/rnc/sectors', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT DISTINCT Setor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY Setor"
         );
         res.json({ success: true, data: rows.map(r => r.Setor) });
@@ -12069,6 +12663,92 @@ const ensureProcessoFieldsAndRetry = async (pool, query, params) => {
 };
 
 
+
+// Helper to lazily create columns for new generic resources
+const ensureDynamicResourceColumns = async (pool, resourceName) => {
+    if (!resourceName) return;
+    const cleanResource = resourceName.trim().replace(/\s+/g, '');
+    if (!cleanResource) return;
+    
+    try {
+        const [rows] = await pool.execute(`SHOW COLUMNS FROM ordemservicoitem`);
+        const existingCols = rows.map(c => c.Field.toLowerCase());
+        
+        const columnsToAdd = [
+            { name: `txt${cleanResource}`, type: 'VARCHAR(255) NULL' },
+            { name: `${cleanResource}TotalExecutado`, type: 'VARCHAR(255) NULL' },
+            { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
+        ];
+        
+        for (const col of columnsToAdd) {
+            if (!existingCols.includes(col.name.toLowerCase())) {
+                try {
+                    await pool.execute(`ALTER TABLE ordemservicoitem ADD COLUMN \`${col.name}\` ${col.type}`);
+                    console.log(`Column ${col.name} added to ordemservicoitem`);
+                } catch (err) {
+                    console.error(`Error adding ${col.name}:`, err.message);
+                }
+            }
+        }
+        
+        const [osCols] = await pool.execute(`SHOW COLUMNS FROM ordemservico`);
+        const existingOsCols = osCols.map(c => c.Field.toLowerCase());
+        
+        const osColumnsToAdd = [
+            { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+            { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
+        ];
+        
+        for (const col of osColumnsToAdd) {
+            if (!existingOsCols.includes(col.name.toLowerCase())) {
+                try {
+                    await pool.execute(`ALTER TABLE ordemservico ADD COLUMN \`${col.name}\` ${col.type}`);
+                    console.log(`Column ${col.name} added to ordemservico`);
+                } catch (err) {
+                    console.error(`Error adding ${col.name} to ordemservico:`, err.message);
+                }
+            }
+        }
+
+        // --- TAGS TABLE ---
+        try {
+            const [tagsCols] = await pool.execute(`SHOW COLUMNS FROM tags`);
+            const existingTagsCols = tagsCols.map(c => c.Field.toLowerCase());
+            
+            const tagsColumnsToAdd = [
+                { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
+            ];
+            
+            for (const col of tagsColumnsToAdd) {
+                if (!existingTagsCols.includes(col.name.toLowerCase())) {
+                    try {
+                        await pool.execute(`ALTER TABLE tags ADD COLUMN \`${col.name}\` ${col.type}`);
+                        console.log(`Column ${col.name} added to tags`);
+                    } catch (err) {
+                        console.error(`Error adding ${col.name} to tags:`, err.message);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('ensureDynamicResourceColumns failed for tags:', e);
+        }
+
+    } catch (e) {
+        console.error('ensureDynamicResourceColumns failed:', e);
+    }
+};
+
+// Cache to track which resources have had their dynamic columns verified
+const syncedTenantResources = new Map(); // Key: dbName_resourceName
+
 // GET /api/recursos - Listar todos os recursos
 app.get('/api/recursos', tenantMiddleware, async (req, res) => {
     try {
@@ -12093,6 +12773,9 @@ app.post('/api/recursos', tenantMiddleware, async (req, res) => {
         const query = "INSERT INTO processofabricacao (processofabricacao, CodigoProcessoFabricacao, Fabrica, DataLiberada, Setup, TempoPadrao, CriadoPor, DataCriacao, IdMatriz) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
         const params = [processofabricacao, CodigoProcessoFabricacao || '', Fabrica || 'NAO', DataLiberada || 'NAO', Setup || null, TempoPadrao || null, usuario, nowFormat, idMatriz];
         await ensureProcessoFieldsAndRetry(req.tenantDbPool, query, params);
+                // Dynamically create columns for the new resource so queries like Visão Geral won't fail
+        await ensureDynamicResourceColumns(req.tenantDbPool, processofabricacao);
+        
         res.json({ success: true, message: 'Recurso criado com sucesso' });
     } catch (error) {
         console.error('Error creating recurso:', error);
@@ -12106,7 +12789,7 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const { processofabricacao, CodigoProcessoFabricacao, Fabrica, DataLiberada, Setup, TempoPadrao } = req.body;
     try {
         // --- NEW VALIDATION ---
-        const [oldRows] = await db.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
+        const [oldRows] = await req.tenantDbPool.execute('SELECT processofabricacao, Fabrica FROM processofabricacao WHERE IdProcessoFabricacao = ?', [id]);
         if (oldRows.length > 0) {
             const oldProc = oldRows[0];
             const oldFabrica = oldProc.Fabrica || 'NAO';
@@ -12116,11 +12799,11 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
                 const procNameFormatado = (oldProc.processofabricacao || '').trim().replace(/\s+/g, '');
                 if (procNameFormatado) {
                     const colName = `txt${procNameFormatado}`;
-                    const [cols] = await db.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
+                    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
                     if (cols.length > 0) {
-                        const [usage] = await db.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
+                        const [usage] = await req.tenantDbPool.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
                         if (usage.length > 0) {
-                            return res.status(400).json({ success: false, message: 'Não é possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
+                            return res.status(400).json({ success: false, message: 'Não ? possível alterar o campo Fabrica porque este processo já está montado em um item de Ordem de Serviço.' });
                         }
                     }
                 }
@@ -12146,7 +12829,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE processofabricacao SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdProcessoFabricacao = ?",
             [nowFormat, usuario, id]
         );
@@ -12162,7 +12845,7 @@ app.delete('/api/recursos/:id', tenantMiddleware, async (req, res) => {
 // GET /api/setores - Listar todos os setores (usado na tela de Manutenção)
 app.get('/api/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idSetor, Setor, DataLiberada, Fabrica, DataCriacao, CriadoPor FROM setor WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY idSetor DESC"
         );
         res.json({ success: true, data: rows });
@@ -12179,7 +12862,7 @@ app.post('/api/setores', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO setor (Setor, Fabrica, DataLiberada, CriadoPor, DataCriacao) VALUES (?, ?, ?, ?, ?)",
             [Setor, Fabrica || 'NAO', DataLiberada || 'NAO', usuario, nowFormat]
         );
@@ -12195,7 +12878,7 @@ app.put('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Setor, Fabrica, DataLiberada } = req.body;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE setor SET Setor = ?, Fabrica = ?, DataLiberada = ? WHERE idSetor = ?",
             [Setor, Fabrica, DataLiberada, id]
         );
@@ -12213,7 +12896,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE setor SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE idSetor = ?",
             [nowFormat, usuario, id]
         );
@@ -12229,7 +12912,7 @@ app.delete('/api/setores/:id', tenantMiddleware, async (req, res) => {
 // GET /api/motoristas - Listar todos os motoristas
 app.get('/api/motoristas', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT * FROM motorista WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Motorista"
         );
         res.json({ success: true, data: rows });
@@ -12255,7 +12938,7 @@ app.post('/api/motoristas', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO motorista (Motorista, CNH, Categoria, Telefone, DataCadastro) VALUES (?, ?, ?, ?, ?)",
             [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, nowFormat]
         );
@@ -12271,7 +12954,7 @@ app.put('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { Motorista, CNH, Categoria, Telefone, DataVencimentoCNH, ImagemCNH } = req.body;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE motorista SET Motorista = ?, CNH = ?, Categoria = ?, Telefone = ?, DataVencimentoCNH = ?, ImagemCNH = ? WHERE IdMotorista = ?",
               [Motorista, CNH || '', Categoria || '', Telefone || '', DataVencimentoCNH || null, ImagemCNH || null, id]
         );
@@ -12289,7 +12972,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE motorista SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdMotorista = ?",
             [nowFormat, usuario, id]
         );
@@ -12306,7 +12989,7 @@ app.delete('/api/motoristas/:id', tenantMiddleware, async (req, res) => {
 app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     try {
         // Auto-create table if not exists
-        await db.execute(`
+        await req.tenantDbPool.execute(`
             CREATE TABLE IF NOT EXISTS tipotransporte (
                 IdTipoTransporte INT AUTO_INCREMENT PRIMARY KEY,
                 TipoVeiculo VARCHAR(80) NOT NULL,
@@ -12317,7 +13000,7 @@ app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
                 UsuarioD_E_L_E_T_E VARCHAR(80) DEFAULT ''
             )
         `);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdTipoTransporte, TipoVeiculo, Placa FROM tipotransporte WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY TipoVeiculo"
         );
         res.json({ success: true, data: rows });
@@ -12331,12 +13014,12 @@ app.get('/api/tipotransporte', tenantMiddleware, async (req, res) => {
 app.post('/api/tipotransporte', tenantMiddleware, async (req, res) => {
     const { TipoVeiculo, Placa } = req.body;
     if (!TipoVeiculo || !TipoVeiculo.trim()) {
-        return res.status(400).json({ success: false, message: 'Tipo de Veículo é obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo de Veículo ? obrigatório' });
     }
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        const [result] = await db.execute(
+        const [result] = await req.tenantDbPool.execute(
             "INSERT INTO tipotransporte (TipoVeiculo, Placa, DataCadastro) VALUES (?, ?, ?)",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), nowFormat]
         );
@@ -12352,10 +13035,10 @@ app.put('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { TipoVeiculo, Placa } = req.body;
     if (!TipoVeiculo || !TipoVeiculo.trim()) {
-        return res.status(400).json({ success: false, message: 'Tipo de Veículo é obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo de Veículo ? obrigatório' });
     }
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipotransporte SET TipoVeiculo = ?, Placa = ? WHERE IdTipoTransporte = ?",
             [TipoVeiculo.trim().toUpperCase(), (Placa || '').trim().toUpperCase(), id]
         );
@@ -12373,7 +13056,7 @@ app.delete('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
     const now = new Date();
     const nowFormat = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
     try {
-        await db.execute(
+        await req.tenantDbPool.execute(
             "UPDATE tipotransporte SET D_E_L_E_T_E = '*', DataD_E_L_E_T_E = ?, UsuarioD_E_L_E_T_E = ? WHERE IdTipoTransporte = ?",
             [nowFormat, usuario, id]
         );
@@ -12386,9 +13069,9 @@ app.delete('/api/tipotransporte/:id', tenantMiddleware, async (req, res) => {
 
 // GET /api/processosfabricacao - Lista todos os processos de fabricação ativos
 // NOTA: não usar /api/usuario/processos pois conflita com /api/usuario/:id
-app.get('/api/processosfabricacao', async (req, res) => {
+app.get('/api/processosfabricacao', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdProcessoFabricacao, ProcessoFabricacao, CodigoProcessoFabricacao FROM processofabricacao WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY ProcessoFabricacao"
         );
         res.json({ success: true, data: rows });
@@ -12399,9 +13082,9 @@ app.get('/api/processosfabricacao', async (req, res) => {
 });
 
 // GET /api/processosfabricacao/usuario/:id - Lista processos vinculados ao usuário
-app.get('/api/processosfabricacao/usuario/:id', async (req, res) => {
+app.get('/api/processosfabricacao/usuario/:id', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT IdUsuarioprocessofabricacao, ProcessoFabricacao, IdProcessoFabricacao FROM usuarioprocessofabricacao WHERE IdUsuario = ? AND (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY ProcessoFabricacao",
             [req.params.id]
         );
@@ -12413,19 +13096,19 @@ app.get('/api/processosfabricacao/usuario/:id', async (req, res) => {
 });
 
 // POST /api/processosfabricacao/associar - Associa um processo a um usuário
-app.post('/api/processosfabricacao/associar', async (req, res) => {
+app.post('/api/processosfabricacao/associar', tenantMiddleware, async (req, res) => {
     const { IdUsuario, IdProcessoFabricacao, ProcessoFabricacao } = req.body;
     if (!IdUsuario || !IdProcessoFabricacao) return res.status(400).json({ success: false, message: 'Faltam dados obrigatórios' });
     try {
         // Verificar se já existe
-        const [existing] = await pool.execute(
+        const [existing] = await req.tenantDbPool.execute(
             "SELECT 1 FROM usuarioprocessofabricacao WHERE IdUsuario = ? AND IdProcessoFabricacao = ? AND (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL)",
             [IdUsuario, IdProcessoFabricacao]
         );
         if (existing.length > 0) return res.json({ success: false, message: 'Este processo já está associado a este usuário.' });
 
         // Inserir
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO usuarioprocessofabricacao (IdUsuario, IdProcessoFabricacao, ProcessoFabricacao) VALUES (?, ?, ?)",
             [IdUsuario, IdProcessoFabricacao, ProcessoFabricacao]
         );
@@ -12437,10 +13120,10 @@ app.post('/api/processosfabricacao/associar', async (req, res) => {
 });
 
 // DELETE /api/processosfabricacao/desvincular/:id - Remove associação (Desvincula)
-app.delete('/api/processosfabricacao/desvincular/:id', async (req, res) => {
+app.delete('/api/processosfabricacao/desvincular/:id', tenantMiddleware, async (req, res) => {
     try {
         // Exclusão lógica padrão do sistema
-        await pool.execute(
+        await req.tenantDbPool.execute(
             "UPDATE usuarioprocessofabricacao SET D_E_L_E_T_E = '*' WHERE IdUsuarioprocessofabricacao = ?",
             [req.params.id]
         );
@@ -12452,9 +13135,9 @@ app.delete('/api/processosfabricacao/desvincular/:id', async (req, res) => {
 });
 
 // GET /api/config/espessuras - List all espessuras
-app.get('/api/config/espessuras', async (req, res) => {
+app.get('/api/config/espessuras', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC");
+        const [rows] = await req.tenantDbPool.execute("SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching espessuras:', error);
@@ -12463,9 +13146,9 @@ app.get('/api/config/espessuras', async (req, res) => {
 });
 
 // GET /api/config/materiais - List all materialsw
-app.get('/api/config/materiais', async (req, res) => {
+app.get('/api/config/materiais', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute("SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC");
+        const [rows] = await req.tenantDbPool.execute("SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching materiais:', error);
@@ -12474,9 +13157,9 @@ app.get('/api/config/materiais', async (req, res) => {
 });
 
 // GET /api/rnc/collaborators - List active collaborators
-app.get('/api/rnc/collaborators', async (req, res) => {
+app.get('/api/rnc/collaborators', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idUsuario, NomeCompleto, Setor FROM usuario WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY NomeCompleto"
         );
         res.json({ success: true, data: rows });
@@ -12487,9 +13170,9 @@ app.get('/api/rnc/collaborators', async (req, res) => {
 });
 
 // GET /api/rnc/task-types - List task types from dedicated table
-app.get('/api/rnc/task-types', async (req, res) => {
+app.get('/api/rnc/task-types', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT DISTINCT TipoTarefa FROM tipotarefa WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND TipoTarefa IS NOT NULL AND TipoTarefa != '' ORDER BY TipoTarefa"
         );
         res.json({ success: true, data: rows.map(r => r.TipoTarefa) });
@@ -12500,9 +13183,9 @@ app.get('/api/rnc/task-types', async (req, res) => {
 });
 
 // GET /api/rnc/item-data/:idRomaneioItem - Get header data for initial load
-app.get('/api/rnc/item-data/:idRomaneioItem', async (req, res) => {
+app.get('/api/rnc/item-data/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT
 v.IdRomaneioItem,
             v.IDOrdemServicoITEM as IdOrdemServicoItem,
@@ -12533,7 +13216,7 @@ v.IdRomaneioItem,
             `, [req.params.idRomaneioItem]);
 
         if (rows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Item do romaneio nÃ¯Â¿Â½o encontrado' });
+            return res.status(404).json({ success: false, message: 'Item do romaneio não encontrado' });
         }
         res.json({ success: true, data: rows[0] });
     } catch (error) {
@@ -12543,7 +13226,7 @@ v.IdRomaneioItem,
 });
 
 // GET /api/rnc/list/:idRomaneioItem - List existing pendencies (Global or specific)
-app.get('/api/rnc/list/:idRomaneioItem', async (req, res) => {
+app.get('/api/rnc/list/:idRomaneioItem', tenantMiddleware, async (req, res) => {
     const { showFinalized, q1, q2 } = req.query;
 
     // GLOBAL QUERY as requested by user - removing join with viewromaneioitem
@@ -12571,16 +13254,16 @@ WHERE(v.D_E_L_E_T_E IS NULL OR v.D_E_L_E_T_E = '')
     sql += " ORDER BY v.IdOrdemServicoItemPendencia DESC ";
 
     try {
-        const [rows] = await pool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, params);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error listing RNCs:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar pendÃ¯Â¿Â½ncias' });
+        res.status(500).json({ success: false, message: 'Erro ao listar pend?ncias' });
     }
 });
 
 // POST /api/rnc - Save Pendency (RNC) with complex logic from VB.NET
-app.post('/api/rnc', async (req, res) => {
+app.post('/api/rnc', tenantMiddleware, async (req, res) => {
     const data = req.body;
     const connection = await pool.getConnection();
 
@@ -12595,14 +13278,14 @@ app.post('/api/rnc', async (req, res) => {
             );
             if (check.length > 0 && check[0].Estatus === 'FINALIZADA') {
                 await connection.rollback();
-                return res.status(400).json({ success: false, message: 'PendÃ¯Â¿Â½ncia jÃ¯Â¿Â½ Finalizada!' });
+                return res.status(400).json({ success: false, message: 'Pend?ncia já Finalizada!' });
             }
         }
 
         // 2. Validate mandatory Sector
         if (!data.setorResponsavel) {
             await connection.rollback();
-            return res.status(400).json({ success: false, message: 'Informe Setor ResponsÃ¯Â¿Â½vel pela PendÃ¯Â¿Â½ncia!' });
+            return res.status(400).json({ success: false, message: 'Informe Setor Respons?vel pela Pend?ncia!' });
         }
 
         const nowFormatted = getCurrentDateTimeBR();
@@ -12738,7 +13421,7 @@ DescricaoPendencia = ?, SetorResponsavel = ?, TipoCadastro = ?, TipoTarefa = ?,
 });
 
 // POST /api/rnc/finalizar - Finaliza Pendncia e Decrementa Contadores
-app.post('/api/rnc/finalizar', async (req, res) => {
+app.post('/api/rnc/finalizar', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItemPendencia, usuario, setor } = req.body;
     const connection = await pool.getConnection();
 
@@ -12821,7 +13504,7 @@ Estatus = 'FINALIZADA',
 });
 
 // --- SYSTEM UTILITIES ---
-app.post('/api/system/open-folder', async (req, res) => {
+app.post('/api/system/open-folder', tenantMiddleware, async (req, res) => {
     const { path: folderPath } = req.body;
 
     if (!folderPath) {
@@ -12855,9 +13538,9 @@ app.post('/api/admin/db/test', authenticateAdmin, async (req, res) => {
     try {
         const success = await pool.testConnection(config);
         if (success) {
-            res.json({ success: true, message: 'ConexÃ¯Â¿Â½o bem-sucedida! O banco de dados estÃ¯Â¿Â½ acessÃ¯Â¿Â½vel.' });
+            res.json({ success: true, message: 'Conex?o bem-sucedida! O banco de dados est? acess?vel.' });
         } else {
-            res.status(400).json({ success: false, message: 'Falha na conexÃ¯Â¿Â½o. Verifique os dados.' });
+            res.status(400).json({ success: false, message: 'Falha na conex?o. Verifique os dados.' });
         }
     } catch (error) {
         res.status(500).json({ success: false, message: 'Erro ao conectar: ' + error.message });
@@ -12871,7 +13554,7 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
         // 1. Update runtime pool
         const initialized = pool.initPool(newConfig);
         if (!initialized) {
-            throw new Error('Falha ao inicializar o pool com as novas configuraÃ¯Â¿Â½Ã¯Â¿Â½es.');
+            throw new Error('Falha ao inicializar o pool com as novas configurações.');
         }
 
         // 2. Update .env file persistently
@@ -12924,11 +13607,11 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
         fs.writeFileSync(envPath, newLines.join('\n'));
         console.log('[API] .env file updated with new DB config');
 
-        res.json({ success: true, message: 'ConfiguraÃ¯Â¿Â½Ã¯Â¿Â½o salva e aplicada com sucesso!' });
+        res.json({ success: true, message: 'Configuração salva e aplicada com sucesso!' });
 
     } catch (error) {
         console.error('Error saving DB config:', error);
-        res.status(500).json({ success: false, message: 'Erro ao salvar configuraÃ¯Â¿Â½Ã¯Â¿Â½o: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao salvar configuração: ' + error.message });
     }
 });
 
@@ -12936,7 +13619,7 @@ app.post('/api/admin/db/save', authenticateAdmin, async (req, res) => {
 // CONTROLE DE EXPEDIÃƒâ€¡ÃƒÆ’O
 // ============================================================================
 
-app.get('/api/controle-expedicao', async (req, res) => {
+app.get('/api/controle-expedicao', tenantMiddleware, async (req, res) => {
     try {
         const { projeto, tag, descTag, empresa, codmat, descResumo, dataPrevisaoInicio, dataPrevisaoFim, concluidos } = req.query;
         let query = `
@@ -12987,7 +13670,7 @@ WHERE (o.D_E_L_E_T_E IS NULL OR o.D_E_L_E_T_E = '' OR o.D_E_L_E_T_E != '*')
 
         query += " ORDER BY Projeto ASC, Tag ASC LIMIT 1000";
 
-        const [rows] = await pool.execute(query, queryParams);
+        const [rows] = await req.tenantDbPool.execute(query, queryParams);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar viewcontroleexpedicao:', error);
@@ -12996,12 +13679,12 @@ WHERE (o.D_E_L_E_T_E IS NULL OR o.D_E_L_E_T_E = '' OR o.D_E_L_E_T_E != '*')
 });
 
 // ABRIR ARQUIVO GENÃƒâ€°RICO (3D, PDF, etc) - SIMULA PROCESS.START DO VB.NET NO SERVIDOR
-app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
+app.get('/api/controle-expedicao/abrir-arquivo', tenantMiddleware, (req, res) => {
     try {
         let { caminho, tipo } = req.query;
 
         if (!caminho) {
-            return res.status(400).json({ success: false, message: 'Caminho nÃƒÂ£o informado' });
+            return res.status(400).json({ success: false, message: 'Caminho não informado' });
         }
 
         if (tipo === 'pdf' || tipo === 'dxf') {
@@ -13031,12 +13714,12 @@ app.get('/api/controle-expedicao/abrir-arquivo', (req, res) => {
 });
 
 // ABRIR ISOMÃƒâ€°TRICO (Busca caminho no banco e abre)
-app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
+app.get('/api/controle-expedicao/abrir-iso', tenantMiddleware, async (req, res) => {
     try {
         const { idTag } = req.query;
-        if (!idTag) return res.status(400).json({ success: false, message: 'IdTag nÃƒÂ£o informado' });
+        if (!idTag) return res.status(400).json({ success: false, message: 'IdTag não informado' });
 
-        const [rows] = await pool.execute("SELECT CaminhoIsometrico FROM tags WHERE idtag = ?", [idTag]);
+        const [rows] = await req.tenantDbPool.execute("SELECT CaminhoIsometrico FROM tags WHERE idtag = ?", [idTag]);
         
         if (rows.length > 0 && rows[0].CaminhoIsometrico) {
             const endereco = rows[0].CaminhoIsometrico;
@@ -13044,22 +13727,22 @@ app.get('/api/controle-expedicao/abrir-iso', async (req, res) => {
                 const { exec } = require('child_process');
                 exec(`start "" "${endereco}"`, (error) => {
                     if (error) {
-                        return res.status(500).json({ success: false, message: 'Erro ao executar isomÃƒÂ©trico' });
+                        return res.status(500).json({ success: false, message: 'Erro ao executar isomà©trico' });
                     }
-                    res.json({ success: true, message: 'IsomÃƒÂ©trico aberto com sucesso' });
+                    res.json({ success: true, message: 'Isomà©trico aberto com sucesso' });
                 });
             } else {
                 res.status(404).json({ success: false, message: 'Arquivo referenciado na base de dados não existe!!' });
             }
         } else {
-            res.status(404).json({ success: false, message: 'Nenhum caminho isomÃƒÂ©trico encontrado para esta Tag.' });
+            res.status(404).json({ success: false, message: 'Nenhum caminho isomà©trico encontrado para esta Tag.' });
         }
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
+app.get('/api/controle-expedicao/ordem-item', tenantMiddleware, async (req, res) => {
     try {
         const { idOrdemServico, idOrdemServicoItem, tag, projeto } = req.query;
         let query = `
@@ -13080,7 +13763,7 @@ app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
             queryParams.push(`%${projeto}%`);
         }
 
-        const [rows] = await pool.execute(query, queryParams);
+        const [rows] = await req.tenantDbPool.execute(query, queryParams);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Erro ao buscar viewordemservicoitemcontrole:', error);
@@ -13088,7 +13771,7 @@ app.get('/api/controle-expedicao/ordem-item', async (req, res) => {
     }
 });
 
-app.post('/api/controle-expedicao/apontar', async (req, res) => {
+app.post('/api/controle-expedicao/apontar', tenantMiddleware, async (req, res) => {
     const { idOrdemServicoItem, idOrdemServico, idTag, idProjeto, qtde, qtdeTotalDaLinha } = req.body;
     const qtdeNum = parseFloat(qtde);
     
@@ -13104,7 +13787,7 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
     }
 
     if (!idOrdemServicoItem || !qtdeNum || qtdeNum <= 0) {
-        return res.status(400).json({ success: false, message: 'Dados invÃƒÂ¡lidos.' });
+        return res.status(400).json({ success: false, message: 'Dados inválidos.' });
     }
 
     let connection;
@@ -13116,9 +13799,9 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
 
         let qtdExpedidaGeral = 0;
 
-        // 4 e 5: a quantidade digitada serÃƒÂ¡ acrescida ao campo de total de expediÃƒÂ§ÃƒÂ£o
-        // Se na primeira atualizaÃƒÂ§ÃƒÂ£o a data de realizado inicio estiver vazia, atualizar.
-        // 6: Se qtde entrada + total expediÃƒÂ§ÃƒÂ£o == qtde total, atualizar realizado final.
+        // 4 e 5: a quantidade digitada será acrescida ao campo de total de expedià§ão
+        // Se na primeira atualizaà§ão a data de realizado inicio estiver vazia, atualizar.
+        // 6: Se qtde entrada + total expedià§ão == qtde total, atualizar realizado final.
 
         const tabelas = [
             { 
@@ -13212,7 +13895,7 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
         res.json({ success: true, message: 'Apontamento registrado com sucesso.' });
     } catch (error) {
         if (connection) await connection.rollback();
-        console.error('Erro ao apontar expediÃƒÂ§ÃƒÂ£o:', error);
+        console.error('Erro ao apontar expedià§ão:', error);
         res.status(500).json({ success: false, message: 'Erro interno ao salvar.' });
     } finally {
         if (connection) connection.release();
@@ -13220,31 +13903,31 @@ app.post('/api/controle-expedicao/apontar', async (req, res) => {
 });
 
 // Exportar Tarefas / PCP Excel
-app.post('/api/tarefas/exportar-excel', async (req, res) => {
+app.post('/api/tarefas/exportar-excel', tenantMiddleware, async (req, res) => {
     try {
         const { tarefas, usuario } = req.body;
         
         // 1. Buscar Caminhos e Template
-        const [configRows] = await pool.execute(
+        const [configRows] = await req.tenantDbPool.execute(
             "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoTemplateExcelRelatorios'"
         );
         const templatePath = configRows.length > 0 ? configRows[0].valor : null;
 
         if (!templatePath || !fs.existsSync(templatePath)) {
-            console.warn(`[Excel] Planilha template nÃƒÂ£o encontrada: ${templatePath}`);
-            return res.status(400).json({ success: false, message: 'A planilha template nÃƒÂ£o foi encontrada no caminho configurado.' });
+            console.warn(`[Excel] Planilha template não encontrada: ${templatePath}`);
+            return res.status(400).json({ success: false, message: 'A planilha template não foi encontrada no caminho configurado.' });
         }
 
         const workbook = new ExcelJS.Workbook();
         await workbook.xlsx.readFile(templatePath);
         const worksheet = workbook.getWorksheet(1); // Pega a primeira aba
         
-        // CabeÃƒÂ§alho (BH2 = Data, BH3 = Usuario)
+        // Cabeà§alho (BH2 = Data, BH3 = Usuario)
         const nowFormatted = new Date().toLocaleDateString('pt-BR');
         worksheet.getCell('BH2').value = nowFormatted;
         worksheet.getCell('BH3').value = usuario || 'Sistema';
 
-        // Linha 12 tem a formataÃƒÂ§ÃƒÂ£o base, copiamos os valores a partir da linha 13
+        // Linha 12 tem a formataà§ão base, copiamos os valores a partir da linha 13
         tarefas.forEach((t, idx) => {
             const rowIdx = idx + 13;
             worksheet.getCell(`A${rowIdx}`).value = (t.idRnc || '').toString().trim().toUpperCase();
@@ -13273,18 +13956,18 @@ app.post('/api/tarefas/exportar-excel', async (req, res) => {
         
         await workbook.xlsx.write(res);
         res.end();
-        console.log(`[Excel] RelatÃƒÂ³rio de tarefas gerado e baixado (${tarefas?.length || 0} itens)`);
+        console.log(`[Excel] Relatà³rio de tarefas gerado e baixado (${tarefas?.length || 0} itens)`);
 
     } catch (error) {
         console.error('[Excel Tarefas] Erro ao exportar:', error);
         if (!res.headersSent) {
-            res.status(500).json({ success: false, message: 'Erro ao gerar relatÃƒÂ³rio Excel: ' + error.message });
+            res.status(500).json({ success: false, message: 'Erro ao gerar relatà³rio Excel: ' + error.message });
         }
     }
 });
 
 // Pesquisar Desenho Endpoint
-app.get('/api/pesquisar-desenho', async (req, res) => {
+app.get('/api/pesquisar-desenho', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { projeto, tag, codMat, descResumo, descDetal, espessura, material } = req.query;
@@ -13393,7 +14076,7 @@ const resolveDrawingPath = (basePath, type) => {
     return resolved;
 };
 
-app.get('/api/ordemservicoitem/check-file', (req, res) => {
+app.get('/api/ordemservicoitem/check-file', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath, type } = req.query;
         if (!filePath) return res.json({ exists: false });
@@ -13411,8 +14094,8 @@ app.get('/api/ordemservicoitem/check-file', (req, res) => {
     }
 });
 
-// Sem autenticaÃƒÂ§ÃƒÂ£o obrigatÃƒÂ³ria para facilitar window.open em nova guia. Ideal: usar tokens em querystring se necessÃƒÂ¡rio.
-app.get('/api/pdf', (req, res) => {
+// Sem autenticaà§ão obrigatà³ria para facilitar window.open em nova guia. Ideal: usar tokens em querystring se necessário.
+app.get('/api/pdf', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath } = req.query;
         if (!filePath) return res.status(400).send('Path is required');
@@ -13433,7 +14116,7 @@ app.get('/api/pdf', (req, res) => {
     }
 });
 
-app.get('/api/download', (req, res) => {
+app.get('/api/download', tenantMiddleware, (req, res) => {
     try {
         const { path: filePath, type } = req.query;
         if (!filePath || !type) return res.status(400).send('Path and type are required');
@@ -13447,15 +14130,63 @@ app.get('/api/download', (req, res) => {
             const stream = fs.createReadStream(resolvedPath);
             stream.pipe(res);
         } else {
-            res.status(404).send('<script>alert("Arquivo nÃƒÂ£o encontrado!"); window.close();</script>');
+            res.status(404).send('<script>alert("Arquivo não encontrado!"); window.close();</script>');
         }
     } catch (err) {
         res.status(500).send(err.message);
     }
 });
 
-// --- ÃƒÂcone 5: Excluir linha OS ---
-app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
+// --- àcone 5: Excluir linha OS ---
+// --- Toggle Produto Principal ---
+app.post('/api/ordemservicoitem/:id/toggle-principal', tenantMiddleware, async (req, res) => {
+    let connection = null;
+    try {
+        const { id } = req.params;
+        const { marcar, idOrdemServico } = req.body;
+
+        if (!id || idOrdemServico === undefined) {
+            return res.status(400).json({ success: false, message: 'IdOrdemServicoItem e idOrdemServico são obrigatórios.' });
+        }
+
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        if (marcar) {
+            // Clear any existing Produto Principal for this OS first
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = NULL WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [idOrdemServico]
+            );
+            // Mark the selected item as Produto Principal
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = 'SIM' WHERE IdOrdemServicoItem = ?`,
+                [id]
+            );
+        } else {
+            // Unmark Produto Principal
+            await connection.execute(
+                `UPDATE ordemservicoitem SET ProdutoPrincipal = NULL WHERE IdOrdemServicoItem = ?`,
+                [id]
+            );
+        }
+
+        await connection.commit();
+        return res.json({
+            success: true,
+            message: marcar ? 'Item marcado como Produto Principal.' : 'Produto Principal desmarcado.'
+        });
+    } catch (error) {
+        if (connection) { try { await connection.rollback(); } catch (e) {} }
+        console.error('[API] Error toggle-principal:', error);
+        return res.status(500).json({ success: false, message: 'Erro ao atualizar Produto Principal.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+app.post('/api/ordemservicoitem/alterar-fator', tenantMiddleware, async (req, res) => {
+
     let connection = null;
     try {
         const { IdOrdemServicoItem, Fator } = req.body;
@@ -13516,7 +14247,231 @@ app.post('/api/ordemservicoitem/alterar-fator', async (req, res) => {
     }
 });
 
-app.delete('/api/ordemservicoitem/:id', async (req, res) => {
+// ============================================================
+// PUT /api/ordemservicoitem/:id/tempos - Manutencao de Tempos de Producao
+// ============================================================
+// Mapa de prefixo do campo de BD para cada recurso/setor
+const SETOR_PREFIXO_MAP = {
+    corte:        'Corte',
+    dobra:        'Dobra',
+    solda:        'Solda',
+    pintura:      'Pintura',
+    montagem:     'Montagem',
+    cortealasar:  'CorteaLaser',
+    punsionadeira:'Punsionadeira',
+    galvanizar:   'Galvanizar',
+    engenharia:   'Engenharia',
+};
+
+app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) => {
+    let conn = null;
+    try {
+        const { id } = req.params;
+        const { TempoSetup, TempoPadrao, TotalTempo, recursoTempos, QtdeTotal,
+                addRecursos, removeRecursos, osContext } = req.body;
+
+        const dbPool = req.tenantDbPool || pool;
+
+        // --- Campos dinâmicos por recurso (tempos) ---
+        const setClauses = [];
+        const values = [];
+        let globalSetup = parseFloat(TempoSetup) || 0;
+        let globalPadrao = parseFloat(TempoPadrao) || 0;
+        let globalTotal = parseFloat(TotalTempo) || 0;
+        const qtde = parseFloat(QtdeTotal) || 0;
+
+        // Buscar as sequencias atuais do item para descobrir o maior valor
+        const [rowItemSeq] = await dbPool.execute(`SELECT CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia, MontagemSequencia, CorteaLaserSequencia, PunsionadeiraSequencia, GalvanizarSequencia, EngenhariaSequencia FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`, [id]);
+        let maxSeq = 0;
+        if (rowItemSeq.length > 0) {
+            const itemSeqs = rowItemSeq[0];
+            for (const key in itemSeqs) {
+                if (itemSeqs[key] !== null && itemSeqs[key] > maxSeq) {
+                    maxSeq = itemSeqs[key];
+                }
+            }
+        }
+
+        // Tambem verificar se o usuario passou alguma sequencia explicitamente no payload que seja maior
+        if (recursoTempos && typeof recursoTempos === 'object') {
+            for (const vals of Object.values(recursoTempos)) {
+                const rSeqParsed = parseInt(vals.seq, 10);
+                if (!isNaN(rSeqParsed) && rSeqParsed > maxSeq) {
+                    maxSeq = rSeqParsed;
+                }
+            }
+        }
+
+        if (recursoTempos && typeof recursoTempos === 'object' && Object.keys(recursoTempos).length > 0) {
+            let sumSetup = 0, sumPadrao = 0, sumTotal = 0;
+            for (const [secKey, vals] of Object.entries(recursoTempos)) {
+                const pref = SETOR_PREFIXO_MAP[secKey];
+                if (!pref) continue;
+                const rSetup  = Math.max(0, parseFloat(vals.setup)  || 0);
+                const rPadrao = Math.max(0, parseFloat(vals.padrao) || 0);
+                
+                let rSeqParsed = parseInt(vals.seq, 10);
+                if (isNaN(rSeqParsed)) {
+                    maxSeq = maxSeq === 0 ? 10 : (Math.floor(maxSeq / 10) * 10 + 10);
+                    rSeqParsed = maxSeq;
+                    vals.seq = rSeqParsed.toString();
+                }
+                const rSeq = rSeqParsed;
+                
+                const rTotal  = (qtde * rPadrao) + rSetup;
+                setClauses.push(`${pref}TempoSetup = ?`, `${pref}TempoPadrao = ?`, `${pref}TotalTempo = ?`, `${pref}Sequencia = ?`);
+                values.push(rSetup, rPadrao, rTotal, rSeq);
+                sumSetup  += rSetup;
+                sumPadrao += rPadrao;
+                sumTotal  += rTotal;
+            }
+            globalSetup  = sumSetup;
+            globalPadrao = sumPadrao;
+            globalTotal  = sumTotal;
+        }
+
+        setClauses.push('TempoSetup = ?', 'TempoPadrao = ?', 'TotalTempo = ?');
+        values.push(globalSetup, globalPadrao, globalTotal);
+        values.push(id); // WHERE
+
+        await dbPool.execute(
+            `UPDATE ordemservicoitem SET ${setClauses.join(', ')} WHERE IdOrdemServicoItem = ?`,
+            values
+        );
+
+        // --- Ativar/desativar flags txt* para recursos adicionados/removidos ---
+        // Mapa de campo txt* por secKey
+        const TXT_FIELD_MAP = {
+            corte:         'txtCorte',
+            dobra:         'txtDobra',
+            solda:         'txtSolda',
+            pintura:       'txtPintura',
+            montagem:      'TxtMontagem',
+            cortealasar:   'txtCorteaLaser',
+            punsionadeira: 'txtPUNSIONADEIRA',
+            galvanizar:    'txtGALVANIZAR',
+            engenharia:    'txtEngenharia',
+        };
+
+        // Buscar IdOrdemServico do item para propagar nas tabelas pai e infos de material para atualizar engenharia
+        const [itemRows] = await dbPool.execute(
+            `SELECT IdOrdemServico, IdMaterial, CodMatFabricante FROM ordemservicoitem WHERE IdOrdemServicoItem = ? LIMIT 1`, [id]
+        );
+        const itemOsId = itemRows.length > 0 ? itemRows[0].IdOrdemServico : null;
+        const itemIdMaterial = itemRows.length > 0 ? itemRows[0].IdMaterial : null;
+        const itemCodMatFabricante = itemRows.length > 0 ? itemRows[0].CodMatFabricante : null;
+        
+        // Atualizar SequenciaExecucao na tabela material_processo (Engenharia) se o recurso foi modificado
+        if (itemIdMaterial || itemCodMatFabricante) {
+            for (const [secKey, vals] of Object.entries(recursoTempos || {})) {
+                if (vals.IdProcesso) {
+                    const seqParsed = parseInt(vals.seq, 10);
+                    const seqNum = isNaN(seqParsed) ? 99 : seqParsed;
+                    const tSetup = vals.setup != null && vals.setup !== '' ? parseFloat(vals.setup) : null;
+                    const tPadrao = vals.padrao != null && vals.padrao !== '' ? parseFloat(vals.padrao) : null;
+                    
+                    try {
+                        const [resUpd] = await dbPool.execute(
+                            `UPDATE material_processo SET SequenciaExecucao = ?, TempoEstimadoMin = ?, TempoPadraoMin = ? WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
+                            [seqNum, tSetup, tPadrao, itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso]
+                        );
+                        if (resUpd.affectedRows === 0) {
+                            await dbPool.execute(
+                                `INSERT INTO material_processo (IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, TempoEstimadoMin, TempoPadraoMin, Ativo, UsuarioCriacao, DataCriacao, IdMatriz)
+                                 VALUES (?, ?, ?, ?, ?, ?, 'A', ?, NOW(), ?)`,
+                                [itemIdMaterial || 0, itemCodMatFabricante || '', vals.IdProcesso, seqNum, tSetup, tPadrao, req.user?.NomeCompleto || req.user?.nome || 'Sistema', req.tenantUser?.tenantId || null]
+                            );
+                        }
+                    } catch(e) {
+                        console.warn(`[Tempos] Erro ao atualizar material_processo para ${secKey}:`, e.message);
+                    }
+                }
+            }
+        }
+
+        // Buscar IdTag e IdProjeto da OS
+        let itemIdTag = osContext?.IdTag || null;
+        let itemIdProjeto = osContext?.IdProjeto || null;
+        if (itemOsId && (!itemIdTag || !itemIdProjeto)) {
+            const [osRows] = await dbPool.execute(
+                `SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ? LIMIT 1`, [itemOsId]
+            );
+            if (osRows.length > 0) {
+                if (!itemIdTag)     itemIdTag     = osRows[0].IdTag;
+                if (!itemIdProjeto) itemIdProjeto = osRows[0].IdProjeto;
+            }
+        }
+
+        // Ativar flags para recursos adicionados
+        if (Array.isArray(addRecursos) && addRecursos.length > 0) {
+            for (const secKey of addRecursos) {
+                const txtField = TXT_FIELD_MAP[secKey];
+                const pref     = SETOR_PREFIXO_MAP[secKey];
+                if (!txtField || !pref) continue;
+                // Ativar no item
+                try { await dbPool.execute(`UPDATE ordemservicoitem SET \`${txtField}\` = '1' WHERE IdOrdemServicoItem = ?`, [id]); } catch(e) { console.warn(`[Tempos] flag item ${txtField}:`, e.message); }
+                // Ativar na OS pai
+                if (itemOsId) { try { await dbPool.execute(`UPDATE ordemservico SET \`${txtField}\` = '1' WHERE IdOrdemServico = ?`, [itemOsId]); } catch(e) { console.warn(`[Tempos] flag OS ${txtField}:`, e.message); } }
+                // Ativar na tag
+                if (itemIdTag) { try { await dbPool.execute(`UPDATE tags SET \`${txtField}\` = '1' WHERE IdTag = ?`, [itemIdTag]); } catch(e) { console.warn(`[Tempos] flag tag ${txtField}:`, e.message); } }
+                // Ativar no projeto
+                if (itemIdProjeto) { try { await dbPool.execute(`UPDATE projetos SET \`${txtField}\` = '1' WHERE IdProjeto = ?`, [itemIdProjeto]); } catch(e) { console.warn(`[Tempos] flag proj ${txtField}:`, e.message); } }
+                console.log(`[Tempos] Recurso ADICIONADO: ${secKey} (${txtField}) no item ${id}`);
+            }
+        }
+
+        // Desativar flags para recursos removidos (apenas no item — OS/tag/projeto podem ter outros itens)
+        if (Array.isArray(removeRecursos) && removeRecursos.length > 0) {
+            for (const item of removeRecursos) {
+                const secKey = typeof item === 'string' ? item : item.key;
+                const idProc = typeof item === 'object' ? item.IdProcesso : null;
+                const txtField = TXT_FIELD_MAP[secKey];
+                const pref     = SETOR_PREFIXO_MAP[secKey];
+                if (!txtField || !pref) continue;
+                // Desativar no item e zerar tempos do recurso
+                try {
+                    await dbPool.execute(
+                        `UPDATE ordemservicoitem SET \`${txtField}\` = '0',
+                         \`${pref}TempoSetup\` = 0, \`${pref}TempoPadrao\` = 0, \`${pref}TotalTempo\` = 0
+                         WHERE IdOrdemServicoItem = ?`, [id]
+                    );
+                } catch(e) { console.warn(`[Tempos] desativar item ${txtField}:`, e.message); }
+                
+                // Excluir da tabela material_processo
+                if (idProc && (itemIdMaterial || itemCodMatFabricante)) {
+                    try {
+                        await dbPool.execute(
+                            `DELETE FROM material_processo WHERE (IdMaterial = ? OR codmatFabricante = ?) AND IdProcesso = ?`,
+                            [itemIdMaterial || 0, itemCodMatFabricante || '', idProc]
+                        );
+                    } catch(e) {
+                        console.warn(`[Tempos] Erro ao deletar material_processo para ${secKey}:`, e.message);
+                    }
+                }
+                
+                console.log(`[Tempos] Recurso REMOVIDO: ${secKey} (${txtField}) no item ${id}`);
+            }
+        }
+
+        console.log(`[Tempos] Item ${id}: global setup=${globalSetup}, padrao=${globalPadrao}, total=${globalTotal}`);
+        
+        if (itemOsId) {
+            try {
+                await recalcularQuantidadesTotais(itemOsId, dbPool);
+                console.log(`[Tempos] Recalculo de totais (OS, Tag, Projeto) concluído para OS ${itemOsId}`);
+            } catch(e) {
+                console.error(`[Tempos] Erro ao recalcular totais para OS ${itemOsId}:`, e.message);
+            }
+        }
+
+        return res.json({ success: true, message: 'Tempos de produção atualizados com sucesso.', globalSetup, globalPadrao, globalTotal, recursoTempos });
+    } catch (err) {
+        console.error('[API] Erro ao atualizar tempos:', err.message);
+        return res.status(500).json({ success: false, message: err.message });
+    }
+});
+
+app.delete('/api/ordemservicoitem/:id', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const id = req.params.id;
@@ -13583,7 +14538,7 @@ app.delete('/api/ordemservicoitem/:id', async (req, res) => {
 // ============================================================================
 // TESTE FINAL MONTAGEM
 // ============================================================================
-app.get('/api/teste-final-montagem/itens', async (req, res) => {
+app.get('/api/teste-final-montagem/itens', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -13659,9 +14614,9 @@ app.get('/api/teste-final-montagem/itens', async (req, res) => {
 });
 
 // ----------------------------------------------------------------------------
-// TESTE FINAL MONTAGEM Ã¢â‚¬â€ LanÃƒÂ§ar quantidade testada
+// TESTE FINAL MONTAGEM Ã¢â‚¬â€ Lanà§ar quantidade testada
 // ----------------------------------------------------------------------------
-app.post('/api/teste-final-montagem/lancar', async (req, res) => {
+app.post('/api/teste-final-montagem/lancar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -13672,7 +14627,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
         const entrada = Number(entradaRaw);
 
         if (!IdOrdemServicoItem || !entrada) {
-            return res.status(400).json({ success: false, message: 'ParÃƒÂ¢metros invÃƒÂ¡lidos.' });
+            return res.status(400).json({ success: false, message: 'Parà¢metros inválidos.' });
         }
 
         // 1. Buscar dados atuais do item
@@ -13684,14 +14639,14 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
             [IdOrdemServicoItem]
         );
 
-        if (!item) return res.status(404).json({ success: false, message: 'Item nÃƒÂ£o encontrado.' });
+        if (!item) return res.status(404).json({ success: false, message: 'Item não encontrado.' });
 
-        // 2. ValidaÃƒÂ§ÃƒÂµes
+        // 2. Validaà§àµes
         if (item.OrdemServicoItemFinalizado === 'C') {
-            return res.json({ success: false, message: 'Item jÃƒÂ¡ finalizado!' });
+            return res.json({ success: false, message: 'Item já finalizado!' });
         }
         if (item.sttxtMontagem === 'C') {
-            return res.json({ success: false, message: 'Item jÃƒÂ¡ finalizado no setor de Montagem!' });
+            return res.json({ success: false, message: 'Item já finalizado no setor de Montagem!' });
         }
 
         // Tag finalizada?
@@ -13700,7 +14655,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                 'SELECT Finalizado FROM tags WHERE idtag = ? LIMIT 1', [IdTag]
             );
             if (tagRow && tagRow.Finalizado && tagRow.Finalizado !== '') {
-                return res.json({ success: false, message: 'Tag jÃƒÂ¡ Finalizada!' });
+                return res.json({ success: false, message: 'Tag já Finalizada!' });
             }
         }
 
@@ -13709,7 +14664,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
 
         // Validar entrada
         if (isNaN(entrada) || entrada <= 0 || entrada > qtdeTotal) {
-            return res.json({ success: false, message: 'Valor informado invÃƒÂ¡lido!' });
+            return res.json({ success: false, message: 'Valor informado inválido!' });
         }
 
         const novoExecutado = executadoAtual + entrada;
@@ -13734,7 +14689,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                 [novoExecutado, agora, agoraData, IdOrdemServicoItem]
             );
 
-            // Preencher inÃƒÂ­cio se vazio
+            // Preencher inà­cio se vazio
             if (!item.RealizadoInicioMontagem) {
                 await connection.execute(
                     `UPDATE ordemservicoitem SET RealizadoInicioMontagem = ? WHERE IdOrdemServicoItem = ?`,
@@ -13785,7 +14740,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
                     );
                 }
 
-                // Verificar se todos itens da OS foram concluÃƒÂ­dos
+                // Verificar se todos itens da OS foram concluà­dos
                 const [[countRow]] = await connection.execute(
                     `SELECT COUNT(IdOrdemServicoItem) as pendentes FROM ordemservicoitem
                      WHERE IdOrdemServico = ?
@@ -13855,7 +14810,7 @@ app.post('/api/teste-final-montagem/lancar', async (req, res) => {
 // PLANO DE CORTE — Lista para tela de MONTAGEM
 // GET /api/plano-corte/lista
 // ============================================================================
-app.get('/api/plano-corte/lista', async (req, res) => {
+app.get('/api/plano-corte/lista', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -13925,7 +14880,7 @@ app.get('/api/plano-corte/lista', async (req, res) => {
 //   exibirTodos=false (PENDENTES): exclui concluídos
 //   exibirTodos=true  (TODOS):     mostra todos enviados, concluídos ou não
 // ============================================================================
-app.get('/api/producao-plano-corte/lista', async (req, res) => {
+app.get('/api/producao-plano-corte/lista', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -13994,7 +14949,7 @@ app.get('/api/producao-plano-corte/lista', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Itens disponíveis para Montagem
 // ============================================================================
-app.get('/api/plano-corte/itens-disponiveis', async (req, res) => {
+app.get('/api/plano-corte/itens-disponiveis', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14238,7 +15193,7 @@ app.get('/api/plano-corte/itens/:idPlano', _handlePlanoItens);
 // POST /api/producao-plano-corte/:id/liberar-producao
 // Espelha VB.NET: Liberar Plano de Corte para Produção
 // Atualiza LiberacaoParaCorte = 'S', DataLiberacaoParaCorte, UsuarioLiberacaoParaCorte
-app.post('/api/producao-plano-corte/:id/liberar-producao', async (req, res) => {
+app.post('/api/producao-plano-corte/:id/liberar-producao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14282,7 +15237,7 @@ app.post('/api/producao-plano-corte/:id/liberar-producao', async (req, res) => {
 // Espelha VB.NET: Finalizar Plano de Corte
 // 1. Marca plano como concluído
 // 2. Finaliza compulsoriamente itens pendentes
-app.post('/api/producao-plano-corte/:id/finalizar', async (req, res) => {
+app.post('/api/producao-plano-corte/:id/finalizar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14376,7 +15331,7 @@ app.post('/api/producao-plano-corte/:id/finalizar', async (req, res) => {
 
 // POST /api/producao-plano-corte/itens/:id/lancar-producao
 // Lançamento de produção manual para item individual (Ícone 5)
-app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res) => {
+app.post('/api/producao-plano-corte/itens/:id/lancar-producao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14391,7 +15346,7 @@ app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res)
 
         // 1. Busca dados do item
         const [[item]] = await connection.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, IdProjeto, IdTag, QtdeTotal, 
                     CorteTotalExecutado, CorteTotalExecutar, sttxtcorte,
                     txtDobra, txtSolda, txtPintura, txtMontagem, 
                     RealizadoInicioCorte, COALESCE(QtdeReposicao, 0) AS QtdeReposicao
@@ -14477,7 +15432,7 @@ app.post('/api/producao-plano-corte/itens/:id/lancar-producao', async (req, res)
                 QtdeTotal, QtdeProduzida, QtdeFaltante, CriadoPor, DataCriacao, Situacao, TipoApontamento, txtCorte
             ) VALUES (?, ?, 0, 'CORTE', ?, ?, ?, ?, ?, 'LANCAMENTO', ?, ?)`,
             [item.IdOrdemServico, id, qtdeTotal, qtd, novoExecutar, usuario, agoraFull, tipoAppEnv, qtd]
-        ); // Nota: QtdeProduzida é a diferença (qtd) e txtCorte foi unificado
+        ); // Nota: QtdeProduzida ? a diferença (qtd) e txtCorte foi unificado
 
         // 4. Propaga para próximo setor
         let proximoCol = null;
@@ -14559,7 +15514,7 @@ app.get('/api/producao-plano-corte/itens/:idPlano', _handlePlanoItens);
 // ============================================================================
 // PLANO DE CORTE — Abrir Pasta no Servidor (Explorer)
 // ============================================================================
-app.post('/api/plano-corte/:id/abrir-pasta', async (req, res) => {
+app.post('/api/plano-corte/:id/abrir-pasta', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14612,7 +15567,7 @@ app.post('/api/plano-corte/:id/abrir-pasta', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Abrir Desenho no Servidor (3D ou PDF)
 // ============================================================================
-app.post('/api/plano-corte/abrir-desenho', async (req, res) => {
+app.post('/api/plano-corte/abrir-desenho', tenantMiddleware, async (req, res) => {
     try {
         let { filePath, tipo } = req.body;
         if (!filePath) return res.json({ success: false, message: 'Caminho do arquivo não fornecido.' });
@@ -14653,7 +15608,7 @@ app.post('/api/plano-corte/abrir-desenho', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Liberar Plano de Corte (Importar Arquivos + Set Enviadocorte 'S')
 // ============================================================================
-app.post('/api/plano-corte/:id/liberar', async (req, res) => {
+app.post('/api/plano-corte/:id/liberar', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14702,7 +15657,7 @@ app.post('/api/plano-corte/:id/liberar', async (req, res) => {
 
         // Busca todos itens da OS
         const [itens] = await connection.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo 
              FROM ordemservicoitem 
              WHERE idplanodecorte = ? AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')`,
             [id]
@@ -14773,7 +15728,7 @@ app.post('/api/plano-corte/:id/liberar', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Cancelar Liberação (equivalente ao UpdateCancelaEnvioPC do VB)
 // ============================================================================
-app.post('/api/plano-corte/:id/cancelar-liberacao', async (req, res) => {
+app.post('/api/plano-corte/:id/cancelar-liberacao', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14811,7 +15766,7 @@ app.post('/api/plano-corte/:id/cancelar-liberacao', async (req, res) => {
 // Equivalente: BancoDados.AlteracaoEspecifica("planodecorte","enviadocorte","B",...)
 // Condições: plano NÃO pode estar liberado ('S') nem já bloqueado ('B')
 // ============================================================================
-app.post('/api/plano-corte/:id/bloquear', async (req, res) => {
+app.post('/api/plano-corte/:id/bloquear', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14860,7 +15815,7 @@ app.post('/api/plano-corte/:id/bloquear', async (req, res) => {
 // PLANO DE CORTE — Desbloquear preenchimento automático (Enviadocorte = '')
 // Desfaz o processo de bloqueio (ícone 6)
 // ============================================================================
-app.post('/api/plano-corte/:id/desbloquear', async (req, res) => {
+app.post('/api/plano-corte/:id/desbloquear', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14902,7 +15857,7 @@ app.post('/api/plano-corte/:id/desbloquear', async (req, res) => {
 // PLANO DE CORTE — Excluir Plano de Corte (Soft Delete)
 // Ícone 7: Só exclui se não houver execução (cortetotalexecutado = 0)
 // ============================================================================
-app.post('/api/plano-corte/:id/excluir', async (req, res) => {
+app.post('/api/plano-corte/:id/excluir', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -14969,7 +15924,7 @@ app.post('/api/plano-corte/:id/excluir', async (req, res) => {
 // PLANO DE CORTE — Gerar Relatório Excel (Ícone 8)
 // Somente exportação (sem cópia de arquivos)
 // ============================================================================
-app.post('/api/plano-corte/:id/exportar-excel', async (req, res) => {
+app.post('/api/plano-corte/:id/exportar-excel', tenantMiddleware, async (req, res) => {
     try {
         const { id } = req.params;
         const tenantPool = req.tenantDbPool || pool;
@@ -15006,7 +15961,7 @@ app.post('/api/plano-corte/:id/exportar-excel', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Remover item (desvincular de plano)
 // ============================================================================
-app.post('/api/plano-corte/remover-item', async (req, res) => {
+app.post('/api/plano-corte/remover-item', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15031,7 +15986,7 @@ app.post('/api/plano-corte/remover-item', async (req, res) => {
 
         const itemData = statusRows[0];
         if (itemData.Enviadocorte === 'S' || itemData.Concluido === 'S' || itemData.Concluido === 'C') {
-            return res.status(403).json({ success: false, message: 'Não é possível remover itens de um plano já enviado ou concluído.' });
+            return res.status(403).json({ success: false, message: 'Não ? possível remover itens de um plano já enviado ou concluído.' });
         }
 
         // 2. Desvincular item do plano
@@ -15052,7 +16007,7 @@ app.post('/api/plano-corte/remover-item', async (req, res) => {
 // ============================================================================
 // PLANO DE CORTE — Incluir itens de OS em plano (cria ou reutiliza)
 // ============================================================================
-app.post('/api/plano-corte/incluir-itens', async (req, res) => {
+app.post('/api/plano-corte/incluir-itens', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15389,7 +16344,7 @@ const ExportarPlanoExcelPadrao = async (idPlano, tenantPool) => {
 // Equivalente ao botão VB.NET: LimparDiretorio + ImportarArquivos (LXDS/DXF/DFT/PDF)
 // Condição: deve ser executado somente quando aglutinado = true (verificação no frontend)
 // ============================================================================
-app.post('/api/plano-corte/:id/atualizar-arquivos', async (req, res) => {
+app.post('/api/plano-corte/:id/atualizar-arquivos', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -15416,7 +16371,7 @@ app.post('/api/plano-corte/:id/atualizar-arquivos', async (req, res) => {
 
         // 2. Buscar itens do plano (equivalente ao DGVItensPLanodeCorte)
         const [itens] = await connection.execute(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
+            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, EnderecoArquivo
             FROM ordemservicoitem
             WHERE idplanodecorte = ?
               AND (d_e_l_e_t_e IS NULL OR d_e_l_e_t_e = '')
@@ -15541,7 +16496,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 const exCols = cRows.map(r => r.Field.toLowerCase());
                 
                 const timeCols = ['TotalSetup', 'TotalPadrao', 'TempoSetup', 'TempoPadrao', 'TotalTempo'];
-                const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Pulsionadeira', 'Galvanizar', 'Engenharia'];
+                const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Punsionadeira', 'Galvanizar', 'Engenharia'];
                 for (const sec of sectorsList) {
                     timeCols.push(`${sec}TempoSetup`, `${sec}TotalSetup`, `${sec}TempoPadrao`, `${sec}TotalPadrao`, `${sec}TotalTempo`, `${sec}DiasProducao`);
                 }
@@ -15619,12 +16574,12 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 CorteaLaserTotalTempo = (SELECT COALESCE(SUM(oi.CorteaLaserTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(oi.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(oi.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
 
-                PulsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PulsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
-                PulsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PulsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PulsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(oi.PunsionadeiraTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(oi.PunsionadeiraTempoPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalPadrao), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(oi.PunsionadeiraTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
+                PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(oi.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(oi.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
 
                 GalvanizarTempoSetup = (SELECT COALESCE(SUM(oi.GalvanizarTempoSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 GalvanizarTotalSetup = (SELECT COALESCE(SUM(oi.GalvanizarTotalSetup), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
@@ -15640,36 +16595,22 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                 EngenhariaTotalTempo = (SELECT COALESCE(SUM(oi.EngenhariaTotalTempo), 0) FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 EngenhariaDiasProducao = (SELECT CASE WHEN SUM(oi.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(oi.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')),
                 
-                -- Pecas Executadas: minimo entre setores ativos.
+                -- Pecas Executadas: Somente soma QtdeTotal se TODOS os recursos ativos estiverem concluidos ('C' ou 'S')
                 QtdePecasExecutadas = (
                     SELECT COALESCE(SUM(
                         CASE 
-                            WHEN (IFNULL(oi.txtCorte,'')!='1' AND IFNULL(oi.txtDobra,'')!='1' AND IFNULL(oi.txtSolda,'')!='1' AND IFNULL(oi.txtPintura,'')!='1' AND IFNULL(oi.TxtMontagem,'')!='1' AND IFNULL(oi.txtCorteaLaser,'')!='1' AND IFNULL(oi.txtPULSIONADEIRA,'')!='1' AND IFNULL(oi.txtGALVANIZAR,'')!='1' AND IFNULL(oi.txtEngenharia,'')!='1') 
-                            THEN oi.QtdeTotal
-                            ELSE
-                                CASE WHEN LEAST(
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
-                                ) >= 999999999 THEN 0
-                                ELSE LEAST(
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorte, '')='1' THEN oi.CorteTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtDobra, '')='1' THEN oi.DobraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtSolda, '')='1' THEN oi.SoldaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPintura, '')='1' THEN oi.PinturaTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.TxtMontagem, '')='1' THEN oi.MontagemTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtCorteaLaser, '')='1' THEN oi.CorteaLaserTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtPULSIONADEIRA, '')='1' THEN oi.PulsionadeiraTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtGALVANIZAR, '')='1' THEN oi.GalvanizarTotalExecutado ELSE 999999999 END, 999999999),
-                                    COALESCE(CASE WHEN IFNULL(oi.txtEngenharia, '')='1' THEN oi.EngenhariaTotalExecutado ELSE 999999999 END, 999999999)
-                                )
-                                END
+                            WHEN (
+                                (IFNULL(oi.txtCorte,'') != '1' OR IFNULL(oi.sttxtCorte,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtDobra,'') != '1' OR IFNULL(oi.sttxtDobra,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtSolda,'') != '1' OR IFNULL(oi.sttxtSolda,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtPintura,'') != '1' OR IFNULL(oi.sttxtPintura,'') IN ('C','S')) AND
+                                (IFNULL(oi.TxtMontagem,'') != '1' OR IFNULL(oi.sttxtMontagem,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtCorteaLaser,'') != '1' OR IFNULL(oi.sttxtCorteaLaser,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtPUNSIONADEIRA,'') != '1' OR IFNULL(oi.sttxtPUNSIONADEIRA,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtGALVANIZAR,'') != '1' OR IFNULL(oi.sttxtGALVANIZAR,'') IN ('C','S')) AND
+                                (IFNULL(oi.txtEngenharia,'') != '1' OR IFNULL(oi.sttxtEngenharia,'') IN ('C','S'))
+                            ) THEN oi.QtdeTotal
+                            ELSE 0
                         END
                     ), 0)
                     FROM ordemservicoitem oi WHERE oi.IdOrdemServico = os.IdOrdemServico AND (oi.d_e_l_e_t_e IS NULL OR oi.d_e_l_e_t_e = '')
@@ -15718,6 +16659,61 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     TotalPadrao = (SELECT COALESCE(SUM(os.TotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     TotalTempo = (SELECT COALESCE(SUM(os.TotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
 
+                    
+                    CorteTempoSetup = (SELECT COALESCE(SUM(os.CorteTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalSetup = (SELECT COALESCE(SUM(os.CorteTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTempoPadrao = (SELECT COALESCE(SUM(os.CorteTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalPadrao = (SELECT COALESCE(SUM(os.CorteTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteTotalTempo = (SELECT COALESCE(SUM(os.CorteTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteDiasProducao = (SELECT CASE WHEN SUM(os.CorteTotalTempo) > 0 THEN CEIL(SUM(os.CorteTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTempoSetup = (SELECT COALESCE(SUM(os.DobraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalSetup = (SELECT COALESCE(SUM(os.DobraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTempoPadrao = (SELECT COALESCE(SUM(os.DobraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalPadrao = (SELECT COALESCE(SUM(os.DobraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraTotalTempo = (SELECT COALESCE(SUM(os.DobraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    DobraDiasProducao = (SELECT CASE WHEN SUM(os.DobraTotalTempo) > 0 THEN CEIL(SUM(os.DobraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTempoSetup = (SELECT COALESCE(SUM(os.SoldaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalSetup = (SELECT COALESCE(SUM(os.SoldaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTempoPadrao = (SELECT COALESCE(SUM(os.SoldaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalPadrao = (SELECT COALESCE(SUM(os.SoldaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaTotalTempo = (SELECT COALESCE(SUM(os.SoldaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    SoldaDiasProducao = (SELECT CASE WHEN SUM(os.SoldaTotalTempo) > 0 THEN CEIL(SUM(os.SoldaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTempoSetup = (SELECT COALESCE(SUM(os.PinturaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalSetup = (SELECT COALESCE(SUM(os.PinturaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTempoPadrao = (SELECT COALESCE(SUM(os.PinturaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalPadrao = (SELECT COALESCE(SUM(os.PinturaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaTotalTempo = (SELECT COALESCE(SUM(os.PinturaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PinturaDiasProducao = (SELECT CASE WHEN SUM(os.PinturaTotalTempo) > 0 THEN CEIL(SUM(os.PinturaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTempoSetup = (SELECT COALESCE(SUM(os.MontagemTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalSetup = (SELECT COALESCE(SUM(os.MontagemTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTempoPadrao = (SELECT COALESCE(SUM(os.MontagemTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalPadrao = (SELECT COALESCE(SUM(os.MontagemTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemTotalTempo = (SELECT COALESCE(SUM(os.MontagemTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    MontagemDiasProducao = (SELECT CASE WHEN SUM(os.MontagemTotalTempo) > 0 THEN CEIL(SUM(os.MontagemTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoSetup = (SELECT COALESCE(SUM(os.CorteaLaserTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalSetup = (SELECT COALESCE(SUM(os.CorteaLaserTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(os.CorteaLaserTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(os.CorteaLaserTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalTempo = (SELECT COALESCE(SUM(os.CorteaLaserTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(os.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(os.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(os.PunsionadeiraTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(os.PunsionadeiraTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(os.PunsionadeiraTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(os.PunsionadeiraTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(os.PunsionadeiraTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(os.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(os.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoSetup = (SELECT COALESCE(SUM(os.GalvanizarTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalSetup = (SELECT COALESCE(SUM(os.GalvanizarTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoPadrao = (SELECT COALESCE(SUM(os.GalvanizarTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalPadrao = (SELECT COALESCE(SUM(os.GalvanizarTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalTempo = (SELECT COALESCE(SUM(os.GalvanizarTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    GalvanizarDiasProducao = (SELECT CASE WHEN SUM(os.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(os.GalvanizarTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoSetup = (SELECT COALESCE(SUM(os.EngenhariaTempoSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalSetup = (SELECT COALESCE(SUM(os.EngenhariaTotalSetup), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoPadrao = (SELECT COALESCE(SUM(os.EngenhariaTempoPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalPadrao = (SELECT COALESCE(SUM(os.EngenhariaTotalPadrao), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalTempo = (SELECT COALESCE(SUM(os.EngenhariaTotalTempo), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
+                    EngenhariaDiasProducao = (SELECT CASE WHEN SUM(os.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(os.EngenhariaTotalTempo) / 480) ELSE 0 END FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutado = (SELECT COALESCE(SUM(os.CorteTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(os.CorteTotalExecutar), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(os.DobraTotalExecutado), 0) FROM ordemservico os WHERE os.IdTag = t.IdTag AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')),
@@ -15759,6 +16755,61 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
                     TotalPadrao = (SELECT COALESCE(SUM(t.TotalPadrao), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     TotalTempo = (SELECT COALESCE(SUM(t.TotalTempo), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     
+                    
+                    CorteTempoSetup = (SELECT COALESCE(SUM(t2.CorteTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalSetup = (SELECT COALESCE(SUM(t2.CorteTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTempoPadrao = (SELECT COALESCE(SUM(t2.CorteTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalPadrao = (SELECT COALESCE(SUM(t2.CorteTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteTotalTempo = (SELECT COALESCE(SUM(t2.CorteTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteDiasProducao = (SELECT CASE WHEN SUM(t2.CorteTotalTempo) > 0 THEN CEIL(SUM(t2.CorteTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTempoSetup = (SELECT COALESCE(SUM(t2.DobraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalSetup = (SELECT COALESCE(SUM(t2.DobraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTempoPadrao = (SELECT COALESCE(SUM(t2.DobraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalPadrao = (SELECT COALESCE(SUM(t2.DobraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraTotalTempo = (SELECT COALESCE(SUM(t2.DobraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    DobraDiasProducao = (SELECT CASE WHEN SUM(t2.DobraTotalTempo) > 0 THEN CEIL(SUM(t2.DobraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTempoSetup = (SELECT COALESCE(SUM(t2.SoldaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalSetup = (SELECT COALESCE(SUM(t2.SoldaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTempoPadrao = (SELECT COALESCE(SUM(t2.SoldaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalPadrao = (SELECT COALESCE(SUM(t2.SoldaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaTotalTempo = (SELECT COALESCE(SUM(t2.SoldaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    SoldaDiasProducao = (SELECT CASE WHEN SUM(t2.SoldaTotalTempo) > 0 THEN CEIL(SUM(t2.SoldaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTempoSetup = (SELECT COALESCE(SUM(t2.PinturaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalSetup = (SELECT COALESCE(SUM(t2.PinturaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTempoPadrao = (SELECT COALESCE(SUM(t2.PinturaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalPadrao = (SELECT COALESCE(SUM(t2.PinturaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaTotalTempo = (SELECT COALESCE(SUM(t2.PinturaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PinturaDiasProducao = (SELECT CASE WHEN SUM(t2.PinturaTotalTempo) > 0 THEN CEIL(SUM(t2.PinturaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTempoSetup = (SELECT COALESCE(SUM(t2.MontagemTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalSetup = (SELECT COALESCE(SUM(t2.MontagemTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTempoPadrao = (SELECT COALESCE(SUM(t2.MontagemTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalPadrao = (SELECT COALESCE(SUM(t2.MontagemTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemTotalTempo = (SELECT COALESCE(SUM(t2.MontagemTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    MontagemDiasProducao = (SELECT CASE WHEN SUM(t2.MontagemTotalTempo) > 0 THEN CEIL(SUM(t2.MontagemTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoSetup = (SELECT COALESCE(SUM(t2.CorteaLaserTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalSetup = (SELECT COALESCE(SUM(t2.CorteaLaserTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTempoPadrao = (SELECT COALESCE(SUM(t2.CorteaLaserTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalPadrao = (SELECT COALESCE(SUM(t2.CorteaLaserTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserTotalTempo = (SELECT COALESCE(SUM(t2.CorteaLaserTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    CorteaLaserDiasProducao = (SELECT CASE WHEN SUM(t2.CorteaLaserTotalTempo) > 0 THEN CEIL(SUM(t2.CorteaLaserTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoSetup = (SELECT COALESCE(SUM(t2.PunsionadeiraTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalSetup = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTempoPadrao = (SELECT COALESCE(SUM(t2.PunsionadeiraTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalPadrao = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraTotalTempo = (SELECT COALESCE(SUM(t2.PunsionadeiraTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    PunsionadeiraDiasProducao = (SELECT CASE WHEN SUM(t2.PunsionadeiraTotalTempo) > 0 THEN CEIL(SUM(t2.PunsionadeiraTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoSetup = (SELECT COALESCE(SUM(t2.GalvanizarTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalSetup = (SELECT COALESCE(SUM(t2.GalvanizarTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTempoPadrao = (SELECT COALESCE(SUM(t2.GalvanizarTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalPadrao = (SELECT COALESCE(SUM(t2.GalvanizarTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarTotalTempo = (SELECT COALESCE(SUM(t2.GalvanizarTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    GalvanizarDiasProducao = (SELECT CASE WHEN SUM(t2.GalvanizarTotalTempo) > 0 THEN CEIL(SUM(t2.GalvanizarTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoSetup = (SELECT COALESCE(SUM(t2.EngenhariaTempoSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalSetup = (SELECT COALESCE(SUM(t2.EngenhariaTotalSetup), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTempoPadrao = (SELECT COALESCE(SUM(t2.EngenhariaTempoPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalPadrao = (SELECT COALESCE(SUM(t2.EngenhariaTotalPadrao), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaTotalTempo = (SELECT COALESCE(SUM(t2.EngenhariaTotalTempo), 0) FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
+                    EngenhariaDiasProducao = (SELECT CASE WHEN SUM(t2.EngenhariaTotalTempo) > 0 THEN CEIL(SUM(t2.EngenhariaTotalTempo) / 480) ELSE 0 END FROM tags t2 WHERE t2.IdProjeto = p.IdProjeto AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '' OR t2.D_E_L_E_T_E = ' ')),
                     CorteTotalExecutado = (SELECT COALESCE(SUM(t.CorteTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     CorteTotalExecutar = (SELECT COALESCE(SUM(t.CorteTotalExecutar), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
                     DobraTotalExecutado = (SELECT COALESCE(SUM(t.DobraTotalExecutado), 0) FROM tags t WHERE t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')),
@@ -15842,7 +16893,217 @@ app.get(/^\/(dashboard|app|admin|projetos|tags|os|romaneio|producao|material|apo
     }
 });
 
+
+// GET /api/ordemservico/:idTag/tempos-producao
+app.get('/api/ordemservico/:idTag/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { idTag } = req.params;
+        const { recurso } = req.query;
+        if (!idTag || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: idTag ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM tags WHERE IdTag = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, idTag]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo}`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
+    }
+});
+
+
+// GET /api/ordemservico/os/:id/tempos-producao
+app.get('/api/ordemservico/os/:id/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { recurso } = req.query;
+        if (!id || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: id ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM ordemservico WHERE IdOrdemServico = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, id]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo} em ordemservico`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao da OS:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
+    }
+});
+
+
+// GET /api/ordemservico/projetos/:id/tempos-producao
+app.get('/api/ordemservico/projetos/:id/tempos-producao', tenantMiddleware, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { recurso } = req.query;
+        if (!id || !recurso) {
+            return res.status(400).json({ success: false, message: 'Faltam dados: id ou recurso' });
+        }
+        const recursoLimpo = recurso.trim().replace(/\s+/g, '');
+        const colSetup = `${recursoLimpo}TempoSetup`;
+        const colPadrao = `${recursoLimpo}TempoPadrao`;
+        const colTotal = `${recursoLimpo}TotalTempo`;
+        
+        try {
+            const query = 'SELECT ?? AS Setup, ?? AS Padrao, ?? AS Total FROM projetos WHERE IdProjeto = ? LIMIT 1';
+            const [rows] = await req.tenantDbPool.query(query, [colSetup, colPadrao, colTotal, id]);
+            if (rows.length > 0) {
+                return res.json({ success: true, data: rows[0] });
+            }
+        } catch (colErr) {
+            console.log(`Colunas de tempo não encontradas para o recurso ${recursoLimpo} em projetos`);
+        }
+        return res.json({ success: true, data: { Setup: 0, Padrao: 0, Total: 0 } });
+    } catch (error) {
+        console.error('Erro ao buscar tempos de producao do projeto:', error);
+        res.status(500).json({ success: false, message: 'Erro interno ao buscar tempos' });
+    }
+});
+
 // Start Server
+
+// ==========================================
+// SALVAR DATAS DE PLANEJAMENTO EM LOTE (PROD SETORES)
+// ==========================================
+app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
+    try {
+        const projetoId = req.params.id;
+        const { tagIds, osIds, datas } = req.body;
+
+        if ((!tagIds || tagIds.length === 0) && (!osIds || osIds.length === 0)) {
+            return res.status(400).json({ error: 'Nenhuma tag ou OS informada.' });
+        }
+
+        const tagsInClause = tagIds ? tagIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',') : '';
+        const osInClause = osIds ? osIds.map(id => parseInt(id, 10)).filter(id => !isNaN(id)).join(',') : '';
+        
+        if (!tagsInClause && !osInClause) return res.status(400).json({ error: 'IDs de tags ou OS inválidos.' });
+
+        const SECTORS_DB = {
+          'Corte': { osTxt: 'txtCorte', planIni: 'PlanejadoInicioCorte', planFim: 'PlanejadoFinalCorte', diasProd: 'CorteDiasProducao' },
+          'Dobra': { osTxt: 'txtDobra', planIni: 'PlanejadoInicioDobra', planFim: 'PlanejadoFinalDobra', diasProd: 'DobraDiasProducao' },
+          'Solda': { osTxt: 'txtSolda', planIni: 'PlanejadoInicioSolda', planFim: 'PlanejadoFinalSolda', diasProd: 'SoldaDiasProducao' },
+          'Pintura': { osTxt: 'txtPintura', planIni: 'PlanejadoInicioPintura', planFim: 'PlanejadoFinalPintura', diasProd: 'PinturaDiasProducao' },
+          'Montagem': { osTxt: 'TxtMontagem', planIni: 'PlanejadoInicioMontagem', planFim: 'PlanejadoFinalMontagem', diasProd: 'MontagemDiasProducao' },
+          'Punsionadeira': { osTxt: 'txtPUNSIONADEIRA', planIni: 'PlanejadoInicioPUNSIONADEIRA', planFim: 'PlanejadoFinalPUNSIONADEIRA', diasProd: 'PunsionadeiraDiasProducao' },
+          'CorteaLaser': { osTxt: 'txtCorteaLaser', planIni: 'PlanejadoInicioCorteaLaser', planFim: 'PlanejadoFinalCorteaLaser', diasProd: 'CorteaLaserDiasProducao' },
+          'Galvanizar': { osTxt: 'txtGALVANIZAR', planIni: 'PlanejadoInicioGALVANIZAR', planFim: 'PlanejadoFinalGALVANIZAR', diasProd: 'GalvanizarDiasProducao' }
+        };
+
+        const tenantPool = req.tenantDbPool || pool;
+        const conn = await tenantPool.getConnection();
+        await conn.beginTransaction();
+
+        try {
+            for (const sectorId of Object.keys(datas)) {
+                const sec = SECTORS_DB[sectorId];
+                if (!sec) continue;
+                
+                const ini = datas[sectorId].ini;
+                const fim = datas[sectorId].fim;
+                if (!ini && !fim) continue; 
+
+                // Convert YYYY-MM-DD to DD/MM/YYYY
+                const iniBr = ini ? ini.split('-').reverse().join('/') : null;
+                const fimBr = fim ? fim.split('-').reverse().join('/') : null;
+
+                // For tags table
+                const updateTagsParams = [];
+                let setClauseTags = [];
+                
+                if (iniBr) { 
+                    setClauseTags.push(`${sec.planIni} = CASE WHEN NULLIF(${sec.planIni}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') < STR_TO_DATE(${sec.planIni}, '%d/%m/%Y') THEN ? ELSE ${sec.planIni} END`);
+                    updateTagsParams.push(iniBr, iniBr, iniBr); 
+                }
+                if (fimBr) {
+                    setClauseTags.push(`${sec.planFim} = CASE WHEN NULLIF(${sec.planFim}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') > STR_TO_DATE(${sec.planFim}, '%d/%m/%Y') THEN ? ELSE ${sec.planFim} END`);
+                    updateTagsParams.push(fimBr, fimBr, fimBr);
+                }
+
+                
+                if (iniBr || fimBr) {
+                    setClauseTags.push(`${sec.diasProd} = DATEDIFF(STR_TO_DATE(${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(${sec.planIni}, '%d/%m/%Y'))`);
+                }
+                if (setClauseTags.length > 0 && tagsInClause) {
+                    const queryTags = `UPDATE tags SET ${setClauseTags.join(', ')} WHERE IdTag IN (${tagsInClause})`;
+                    await conn.query(queryTags, updateTagsParams);
+                }
+
+                // For ordemservicoitem table
+                const updateOsiParams = [];
+                let setClauseOsi = [];
+
+                if (iniBr) { 
+                    setClauseOsi.push(`osi.${sec.planIni} = CASE WHEN NULLIF(osi.${sec.planIni}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') < STR_TO_DATE(osi.${sec.planIni}, '%d/%m/%Y') THEN ? ELSE osi.${sec.planIni} END`);
+                    updateOsiParams.push(iniBr, iniBr, iniBr); 
+                }
+                if (fimBr) {
+                    setClauseOsi.push(`osi.${sec.planFim} = CASE WHEN NULLIF(osi.${sec.planFim}, '') IS NULL THEN ? WHEN STR_TO_DATE(?, '%d/%m/%Y') > STR_TO_DATE(osi.${sec.planFim}, '%d/%m/%Y') THEN ? ELSE osi.${sec.planFim} END`);
+                    updateOsiParams.push(fimBr, fimBr, fimBr);
+                }
+
+                
+                if (iniBr || fimBr) {
+                    setClauseOsi.push(`osi.${sec.diasProd} = DATEDIFF(STR_TO_DATE(osi.${sec.planFim}, '%d/%m/%Y'), STR_TO_DATE(osi.${sec.planIni}, '%d/%m/%Y'))`);
+                }
+                if (setClauseOsi.length > 0) {
+                    let setClauseOs = setClauseOsi.map(clause => clause.replace(/osi\./g, 'os.'));
+
+                    if (tagsInClause) {
+                        const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
+                        await conn.query(queryOSI, updateOsiParams);
+
+                        const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdTag IN (${tagsInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
+                        await conn.query(queryOS, updateOsiParams);
+                    }
+
+                    if (osInClause) {
+                        const queryOSI = `UPDATE ordemservicoitem osi INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico SET ${setClauseOsi.join(', ')} WHERE os.IdOrdemServico IN (${osInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ") AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = "" OR osi.D_E_L_E_T_E = " ") AND (TRIM(osi.${sec.osTxt}) = "1" OR TRIM(osi.${sec.osTxt}) = "S")`;
+                        await conn.query(queryOSI, updateOsiParams);
+
+                        const queryOS = `UPDATE ordemservico os SET ${setClauseOs.join(', ')} WHERE os.IdOrdemServico IN (${osInClause}) AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = "" OR os.D_E_L_E_T_E = " ")`;
+                        await conn.query(queryOS, updateOsiParams);
+                    }
+                }
+            }
+
+            await conn.commit();
+            res.json({ success: true, message: 'Datas salvas com sucesso' });
+        } catch (err) {
+            await conn.rollback();
+            throw err;
+        } finally {
+            conn.release();
+        }
+
+    } catch (error) {
+        console.error(error.message);
+        res.status(500).json({ error: error.message });
+    }
+});
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT} and listening on all interfaces(0.0.0.0)`);
     try {
@@ -15857,7 +17118,7 @@ app.listen(PORT, '0.0.0.0', async () => {
 // ============================================================================
 // ACOMPANHAMENTO DE ETAPAS (Visão Geral de Projetos / Etapas)
 // ============================================================================
-app.get('/api/acompanhamento-etapas', async (req, res) => {
+app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const tenantPool = req.tenantDbPool || pool;
@@ -16000,7 +17261,7 @@ app.get('/api/acompanhamento-etapas', async (req, res) => {
 });
 
 // Bulk Update das datas de etapas (Planejamento e Realizado)
-app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) => {
+app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { id } = req.params;
@@ -16051,7 +17312,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
         let tagFilter = `IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
         const tagParams = [id];
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
+            tagFilter += ` AND IdTag IN (${tagIds.map(() => 'é').join(',')})`;
             tagParams.push(...tagIds);
         }
         const [tagsRows] = await connection.execute(
@@ -16068,7 +17329,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
             const params = [];
 
             Object.keys(normalizedData).forEach(key => {
-                // Verifica se é campo de Realizado
+                // Verifica se ? campo de Realizado
                 const setorConf = SETORES_REALIZADO.find(s => s.realFields.includes(key));
                 if (setorConf) {
                     // Tag já tem PlanejadoInicio? ou payload está enviando o PlanejadoInicio deste setor?
@@ -16209,12 +17470,12 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', async (req, res) =
 // ─── ENDPOINT DE MANUTENCAO: Recalcula QtdeTags para todos os projetos ────
 // Chame via: GET /api/manutencao/fix-qtdetags?key=sinco-manut-2026
 // REMOVER APOS EXECUTAR UMA VEZ.
-app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
+app.get('/api/manutencao/fix-qtdetags', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
-        const [result] = await pool.execute(`
+        const [result] = await req.tenantDbPool.execute(`
             UPDATE projetos p
             SET QtdeTags = (
                 SELECT COUNT(*) FROM tags t
@@ -16225,11 +17486,11 @@ app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
         `);
         console.log(`[MANUTENCAO] QtdeTags recalculado para ${result.affectedRows} projetos.`);
 
-        const [[p84]] = await pool.execute(
+        const [[p84]] = await req.tenantDbPool.execute(
             'SELECT IdProjeto, Projeto, QtdeTags FROM projetos WHERE IdProjeto = 84'
         );
 
-        const [divs] = await pool.execute(`
+        const [divs] = await req.tenantDbPool.execute(`
             SELECT p.IdProjeto, p.Projeto, p.QtdeTags, COUNT(t.IdTag) as CountReal
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto
@@ -16253,13 +17514,13 @@ app.get('/api/manutencao/fix-qtdetags', async (req, res) => {
 });
 
 // ─── ENDPOINT ANALISE: Padrao EnderecoArquivo ───────────────────────────────
-app.get('/api/manutencao/analise-endereco', async (req, res) => {
+app.get('/api/manutencao/analise-endereco', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
         // 1. Amostras de EnderecoArquivo existentes
-        const [amostras] = await pool.execute(`
+        const [amostras] = await req.tenantDbPool.execute(`
             SELECT EnderecoArquivo, CodMatFabricante
             FROM ordemservicoitem
             WHERE EnderecoArquivo IS NOT NULL AND EnderecoArquivo <> ''
@@ -16287,7 +17548,7 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
         // 4. Verifica configuracoes_internas por chave de caminho
         let configPath = null;
         try {
-            const [cfg] = await pool.execute(
+            const [cfg] = await req.tenantDbPool.execute(
                 `SELECT chave, valor FROM configuracoes_internas
                  WHERE chave LIKE '%solidworks%' OR chave LIKE '%endereco%'
                     OR chave LIKE '%path%' OR chave LIKE '%arquivo%'
@@ -16297,7 +17558,7 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
         } catch(e) { configPath = 'Tabela configuracoes_internas nao encontrada ou sem registros'; }
 
         // 5. Estatisticas: com/sem EnderecoArquivo
-        const [[stats]] = await pool.execute(`
+        const [[stats]] = await req.tenantDbPool.execute(`
             SELECT 
                 COUNT(*) as total,
                 SUM(CASE WHEN EnderecoArquivo IS NOT NULL AND EnderecoArquivo <> '' THEN 1 ELSE 0 END) as com_endereco,
@@ -16320,12 +17581,12 @@ app.get('/api/manutencao/analise-endereco', async (req, res) => {
 });
 
 // ─── ENDPOINT ANALISE: Correlacao txtTipoDesenho x sufixo arquivo ───────────
-app.get('/api/manutencao/analise-tipoarquivo', async (req, res) => {
+app.get('/api/manutencao/analise-tipoarquivo', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     try {
-        const [rows] = await pool.execute(`
+        const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 txtTipoDesenho,
                 EnderecoArquivo,
@@ -16358,7 +17619,7 @@ app.get('/api/manutencao/analise-tipoarquivo', async (req, res) => {
 
 // ─── ENDPOINT MANUTENCAO: Corrige EnderecoArquivo = 'IMPORTADO DA PLANILHA' ─
 // GET /api/manutencao/fix-endereco-importado?key=sinco-manut-2026
-app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
+app.get('/api/manutencao/fix-endereco-importado', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
@@ -16366,7 +17627,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
         // 1. Busca caminho base configurado (ou usa fallback padrao lynxlocal)
         let swBasePath = 'G:\\MEU DRIVE\\04-ARQUIVOS SOLIDWORKS';
         try {
-            const [cfgRows] = await pool.execute(
+            const [cfgRows] = await req.tenantDbPool.execute(
                 `SELECT valor FROM configuracoes_internas WHERE chave = 'path_solidworks' LIMIT 1`
             );
             if (cfgRows.length > 0 && cfgRows[0].valor) {
@@ -16375,7 +17636,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
         } catch(e) { /* usa fallback */ }
 
         // 2. Busca todos os itens com EnderecoArquivo = 'IMPORTADO DA PLANILHA'
-        const [itens] = await pool.execute(`
+        const [itens] = await req.tenantDbPool.execute(`
             SELECT IdOrdemServicoItem, CodMatFabricante, txtTipoDesenho
             FROM ordemservicoitem
             WHERE EnderecoArquivo = 'IMPORTADO DA PLANILHA'
@@ -16397,7 +17658,7 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
             const codMat = (item.CodMatFabricante || '').trim();
             const novoEndereco = `${swBasePath}\\${codMat}${sufixo}`;
 
-            await pool.execute(
+            await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET EnderecoArquivo = ? WHERE IdOrdemServicoItem = ?`,
                 [novoEndereco, item.IdOrdemServicoItem]
             );
@@ -16422,15 +17683,15 @@ app.get('/api/manutencao/fix-endereco-importado', async (req, res) => {
 });
 
 // ─── ENDPOINT DIAGNOSTICO: Inspeciona item por ID ───────────────────────────
-app.get('/api/manutencao/inspecionar-item', async (req, res) => {
+app.get('/api/manutencao/inspecionar-item', tenantMiddleware, async (req, res) => {
     if (req.query.key !== 'sinco-manut-2026') {
         return res.status(403).json({ success: false, message: 'Chave invalida' });
     }
     const { id } = req.query;
     if (!id) return res.status(400).json({ success: false, message: 'Parametro id obrigatorio' });
     try {
-        const [rows] = await pool.execute(
-            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPULSIONADEIRA, PlanejadoFinalPULSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PulsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PULSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
+        const [rows] = await req.tenantDbPool.execute(
+            `SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, CodMatFabricante,
                     EnderecoArquivo, txtTipoDesenho, D_E_L_E_T_E, DescResumo
              FROM ordemservicoitem WHERE IdOrdemServicoItem = ?`,
             [id]
@@ -16469,7 +17730,7 @@ app.get('/api/manutencao/inspecionar-item', async (req, res) => {
 // ROTA MANUTENÇÃO: Update EnderecoArquivo por OS e banco (sem tenant middleware)
 // Acesso: chave interna 'SincoMasterKey2026!' + POST /api/manutencao/update-endereco-arquivo
 // ══════════════════════════════════════════════════════════════════════════════
-app.post('/api/manutencao/update-endereco-arquivo', async (req, res) => {
+app.post('/api/manutencao/update-endereco-arquivo', tenantMiddleware, async (req, res) => {
     const MANUT_KEY = 'SincoMasterKey2026!';
     const { chave, dbName, osId, basePath } = req.body;
 
@@ -16552,7 +17813,7 @@ app.post('/api/manutencao/update-endereco-arquivo', async (req, res) => {
 
 const ensureMaterialArquivosTable = async (pool) => {
     try {
-        await pool.execute(`
+        await req.tenantDbPool.execute(`
             CREATE TABLE IF NOT EXISTS material_arquivos (
                 idArquivo INT AUTO_INCREMENT PRIMARY KEY,
                 IdMaterial INT NOT NULL,
@@ -16574,7 +17835,7 @@ app.get('/api/materiais/:id/arquivos', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT idArquivo, IdMaterial, NomeArquivo, TipoArquivo, Tamanho, DataCriacao, CriadoPor FROM material_arquivos WHERE IdMaterial = ? ORDER BY DataCriacao DESC",
             [id]
         );
@@ -16597,7 +17858,7 @@ app.post('/api/materiais/:id/arquivos', tenantMiddleware, uploadMemory.single('a
 
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await db.execute(
+        await req.tenantDbPool.execute(
             "INSERT INTO material_arquivos (IdMaterial, NomeArquivo, TipoArquivo, Tamanho, Dados, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?, ?, ?)",
             [id, file.originalname, file.mimetype, file.size, file.buffer, nowFormat, usuario]
         );
@@ -16613,7 +17874,7 @@ app.get('/api/materiais/arquivos/:idArquivo/download', tenantMiddleware, async (
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        const [rows] = await db.execute(
+        const [rows] = await req.tenantDbPool.execute(
             "SELECT NomeArquivo, TipoArquivo, Dados FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );
@@ -16637,7 +17898,7 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
-        await db.execute(
+        await req.tenantDbPool.execute(
             "DELETE FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );
