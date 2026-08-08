@@ -4847,6 +4847,15 @@ const queryPool = req.tenantDbPool || pool;
         const projectIds = projetos.map(p => p.IdProjeto);
         const inClause = projectIds.join(',');
 
+        // Build column list defensively for ordemservicoitem
+        const [osiCols] = await queryPool.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ordemservicoitem'"
+        );
+        const osiSet = new Set(osiCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        const safeOsiCol = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `NULL`;
+        const safeOsiFlag = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `'0'`;
+
         // 2. Fetch OS / OSI Aggregations for all fetched projects
         const [osStatsRows] = await queryPool.execute(`
             SELECT 
@@ -4855,63 +4864,63 @@ const queryPool = req.tenantDbPool || pool;
                 COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdePecasTags,
                 
                 /* Corte */
-                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorte,
-                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
-                MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) as flagCorte,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorte,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('CorteTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
+                MAX(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' OR ${safeOsiFlag('txtCorte')} = 'S' THEN 1 ELSE 0 END) as flagCorte,
 
                 /* Dobra */
-                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalDobra,
-                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
-                MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) as flagDobra,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalDobra,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('DobraTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
+                MAX(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' OR ${safeOsiFlag('txtDobra')} = 'S' THEN 1 ELSE 0 END) as flagDobra,
 
                 /* Solda */
-                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalSolda,
-                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
-                MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) as flagSolda,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalSolda,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('SoldaTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
+                MAX(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' OR ${safeOsiFlag('txtSolda')} = 'S' THEN 1 ELSE 0 END) as flagSolda,
 
                 /* Pintura */
-                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPintura,
-                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
-                MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) as flagPintura,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPintura,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('PinturaTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
+                MAX(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' OR ${safeOsiFlag('txtPintura')} = 'S' THEN 1 ELSE 0 END) as flagPintura,
 
                 /* Montagem */
-                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalMontagem,
-                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
-                MAX(CASE WHEN osi.TxtMontagem = '1' OR osi.TxtMontagem = 'S' THEN 1 ELSE 0 END) as flagMontagem,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalMontagem,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('MontagemTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
+                MAX(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' OR ${safeOsiFlag('TxtMontagem')} = 'S' THEN 1 ELSE 0 END) as flagMontagem,
 
                 /* Corte a Laser */
-                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorteaLaser,
-                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
-                MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorteaLaser,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
+                MAX(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' OR ${safeOsiFlag('txtCorteaLaser')} = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
 
                 /* Punsionadeira */
-                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPunsionadeira,
-                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPunsionadeira,
-                MIN(osi.PlanejadoInicioPUNSIONADEIRA) as PlanejadoInicioPunsionadeira, MAX(osi.PlanejadoFinalPUNSIONADEIRA) as PlanejadoFinalPunsionadeira,
-                MIN(osi.RealizadoInicioPUNSIONADEIRA) as RealizadoInicioPunsionadeira, MAX(osi.RealizadoFinalPUNSIONADEIRA) as RealizadoFinalPunsionadeira,
-                MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPunsionadeira,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPunsionadeira,
+                MIN(${safeOsiCol('PlanejadoInicioPUNSIONADEIRA')}) as PlanejadoInicioPunsionadeira, MAX(${safeOsiCol('PlanejadoFinalPUNSIONADEIRA')}) as PlanejadoFinalPunsionadeira,
+                MIN(${safeOsiCol('RealizadoInicioPUNSIONADEIRA')}) as RealizadoInicioPunsionadeira, MAX(${safeOsiCol('RealizadoFinalPUNSIONADEIRA')}) as RealizadoFinalPunsionadeira,
+                MAX(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' OR ${safeOsiFlag('txtPUNSIONADEIRA')} = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
 
                 /* Galvanizar */
-                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalGalvanizar,
-                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecGalvanizar,
-                MIN(osi.PlanejadoInicioGALVANIZAR) as PlanejadoInicioGalvanizar, MAX(osi.PlanejadoFinalGALVANIZAR) as PlanejadoFinalGalvanizar,
-                MIN(osi.RealizadoInicioGALVANIZAR) as RealizadoInicioGalvanizar, MAX(osi.RealizadoFinalGALVANIZAR) as RealizadoFinalGalvanizar,
-                MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) as flagGalvanizar
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalGalvanizar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecGalvanizar,
+                MIN(${safeOsiCol('PlanejadoInicioGALVANIZAR')}) as PlanejadoInicioGalvanizar, MAX(${safeOsiCol('PlanejadoFinalGALVANIZAR')}) as PlanejadoFinalGalvanizar,
+                MIN(${safeOsiCol('RealizadoInicioGALVANIZAR')}) as RealizadoInicioGalvanizar, MAX(${safeOsiCol('RealizadoFinalGALVANIZAR')}) as RealizadoFinalGalvanizar,
+                MAX(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' OR ${safeOsiFlag('txtGALVANIZAR')} = 'S' THEN 1 ELSE 0 END) as flagGalvanizar
 
             FROM ordemservico os
-            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
             INNER JOIN tags t ON os.IdTag = t.IdTag AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE os.IdProjeto IN (${inClause}) 
               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
@@ -5082,6 +5091,15 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
         const tagIds = tagsRaw.map(t => t.IdTag);
         const inClause = tagIds.join(',');
 
+                // Build column list defensively for ordemservicoitem
+        const [osiCols] = await req.tenantDbPool.execute(
+            "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ordemservicoitem'"
+        );
+        const osiSet = new Set(osiCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        const safeOsiCol = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `NULL`;
+        const safeOsiFlag = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `'0'`;
+
         const [osStatsRows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdTag,
@@ -5089,73 +5107,73 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdeTotalPecas,
 
                 /* flags */
-                MAX(CASE WHEN osi.txtCorte = '1' OR osi.txtCorte = 'S' THEN 1 ELSE 0 END) as flagCorte,
-                MAX(CASE WHEN osi.txtDobra = '1' OR osi.txtDobra = 'S' THEN 1 ELSE 0 END) as flagDobra,
-                MAX(CASE WHEN osi.txtSolda = '1' OR osi.txtSolda = 'S' THEN 1 ELSE 0 END) as flagSolda,
-                MAX(CASE WHEN osi.txtPintura = '1' OR osi.txtPintura = 'S' THEN 1 ELSE 0 END) as flagPintura,
-                MAX(CASE WHEN osi.txtMontagem = '1' OR osi.txtMontagem = 'S' THEN 1 ELSE 0 END) as flagMontagem,
-                MAX(CASE WHEN osi.txtCorteaLaser = '1' OR osi.txtCorteaLaser = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
-                MAX(CASE WHEN osi.txtPUNSIONADEIRA = '1' OR osi.txtPUNSIONADEIRA = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
-                MAX(CASE WHEN osi.txtGALVANIZAR = '1' OR osi.txtGALVANIZAR = 'S' THEN 1 ELSE 0 END) as flagGalvanizar,
+                MAX(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' OR ${safeOsiFlag('txtCorte')} = 'S' THEN 1 ELSE 0 END) as flagCorte,
+                MAX(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' OR ${safeOsiFlag('txtDobra')} = 'S' THEN 1 ELSE 0 END) as flagDobra,
+                MAX(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' OR ${safeOsiFlag('txtSolda')} = 'S' THEN 1 ELSE 0 END) as flagSolda,
+                MAX(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' OR ${safeOsiFlag('txtPintura')} = 'S' THEN 1 ELSE 0 END) as flagPintura,
+                MAX(CASE WHEN ${safeOsiFlag('txtMontagem')} = '1' OR ${safeOsiFlag('txtMontagem')} = 'S' THEN 1 ELSE 0 END) as flagMontagem,
+                MAX(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' OR ${safeOsiFlag('txtCorteaLaser')} = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
+                MAX(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' OR ${safeOsiFlag('txtPUNSIONADEIRA')} = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
+                MAX(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' OR ${safeOsiFlag('txtGALVANIZAR')} = 'S' THEN 1 ELSE 0 END) as flagGalvanizar,
 
                 /* Corte */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorte, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
-                COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.CorteTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtCorte = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorte,
 
                 /* Dobra */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalDobra, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
-                COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutado,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.DobraTotalExecutar,'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtDobra = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('DobraTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('DobraTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeDobra,
 
                 /* Solda */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalSolda, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
-                COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.SoldaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtSolda = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('SoldaTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('SoldaTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeSolda,
 
                 /* Pintura */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPintura, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
-                COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutado,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.PinturaTotalExecutar,'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtPintura = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PinturaTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PinturaTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePintura,
 
                 /* Montagem */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalMontagem, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
-                COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutado,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.MontagemTotalExecutar,'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.TxtMontagem = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('MontagemTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('MontagemTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeMontagem,
 
                 /* Corte a Laser */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalCorteaLaser, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
-                COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutado,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.CorteaLaserTotalExecutar,'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtCorteaLaser = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorteaLaser,
 
                 /* Punsionadeira */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPUNSIONADEIRA,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalPUNSIONADEIRA, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPUNSIONADEIRA,
-                COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutado,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.PUNSIONADEIRATotalExecutar,'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtPUNSIONADEIRA = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePunsionadeira,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPUNSIONADEIRA,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPUNSIONADEIRA,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutado')},'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutar')},'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePunsionadeira,
 
                 /* Galvanizar */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.PlanejadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.PlanejadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalGALVANIZAR,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(osi.RealizadoInicioGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(osi.RealizadoFinalGALVANIZAR, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalGALVANIZAR,
-                COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutado,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(osi.GALVANIZARTotalExecutar,'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutar,
-                COALESCE(SUM(CASE WHEN osi.txtGALVANIZAR = '1' THEN CAST(NULLIF(osi.QtdeTotal,'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalGALVANIZAR,
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalGALVANIZAR,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutado,
+                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutar,
+                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
 
             FROM ordemservico os
-            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = osi.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
             WHERE os.IdTag IN (${inClause})
               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
             GROUP BY os.IdTag

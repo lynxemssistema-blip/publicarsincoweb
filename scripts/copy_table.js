@@ -14,7 +14,7 @@ async function copyTable() {
         console.log('Connecting to Central DB:', centralConfig.host);
         centralConn = await mysql.createConnection(centralConfig);
         
-        const targets = ['ecoindustria', 'amceletrica'];
+        const targets = ['mettapaineis'];
         
         for (const target of targets) {
             console.log(`\nProcessing target: ${target}`);
