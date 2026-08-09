@@ -494,7 +494,7 @@ useEffect(() => {
  // Use different route for mapa and mapaproducao
  const url = (setorAtivo === 'mapa' || setorAtivo === 'mapaproducao')
  ? `${API_BASE}/apontamento/mapa/producao?${params}`
- : `${API_BASE}/apontamento/${setorAtivo}?${params}`;
+ : `${API_BASE}/material-processo/apontamentos/${setorAtivo}?${params}`;
 
  const res = await fetch(url, { signal: controller.signal });
  const json = await res.json();
@@ -737,19 +737,27 @@ useEffect(() => {
  const limitesSalvosPost = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
  const limiteDiarioPost = limitesSalvosPost[String(modalSetor).toLowerCase()] ?? 500;
 
- const res = await fetch(`${API_BASE}/apontamento`, {
- method: 'POST',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({
- IdOrdemServicoItem: selectedItem.IdOrdemServicoItem,
- IdOrdemServico: selectedItem.IdOrdemServico,
- Processo: modalSetor,
- RecursoOrigem: recursoOrigemRef.current || '', // informa qual recurso estava ativo ao abrir MAPA
- QtdeProduzida: finalQtde,
- TipoApontamento: finalTipoApontamento,
- LimiteDiario: limiteDiarioPost, // campo auxiliar diário — validado no backend
- CriadoPor: (user as any)?.NomeCompleto || (user as any)?.name || 'Sistema'
- })
+  let apiURL = `${API_BASE}/apontamento`;
+ let payload: any = {
+  IdOrdemServicoItem: selectedItem.IdOrdemServicoItem,
+  IdOrdemServico: selectedItem.IdOrdemServico,
+  Processo: modalSetor,
+  RecursoOrigem: recursoOrigemRef.current || '',
+  QtdeProduzida: finalQtde,
+  TipoApontamento: finalTipoApontamento,
+  LimiteDiario: limiteDiarioPost,
+  CriadoPor: (user as any)?.NomeCompleto || (user as any)?.name || 'Sistema'
+ };
+
+ if (modalSetor !== 'mapa' && modalSetor !== 'mapaproducao' && (selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso)) {
+  apiURL = `${API_BASE}/material-processo/apontar`;
+  payload.IdMaterialProcesso = selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso;
+ }
+
+ const res = await fetch(apiURL, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload)
  });
 
  const json = await res.json();
@@ -1050,7 +1058,7 @@ useEffect(() => {
  return 'bg-gray-300';
  };
 
- const setorInfo = setores.find(s => s.id === setorAtivo) || setores[0];
+ const setorInfo = setores.find(s => s.id === setorAtivo) || { id: setorAtivo as any, label: String(setorAtivo).charAt(0).toUpperCase() + String(setorAtivo).slice(1), icon: Settings2, color: "bg-gray-500" };
   const unauthorizedError = (!user || (user.role !== 'admin' && user.mapaProducao !== 'S' && !user.isSuperadmin && user.superadmin !== 'S')) ? (
  <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 min-h-0 bg-slate-50">
  <div className="p-4 bg-red-100 rounded-full text-red-600"><Lock size={40} /></div>

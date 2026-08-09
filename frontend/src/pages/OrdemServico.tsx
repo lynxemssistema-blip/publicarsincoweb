@@ -314,6 +314,7 @@ function OrdemServicoContent() {
     // Data state
     const [ordens, setOrdens] = useState<OrdemServico[]>([]);
     const [expandedOrdens, setExpandedOrdens] = useState<Set<number>>(new Set());
+    const [collapsedOsInfo, setCollapsedOsInfo] = useState<Set<number>>(new Set());
     const [selectedOSId, setSelectedOSId] = useState<number | null>(null);
     const [ordensItens, setOrdensItens] = useState<Record<number, OrdemServicoItem[]>>({});
     const [loadingItens, setLoadingItens] = useState<Set<number>>(new Set());
@@ -576,81 +577,7 @@ function OrdemServicoContent() {
         setTempoModalItem(item);
         setTempoSetupEdit(String(itemAny.TempoSetup ?? ''));
         setTempoPadraoEdit(String(itemAny.TempoPadrao ?? ''));
-        // Inicializar tempos por recurso para setores ativos (txtField === '1')
-        const recursoInit: Record<string, { setup: string; padrao: string; seq?: string; IdProcesso?: number }> = {};
-        for (const [secKey, pref] of Object.entries(SETOR_TEMPO_PREFIXO)) {
-            const txtFields: Record<string, string> = {
-                corte: 'txtCorte', dobra: 'txtDobra', solda: 'txtSolda', pintura: 'txtPintura',
-                montagem: 'TxtMontagem', cortealasar: 'txtCorteaLaser',
-                punsionadeira: 'txtPUNSIONADEIRA', galvanizar: 'txtGALVANIZAR',
-                engenharia: 'txtEngenharia',
-            };
-            const txtKey = txtFields[secKey];
-            if (txtKey && String(itemAny[txtKey] ?? '') === '1') {
-                // Usar valor do BD (pode ser vazio/nulo); sem fallback para evitar mostrar 0 falso
-                const rawSetup  = itemAny[`${pref}TempoSetup`];
-                const rawPadrao = itemAny[`${pref}TempoPadrao`];
-                const rawSeq    = itemAny[`${pref}Sequencia`];
-                
-                // Buscar IdProcesso na lista processosFabricaSIM
-                const procMatch = processosFabricaSIM.find(p => p.key === secKey);
-                
-                recursoInit[secKey] = {
-                    setup:  (rawSetup  != null && rawSetup  !== '') ? String(rawSetup)  : '',
-                    padrao: (rawPadrao != null && rawPadrao !== '') ? String(rawPadrao) : '',
-                    seq:    (rawSeq != null && rawSeq !== '') ? String(rawSeq) : '',
-                    IdProcesso: procMatch?.IdProcesso
-                };
-            }
-        }
-        setRecursoTemposEdit(recursoInit);
-        setRecursoTemposOriginal({ ...recursoInit }); // snapshot para comparação ao salvar
-
-        // Buscar materialProcessos da engenharia
-        try {
-            const activeToken = token || localStorage.getItem('sinco_token') || '';
-            const codmat = itemAny.CodMatFabricante || '';
-            if (codmat) {
-                const rMat = await fetch(`${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codmat)}`, {
-                    headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
-                    cache: 'no-store'
-                });
-                const jMat = await rMat.json();
-                if (jMat.success && Array.isArray(jMat.data)) {
-                    const matList = jMat.data.map((row: any) => ({
-                        IdProcesso: row.IdProcesso,
-                        key: mapProcessNameToKey(row.NomeProcesso).key,
-                        sequencia: row.SequenciaExecucao
-                    }));
-                    setMaterialProcessos(matList);
-                    
-                    // Enriquecer recursoTemposEdit com IdProcesso caso falte
-                    setRecursoTemposEdit(prev => {
-                        const novo = { ...prev };
-                        let mudou = false;
-                        for (const [key, vals] of Object.entries(novo)) {
-                            const mat = matList.find(m => m.key === key);
-                            if (mat) {
-                                if (vals.IdProcesso !== mat.IdProcesso) {
-                                    novo[key] = { ...novo[key], IdProcesso: mat.IdProcesso };
-                                    mudou = true;
-                                }
-                            }
-                        }
-                        return mudou ? novo : prev;
-                    });
-
-                } else {
-                    setMaterialProcessos([]);
-                }
-            } else {
-                setMaterialProcessos([]);
-            }
-        } catch (err) {
-            console.warn('[handleOpenTempoModal] falha ao buscar processos do material:', err);
-            setMaterialProcessos([]);
-        }
-
+        let processosLista: { key: string; label: string; IdProcesso: number }[] = [];
         // Buscar processos com Fabrica = 'SIM' do backend
         try {
             const activeToken = token || localStorage.getItem('sinco_token') || '';
@@ -697,9 +624,87 @@ function OrdemServicoContent() {
                     }
                 }
                 setProcessosFabricaSIM(lista as any); // Type assertion needed due to state interface
+                processosLista = lista;
             }
         } catch (err) {
             console.warn('[handleOpenTempoModal] falha ao buscar processos Fabrica=SIM:', err);
+        }
+        
+        // Inicializar tempos por recurso para setores ativos (txtField === '1')
+        const recursoInit: Record<string, { setup: string; padrao: string; seq?: string; IdProcesso?: number }> = {};
+        for (const [secKey, pref] of Object.entries(SETOR_TEMPO_PREFIXO)) {
+            const txtFields: Record<string, string> = {
+                corte: 'txtCorte', dobra: 'txtDobra', solda: 'txtSolda', pintura: 'txtPintura',
+                montagem: 'TxtMontagem', cortealasar: 'txtCorteaLaser',
+                punsionadeira: 'txtPUNSIONADEIRA', galvanizar: 'txtGALVANIZAR',
+                engenharia: 'txtEngenharia',
+            };
+            const txtKey = txtFields[secKey];
+            if (txtKey && String(itemAny[txtKey] ?? '') === '1') {
+                // Usar valor do BD (pode ser vazio/nulo); sem fallback para evitar mostrar 0 falso
+                const rawSetup  = itemAny[`${pref}TempoSetup`];
+                const rawPadrao = itemAny[`${pref}TempoPadrao`];
+                const rawSeq    = itemAny[`${pref}Sequencia`];
+                
+                // Buscar IdProcesso na lista processosFabricaSIM
+                const procMatch = processosLista.find(p => p.key === secKey);
+                
+                recursoInit[secKey] = {
+                    setup:  (rawSetup  != null && rawSetup  !== '') ? String(rawSetup)  : '',
+                    padrao: (rawPadrao != null && rawPadrao !== '') ? String(rawPadrao) : '',
+                    seq:    (rawSeq != null && rawSeq !== '') ? String(rawSeq) : '',
+                    IdProcesso: procMatch?.IdProcesso
+                };
+            }
+        }
+        setRecursoTemposEdit(recursoInit);
+        setRecursoTemposOriginal({ ...recursoInit }); // snapshot para comparação ao salvar
+
+        // Buscar materialProcessos da engenharia
+        try {
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const codmat = itemAny.CodMatFabricante || '';
+            if (codmat) {
+                const rMat = await fetch(`${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codmat)}`, {
+                    headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
+                    cache: 'no-store'
+                });
+                const jMat = await rMat.json();
+                if (jMat.success && Array.isArray(jMat.data)) {
+                    const matList = jMat.data.map((row: any) => ({
+                        IdProcesso: row.IdProcesso,
+                        key: mapProcessNameToKey(row.NomeProcesso).key,
+                        sequencia: row.SequenciaExecucao,
+                        setup: row.TempoEstimadoMin,
+                        padrao: row.TempoPadraoMin
+                    }));
+                    setMaterialProcessos(matList);
+                    
+                    // Rota 2: Inicializar recursoTemposEdit puramente baseado em material_processo
+                    const newRecursoInit: Record<string, { setup: string; padrao: string; seq?: string; IdProcesso?: number }> = {};
+                    matList.forEach((mat: any) => {
+                        if (mat.key) {
+                            newRecursoInit[mat.key] = {
+                                setup: mat.setup != null ? String(mat.setup) : '',
+                                padrao: mat.padrao != null ? String(mat.padrao) : '',
+                                seq: mat.sequencia != null ? String(mat.sequencia) : '',
+                                IdProcesso: mat.IdProcesso
+                            };
+                        }
+                    });
+                    
+                    setRecursoTemposEdit(newRecursoInit);
+                    setRecursoTemposOriginal({ ...newRecursoInit });
+
+                } else {
+                    setMaterialProcessos([]);
+                }
+            } else {
+                setMaterialProcessos([]);
+            }
+        } catch (err) {
+            console.warn('[handleOpenTempoModal] falha ao buscar processos do material:', err);
+            setMaterialProcessos([]);
         }
 
         setTempoModalOpen(true);
@@ -2160,8 +2165,30 @@ function OrdemServicoContent() {
                         </div>
                     </div>
                 </div>
-                            {/* Info Panel */}
-                            <div className="px-6 py-4 border-b border-gray-100">
+                            {/* Info Panel Header - Collapsible */}
+                            <div 
+                                className="px-6 py-3 border-b border-gray-100 bg-gray-50 flex justify-between items-center cursor-pointer hover:bg-gray-100 transition-colors"
+                                onClick={() => {
+                                    setCollapsedOsInfo(prev => {
+                                        const next = new Set(prev);
+                                        if (next.has(os.IdOrdemServico)) next.delete(os.IdOrdemServico);
+                                        else next.add(os.IdOrdemServico);
+                                        return next;
+                                    });
+                                }}
+                            >
+                                <div className="text-xs font-semibold text-gray-600 flex items-center gap-2">
+                                    <FileText size={14} />
+                                    Resumo da O.S. (Gerais, Liberação, Totais e Cronograma)
+                                </div>
+                                <div className="text-gray-400">
+                                    {collapsedOsInfo.has(os.IdOrdemServico) ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
+                                </div>
+                            </div>
+
+                            {/* Info Panel Content */}
+                            {!collapsedOsInfo.has(os.IdOrdemServico) && (
+                                <div className="px-6 py-4 border-b border-gray-100">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                     {/* Info cards... */}
                                     <div className="bg-white rounded-lg p-3 border border-gray-100">
@@ -2264,6 +2291,7 @@ function OrdemServicoContent() {
                                     <SetorDatas nome="Acabamento" planejadoInicio={(os as any).PlanejadoInicioACABAMENTO} planejadoFim={(os as any).PlanejadoFinalACABAMENTO} realizadoInicio={(os as any).RealizadoInicioACABAMENTO} realizadoFim={(os as any).RealizadoFinalACABAMENTO} />
                                 </div>
                             </div>
+                            )}
 
                             {/* Itens */}
                             {isLoadingItens ? (
@@ -2290,36 +2318,48 @@ function OrdemServicoContent() {
 
                                     {/* Skeleton Table Header */}
                                     <div className="flex items-center gap-2 pl-6 py-2 text-[10px] font-medium text-gray-300 uppercase border-b border-gray-100">
-                                        <span className="w-8">PDF</span>
-                                        <span className="w-8">DXF</span>
-                                        <span className="w-8">3D</span>
-                                        <span className="w-32">Código Desenho</span>
-                                        <span className="flex-1">Descrição</span>
-                                        <span className="w-12 text-center">Qtde</span>
-                                        <span className="w-14 text-center">Peso</span>
-                                        {setoresParaRender.map(s => <span key={s.key} className="w-16 hidden lg:block text-center">{s.labelShort}</span>)}
-                                        <span className="w-10 ml-auto mr-2"></span>
+                                        <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                            <span className="w-8 text-center">PDF</span>
+                                            <span className="w-8 text-center">DXF</span>
+                                            <span className="w-8 text-center">3D</span>
+                                            <span className="w-8 text-center">OS</span>
+                                            <span className="w-8 text-center">★</span>
+                                            <span className="w-8 text-center">⏱</span>
+                                        </div>
+                                        <span className="w-32 shrink-0">Código Desenho</span>
+                                        <span className="flex-1 min-w-0">Descrição</span>
+                                        <span className="w-12 shrink-0 text-center">Fator</span>
+                                        <span className="w-12 shrink-0 text-center">Qtde</span>
+                                        <span className="w-14 shrink-0 text-center">Peso</span>
+                                        {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
+                                        <span className="w-8 shrink-0"></span>
+                                        <span className="w-8 shrink-0 mr-2"></span>
                                     </div>
 
                                     {/* Skeleton Rows */}
                                     {[1, 2, 3, 4, 5].map((i) => (
                                         <div key={i} className="flex items-center gap-2 pl-6 py-3 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
                                             {/* Media Icon Skeletons */}
-                                            <div className="flex gap-1 w-28">
+                                            <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                                <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
+                                                <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
+                                                <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                             </div>
                                             {/* Código Desenho Skeleton */}
-                                            <div className="w-32 h-6 rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200" />
+                                            <div className="w-32 shrink-0 h-6 rounded bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200" />
                                             {/* Descrição Skeleton */}
-                                            <div className="flex-1 h-4 rounded bg-gray-100" style={{ width: `${60 + Math.random() * 30}%` }} />
+                                            <div className="flex-1 min-w-0 h-4 rounded bg-gray-100" style={{ width: `${60 + Math.random() * 30}%` }} />
+                                            {/* Fator Skeleton */}
+                                            <div className="w-12 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Qtde Skeleton */}
-                                            <div className="w-8 h-4 rounded bg-gray-100 mx-2" />
+                                            <div className="w-12 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Peso Skeleton */}
-                                            <div className="w-10 h-4 rounded bg-gray-100 mx-2" />
+                                            <div className="w-14 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Progress Skeletons */}
-                                            {setoresParaRender.map(s => <div key={s.key} className="w-12 h-1.5 rounded-full bg-gray-100 hidden lg:block mx-2" />)}
+                                            {setoresParaRender.map(s => <div key={s.key} className="w-16 shrink-0 h-1.5 rounded-full bg-gray-100 hidden lg:block" />)}
                                         </div>
                                     ))}
 
@@ -2357,19 +2397,20 @@ function OrdemServicoContent() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 pl-6 py-1 text-[10px] font-medium text-gray-400 uppercase">
-                                            <div className="flex gap-1 shrink-0" style={{ width: '11.5rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
                                                 <span className="w-8 text-center" title="PDF do Item">PDF</span>
                                                 <span className="w-8 text-center">DXF</span>
                                                 <span className="w-8 text-center">3D</span>
                                                 <span className="w-8 text-center" title="PDF da O.S.">OS</span>
                                                 <span className="w-8 text-center" title="Conjunto Principal">★</span>
+                                                <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
                                             </div>
-                                            <span className="w-32">Código Desenho</span>
-                                            <span className="flex-1">Descrição</span>
-                                            <span className="w-12 text-center" title="Fator Multiplicador">Fator</span>
-                                            <span className="w-12 text-center">Qtde</span>
-                                            <span className="w-14 text-center">Peso</span>
-                                            {setoresParaRender.map(s => <span key={s.key} className="w-16 hidden lg:block text-center">{s.labelShort}</span>)}
+                                            <span className="w-32 shrink-0">Código Desenho</span>
+                                            <span className="flex-1 min-w-0">Descrição</span>
+                                            <span className="w-12 shrink-0 text-center" title="Fator Multiplicador">Fator</span>
+                                            <span className="w-12 shrink-0 text-center">Qtde</span>
+                                            <span className="w-14 shrink-0 text-center">Peso</span>
+                                            {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
                                              {/* Spacers p/ alinhar botões RNC e Excluir */}
                                              <span className="w-8 shrink-0"></span>
                                              <span className="w-8 shrink-0 mr-2"></span>
@@ -2503,13 +2544,13 @@ function OrdemServicoContent() {
                                                 </div>
 
                                                 <span
-                                                    className="w-32 text-xs font-bold text-primary bg-accent/20 px-2 py-1 rounded truncate"
+                                                    className="w-32 shrink-0 text-xs font-bold text-primary bg-accent/20 px-2 py-1 rounded truncate"
                                                     title={item.CodMatFabricante || 'Sem código'}
                                                 >
                                                     {item.CodMatFabricante || '-'}
                                                 </span>
 
-                                                <span className="flex-1 text-xs text-gray-700 truncate" title={item.DescDetal || item.DescResumo}>
+                                                <span className="flex-1 min-w-0 text-xs text-gray-700 truncate" title={item.DescDetal || item.DescResumo}>
                                                     {item.DescResumo || '-'}
                                                 </span>
 
@@ -2519,22 +2560,22 @@ function OrdemServicoContent() {
                                                             e.stopPropagation();
                                                             handleAlterarFatorItem(item, os.IdOrdemServico);
                                                         }}
-                                                        className="w-12 text-xs font-semibold text-accent hover:text-white text-center bg-accent/10 hover:bg-accent rounded my-auto py-0.5 border border-accent/20 cursor-pointer transition-all"
+                                                        className="w-12 shrink-0 text-xs font-semibold text-accent hover:text-white text-center bg-accent/10 hover:bg-accent rounded my-auto py-0.5 border border-accent/20 cursor-pointer transition-all"
                                                         title="Clique para alterar o Fator do Item"
                                                     >
                                                         {item.Fator !== undefined ? item.Fator : '1'}
                                                     </button>
                                                 ) : (
-                                                    <span className="w-12 text-xs font-semibold text-gray-500 text-center bg-gray-100 rounded my-auto py-0.5" title="Fator (Bloqueado)">
+                                                    <span className="w-12 shrink-0 text-xs font-semibold text-gray-500 text-center bg-gray-100 rounded my-auto py-0.5" title="Fator (Bloqueado)">
                                                         {item.Fator !== undefined ? item.Fator : '1'}
                                                     </span>
                                                 )}
-                                                <span className="w-12 text-xs text-gray-600 text-center">{item.QtdeTotal || '-'}</span>
-                                                <span className="w-14 text-xs text-gray-600 text-center">{item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}</span>
+                                                <span className="w-12 shrink-0 text-xs text-gray-600 text-center">{item.QtdeTotal || '-'}</span>
+                                                <span className="w-14 shrink-0 text-xs text-gray-600 text-center">{item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}</span>
                                                 {setoresParaRender.map(s => {
                                                     const temSetorNoItem = String((item as any)[s.txtField] ?? '') === '1';
                                                     return (
-                                                        <div key={s.key} className="hidden lg:flex w-16 justify-center items-center">
+                                                        <div key={s.key} className="hidden lg:flex w-16 shrink-0 justify-center items-center">
                                                             {temSetorNoItem ? (
                                                                 <ProgressBar value={(item as any)[s.percentField]} label={s.label} />
                                                             ) : (
@@ -2547,7 +2588,7 @@ function OrdemServicoContent() {
                                                 {/* Botão Gerar Pendência (RNC) - sempre visível */}
                                                 <button
                                                     onClick={(e) => handleGerarRnc(e, item, os.IdOrdemServico)}
-                                                    className="w-8 h-8 rounded flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors ml-auto"
+                                                    className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors ml-auto"
                                                     title="Gerar Pendência (RNC)"
                                                 >
                                                     <ShieldAlert size={14} />
@@ -2557,7 +2598,7 @@ function OrdemServicoContent() {
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
                                                     <button
                                                         onClick={(e) => handleDeleteItem(e, item, os.IdOrdemServico)}
-                                                        className="w-8 h-8 rounded flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors mr-2"
+                                                        className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors mr-2"
                                                         title="Excluir Linha Selecionada"
                                                     >
                                                         <Trash2 size={14} />

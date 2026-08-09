@@ -4194,7 +4194,7 @@ app.get('/api/material/processos/:cod', tenantMiddleware, async (req, res) => {
              LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
              WHERE (mp.codmatFabricante = ? OR (mp.IdMaterial IS NOT NULL AND mp.IdMaterial = ?))
                AND (mp.Ativo = 'A' OR mp.Ativo IS NULL OR mp.Ativo = '1')
-             ORDER BY mp.SequenciaExecucao ASC, mp.IdMaterialProcesso ASC`,
+             ORDER BY COALESCE(mp.IdOrdemServico, 0) ASC, COALESCE(mp.IdTag, 0) ASC, COALESCE(mp.IdProjeto, 0) ASC, mp.SequenciaExecucao ASC, mp.IdMaterialProcesso ASC`,
             [cod, idMaterial]
         );
 
@@ -9673,6 +9673,8 @@ async function inicializarPrimeiroSetor(conn, id) {
 }
 
 // GET: Mapa da Produ??o - vis?o geral de todos os processos
+require('./routes/rota2')(app, tenantMiddleware);
+
 app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => {
     const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;

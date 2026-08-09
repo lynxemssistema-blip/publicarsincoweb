@@ -791,27 +791,31 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       return true;
     };
 
-    // Checar se há datas de planejamento ativas para este setor
-    const { pi, pf } = getSectorPlanningDates(obj, sectorKey);
-    if (pi || pf) return true;
+    const isItem = !!obj.IdOrdemServicoItem;
+
+    // Checar se há datas de planejamento ativas para este setor (Apenas para OS/TAG/PROJ, ignorar para itens pois a fonte da verdade agora é material_processo via txt*)
+    if (!isItem) {
+        const { pi, pf } = getSectorPlanningDates(obj, sectorKey);
+        if (pi || pf) return true;
+    }
 
     switch (sectorKey) {
       case 'Corte':
-        return isTrue(obj.txtCorte) || isTrue(obj.txtCORTE) || isTrue(obj.flagCorte) || toNum({val: obj.CorteTotalExecutado}) > 0 || toNum({val: obj.CorteTotalExecutar}) > 0;
+        return isTrue(obj.txtCorte) || isTrue(obj.txtCORTE) || isTrue(obj.flagCorte) || (!isItem && (toNum({val: obj.CorteTotalExecutado}) > 0 || toNum({val: obj.CorteTotalExecutar}) > 0));
       case 'Dobra':
-        return isTrue(obj.txtDobra) || isTrue(obj.txtDOBRA) || isTrue(obj.flagDobra) || toNum({val: obj.DobraTotalExecutado}) > 0 || toNum({val: obj.DobraTotalExecutar}) > 0;
+        return isTrue(obj.txtDobra) || isTrue(obj.txtDOBRA) || isTrue(obj.flagDobra) || (!isItem && (toNum({val: obj.DobraTotalExecutado}) > 0 || toNum({val: obj.DobraTotalExecutar}) > 0));
       case 'Solda':
-        return isTrue(obj.txtSolda) || isTrue(obj.txtSOLDA) || isTrue(obj.flagSolda) || toNum({val: obj.SoldaTotalExecutado}) > 0 || toNum({val: obj.SoldaTotalExecutar}) > 0;
+        return isTrue(obj.txtSolda) || isTrue(obj.txtSOLDA) || isTrue(obj.flagSolda) || (!isItem && (toNum({val: obj.SoldaTotalExecutado}) > 0 || toNum({val: obj.SoldaTotalExecutar}) > 0));
       case 'Pintura':
-        return isTrue(obj.txtPintura) || isTrue(obj.txtPINTURA) || isTrue(obj.flagPintura) || toNum({val: obj.PinturaTotalExecutado}) > 0 || toNum({val: obj.PinturaTotalExecutar}) > 0;
+        return isTrue(obj.txtPintura) || isTrue(obj.txtPINTURA) || isTrue(obj.flagPintura) || (!isItem && (toNum({val: obj.PinturaTotalExecutado}) > 0 || toNum({val: obj.PinturaTotalExecutar}) > 0));
       case 'Montagem':
-        return isTrue(obj.TxtMontagem) || isTrue(obj.txtMontagem) || isTrue(obj.txtMONTAGEM) || isTrue(obj.flagMontagem) || toNum({val: obj.MontagemTotalExecutado}) > 0 || toNum({val: obj.MontagemTotalExecutar}) > 0;
+        return isTrue(obj.TxtMontagem) || isTrue(obj.txtMontagem) || isTrue(obj.txtMONTAGEM) || isTrue(obj.flagMontagem) || (!isItem && (toNum({val: obj.MontagemTotalExecutado}) > 0 || toNum({val: obj.MontagemTotalExecutar}) > 0));
       case 'CorteaLaser':
-        return isTrue(obj.txtCorteaLaser) || isTrue(obj.txtCORTEALASER) || isTrue(obj.flagCorteaLaser) || toNum({val: obj.CorteaLaserTotalExecutado}) > 0 || toNum({val: obj.CorteaLaserTotalExecutar}) > 0;
+        return isTrue(obj.txtCorteaLaser) || isTrue(obj.txtCORTEALASER) || isTrue(obj.flagCorteaLaser) || (!isItem && (toNum({val: obj.CorteaLaserTotalExecutado}) > 0 || toNum({val: obj.CorteaLaserTotalExecutar}) > 0));
       case 'Punsionadeira':
-        return isTrue(obj.txtPUNSIONADEIRA) || isTrue(obj.txtPunsionadeira) || isTrue(obj.flagPunsionadeira) || toNum({val: obj.PUNSIONADEIRATotalExecutado}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutado}) > 0 || toNum({val: obj.PUNSIONADEIRATotalExecutar}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutar}) > 0;
+        return isTrue(obj.txtPUNSIONADEIRA) || isTrue(obj.txtPunsionadeira) || isTrue(obj.flagPunsionadeira) || (!isItem && (toNum({val: obj.PUNSIONADEIRATotalExecutado}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutado}) > 0 || toNum({val: obj.PUNSIONADEIRATotalExecutar}) > 0 || toNum({val: obj.PunsionadeiraTotalExecutar}) > 0));
       case 'Galvanizar':
-        return isTrue(obj.txtGALVANIZAR) || isTrue(obj.txtGalvanizar) || isTrue(obj.flagGalvanizar) || toNum({val: obj.GALVANIZARTotalExecutado}) > 0 || toNum({val: obj.GalvanizarTotalExecutado}) > 0 || toNum({val: obj.GALVANIZARTotalExecutar}) > 0 || toNum({val: obj.GalvanizarTotalExecutar}) > 0;
+        return isTrue(obj.txtGALVANIZAR) || isTrue(obj.txtGalvanizar) || isTrue(obj.flagGalvanizar) || (!isItem && (toNum({val: obj.GALVANIZARTotalExecutado}) > 0 || toNum({val: obj.GalvanizarTotalExecutado}) > 0 || toNum({val: obj.GALVANIZARTotalExecutar}) > 0 || toNum({val: obj.GalvanizarTotalExecutar}) > 0));
       default:
         return false;
     }
