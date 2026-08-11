@@ -2,12 +2,25 @@ module.exports = function(app, tenantMiddleware) {
 app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async (req, res) => {
     const recurso = req.params.recurso.toLowerCase();
     
-    // Obter o IdProcesso do recurso
-    const [processos] = await req.tenantDbPool.execute("SELECT IdProcesso, Descricao FROM processos WHERE REPLACE(LOWER(Descricao), ' ', '') = ? LIMIT 1", [recurso]);
-    if (processos.length === 0) {
-        return res.status(404).json({ success: false, message: 'Recurso não encontrado' });
+    let idProcesso = null;
+    let isTodos = false;
+
+    if (recurso === 'todos' || recurso === '12') {
+        isTodos = true;
+    } else if (!isNaN(recurso) && recurso.trim() !== '') {
+        idProcesso = parseInt(recurso, 10);
+        if (idProcesso === 12) isTodos = true;
+    } else {
+        // Fallback: Obter o IdProcessoFabricacao do recurso por nome na tabela correta (processofabricacao)
+        const [processos] = await req.tenantDbPool.execute("SELECT IdProcessoFabricacao as IdProcesso, processofabricacao as Descricao FROM processofabricacao WHERE REPLACE(LOWER(processofabricacao), ' ', '') = ? LIMIT 1", [recurso]);
+        if (processos.length === 0) {
+            return res.status(404).json({ success: false, message: 'Recurso não encontrado' });
+        }
+        idProcesso = processos[0].IdProcesso;
+        if (idProcesso === 12 || processos[0].Descricao.toLowerCase() === 'todos') {
+            isTodos = true;
+        }
     }
-    const idProcesso = processos[0].IdProcesso;
 
     const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
@@ -15,11 +28,15 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
     const offsetNum = (pageNum - 1) * limitNum;
 
     try {
-        let whereClause = `mp.IdProcesso = ? 
-            AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+        let whereClause = `(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
             AND osi.Liberado_engenharia = 'S'
             AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`;
-        const params = [idProcesso];
+        const params = [];
+
+        if (!isTodos && idProcesso !== null) {
+            whereClause += ` AND mp.IdProcesso = ?`;
+            params.push(idProcesso);
+        }
 
         if (projeto) {
             whereClause += ' AND (os.Projeto LIKE ?)';
@@ -77,6 +94,9 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 osi.DescResumo,
                 osi.DescDetal,
                 osi.QtdeTotal,
+                mp.TempoEstimadoMin,
+                mp.TempoPadraoMin,
+                mp.MinutosProducao,
                 osi.IdPlanodecorte AS PlanoCorte,
                 osi.Espessura,
                 os.Projeto,
@@ -142,8 +162,13 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
         // TotalExecutar should not go below 0
         const novoExecutar = Math.max(0, currentExecutar - inputQty);
 
-        let updateQuery = 'UPDATE material_processo SET TotalExecutado = ?, TotalExecutar = ?';
-        let updateParams = [novoExecutado, novoExecutar];
+        // Atualizar MinutosProducao (Quantidade * Tempo Padrão)
+        const tempoPadraoMin = parseFloat(mp.TempoPadraoMin) || 0;
+        const adicionaMinutos = inputQty * tempoPadraoMin;
+        const novoMinutosProducao = (parseFloat(mp.MinutosProducao) || 0) + adicionaMinutos;
+
+        let updateQuery = 'UPDATE material_processo SET TotalExecutado = ?, TotalExecutar = ?, MinutosProducao = ?';
+        let updateParams = [novoExecutado, novoExecutar, novoMinutosProducao];
 
         // Se finalizou (TotalExecutar chegou a 0 ou apontamento Total)
         let finalizado = false;
@@ -157,6 +182,29 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
         updateParams.push(IdMaterialProcesso);
 
         await conn.execute(updateQuery, updateParams);
+
+        // -- CASCATA DE APONTAMENTO --
+        // Aumenta o TotalExecutar da PRÓXIMA etapa na sequência, se houver
+        const [nextMpRows] = await conn.execute(`
+            SELECT IdMaterialProcesso, TotalExecutar 
+            FROM material_processo 
+            WHERE IdOrdemServico = ? 
+              AND codmatFabricante = ? 
+              AND SequenciaExecucao > ? 
+            ORDER BY SequenciaExecucao ASC 
+            LIMIT 1 
+            FOR UPDATE
+        `, [mp.IdOrdemServico, mp.codmatFabricante, mp.SequenciaExecucao]);
+
+        if (nextMpRows.length > 0) {
+            const nextMp = nextMpRows[0];
+            const nextTotalExecutar = (parseFloat(nextMp.TotalExecutar) || 0) + inputQty;
+            await conn.execute(
+                'UPDATE material_processo SET TotalExecutar = ? WHERE IdMaterialProcesso = ?',
+                [nextTotalExecutar, nextMp.IdMaterialProcesso]
+            );
+        }
+        // -----------------------------
 
         // 2. Cascatear Totais (usando lógica existente na rota 1, mas chamando as functions corretas)
         // Isso envolve atualizar ordemservicoitem, ordemservico, tag, projeto. 

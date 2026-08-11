@@ -136,7 +136,10 @@ export default function CriarOrdemServicoPage() {
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    if (name === 'Descricao') {
+      value = value.toUpperCase();
+    }
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 

@@ -106,6 +106,17 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
     if (visibleMfg.length > 0) {
       mfgProcessosVisiveis = visibleMfg;
     }
+
+    // Grava os limites no localStorage para que outras telas (como o Apontamento) leiam
+    const limitsMap: Record<string, number> = {};
+    limitesData.data.forEach((r: any) => {
+      const keyWithSpaces = r.recurso.toLowerCase().trim();
+      const keyNoSpaces = keyWithSpaces.replace(/\s+/g, '');
+      const limit = parseFloat(r.limite_minutos) || 500;
+      limitsMap[keyWithSpaces] = limit;
+      limitsMap[keyNoSpaces] = limit;
+    });
+    localStorage.setItem('sinco_limitesTempoSetores', JSON.stringify(limitsMap));
   }
 
   const processosVisiveis = [...mfgProcessosVisiveis, ...engProcessosVisiveis];

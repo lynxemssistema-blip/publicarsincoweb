@@ -42,6 +42,18 @@ export default function ProducaoDiariaRecursoPage() {
       const json = await res.json();
       if (json.success) {
         setRecursos(json.data);
+        
+        // Atualiza a memória local para que a tela de apontamento receba o limite atualizado
+        const limitsMap: Record<string, number> = {};
+        json.data.forEach((r: any) => {
+          if (!r.recurso) return;
+          const keyWithSpaces = r.recurso.toLowerCase().trim();
+          const keyNoSpaces = keyWithSpaces.replace(/\s+/g, '');
+          const limit = parseFloat(r.limite_minutos) || 500;
+          limitsMap[keyWithSpaces] = limit;
+          limitsMap[keyNoSpaces] = limit;
+        });
+        localStorage.setItem('sinco_limitesTempoSetores', JSON.stringify(limitsMap));
       } else {
         setError(json.message || 'Erro ao carregar dados');
       }

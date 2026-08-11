@@ -492,9 +492,15 @@ useEffect(() => {
  params.set('limit', String(limit));
 
  // Use different route for mapa and mapaproducao
+ const getResourceFetchId = () => {
+   if (setorAtivo === 'mapa' || setorAtivo === 'mapaproducao') return setorAtivo;
+   const r = recursosList.find((x: any) => x.processofabricacao.toLowerCase().replace(/\s+/g, '') === setorAtivo);
+   return r ? r.IdProcessoFabricacao : setorAtivo;
+ };
+
  const url = (setorAtivo === 'mapa' || setorAtivo === 'mapaproducao')
  ? `${API_BASE}/apontamento/mapa/producao?${params}`
- : `${API_BASE}/material-processo/apontamentos/${setorAtivo}?${params}`;
+ : `${API_BASE}/material-processo/apontamentos/${getResourceFetchId()}?${params}`;
 
  const res = await fetch(url, { signal: controller.signal });
  const json = await res.json();
@@ -639,6 +645,7 @@ useEffect(() => {
       const res = await fetch(`${API_BASE}/apontamento/item/${item.IdOrdemServicoItem}/${activeSetor}`, { headers: getAuthHeaders() });
       const json = await res.json();
       if (json.success && json.data) {
+        json.data.item = { ...item, ...json.data.item }; // Preserva campos da Rota 2 (material_processo)
         setItemDetails(json.data);
         if (activeSetor === 'mapa') {
           setQtdeApontar(String(item.QtdeTotal));
@@ -676,35 +683,43 @@ useEffect(() => {
 
  // ── VALIDAÇÃO DE LIMITE DIÁRIO DE MINUTOS ──────────────────────────────
  if (modalSetor !== 'mapa' && itemDetails) {
-   const setorKey = String(modalSetor).toLowerCase();
-   const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
-   const secUpper = modalSetor.toUpperCase();
-   const itemAny = itemDetails.item as any;
+    const setorKey = String(modalSetor).toLowerCase();
+    const secFormatted = modalSetor.charAt(0).toUpperCase() + modalSetor.slice(1);
+    const secUpper = modalSetor.toUpperCase();
+    const itemAny = itemDetails.item as any;
 
-   // Calcula tempoPadrão do setor ativo
-   const PREFIXOS_V = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Punsionadeira','CorteaLaser','Engenharia'];
-   let tPadraoV = 0, tSetupV = 0;
-   const prefV = secFormatted;
-   const candidatesV = [prefV, ...PREFIXOS_V.filter(p => p !== prefV)];
-   for (const p of candidatesV) {
-     const tp = parseFloat(String(itemAny[`${p}TempoPadrao`] ?? 0)) || 0;
-     const ts = parseFloat(String(itemAny[`${p}TempoSetup`] ?? 0)) || 0;
-     if (tp > 0 || ts > 0) { tPadraoV = tp; tSetupV = ts; break; }
-   }
-   if (tPadraoV === 0) tPadraoV = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
-   if (tSetupV === 0) tSetupV = parseFloat(String(itemAny.TempoSetup ?? 0)) || 0;
+    let tPadraoV = 0, tSetupV = 0, minProdAtual = 0;
 
-   // MinProd acumulado atual do setor
-   const minProdAtual = parseFloat(String(
-     itemDetails[`${secFormatted}MinProd`] ??
-     itemDetails[`${secUpper}MinProd`] ??
-     itemDetails[`${modalSetor}MinProd`] ??
-     itemDetails.item?.[`${secFormatted}MinProd`] ??
-     itemDetails.item?.[`${secUpper}MinProd`] ?? 0
-   )) || 0;
+    if (itemAny.TempoEstimadoMin !== undefined && itemAny.TempoEstimadoMin !== null) {
+      // Rota 2
+      tPadraoV = parseFloat(String(itemAny.TempoPadraoMin)) || 0;
+      tSetupV = parseFloat(String(itemAny.TempoEstimadoMin)) || 0;
+      minProdAtual = parseFloat(String(itemAny.MinutosProducao)) || 0;
+    } else {
+      // Rotas Legado
+      const PREFIXOS_V = ['Corte','Dobra','Solda','Pintura','Montagem','Galvanizar','Punsionadeira','CorteaLaser','Engenharia'];
+      const prefV = secFormatted;
+      const candidatesV = [prefV, ...PREFIXOS_V.filter(p => p !== prefV)];
+      for (const p of candidatesV) {
+        const tp = parseFloat(String(itemAny[`${p}TempoPadrao`] ?? 0)) || 0;
+        const ts = parseFloat(String(itemAny[`${p}TempoSetup`] ?? 0)) || 0;
+        if (tp > 0 || ts > 0) { tPadraoV = tp; tSetupV = ts; break; }
+      }
+      if (tPadraoV === 0) tPadraoV = parseFloat(String(itemAny.TempoPadrao ?? 0)) || 0;
+      if (tSetupV === 0) tSetupV = parseFloat(String(itemAny.TempoSetup ?? 0)) || 0;
 
-   // Tempo estimado deste apontamento (setup só se for o primeiro, i.e. minProdAtual === 0)
-   const tempoEsteApont = (qProduzir * tPadraoV) + (minProdAtual === 0 ? tSetupV : 0);
+      minProdAtual = parseFloat(String(
+        (itemDetails as any).dailyMinProd ??
+        itemDetails[`${secFormatted}MinProd`] ??
+        itemDetails[`${secUpper}MinProd`] ??
+        itemDetails[`${modalSetor}MinProd`] ??
+        itemDetails.item?.[`${secFormatted}MinProd`] ??
+        itemDetails.item?.[`${secUpper}MinProd`] ?? 0
+      )) || 0;
+    }
+
+    // Tempo estimado deste apontamento (setup só se for o primeiro, i.e. minProdAtual === 0)
+    const tempoEsteApont = (qProduzir * tPadraoV) + (minProdAtual === 0 ? tSetupV : 0);
 
    // Limite diário configurado
    const limitesSalvos = JSON.parse(localStorage.getItem('sinco_limitesTempoSetores') || '{}');
@@ -1152,7 +1167,7 @@ useEffect(() => {
     >
         {recursosList.map((r, idx) => {
             const val = r.processofabricacao.toLowerCase().replace(/\s+/g, '');
-            return <option key={idx} value={val}>{r.processofabricacao}</option>;
+            return <option key={idx} value={val}>{r.IdProcessoFabricacao ? `${r.IdProcessoFabricacao} - ${r.processofabricacao}` : r.processofabricacao}</option>;
         })}
     </select>
   </div>
@@ -2093,12 +2108,19 @@ useEffect(() => {
  </div>
  </div>
  </div>
- <button
- onClick={() => setModalOpen(false)}
- className="p-1 rounded-full hover:bg-white/20 transition-colors"
- >
- <X size={15} />
- </button>
+ <div className="flex items-center gap-3">
+   {modalSetor !== 'mapa' && (
+     <div className="text-[9px] text-white/90 bg-black/10 px-2 py-1 rounded border border-white/20 uppercase font-black whitespace-nowrap hidden sm:block">
+       Qtde * Tempo Padrão = Minutos Produção
+     </div>
+   )}
+   <button
+     onClick={() => setModalOpen(false)}
+     className="p-1 rounded-full hover:bg-white/20 transition-colors"
+   >
+     <X size={15} />
+   </button>
+ </div>
  </div>
 
  {/* Modal Content */}
@@ -2290,8 +2312,13 @@ useEffect(() => {
                   ? recursoOrigemRef.current.charAt(0).toUpperCase() + recursoOrigemRef.current.slice(1)
                   : '');
             
-            let tempoSetup = 0, tempoPadrao = 0;
-            if (prefixoAlvo) {
+            let tempoSetup = 0, tempoPadrao = 0, minutosProducao = 0;
+            // Se vier da Rota 2 (material_processo)
+            if (itemAny.TempoEstimadoMin !== undefined && itemAny.TempoEstimadoMin !== null) {
+              tempoSetup = parseFloat(itemAny.TempoEstimadoMin) || 0;
+              tempoPadrao = parseFloat(itemAny.TempoPadraoMin) || 0;
+              minutosProducao = parseFloat(itemAny.MinutosProducao) || 0;
+            } else if (prefixoAlvo) {
               tempoSetup = parseFloat(String(itemAny[`${prefixoAlvo}TempoSetup`] ?? 0)) || 0;
               tempoPadrao = parseFloat(String(itemAny[`${prefixoAlvo}TempoPadrao`] ?? 0)) || 0;
             }
@@ -2352,7 +2379,9 @@ useEffect(() => {
                   <div className="flex-1 text-center px-1">
                     <div className="text-[7px] font-black text-amber-500 uppercase tracking-wider leading-none">Total (C)</div>
                     <div className="text-xs font-black text-amber-800 leading-tight mt-0.5">
-                      {((parseFloat(qtdeApontar) || 0) * tempoPadrao).toFixed(1)}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
+                      {(itemAny.MinutosProducao !== undefined && itemAny.MinutosProducao !== null) 
+                         ? (minutosProducao + ((parseFloat(qtdeApontar) || 0) * tempoPadrao)).toFixed(1) 
+                         : ((parseFloat(qtdeApontar) || 0) * tempoPadrao).toFixed(1)}<span className="text-[7px] text-amber-400 ml-0.5">min</span>
                     </div>
                   </div>
 

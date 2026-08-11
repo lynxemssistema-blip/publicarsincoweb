@@ -6,12 +6,18 @@ interface ModalMontagemProcessoFabricacaoProps {
   isOpen: boolean;
   onClose: () => void;
   codmatfabricante?: string;
+  osId?: string | number;
+  osContext?: any;
+  qtdSelecionada?: number;
 }
 
 export default function ModalMontagemProcessoFabricacao({
   isOpen,
   onClose,
-  codmatfabricante
+  codmatfabricante,
+  osId,
+  osContext,
+  qtdSelecionada
 }: ModalMontagemProcessoFabricacaoProps) {
   if (!isOpen) return null;
 
@@ -49,7 +55,12 @@ export default function ModalMontagemProcessoFabricacao({
 
         {/* Content Body */}
         <div className="flex-1 overflow-auto bg-slate-100 p-1">
-          <MontaPecaManufaturadaPage initialCodMatFabricante={codmatfabricante} />
+          <MontaPecaManufaturadaPage 
+            initialCodMatFabricante={codmatfabricante} 
+            osId={osId} 
+            osContext={osContext}
+            qtdSelecionada={qtdSelecionada} 
+          />
         </div>
       </div>
     </div>

@@ -66,6 +66,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       tempoSetup: number, 
       tempoPadrao: number,
       recursoTempos: Record<string, { tempoSetup: number, tempoPadrao: number }>
+      alreadyInOS?: boolean,
+      desc?: string
     } 
   }>({});
   const [itemProcessos, setItemProcessos] = useState<{ [cod: string]: { key: string, label: string, tempoSetup: number, tempoPadrao: number }[] }>({});
@@ -78,6 +80,48 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   const [totalAdded, setTotalAdded] = useState(0);
   const [montarRecursoCod, setMontarRecursoCod] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+
+
+  const fetchExistingOsItems = async () => {
+    try {
+      const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
+      const res = await fetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo`, {
+        headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
+      });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        const newSelected: any = {};
+        const newProcessos: any = {};
+        json.data.forEach((m: any) => {
+            const cod = m.codmatfabricante;
+            newSelected[cod] = {
+                qtde: m.qtde,
+                fator: 1,
+                acabamento: '',
+                tempoSetup: 0,
+                tempoPadrao: 0,
+                recursoTempos: m.recursoTempos || {},
+                alreadyInOS: true,
+                desc: m.desc
+            };
+            const procs: any[] = [];
+            Object.keys(m.recursoTempos || {}).forEach(k => {
+                procs.push({
+                    key: k,
+                    label: m.recursoTempos[k].label || k,
+                    tempoSetup: m.recursoTempos[k].tempoSetup,
+                    tempoPadrao: m.recursoTempos[k].tempoPadrao
+                });
+            });
+            newProcessos[cod] = procs;
+        });
+        setSelectedItems(prev => ({...prev, ...newSelected}));
+        setItemProcessos(prev => ({...prev, ...newProcessos}));
+      }
+    } catch (e) {
+      console.error('Erro ao buscar materiais da OS', e);
+    }
+  };
 
   const fetchExistingOsCodigos = async () => {
     try {
@@ -111,6 +155,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       fetchAcabamentos();
       
       fetchExistingOsCodigos().then((codsExistentes) => {
+        fetchExistingOsItems();
         fetchInitialMaterials(codsExistentes);
       });
     }
@@ -263,6 +308,89 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
+
+  const handleSaveQuantity = async (cod: string) => {
+    try {
+        const item = selectedItems[cod];
+        if (!item) return;
+        const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || localStorage.getItem('supabase.auth.token') || '';
+        
+        const qtde = Math.max(1, item.qtde || 1);
+        
+        const res = await fetch(`${API_BASE}/material-processo/quantidade`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {})
+            },
+            body: JSON.stringify({
+                codmatFabricante: cod,
+                osId: osId,
+                idProjeto: osContext?.IdProjeto || null,
+                idTag: osContext?.IdTag || null,
+                qtde: qtde
+            })
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+            setSuccessMsg('Quantidade total (TotalExecutar) atualizada com sucesso!');
+            setTimeout(() => setSuccessMsg(null), 3000);
+        } else {
+            console.error('Erro:', json);
+            setSuccessMsg('Erro ao salvar quantidade');
+            setTimeout(() => setSuccessMsg(null), 3000);
+        }
+    } catch (e) {
+        console.error('Erro ao salvar quantidade', e);
+    }
+  };
+
+  const handleSaveRecurso = async (cod: string, secKey: string) => {
+    try {
+        const item = selectedItems[cod];
+        if (!item) return;
+        const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || localStorage.getItem('supabase.auth.token') || '';
+        
+        const procsList = itemProcessos[cod] || [];
+        const proc = procsList.find(p => p.key === secKey);
+        if(!proc) return;
+        
+        const recVal = item.recursoTempos?.[secKey] || { tempoSetup: proc.tempoSetup, tempoPadrao: proc.tempoPadrao };
+        const qtde = Math.max(1, item.qtde || 1);
+        
+        const res = await fetch(`${API_BASE}/material-processo/tempos`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {})
+            },
+            body: JSON.stringify({
+                codmatFabricante: cod,
+                osId: osId,
+                idProjeto: osContext?.IdProjeto || null,
+                idTag: osContext?.IdTag || null,
+                labelProcesso: proc.label,
+                tempoSetup: parseInt(recVal.tempoSetup) || 0,
+                tempoPadrao: parseInt(recVal.tempoPadrao) || 0,
+                qtde: qtde
+            })
+        });
+        
+        const json = await res.json();
+        if (json.success) {
+            setSuccessMsg('Tempos e Quantidade atualizados com sucesso!');
+            setTimeout(() => setSuccessMsg(null), 3000);
+        } else {
+            console.error('Erro:', json);
+            setSuccessMsg('Erro ao salvar recursos');
+            setTimeout(() => setSuccessMsg(null), 3000);
+        }
+    } catch (e) {
+        console.error('Erro ao salvar recursos', e);
+    }
+  };
+
   const updateItem = (cod: string, field: 'qtde' | 'fator' | 'acabamento' | 'tempoSetup' | 'tempoPadrao', value: any) => {
     setSelectedItems(prev => ({
       ...prev,
@@ -311,7 +439,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       return;
     }
 
-    const itensArray = Object.keys(selectedItems).map(cod => {
+  const itensArray = Object.keys(selectedItems).filter(cod => !selectedItems[cod].alreadyInOS).map(cod => {
       const item = selectedItems[cod];
       const qtde = Math.max(1, parseInt(String(item.qtde), 10) || 1);
       const fator = Math.max(1, parseInt(String(item.fator), 10) || 1);
@@ -420,8 +548,12 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               {totalAdded > 0 && <span className="ml-2 font-bold text-[#E0E800]">({totalAdded} material(is) já incluído(s))</span>}
             </p>
           </div>
-          <button onClick={handleConcluir} className="p-1 hover:bg-white/20 rounded transition-colors" title="Fechar">
-            <X size={20} />
+          <button
+            onClick={handleConcluir}
+            className="px-3 py-1.5 bg-white/10 hover:bg-red-600/80 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
+            title="Fechar Modal"
+          >
+            <X size={16} /> Fechar e Retornar
           </button>
         </div>
 
@@ -499,7 +631,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                 <div className="flex justify-center py-10"><Loader2 className="animate-spin text-[#32423D]" size={30} /></div>
               ) : searchResults.length > 0 ? (
                 <div className="space-y-2">
-                  {searchResults.map(mat => {
+                  {searchResults.filter(mat => !selectedItems[mat.CodMatFabricante]?.alreadyInOS).map(mat => {
                     const isSelected = !!selectedItems[mat.CodMatFabricante];
                     const currentItem = selectedItems[mat.CodMatFabricante];
                     const currentQtde = currentItem?.qtde || 1;
@@ -566,9 +698,22 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
           {/* Right panel - Selected Items */}
           <div className="w-full md:w-[410px] shrink-0 flex flex-col bg-white">
             <div className="p-3 border-b bg-gray-50 flex items-center justify-between">
-              <h3 className="font-bold text-gray-700 text-sm">Itens Selecionados ({totalSelected})</h3>
+              <div>
+                <h3 className="font-bold text-gray-700 text-sm">Itens Selecionados ({totalSelected})</h3>
+                {totalSelected > 0 && (
+                  <span className="text-[10px] text-slate-500">Recursos via material_processo</span>
+                )}
+              </div>
               {totalSelected > 0 && (
-                <span className="text-[10px] text-slate-500">Recursos via material_processo</span>
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving}
+                  className="bg-[#32423D] hover:bg-[#E0E800] hover:text-black text-white px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50"
+                  title="Confirmar Inclusão na OS"
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} className="stroke-[3]" />}
+                  Confirmar
+                </button>
               )}
             </div>
 
@@ -578,7 +723,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               ) : (
                 Object.keys(selectedItems).map(cod => {
                   const item = selectedItems[cod];
-                  const mat = searchResults.find(m => m.CodMatFabricante === cod) || { DescResumo: 'Desconhecido' };
+      const mat = searchResults.find(m => m.CodMatFabricante === cod) || { DescResumo: item.desc || 'Desconhecido' };
                   const itemQtde = item.qtde || 1;
                   const itemFator = Math.max(1, item.fator || 1);
                   const isProcLoading = !!loadingProcessos[cod];
@@ -602,6 +747,13 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                               value={item.qtde}
                               onChange={e => updateItem(cod, 'qtde', parseInt(e.target.value) || 1)}
                             />
+                          <button
+                            onClick={() => handleSaveQuantity(cod)}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white rounded p-1 shadow-sm transition-colors ml-1"
+                            title="Salvar TotalExecutar"
+                          >
+                            <Check size={14} className="stroke-[3]" />
+                          </button>
                           </div>
 
                           <div className="flex items-center gap-1 bg-amber-50/70 border border-amber-200 px-2 py-0.5 rounded">
@@ -681,6 +833,15 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                                         onChange={e => updateRecursoTempo(cod, sec.key, 'tempoPadrao', parseInt(e.target.value) || 0)}
                                       />
                                     </div>
+                        <div className="col-span-2 flex justify-end mt-1">
+                          <button
+                            onClick={() => handleSaveRecurso(cod, sec.key)}
+                            className="bg-emerald-500 hover:bg-emerald-600 text-white rounded px-2 py-1 flex items-center gap-1 shadow-sm transition-colors text-[9px]"
+                            title="Salvar Tempos e Quantidade"
+                          >
+                            <Check size={12} className="stroke-[3]" /> Salvar
+                          </button>
+                        </div>
                                   </div>
                                 </div>
                               );
@@ -698,23 +859,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               )}
             </div>
             
-            {/* Footer Actions */}
-            <div className="p-3 border-t bg-gray-50 flex flex-col gap-2">
-              <button 
-                onClick={handleSubmit} 
-                disabled={saving || totalSelected === 0}
-                className="w-full bg-[#32423D] hover:bg-[#E0E800]/90 hover:text-black text-white py-2 rounded font-bold text-sm transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                Confirmar Inclusão ({totalSelected})
-              </button>
-              <button 
-                onClick={handleConcluir}
-                className="w-full border-2 border-[#32423D] text-[#32423D] hover:bg-[#32423D] hover:text-white py-2 rounded font-bold text-sm transition-colors"
-              >
-                {totalAdded > 0 ? `Concluir (${totalAdded} incluído(s))` : 'Fechar'}
-              </button>
-            </div>
           </div>
           
         </div>

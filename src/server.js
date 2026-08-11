@@ -9061,6 +9061,191 @@ app.get('/api/ordemservico/:id/itens-disponiveis', tenantMiddleware, async (req,
     }
 });
 
+
+app.get('/api/ordemservico/:id/itens-codigos', tenantMiddleware, async (req, res) => {
+    try {
+        const { idProjeto, idTag } = req.query;
+        let sql = 'SELECT DISTINCT codmatFabricante FROM material_processo WHERE IdOrdemServico = ?';
+        let params = [req.params.id];
+        
+        if (idProjeto) { sql += ' AND IdProjeto = ?'; params.push(idProjeto); }
+        else { sql += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+        if (idTag) { sql += ' AND IdTag = ?'; params.push(idTag); }
+        else { sql += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+        
+        const [rows] = await req.tenantDbPool.execute(sql, params);
+        res.json({ success: true, codigos: rows.map(r => r.codmatFabricante) });
+    } catch (e) {
+        console.error('Erro itens-codigos:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (req, res) => {
+    try {
+        const osId = req.params.id;
+        const { idProjeto, idTag } = req.query;
+        let sql = `
+            SELECT mp.codmatFabricante, m.DescResumo, mp.TotalExecutar as Qtde,
+                   mp.IdProcesso, pf.processofabricacao, mp.TempoEstimadoMin, mp.TempoPadraoMin
+            FROM material_processo mp
+            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            LEFT JOIN material m ON mp.IdMaterial = m.IdMaterial
+            WHERE mp.IdOrdemServico = ? `;
+        const params = [osId];
+        
+        if (idProjeto) { sql += ` AND mp.IdProjeto = ?`; params.push(idProjeto); }
+        else { sql += ` AND (mp.IdProjeto IS NULL OR mp.IdProjeto = 0 OR mp.IdProjeto = '')`; }
+        if (idTag) { sql += ` AND mp.IdTag = ?`; params.push(idTag); }
+        else { sql += ` AND (mp.IdTag IS NULL OR mp.IdTag = 0 OR mp.IdTag = '')`; }
+        
+        sql += ` ORDER BY mp.codmatFabricante, mp.SequenciaExecucao ASC`;
+
+        const [rows] = await req.tenantDbPool.execute(sql, params);
+        const mats = {};
+        for (const r of rows) {
+            if (!r.codmatFabricante) continue;
+            if (!mats[r.codmatFabricante]) {
+                mats[r.codmatFabricante] = {
+                    codmatfabricante: r.codmatFabricante,
+                    desc: r.DescResumo,
+                    qtde: Number(r.Qtde) || 1,
+                    recursoTempos: {}
+                };
+            }
+            if (r.processofabricacao) {
+                const key = r.processofabricacao.trim().replace(/\s+/g, '');
+                mats[r.codmatFabricante].recursoTempos[key] = {
+                    tempoSetup: Number(r.TempoEstimadoMin || 0),
+                    tempoPadrao: Number(r.TempoPadraoMin || 0),
+                    label: r.processofabricacao
+                };
+            }
+        }
+        res.json({ success: true, data: Object.values(mats) });
+    } catch (e) {
+        console.error('Erro ao buscar materiais na OS:', e);
+        res.status(500).json({ success: false, message: 'Erro', error: e.message });
+    }
+});
+
+app.delete('/api/material-processo/item', tenantMiddleware, async (req, res) => {
+    try {
+        const { codmatFabricante, osId, idProjeto, idTag } = req.body;
+        if (!codmatFabricante || !osId) return res.status(400).json({ success: false, message: 'Dados inválidos' });
+        
+        let sql = 'DELETE FROM material_processo WHERE codmatFabricante = ? AND IdOrdemServico = ?';
+        const params = [codmatFabricante, osId];
+        
+        if (idProjeto) { sql += ' AND IdProjeto = ?'; params.push(idProjeto); }
+        else { sql += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+        if (idTag) { sql += ' AND IdTag = ?'; params.push(idTag); }
+        else { sql += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+        
+        await req.tenantDbPool.execute(sql, params);
+        
+        let sqlOsi = 'DELETE FROM ordemservicoitem WHERE CodMatFabricante = ? AND IdOrdemServico = ?';
+        if (idProjeto) { sqlOsi += ' AND IdProjeto = ?'; }
+        else { sqlOsi += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+        if (idTag) { sqlOsi += ' AND IdTag = ?'; }
+        else { sqlOsi += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+        await req.tenantDbPool.execute(sqlOsi, params);
+        
+        res.json({ success: true, message: 'Material removido da OS' });
+    } catch (e) {
+        console.error('Erro ao excluir material:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.patch('/api/material-processo/quantidade', tenantMiddleware, async (req, res) => {
+    try {
+        const { codmatFabricante, osId, idProjeto, idTag, qtde, novaQtd } = req.body;
+        if (!codmatFabricante || !osId) return res.status(400).json({ success: false, message: 'Dados inválidos' });
+
+        const valueQtd = novaQtd !== undefined ? novaQtd : qtde;
+
+        let subWhere = 'codmatFabricante = ? AND IdOrdemServico = ?';
+        let subParams = [codmatFabricante, osId];
+        
+        if (idProjeto) { subWhere += ' AND IdProjeto = ?'; subParams.push(idProjeto); }
+        else { subWhere += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+        
+        if (idTag) { subWhere += ' AND IdTag = ?'; subParams.push(idTag); }
+        else { subWhere += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+
+        let sql = `
+            UPDATE material_processo 
+            SET TotalExecutar = ? 
+            WHERE IdMaterialProcesso = (
+                SELECT id FROM (
+                    SELECT IdMaterialProcesso AS id 
+                    FROM material_processo 
+                    WHERE ${subWhere}
+                    ORDER BY SequenciaExecucao ASC LIMIT 1
+                ) as subquery
+            )
+        `;
+        const params = [valueQtd, ...subParams];
+        console.log('PARAMS TO EXECUTE (quantidade):', params);
+
+        await req.tenantDbPool.execute(sql, params);
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Erro ao atualizar quantidade:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
+app.patch('/api/material-processo/tempos', tenantMiddleware, async (req, res) => {
+    try {
+        const { codmatFabricante, osId, idProjeto, idTag, labelProcesso, tempoSetup, tempoPadrao, qtde } = req.body;
+        if (!codmatFabricante || !osId || !labelProcesso) return res.status(400).json({ success: false, message: 'Dados inválidos' });
+
+        const normLabel = labelProcesso.trim().replace(/\s+/g, '');
+        const [procRows] = await req.tenantDbPool.execute('SELECT IdProcessoFabricacao FROM processofabricacao WHERE REPLACE(processofabricacao, \' \', \'\') = ? LIMIT 1', [normLabel]);
+        if (!procRows.length) return res.status(404).json({ success: false, message: 'Processo não encontrado' });
+        const idProcesso = procRows[0].IdProcessoFabricacao;
+
+        let sqlTempos = 'UPDATE material_processo SET TempoEstimadoMin = ?, TempoPadraoMin = ? WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?';
+        const paramsTempos = [tempoSetup, tempoPadrao, codmatFabricante, osId, idProcesso];
+        if (idProjeto) { sqlTempos += ' AND IdProjeto = ?'; paramsTempos.push(idProjeto); }
+        else { sqlTempos += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+        if (idTag) { sqlTempos += ' AND IdTag = ?'; paramsTempos.push(idTag); }
+        else { sqlTempos += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+        await req.tenantDbPool.execute(sqlTempos, paramsTempos);
+
+        if (qtde !== undefined && qtde !== null) {
+            let subWhere = 'codmatFabricante = ? AND IdOrdemServico = ?';
+            let subParams = [codmatFabricante, osId];
+            if (idProjeto) { subWhere += ' AND IdProjeto = ?'; subParams.push(idProjeto); }
+            else { subWhere += ' AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = \'\')'; }
+            if (idTag) { subWhere += ' AND IdTag = ?'; subParams.push(idTag); }
+            else { subWhere += ' AND (IdTag IS NULL OR IdTag = 0 OR IdTag = \'\')'; }
+
+            let sqlQtd = `
+                UPDATE material_processo 
+                SET TotalExecutar = ? 
+                WHERE IdMaterialProcesso = (
+                    SELECT id FROM (
+                        SELECT IdMaterialProcesso AS id 
+                        FROM material_processo 
+                        WHERE ${subWhere}
+                        ORDER BY SequenciaExecucao ASC LIMIT 1
+                    ) as subquery
+                )
+            `;
+            const paramsQtd = [qtde, ...subParams];
+            await req.tenantDbPool.execute(sqlQtd, paramsQtd);
+        }
+
+        res.json({ success: true });
+    } catch (e) {
+        console.error('Erro ao atualizar tempos:', e);
+        res.status(500).json({ success: false, error: e.message });
+    }
+});
+
 app.post('/api/ordemservico/:id/incluir-itens', tenantMiddleware, async (req, res) => {
     let conn = null;
     try {
@@ -9321,124 +9506,89 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             const pesoUnit = Number(mat.Peso) || 0;
             const areaUnit = Number(mat.AreaPintura) || 0;
 
-            const [procRows] = await conn.execute(
-                `SELECT pf.processofabricacao
-                 FROM material_processo mp
-                 JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-                 WHERE (mp.IdMaterial = ? OR mp.codmatFabricante = ?) AND mp.Ativo = 'A' AND (pf.D_E_L_E_T_E IS NULL OR pf.D_E_L_E_T_E = '') AND pf.Fabrica = 'SIM'`,
-                [mat.IdMaterial, codmatfabricante]);
-            const processosNomes = procRows.map(r => (r.processofabricacao || '').trim().replace(/\s+/g, ''));
-            const colunasDinamicasVals = {};
 
-            for (const procName of processosNomes) {
-                if (!procName) continue;
-                
-                const colBase = procName;
-                const columnsToEnsure = [
-                    { name: `txt${colBase}`, type: 'VARCHAR(1) DEFAULT \'0\'' },
-                    { name: `sttxt${colBase}`, type: 'VARCHAR(50) DEFAULT NULL' },
-                    { name: `PlanejadoInicio${colBase}`, type: 'DATE DEFAULT NULL' },
-                    { name: `PlanejadoFinal${colBase}`, type: 'DATE DEFAULT NULL' },
-                    { name: `RealizadoInicio${colBase}`, type: 'DATE DEFAULT NULL' },
-                    { name: `UsuarioRealizadoInicio${colBase}`, type: 'VARCHAR(100) DEFAULT NULL' },
-                    { name: `RealizadoFinal${colBase}`, type: 'DATE DEFAULT NULL' },
-                    { name: `UsuarioRealizadoFinal${colBase}`, type: 'VARCHAR(100) DEFAULT NULL' },
-                    { name: `${colBase}TotalExecutado`, type: 'DECIMAL(10,2) DEFAULT 0' },
-                    { name: `${colBase}TotalExecutar`, type: 'DECIMAL(10,2) DEFAULT 0' },
-                    { name: `${colBase}Percentual`, type: 'DECIMAL(5,2) DEFAULT 0' }
-                ];
-                
-                // 1. Garantir colunas em TODA a hierarquia
-                await ensureColumns('ordemservicoitem', columnsToEnsure);
-                await ensureColumns('ordemservico', columnsToEnsure);
-                await ensureColumns('tags', columnsToEnsure);
-                await ensureColumns('projetos', columnsToEnsure);
-                
-                // 2. Atualizar as tabelas pai (OS, Tag, Projeto) para habilitar o processo
-                if (osId) {
-                    await conn.execute(`UPDATE ordemservico SET \`txt${colBase}\` = '1' WHERE IdOrdemServico = ?`, [osId]);
-                }
-                if (osContext?.IdTag) {
-                    await conn.execute(`UPDATE tags SET \`txt${colBase}\` = '1' WHERE IdTag = ?`, [osContext.IdTag]);
-                }
-                if (osContext?.IdProjeto) {
-                    await conn.execute(`UPDATE projetos SET \`txt${colBase}\` = '1' WHERE IdProjeto = ?`, [osContext.IdProjeto]);
-                }
+        let itemSumSetup = 0;
+        let itemSumPadrao = 0;
+        let itemSumTotal = 0;
 
-                // Habilitar a flag deste processo no item
-                colunasDinamicasVals[`txt${colBase}`] = '1';
+        if (recursoTempos && typeof recursoTempos === 'object') {
+            for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                if (!recVal) continue;
+                const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+                const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup;
+
+                itemSumSetup += rSetup;
+                itemSumPadrao += rPadrao;
+                itemSumTotal += rTotalTempo;
             }
+        }
 
-            let itemSumSetup = 0;
-            let itemSumPadrao = 0;
-            let itemSumTotal = 0;
+        const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
+        const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
+        const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup));
 
-            if (recursoTempos && typeof recursoTempos === 'object') {
-                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
-                    if (!recVal) continue;
-                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
-                    const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
-                    const rTotalPadrao = rPadrao * qtdeTotalNum;
-                    const rTotalSetup = rSetup;
-                    const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup; // Fórmula: (qtde × padrão) + setup
-                    const rDiasProd = rTotalTempo > 0 ? Math.max(1, Math.ceil(rTotalTempo / 480)) : 0;
+        await ensureColumns('ordemservicoitem', [
+            { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'TempoPadrao', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'TotalTempo', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'qtde', type: 'DECIMAL(10,2) DEFAULT 1' },
+            { name: 'Fator', type: 'INT DEFAULT 1' }
+        ]);
 
-                    colunasDinamicasVals[`${secKey}TempoSetup`] = rSetup;
-                    colunasDinamicasVals[`${secKey}TotalSetup`] = rTotalSetup;
-                    colunasDinamicasVals[`${secKey}TempoPadrao`] = rPadrao;
-                    colunasDinamicasVals[`${secKey}TotalPadrao`] = rTotalPadrao;
-                    colunasDinamicasVals[`${secKey}TotalTempo`] = rTotalTempo;
-                    colunasDinamicasVals[`${secKey}DiasProducao`] = rDiasProd;
+        const cols = [
+            'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
+            'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
+            'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
+            'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
+            'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
+            'TempoSetup', 'TempoPadrao', 'TotalTempo'
+        ];
 
-                    itemSumSetup += rSetup;
-                    itemSumPadrao += rPadrao;
-                    itemSumTotal += rTotalTempo;
+        const vals = [
+            osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum, qtdeTotalNum,
+            acabamento, (pesoUnit * qtdeTotalNum), (areaUnit * qtdeTotalNum), mat.Espessura, mat.Altura, mat.Largura,
+            mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
+            osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null, osData.Projeto || osContext?.Projeto || null,
+            osData.Tag || osContext?.Tag || null, osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null, osData.DescEmpresa || osContext?.DescEmpresa || null,
+            'Sistema', 'Sistema', new Date(), 'N', fatorNum,
+            itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
+        ];
+
+        const sqlInsert = `
+            INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
+            VALUES (${cols.map(()=>'?').join(', ')})
+        `;
+
+        const [insertRes] = await conn.execute(sqlInsert, vals);
+
+        if (recursoTempos && typeof recursoTempos === 'object') {
+            let seq = 1;
+            for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                if (!recVal) continue;
+                const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+
+                const [procIds] = await conn.execute(`SELECT IdProcessoFabricacao FROM processofabricacao WHERE REPLACE(processofabricacao, ' ', '') = ? LIMIT 1`, [secKey]);
+                if (procIds.length > 0) {
+                    const idProcesso = procIds[0].IdProcessoFabricacao;
+                    await conn.execute(
+                        `INSERT INTO material_processo (
+                            IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, 
+                            TempoEstimadoMin, TempoPadraoMin, TotalExecutar, Ativo, 
+                            UsuarioCriacao, DataCriacao, IdOrdemServico, IdProjeto, IdTag
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)`,
+                        [
+                            mat.IdMaterial, codmatfabricante, idProcesso, seq,
+                            rSetup, rPadrao, qtdeTotalNum,
+                            osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
+                        ]
+                    );
+                    seq++;
                 }
             }
+        }
 
-            const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
-            const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
-            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup)); // Fórmula sem Fator
-
-            await ensureColumns('ordemservicoitem', [
-                { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
-                { name: 'TempoPadrao', type: 'DECIMAL(10,2) DEFAULT 0' },
-                { name: 'TotalTempo', type: 'DECIMAL(10,2) DEFAULT 0' },
-                { name: 'qtde', type: 'DECIMAL(10,2) DEFAULT 1' },
-                { name: 'Fator', type: 'INT DEFAULT 1' }
-            ]);
-
-            const cols = [
-                'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
-                'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
-                'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
-                'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
-                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
-                'TempoSetup', 'TempoPadrao', 'TotalTempo'
-            ];
-            
-            const vals = [
-                osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum, qtdeTotalNum,
-                acabamento, (pesoUnit * qtdeTotalNum), (areaUnit * qtdeTotalNum), mat.Espessura, mat.Altura, mat.Largura,
-                mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
-                osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null, osData.Projeto || osContext?.Projeto || null,
-                osData.Tag || osContext?.Tag || null, osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null, osData.DescEmpresa || osContext?.DescEmpresa || null,
-                'Sistema', 'Sistema', new Date(), 'N', fatorNum,
-                itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
-            ];
-            
-            for (const [key, val] of Object.entries(colunasDinamicasVals)) {
-                cols.push(key);
-                vals.push(val);
-            }
-            
-            const sqlInsert = `
-                INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
-                VALUES (${cols.map(()=>'é').join(', ')})
-            `;
-            
-            const [insertRes] = await conn.execute(sqlInsert, vals);
-            await inicializarPrimeiroSetor(conn, insertRes.insertId);
             
             adicionados++;
         }
