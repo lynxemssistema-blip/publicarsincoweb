@@ -160,15 +160,43 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const fetchProcs = useCallback(async (cod: string) => {
     setLoadingP(true);
     try { 
-      const r = await fetch(`${API}/processos-existentes/${encodeURIComponent(cod)}`, { headers: authHdr() }); 
+      let url = `${API}/processos-existentes/${encodeURIComponent(cod)}`;
+      if (osId) {
+        url = `/api/ordemservico/${osId}/materiais-em-processo`;
+        const qsParams = [];
+        if (osContext?.IdProjeto) qsParams.push(`idProjeto=${osContext.IdProjeto}`);
+        if (osContext?.IdTag) qsParams.push(`idTag=${osContext.IdTag}`);
+        if (qsParams.length > 0) url += `?${qsParams.join('&')}`;
+      }
+
+      const r = await fetch(url, { headers: authHdr() }); 
       const j = await r.json();
       if (j.success) {
-        const mapped = j.data.map((p:any) => ({
-          seq: p.SequenciaExecucao, IdProcesso: p.IdProcesso, nome: p.NomeProcesso,
-          estMin: p.TempoEstimadoMin != null ? Number(p.TempoEstimadoMin) : null,
-          padMin: p.TempoPadraoMin != null ? Number(p.TempoPadraoMin) : null,
-          obs: p.Observacao || ''
-        }));
+        let mapped = [];
+        if (osId) {
+           const matData = j.data.find((m: any) => m.codmatfabricante === cod);
+           if (matData && matData.recursoTempos) {
+              mapped = Object.values(matData.recursoTempos)
+                .map((rt: any) => ({
+                   seq: rt.SequenciaExecucao || 99,
+                   IdProcesso: rt.IdProcesso,
+                   nome: rt.label,
+                   estMin: rt.tempoSetup != null ? Number(rt.tempoSetup) : null,
+                   padMin: rt.tempoPadrao != null ? Number(rt.tempoPadrao) : null,
+                   obs: rt.Observacao || ''
+                }))
+                .filter((rt: any) => rt.IdProcesso)
+                .sort((a: any, b: any) => a.seq - b.seq);
+           }
+        } else {
+           mapped = j.data.map((p:any) => ({
+             seq: p.SequenciaExecucao, IdProcesso: p.IdProcesso, nome: p.NomeProcesso,
+             estMin: p.TempoEstimadoMin != null ? Number(p.TempoEstimadoMin) : null,
+             padMin: p.TempoPadraoMin != null ? Number(p.TempoPadraoMin) : null,
+             obs: p.Observacao || ''
+           }));
+        }
+        
         setStaging(mapped);
         const maxSeq = mapped.length ? Math.max(...mapped.map((s:any) => s.seq)) : 0;
         setLastAutoSeq(maxSeq);
@@ -176,7 +204,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     } finally { 
       setLoadingP(false); 
     }
-  }, []);
+  }, [osId, osContext]);
 
   const selectMat1 = async (m: MatRow) => {
     if (selMat1 && selMat1.IdMaterial === m.IdMaterial) return;
@@ -280,7 +308,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   };
 
   const delProc = async (sq: number) => { 
-    if (!await window.sysConfirm(`Excluir processo da sequência ${sq}?`)) return; 
+    if (!window.confirm(`Excluir processo da sequência ${sq}?`)) return; 
     const updated = staging.filter(s => s.seq !== sq);
     await saveProcs(updated); 
   };
@@ -630,7 +658,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
                    <div className="flex flex-col flex-1 min-w-[120px]">
                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Observação</span>
-                     <input value={ob} onChange={e=>setOb(e.target.value)} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                     <input value={ob} onChange={e=>setOb(e.target.value.toUpperCase())} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
                    <button onClick={handleAddProc} disabled={!selId} className="flex items-center gap-1 h-6 px-3 bg-teal-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-teal-700 disabled:opacity-40 transition-colors">
                      <Plus size={12}/> Adicionar
@@ -692,7 +720,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                       </td>
                       <td className="p-1.5 px-2">
                         {editSq === s.seq ? (
-                          <input value={inlineOb} onChange={e=>setInlineOb(e.target.value)} className="w-full px-1.5 py-0.5 text-[10px] border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white shadow-inner" />
+                          <input value={inlineOb} onChange={e=>setInlineOb(e.target.value.toUpperCase())} className="w-full px-1.5 py-0.5 text-[10px] border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white shadow-inner" />
                         ) : (
                           <span className="text-[10px] text-gray-500 truncate max-w-[140px] block" title={s.obs||''}>{s.obs||'-'}</span>
                         )}

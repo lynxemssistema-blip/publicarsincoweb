@@ -359,7 +359,7 @@ router.get('/processos-existentes/:codmatFabricante', async (req, res) => {
 // ────────────────────────────────────────────────────────────────────────────────
 router.post('/material-processo', async (req, res) => {
     try {
-        const { processos, codmatFabricante, idMatriz, usuarioCriacao, replace } = req.body;
+        const { processos, codmatFabricante, idMatriz, usuarioCriacao, replace, osId, idProjeto, idTag, qtdSelecionada } = req.body;
         const tenantPool = db(req);
 
         if (!Array.isArray(processos) || processos.length === 0) {
@@ -367,7 +367,17 @@ router.post('/material-processo', async (req, res) => {
         }
 
         if (replace && codmatFabricante) {
-            await tenantPool.execute('DELETE FROM material_processo WHERE codmatFabricante = ?', [codmatFabricante]);
+            if (osId) {
+                let delSql = 'DELETE FROM material_processo WHERE codmatFabricante = ? AND IdOrdemServico = ?';
+                let delParams = [codmatFabricante, osId];
+                if (idProjeto) { delSql += ' AND IdProjeto = ?'; delParams.push(idProjeto); }
+                else { delSql += " AND (IdProjeto IS NULL OR IdProjeto = 0 OR IdProjeto = '')"; }
+                if (idTag) { delSql += ' AND IdTag = ?'; delParams.push(idTag); }
+                else { delSql += " AND (IdTag IS NULL OR IdTag = 0 OR IdTag = '')"; }
+                await tenantPool.execute(delSql, delParams);
+            } else {
+                await tenantPool.execute("DELETE FROM material_processo WHERE codmatFabricante = ? AND (IdOrdemServico IS NULL OR IdOrdemServico = 0)", [codmatFabricante]);
+            }
         }
 
         // Resolve IdMaterial pelo CodMatFabricante
@@ -381,19 +391,29 @@ router.post('/material-processo', async (req, res) => {
             else console.warn(`[PecaManufaturada] CodMatFabricante '${codmatFabricante}' não encontrado.`);
         }
 
+        const totalExecutar = qtdSelecionada || 1;
         const insertedIds = [];
-        for (const p of processos) {
+        
+        // Ensure processes are sorted by sequence before processing
+        const sortedProcessos = [...processos].sort((a, b) => a.SequenciaExecucao - b.SequenciaExecucao);
+        let isFirstProcess = true;
+
+        for (const p of sortedProcessos) {
+            const amountToExecute = isFirstProcess ? (totalExecutar || 1) : 0;
             const [result] = await tenantPool.execute(
-                `INSERT INTO material_processo
-                 (IdMaterial, IdProcesso, SequenciaExecucao, TempoEstimadoMin, TempoPadraoMin,
-                  Ativo, Observacao, DataCriacao, UsuarioCriacao, codmatFabricante, IdMatriz)
-                 VALUES (?, ?, ?, ?, ?, 'A', ?, NOW(), ?, ?, ?)`,
-                [idMaterial, p.IdProcesso, p.SequenciaExecucao,
-                 p.TempoEstimadoMin ?? null, p.TempoPadraoMin ?? null,
-                 p.Observacao || null, usuarioCriacao || 'Sistema',
-                 codmatFabricante || '', idMatriz || null]
+                `INSERT INTO material_processo 
+                 (IdMaterial, IdProcesso, SequenciaExecucao, TempoEstimadoMin, TempoPadraoMin, 
+                  Ativo, Observacao, DataCriacao, UsuarioCriacao, codmatFabricante, IdMatriz,
+                  IdOrdemServico, IdProjeto, IdTag, TotalExecutar)
+                 VALUES (?, ?, ?, ?, ?, 'A', ?, NOW(), ?, ?, ?, ?, ?, ?, ?)`,
+                [idMaterial, p.IdProcesso, p.SequenciaExecucao, 
+                 p.TempoEstimadoMin ?? null, p.TempoPadraoMin ?? null, 
+                 p.Observacao || null, usuarioCriacao || 'Sistema', 
+                 codmatFabricante || '', idMatriz || req.tenantId || null,
+                 osId || null, idProjeto || null, idTag || null, amountToExecute]
             );
             insertedIds.push(result.insertId);
+            isFirstProcess = false;
         }
 
         res.json({ success: true, message: `${insertedIds.length} processo(s) salvo(s).`, ids: insertedIds, idMaterial });

@@ -8967,42 +8967,35 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (
 });
 
 app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
+    console.log(`[DEBUG] Hit /api/ordemservico/:id/itens for id ${req.params.id}`);
     try {
         const [rows] = await req.tenantDbPool.execute(`
-            SELECT PlanejadoInicioCorte, PlanejadoFinalCorte, PlanejadoInicioDobra, PlanejadoFinalDobra, PlanejadoInicioSolda, PlanejadoFinalSolda, PlanejadoInicioPintura, PlanejadoFinalPintura, PlanejadoInicioMontagem, PlanejadoFinalMontagem, PlanejadoInicioCorteaLaser, PlanejadoFinalCorteaLaser, PlanejadoInicioPUNSIONADEIRA, PlanejadoFinalPUNSIONADEIRA, PlanejadoInicioGALVANIZAR, PlanejadoFinalGALVANIZAR, CorteDiasProducao, DobraDiasProducao, SoldaDiasProducao, PinturaDiasProducao, MontagemDiasProducao, CorteaLaserDiasProducao, PunsionadeiraDiasProducao, GalvanizarDiasProducao, CorteMinProd, DobraMinProd, SoldaMinProd, PinturaMinProd, MontagemMinProd, CorteaLaserMinProd, PUNSIONADEIRAMinProd, GALVANIZARMinProd, IdOrdemServicoItem, IdOrdemServico, DescResumo, DescDetal, Fator,
-                QtdeTotal, Peso, AreaPintura, Acabamento, Unidade,
-                Espessura, Altura, Largura,
-                CodMatFabricante, MaterialSW, EnderecoArquivo,
-                ProdutoPrincipal,
-                DataPrevisao, qtde, Data_Liberacao_Engenharia, OrdemServicoItemFinalizado, NumeroDobras, AreaPinturaUnitario, PesoUnitario,
-                OrdemServicoItemFinalizado as Finalizado,
-                txtCorte, sttxtCorte, CortePercentual,
-                txtDobra, sttxtDobra, DobraPercentual,
-                txtSolda, sttxtSolda, SoldaPercentual,
-                txtPintura, sttxtPintura, PinturaPercentual,
-                TxtMontagem, sttxtMontagem, MontagemPercentual,
-                txtCorteaLaser, CorteaLaserPercentual,
-                txtPUNSIONADEIRA, PUNSIONADEIRAPercentual,
-                txtGALVANIZAR, GALVANIZARPercentual,
-                Liberado_Engenharia,
-                -- Tempos de produção globais
-                TempoSetup, TempoPadrao, TotalTempo,
-                -- Tempos por recurso
-                CorteTempoSetup, CorteTempoPadrao, CorteTotalTempo,
-                DobraTempoSetup, DobraTempoPadrao, DobraTotalTempo,
-                SoldaTempoSetup, SoldaTempoPadrao, SoldaTotalTempo,
-                PinturaTempoSetup, PinturaTempoPadrao, PinturaTotalTempo,
-                MontagemTempoSetup, MontagemTempoPadrao, MontagemTotalTempo,
-                CorteaLaserTempoSetup, CorteaLaserTempoPadrao, CorteaLaserTotalTempo,
-                PunsionadeiraTempoSetup, PunsionadeiraTempoPadrao, PunsionadeiraTotalTempo,
-                GalvanizarTempoSetup, GalvanizarTempoPadrao, GalvanizarTotalTempo,
-                CorteSequencia, DobraSequencia, SoldaSequencia, PinturaSequencia,
-                MontagemSequencia, CorteaLaserSequencia, PunsionadeiraSequencia,
-                GalvanizarSequencia, EngenhariaSequencia
-            FROM ordemservicoitem 
-            WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+            SELECT osi.*,
+                mp.codmatFabricante AS CodMatFabricante,
+                mp.IdOrdemServico,
+                COALESCE(osi.IdOrdemServicoItem, ABS(CAST(CONV(SUBSTRING(MD5(mp.codmatFabricante), 1, 8), 16, 10) AS SIGNED))) AS IdOrdemServicoItem,
+                COALESCE(osi.DescResumo, m.DescResumo) AS DescResumo,
+                COALESCE(osi.DescDetal, m.DescDetal) AS DescDetal,
+                COALESCE(osi.Fator, 1) AS Fator,
+                mp.MaxTotalExecutar AS QtdeTotal,
+                IF(osi.Peso IS NULL OR osi.Peso = 0, m.Peso, osi.Peso) AS Peso,
+                COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
+                COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
+                COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal
+            FROM (
+                SELECT mp.codmatFabricante, mp.IdOrdemServico, MAX(mp.TotalExecutar) as MaxTotalExecutar
+                FROM material_processo mp
+                JOIN ordemservico os ON os.IdOrdemServico = mp.IdOrdemServico 
+                   AND os.IdProjeto = mp.IdProjeto 
+                   AND os.IdTag = mp.IdTag
+                WHERE mp.IdOrdemServico = ? AND mp.Ativo = 'A'
+                GROUP BY mp.codmatFabricante, mp.IdOrdemServico
+            ) mp
+            LEFT JOIN ordemservicoitem osi ON osi.CodMatFabricante = mp.codmatFabricante AND osi.IdOrdemServico = mp.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
+            LEFT JOIN material m ON m.CodMatFabricante = mp.codmatFabricante
             ORDER BY IdOrdemServicoItem
         `, [req.params.id]);
+        console.log(`[API /itens] Request for OS ${req.params.id} returned ${rows.length} rows.`);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching ordemservicoitem:', error);
@@ -9041,7 +9034,7 @@ app.get('/api/ordemservico/:id/itens-disponiveis', tenantMiddleware, async (req,
         const params = [];
 
         if (codigosInOS.length > 0) {
-            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'é').join(',')}) `;
+            sql += ` AND CodMatFabricante NOT IN (${codigosInOS.map(()=>'?').join(',')}) `;
             params.push(...codigosInOS);
         }
 
@@ -9087,7 +9080,7 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
         const { idProjeto, idTag } = req.query;
         let sql = `
             SELECT mp.codmatFabricante, m.DescResumo, mp.TotalExecutar as Qtde,
-                   mp.IdProcesso, pf.processofabricacao, mp.TempoEstimadoMin, mp.TempoPadraoMin
+                   mp.IdProcesso, pf.processofabricacao, mp.TempoEstimadoMin, mp.TempoPadraoMin, mp.SequenciaExecucao
             FROM material_processo mp
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
             LEFT JOIN material m ON mp.IdMaterial = m.IdMaterial
@@ -9110,7 +9103,8 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
                     codmatfabricante: r.codmatFabricante,
                     desc: r.DescResumo,
                     qtde: Number(r.Qtde) || 1,
-                    recursoTempos: {}
+                    recursoTempos: {},
+                    processos: []
                 };
             }
             if (r.processofabricacao) {
@@ -9120,9 +9114,16 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
                     tempoPadrao: Number(r.TempoPadraoMin || 0),
                     label: r.processofabricacao
                 };
+                mats[r.codmatFabricante].processos.push({
+                    SequenciaExecucao: r.SequenciaExecucao,
+                    processofabricacao: r.processofabricacao,
+                    Qtde: Number(r.Qtde) || 1,
+                    TempoEstimadoMin: Number(r.TempoEstimadoMin || 0),
+                    TempoPadraoMin: Number(r.TempoPadraoMin || 0)
+                });
             }
         }
-        res.json({ success: true, data: Object.values(mats) });
+        res.json({ success: true, data: mats });
     } catch (e) {
         console.error('Erro ao buscar materiais na OS:', e);
         res.status(500).json({ success: false, message: 'Erro', error: e.message });

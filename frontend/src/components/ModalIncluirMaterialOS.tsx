@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench } from 'lucide-react';
+import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench, Trash2 } from 'lucide-react';
 import ModalMontagemProcessoFabricacao from './ModalMontagemProcessoFabricacao';
 
 const API_BASE = '/api';
@@ -80,12 +80,20 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   const [totalAdded, setTotalAdded] = useState(0);
   const [montarRecursoCod, setMontarRecursoCod] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [recursosVisible, setRecursosVisible] = useState<{ [cod: string]: boolean }>({});
+
+  const toggleRecursos = (cod: string) => setRecursosVisible(prev => ({ ...prev, [cod]: !prev[cod] }));
 
 
   const fetchExistingOsItems = async () => {
     try {
+      let qs = [];
+      if (osContext?.IdProjeto) qs.push(`idProjeto=${osContext.IdProjeto}`);
+      if (osContext?.IdTag) qs.push(`idTag=${osContext.IdTag}`);
+      const qsString = qs.length ? `?${qs.join('&')}` : '';
+      
       const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
-      const res = await fetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo`, {
+      const res = await fetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo${qsString}`, {
         headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
@@ -125,8 +133,13 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
   const fetchExistingOsCodigos = async () => {
     try {
+      let qs = [];
+      if (osContext?.IdProjeto) qs.push(`idProjeto=${osContext.IdProjeto}`);
+      if (osContext?.IdTag) qs.push(`idTag=${osContext.IdTag}`);
+      const qsString = qs.length ? `?${qs.join('&')}` : '';
+
       const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
-      const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens-codigos`, {
+      const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens-codigos${qsString}`, {
         headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
@@ -148,6 +161,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       setExistingOsCodigos([]);
       setSelectedItems({});
       setItemProcessos({});
+      setRecursosVisible({});
       setLoadingProcessos({});
       setGlobalAcabamento('');
       setSuccessMsg(null);
@@ -455,7 +469,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
           const setup = Math.max(0, parseInt(String(rec.tempoSetup), 10) || 0);
           const padrao = Math.max(0, parseInt(String(rec.tempoPadrao), 10) || 0);
           const tot = ((padrao * qtde) + setup) * fator;
-          if (setup > 0 || padrao > 0 || tot > 0) {
             recursoTemposCalculados[secKey] = {
               tempoSetup: setup,
               totalSetup: setup,
@@ -463,7 +476,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               totalPadrao: padrao * qtde,
               totalTempo: tot
             };
-          }
         });
       }
 
@@ -704,17 +716,6 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                   <span className="text-[10px] text-slate-500">Recursos via material_processo</span>
                 )}
               </div>
-              {totalSelected > 0 && (
-                <button
-                  onClick={handleSubmit}
-                  disabled={saving}
-                  className="bg-[#32423D] hover:bg-[#E0E800] hover:text-black text-white px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs disabled:opacity-50"
-                  title="Confirmar Inclusão na OS"
-                >
-                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} className="stroke-[3]" />}
-                  Confirmar
-                </button>
-              )}
             </div>
 
             <div className="flex-1 overflow-auto p-3 space-y-3">
@@ -723,7 +724,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               ) : (
                 Object.keys(selectedItems).map(cod => {
                   const item = selectedItems[cod];
-      const mat = searchResults.find(m => m.CodMatFabricante === cod) || { DescResumo: item.desc || 'Desconhecido' };
+                  const mat = searchResults.find(m => m.CodMatFabricante === cod) || { DescResumo: item.desc || 'Desconhecido' };
                   const itemQtde = item.qtde || 1;
                   const itemFator = Math.max(1, item.fator || 1);
                   const isProcLoading = !!loadingProcessos[cod];
@@ -732,8 +733,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                   return (
                     <div key={cod} className="border border-slate-200 rounded-lg p-3 bg-white shadow-xs flex flex-col gap-2">
                       {/* Card Header com Codigo, Descricao, Qtd, Fator e Botao de Remover */}
-                      <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
-                        <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div className="flex-1 min-w-[200px]">
                           <span className="text-xs font-black text-slate-800">{cod}</span>
                           <span className="text-[10.5px] text-slate-500 block truncate">{mat.DescResumo}</span>
                         </div>
@@ -747,37 +748,24 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                               value={item.qtde}
                               onChange={e => updateItem(cod, 'qtde', parseInt(e.target.value) || 1)}
                             />
-                          <button
-                            onClick={() => handleSaveQuantity(cod)}
-                            className="bg-emerald-500 hover:bg-emerald-600 text-white rounded p-1 shadow-sm transition-colors ml-1"
-                            title="Salvar TotalExecutar"
-                          >
-                            <Check size={14} className="stroke-[3]" />
-                          </button>
+                            <button
+                              onClick={() => handleSaveQuantity(cod)}
+                              className="bg-emerald-500 hover:bg-emerald-600 text-white rounded p-1 shadow-sm transition-colors ml-1"
+                              title="Salvar TotalExecutar"
+                            >
+                              <Check size={14} className="stroke-[3]" />
+                            </button>
                           </div>
 
-                          <div className="flex items-center gap-1 bg-amber-50/70 border border-amber-200 px-2 py-0.5 rounded">
-                            <span className="text-[10px] font-extrabold text-amber-800">Fator:</span>
-                            <input
-                              type="number" min="1" step="1"
-                              className="w-12 px-1 py-0.5 border border-amber-300 rounded text-xs font-bold text-center text-amber-900 focus:outline-none focus:border-[#32423D] bg-white"
-                              value={itemFator}
-                              onChange={e => updateItem(cod, 'fator', Math.max(1, parseInt(e.target.value) || 1))}
-                            />
-                          </div>
-
-                          <button onClick={() => toggleSelection({ CodMatFabricante: cod } as any)} className="text-red-500 hover:bg-red-50 p-1 rounded transition-colors shrink-0" title="Remover item">
-                            <X size={16} />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Tempos por Recurso (subidos direto para a parte superior da tela) */}
-                      <div className="pt-1">
-                        <div className="text-[10px] font-black uppercase text-slate-600 tracking-wider mb-1.5 flex items-center justify-between">
-                          <span>Tempos por Recurso (material_processo):</span>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 ml-2">
                             {isProcLoading && <Loader2 size={12} className="animate-spin text-[#32423D]" />}
+                            <button
+                              type="button"
+                              onClick={() => toggleRecursos(cod)}
+                              className="text-[9.5px] font-bold text-[#32423D] hover:text-black bg-slate-100 hover:bg-slate-200 px-2 py-0.5 rounded border border-slate-300 flex items-center transition-colors"
+                            >
+                              {recursosVisible[cod] ? 'Ocultar Recursos' : 'Exibir Recursos'}
+                            </button>
                             <button
                               type="button"
                               onClick={() => setMontarRecursoCod(cod)}
@@ -787,15 +775,23 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                               <Wrench size={11} /> Montar Recursos
                             </button>
                           </div>
+
+                          <button onClick={() => toggleSelection({ CodMatFabricante: cod } as any)} className="text-red-500 hover:bg-red-50 p-1.5 rounded transition-colors shrink-0 ml-1" title="Remover item">
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-                        
-                        {isProcLoading ? (
-                          <div className="flex items-center gap-2 py-4 justify-center text-[10.5px] text-slate-500 bg-slate-50 rounded">
-                            <Loader2 size={14} className="animate-spin text-[#32423D]" />
-                            <span>Buscando recursos em material_processo...</span>
-                          </div>
-                        ) : procsList && procsList.length > 0 ? (
-                          <div className="space-y-2 max-h-60 overflow-auto pr-1">
+                      </div>
+
+                      <div className="pt-0">
+                        {recursosVisible[cod] && (
+                          <>
+                            {isProcLoading ? (
+                              <div className="flex items-center gap-2 py-4 justify-center text-[10.5px] text-slate-500 bg-slate-50 rounded">
+                                <Loader2 size={14} className="animate-spin text-[#32423D]" />
+                                <span>Buscando recursos em material_processo...</span>
+                              </div>
+                            ) : procsList && procsList.length > 0 ? (
+                              <div className="space-y-2 max-h-60 overflow-auto pr-1 mt-2">
                             {procsList.map(sec => {
                               const recVal = item.recursoTempos?.[sec.key] || { tempoSetup: sec.tempoSetup, tempoPadrao: sec.tempoPadrao };
                               const recSetup = recVal.tempoSetup;
@@ -852,6 +848,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                             ⚠️ Não encontrou recurso/processo para este material.
                           </div>
                         ) : null}
+                        </>
+                      )}
                       </div>
                     </div>
                   )

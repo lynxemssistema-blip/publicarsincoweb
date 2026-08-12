@@ -317,8 +317,19 @@ function OrdemServicoContent() {
     const [collapsedOsInfo, setCollapsedOsInfo] = useState<Set<number>>(new Set());
     const [selectedOSId, setSelectedOSId] = useState<number | null>(null);
     const [ordensItens, setOrdensItens] = useState<Record<number, OrdemServicoItem[]>>({});
+    const [materiaisProcesso, setMateriaisProcesso] = useState<Record<number, Record<string, any>>>({});
+    const [expandedItemProcessos, setExpandedItemProcessos] = useState<Set<number>>(new Set());
     const [loadingItens, setLoadingItens] = useState<Set<number>>(new Set());
     const [liberandoOS, setLiberandoOS] = useState<number | null>(null);
+
+    const toggleItemProcessos = useCallback((itemId: number) => {
+        setExpandedItemProcessos(prev => {
+            const next = new Set(prev);
+            if (next.has(itemId)) next.delete(itemId);
+            else next.add(itemId);
+            return next;
+        });
+    }, []);
 
     // Liberar OS com Fator Modal
     const [liberacaoFatorModal, setLiberacaoFatorModal] = useState<OrdemServico | null>(null);
@@ -345,6 +356,7 @@ function OrdemServicoContent() {
     // Seleção de itens da OS aberta (para excluir em lote)
     const [selectedItemIds, setSelectedItemIds] = useState<Set<number>>(new Set());
     const [deletandoSelecionados, setDeletandoSelecionados] = useState(false);
+    const [editingFatorItem, setEditingFatorItem] = useState<{ id: number, value: string } | null>(null);
     const [sectorModal, setSectorModal] = useState<{ title: string; sectors: any[] } | null>(null);
     const osModalItemsCache = useRef<Record<string | number, any[]>>({});
     
@@ -825,12 +837,19 @@ function OrdemServicoContent() {
         
         if (!window.confirm("Deseja excluir o registro selecionado?")) return;
         
-        const doDelete = async (confirmCascade = false) => {
+        const doDelete = async () => {
             try {
-                const url = `${API_BASE}/ordemservicoitem/${item.IdOrdemServicoItem}${confirmCascade ? '?confirmCascade=true' : ''}`;
+                const os = ordens.find(o => o.IdOrdemServico === osId);
+                const url = `${API_BASE}/material-processo/item`;
                 const res = await fetch(url, {
                     method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        codmatFabricante: item.CodMatFabricante,
+                        osId: osId,
+                        idProjeto: os?.IdProjeto || '',
+                        idTag: os?.IdTag || ''
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -839,12 +858,8 @@ function OrdemServicoContent() {
                         ...prev,
                         [osId]: prev[osId].filter(i => i.IdOrdemServicoItem !== item.IdOrdemServicoItem)
                     }));
-                } else if (data.requiresConfirmation) {
-                    if (window.confirm(data.message)) {
-                        await doDelete(true);
-                    }
                 } else {
-                    addToast({ type: 'error', title: 'Falha', message: data.message });
+                    addToast({ type: 'error', title: 'Falha', message: data.message || 'Erro ao excluir item' });
                 }
             } catch (err: any) {
                 addToast({ type: 'error', title: 'Erro', message: err.message });
@@ -929,13 +944,23 @@ function OrdemServicoContent() {
         if (!window.confirm(`Deseja excluir ${selectedItemIds.size} item(s) selecionado(s)?`)) return;
         setDeletandoSelecionados(true);
         let erros = 0;
+        const os = ordens.find(o => o.IdOrdemServico === osId);
         for (const itemId of Array.from(selectedItemIds)) {
-            const doDelete = async (confirmCascade = false) => {
+            const item = (ordensItens[osId] || []).find(i => i.IdOrdemServicoItem === itemId);
+            if (!item) continue;
+
+            const doDelete = async () => {
                 try {
-                    const url = `${API_BASE}/ordemservicoitem/${itemId}${confirmCascade ? '?confirmCascade=true' : ''}`;
+                    const url = `${API_BASE}/material-processo/item`;
                     const res = await fetch(url, {
                         method: 'DELETE',
-                        headers: { 'Authorization': `Bearer ${token}` }
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            codmatFabricante: item.CodMatFabricante,
+                            osId: osId,
+                            idProjeto: os?.IdProjeto || '',
+                            idTag: os?.IdTag || ''
+                        })
                     });
                     const data = await res.json();
                     if (data.success) {
@@ -943,15 +968,9 @@ function OrdemServicoContent() {
                             ...prev,
                             [osId]: (prev[osId] || []).filter(i => i.IdOrdemServicoItem !== itemId)
                         }));
-                    } else if (data.requiresConfirmation) {
-                        if (window.confirm(data.message)) {
-                            await doDelete(true);
-                        } else {
-                            erros++;
-                        }
                     } else {
                         erros++;
-                        addToast({ type: 'error', title: 'Falha', message: data.message });
+                        addToast({ type: 'error', title: 'Falha', message: data.message || 'Erro ao excluir item' });
                     }
                 } catch {
                     erros++;
@@ -1156,16 +1175,30 @@ function OrdemServicoContent() {
         setLoadingItens(prev => new Set(prev).add(osId));
         try {
             const activeToken = token || localStorage.getItem('sinco_token') || '';
-            const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens?t=${Date.now()}`, {
-                headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
-                cache: 'no-store'
-            });
-            const json = await res.json();
-            if (json.success) {
-                setOrdensItens(prev => ({ ...prev, [osId]: json.data }));
+            const headers = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
+            
+            // Find os to get idProjeto and idTag
+            const os = ordens.find(o => o.IdOrdemServico === osId);
+            const pProjeto = os?.IdProjeto || '';
+            const pTag = os?.IdTag || '';
+
+            const resItens = fetch(`${API_BASE}/ordemservico/${osId}/itens?t=${Date.now()}`, { headers, cache: 'no-store' });
+            const resProc = fetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo?idProjeto=${pProjeto}&idTag=${pTag}&t=${Date.now()}`, { headers, cache: 'no-store' });
+
+            const [itensResponse, procResponse] = await Promise.all([resItens, resProc]);
+            
+            const jsonItens = await itensResponse.json();
+            if (jsonItens.success) {
+                setOrdensItens(prev => ({ ...prev, [osId]: jsonItens.data }));
             }
-        } catch (err) {
-            console.error('Error fetching itens:', err);
+
+            const jsonProc = await procResponse.json();
+            if (jsonProc.success) {
+                setMateriaisProcesso(prev => ({ ...prev, [osId]: jsonProc.data }));
+            }
+        } catch (err: any) {
+            console.error('Error fetching itens or processos:', err);
+            addToast({ type: 'error', title: 'Erro de Conexão', message: `Erro ao buscar itens: ${err.message}` });
         } finally {
             setLoadingItens(prev => {
                 const next = new Set(prev);
@@ -1173,7 +1206,7 @@ function OrdemServicoContent() {
                 return next;
             });
         }
-    }, [token]);
+    }, [token, ordens]);
 
         const toggleOS = useCallback(async (osId: number) => {
         setSelectedOSId(osId);
@@ -1307,14 +1340,53 @@ function OrdemServicoContent() {
                 const projLiberado = String(proj?.liberado || proj?.Liberado || '').trim().toUpperCase();
                 const nomeProjeto = proj?.Projeto || os.Projeto || `ID ${os.IdProjeto}`;
                 if (projLiberado !== 'S') {
-                    Swal.fire({
-                        icon: 'error',
+                    const result = await Swal.fire({
+                        icon: 'warning',
                         title: 'Atenção',
                         width: 450,
                         html: `Não é possível liberar a OS <strong>${os.IdOrdemServico}</strong>.<br><br>` +
                               `O Projeto <strong>"${nomeProjeto}"</strong> ainda não foi liberado.<br><br>` +
-                              `Acesse <b>Projetos</b>, localize o projeto e clique no ícone ✓ de liberação antes de liberar esta OS.`,
+                              `Deseja liberar o Projeto agora e, em seguida, liberar esta OS?`,
+                        showCancelButton: true,
+                        confirmButtonColor: '#10B981',
+                        cancelButtonColor: '#d33',
+                        confirmButtonText: 'Sim, Liberar Projeto e OS',
+                        cancelButtonText: 'Não, cancelar'
                     });
+
+                    if (result.isConfirmed) {
+                        try {
+                            const activeToken = token || localStorage.getItem('sinco_token') || '';
+                            const headers = activeToken ? {
+                                'Authorization': `Bearer ${activeToken}`,
+                                'Content-Type': 'application/json'
+                            } : { 'Content-Type': 'application/json' };
+                            
+                            const resProj = await fetch(`${API_BASE}/projeto/${os.IdProjeto}/liberar`, {
+                                method: 'POST',
+                                headers,
+                                body: JSON.stringify({ usuario: user?.nome || 'Sistema' })
+                            });
+                            const jsonProj = await resProj.json();
+                            
+                            if (jsonProj.success) {
+                                addToast({ type: 'success', title: 'Projeto', message: 'Projeto liberado com sucesso!' });
+                                
+                                if (os.Fator === 0 || os.Fator === '0' || os.Fator == null) {
+                                    setLiberacaoFatorModal(os);
+                                    setNovoFator('');
+                                    return;
+                                }
+                                await proceedWithLiberacao(os, os.Fator);
+                                setSelectedOSId(null);
+                            } else {
+                                Swal.fire('Erro', jsonProj.message || 'Erro ao liberar o projeto.', 'error');
+                            }
+                        } catch (e) {
+                            console.error(e);
+                            Swal.fire('Erro', 'Erro de conexão ao liberar o projeto.', 'error');
+                        }
+                    }
                     return;
                 }
             } catch (err) {
@@ -1455,8 +1527,8 @@ function OrdemServicoContent() {
         }
     };
 
-    const handleAlterarFatorItem = async (item: OrdemServicoItem, osId: number) => {
-        const novoFator = window.prompt(`Informe o novo Fator para o item ${item.CodMatFabricante || ''}:`, item.Fator?.toString() || '1');
+    const handleAlterarFatorItem = async (item: OrdemServicoItem, osId: number, novoFatorValor?: string) => {
+        const novoFator = novoFatorValor !== undefined ? novoFatorValor : window.prompt(`Informe o novo Fator para o item ${item.CodMatFabricante || ''}:`, item.Fator?.toString() || '1');
         if (!novoFator) return;
 
         const fatorNum = parseFloat(novoFator.replace(',', '.'));
@@ -2242,7 +2314,7 @@ function OrdemServicoContent() {
                                                 <span className="text-gray-600 font-semibold">
                                                 {(() => {
                                                     const itensDaOS = ordensItens[os.IdOrdemServico] || [];
-                                                    const pesoCalculado = itensDaOS.reduce((acc, item) => acc + (parseFloat(String(item.Peso || 0)) * (parseFloat(String(item.QtdeTotal || 1))) || 0), 0);
+                                                    const pesoCalculado = itensDaOS.reduce((acc, item) => acc + ((parseFloat(String(item.Fator)) || 1) * (parseFloat(String(item.QtdeTotal || 1))) * (parseFloat(String(item.Peso || 0))) || 0), 0);
                                                     const pesoFinal = pesoCalculado > 0 ? pesoCalculado : parseFloat(String(os.PesoTotal || 0));
                                                     return pesoFinal > 0 ? `${pesoFinal.toFixed(2)} kg` : '-';
                                                 })()}
@@ -2371,7 +2443,7 @@ function OrdemServicoContent() {
                             ) : itens.length === 0 ? (
                                 <div className="pl-16 py-4 text-xs text-gray-400 flex items-center gap-2">
                                     <Box size={14} />
-                                    Nenhum item nesta OS
+                                    Nenhum item nesta OS (DEBUG itens: {JSON.stringify(itens)}, loading: {isLoadingItens ? 'sim' : 'nao'}, fetch time: {Date.now()})
                                 </div>
                             ) : (
                                 <div className="px-2 py-1">
@@ -2397,13 +2469,14 @@ function OrdemServicoContent() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 pl-6 py-1 text-[10px] font-medium text-gray-400 uppercase">
-                                            <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '16rem' }}>
                                                 <span className="w-8 text-center" title="PDF do Item">PDF</span>
                                                 <span className="w-8 text-center">DXF</span>
                                                 <span className="w-8 text-center">3D</span>
                                                 <span className="w-8 text-center" title="PDF da O.S.">OS</span>
                                                 <span className="w-8 text-center" title="Conjunto Principal">★</span>
                                                 <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
+                                                <span className="w-8 text-center" title="Recursos"><Layers size={12} className="inline" /></span>
                                             </div>
                                             <span className="w-32 shrink-0">Código Desenho</span>
                                             <span className="flex-1 min-w-0">Descrição</span>
@@ -2412,26 +2485,33 @@ function OrdemServicoContent() {
                                             <span className="w-14 shrink-0 text-center">Peso</span>
                                             {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
                                              {/* Spacers p/ alinhar botões RNC e Excluir */}
-                                             <span className="w-8 shrink-0"></span>
+                                             <span className="w-8 shrink-0 ml-auto"></span>
                                              <span className="w-8 shrink-0 mr-2"></span>
                                         </div>
 
                                         {itens.map((item) => {
                                             const isSelected = selectedItemIds.has(item.IdOrdemServicoItem);
                                             const osLiberada = os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM';
+                                            
+                                            // Recursos do material
+                                            const matProcsMap = materiaisProcesso[os.IdOrdemServico] || {};
+                                            const matProcsNode = matProcsMap[item.CodMatFabricante];
+                                            const hasProcessos = matProcsNode && matProcsNode.processos && matProcsNode.processos.length > 0;
+                                            const isExpandedProc = expandedItemProcessos.has(item.IdOrdemServicoItem);
+
                                             return (
-                                            <div
-                                                key={item.IdOrdemServicoItem}
+                                            <div key={item.IdOrdemServicoItem} className="flex flex-col border-b border-gray-100 last:border-0">
+                                              <div
                                                 onClick={() => !osLiberada && toggleItemSelection(item.IdOrdemServicoItem)}
-                                                className={`flex items-center gap-2 pl-6 py-2 rounded-lg transition-colors group ${
+                                                className={`flex items-center gap-2 pl-6 py-2 transition-colors group ${
                                                     isSelected
-                                                        ? 'bg-blue-50 border border-blue-200 shadow-sm'
+                                                        ? 'bg-blue-50'
                                                         : item.ProdutoPrincipal === 'SIM'
                                                             ? 'bg-amber-50/60 hover:bg-amber-100/60'
-                                                            : 'hover:bg-white'
+                                                            : 'hover:bg-gray-50'
                                                 } ${!osLiberada ? 'cursor-pointer' : ''}`}
-                                            >
-                                                <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                              >
+                                                <div className="flex gap-1 shrink-0" style={{ width: '16rem' }}>
                                                     {item.EnderecoArquivo ? (
                                                         <button
                                                             onClick={(e) => handleOpenFile(e, item.EnderecoArquivo || '', 'pdf')}
@@ -2524,11 +2604,7 @@ function OrdemServicoContent() {
                                                                     ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
                                                                     : 'bg-gray-50 text-gray-400 hover:bg-yellow-50 hover:text-yellow-600'
                                                             } transition-colors`}
-                                                            title={
-                                                                (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') || (item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM')
-                                                                    ? 'Ação bloqueada'
-                                                                    : `Marcar: ${item.CodMatFabricante} como Conjunto Principal`
-                                                            }
+                                                            title={`Definir como Conjunto Principal: ${item.CodMatFabricante}`}
                                                         >
                                                             <Star size={14} />
                                                         </button>
@@ -2541,6 +2617,32 @@ function OrdemServicoContent() {
                                                     >
                                                         <Clock size={14} />
                                                     </button>
+                                                    
+                                                    {/* Botão de Ver Recursos (Movido da coluna direita) */}
+                                                    {hasProcessos ? (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleItemProcessos(item.IdOrdemServicoItem);
+                                                            }}
+                                                            className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                                                                isExpandedProc 
+                                                                ? 'bg-[#32423D] text-white' 
+                                                                : 'bg-teal-50 text-teal-600 hover:bg-teal-100'
+                                                            }`}
+                                                            title="Ver Recursos (Processos) do item"
+                                                        >
+                                                            <Layers size={14} />
+                                                        </button>
+                                                    ) : (
+                                                        <div 
+                                                            className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-300" 
+                                                            title="Sem recursos"
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        >
+                                                            <Layers size={14} />
+                                                        </div>
+                                                    )}
                                                 </div>
 
                                                 <span
@@ -2555,16 +2657,41 @@ function OrdemServicoContent() {
                                                 </span>
 
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleAlterarFatorItem(item, os.IdOrdemServico);
-                                                        }}
-                                                        className="w-12 shrink-0 text-xs font-semibold text-accent hover:text-white text-center bg-accent/10 hover:bg-accent rounded my-auto py-0.5 border border-accent/20 cursor-pointer transition-all"
-                                                        title="Clique para alterar o Fator do Item"
-                                                    >
-                                                        {item.Fator !== undefined ? item.Fator : '1'}
-                                                    </button>
+                                                    editingFatorItem?.id === item.IdOrdemServicoItem ? (
+                                                        <input
+                                                            type="number"
+                                                            autoFocus
+                                                            className="w-12 shrink-0 text-xs font-semibold text-center rounded my-auto py-0.5 border border-accent outline-none focus:ring-1 focus:ring-accent"
+                                                            value={editingFatorItem.value}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                            onChange={(e) => setEditingFatorItem({ id: item.IdOrdemServicoItem, value: e.target.value })}
+                                                            onBlur={() => {
+                                                                if (editingFatorItem.value && editingFatorItem.value !== String(item.Fator)) {
+                                                                    handleAlterarFatorItem(item, os.IdOrdemServico, editingFatorItem.value);
+                                                                }
+                                                                setEditingFatorItem(null);
+                                                            }}
+                                                            onKeyDown={(e) => {
+                                                                if (e.key === 'Enter') {
+                                                                    e.currentTarget.blur();
+                                                                }
+                                                                if (e.key === 'Escape') {
+                                                                    setEditingFatorItem(null);
+                                                                }
+                                                            }}
+                                                        />
+                                                    ) : (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEditingFatorItem({ id: item.IdOrdemServicoItem, value: String(item.Fator !== undefined ? item.Fator : '1') });
+                                                            }}
+                                                            className="w-12 shrink-0 text-xs font-semibold text-accent hover:text-white text-center bg-accent/10 hover:bg-accent rounded my-auto py-0.5 border border-accent/20 cursor-pointer transition-all"
+                                                            title="Clique para alterar o Fator do Item"
+                                                        >
+                                                            {item.Fator !== undefined ? item.Fator : '1'}
+                                                        </button>
+                                                    )
                                                 ) : (
                                                     <span className="w-12 shrink-0 text-xs font-semibold text-gray-500 text-center bg-gray-100 rounded my-auto py-0.5" title="Fator (Bloqueado)">
                                                         {item.Fator !== undefined ? item.Fator : '1'}
@@ -2595,6 +2722,7 @@ function OrdemServicoContent() {
                                                 </button>
 
 
+
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
                                                     <button
                                                         onClick={(e) => handleDeleteItem(e, item, os.IdOrdemServico)}
@@ -2606,6 +2734,36 @@ function OrdemServicoContent() {
                                                 ) : (
                                                     <div className="w-8 h-8 shrink-0 mr-2" />
                                                 )}
+                                              </div>
+                                              
+                                              {/* Sub-grid de Recursos */}
+                                              {isExpandedProc && hasProcessos && (
+                                                  <div className="bg-slate-50 border-t border-slate-100 p-3 pl-[17rem]">
+                                                      <div className="bg-white border border-slate-200 rounded-lg shadow-sm overflow-hidden">
+                                                          <div className="flex items-center gap-4 bg-slate-100 border-b border-slate-200 px-3 py-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                                                              <div className="w-8 text-center">Seq</div>
+                                                              <div className="flex-1">Processo de Fabricação</div>
+                                                              <div className="w-16 text-center">Qtde</div>
+                                                              <div className="w-20 text-center">Tempo Est.</div>
+                                                              <div className="w-20 text-center">Tempo Padrão</div>
+                                                          </div>
+                                                          <div className="divide-y divide-slate-100">
+                                                              {matProcsNode.processos.map((proc: any, i: number) => (
+                                                                  <div key={i} className="flex items-center gap-4 px-3 py-1.5 text-[11px] text-slate-700 hover:bg-slate-50 transition-colors">
+                                                                      <div className="w-8 text-center font-mono font-bold text-slate-500">{proc.SequenciaExecucao}</div>
+                                                                      <div className="flex-1 font-semibold flex items-center gap-2">
+                                                                          <span className="w-2 h-2 rounded-full bg-[#32423D]"></span>
+                                                                          {proc.processofabricacao}
+                                                                      </div>
+                                                                      <div className="w-16 text-center font-mono">{proc.Qtde || 0}</div>
+                                                                      <div className="w-20 text-center font-mono">{proc.TempoEstimadoMin || 0}m</div>
+                                                                      <div className="w-20 text-center font-mono">{proc.TempoPadraoMin || 0}m</div>
+                                                                  </div>
+                                                              ))}
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              )}
                                             </div>
                                         );
                                         })}
@@ -3381,16 +3539,16 @@ function OrdemServicoContent() {
                                             <tfoot className="bg-gray-50 border-t-2 border-gray-200 sticky bottom-0">
                                                 <tr>
                                                     <td colSpan={3} className="px-2 py-1 text-xs text-gray-500 font-semibold">Total ({itensOS.length})</td>
-                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number(i.QtdeTotal) || 0), 0)}</td>
-                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number(i.Peso) || 0), 0).toFixed(2)}</td>
-                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + (Number((i as any).AreaPintura) || 0), 0).toFixed(2)}</td>
+                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 0)), 0)}</td>
+                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 1) * (Number(i.Peso) || 0)), 0).toFixed(2)}</td>
+                                                    <td className="px-2 py-1 text-center text-xs font-bold text-primary">{itensOS.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 1) * (Number((i as any).AreaPintura) || 0)), 0).toFixed(2)}</td>
                                                 </tr>
                                                 {excluirItemChecks.size > 0 && (
                                                     <tr className="bg-red-50 border-t border-red-200">
                                                         <td colSpan={3} className="px-2 py-1 text-xs text-red-600 font-bold">Selecionados ({totalSel.length})</td>
-                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number(i.QtdeTotal) || 0), 0)}</td>
-                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number(i.Peso) || 0), 0).toFixed(2)} kg</td>
-                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + (Number((i as any).AreaPintura) || 0), 0).toFixed(2)} m²</td>
+                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 0)), 0)}</td>
+                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 1) * (Number(i.Peso) || 0)), 0).toFixed(2)} kg</td>
+                                                        <td className="px-2 py-1 text-center text-xs font-bold text-red-600">{totalSel.reduce((a, i) => a + ((Number(i.Fator) || 1) * (Number(i.QtdeTotal) || 1) * (Number((i as any).AreaPintura) || 0)), 0).toFixed(2)} m²</td>
                                                     </tr>
                                                 )}
                                             </tfoot>
