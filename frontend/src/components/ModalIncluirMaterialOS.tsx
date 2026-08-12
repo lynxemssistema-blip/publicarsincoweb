@@ -269,6 +269,10 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
   const handleSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    setSelectedItems({});
+    setItemProcessos({});
+    setRecursosVisible({});
+    setTotalAdded(0);
     if (!searchTerm.trim()) {
       setSearchResults(allMaterials);
       return;
@@ -539,6 +543,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   };
 
   const handleConcluir = () => {
+    onSuccess();
     onClose();
   };
 
@@ -656,7 +661,40 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
                       >
                         <div className="flex justify-between items-center gap-2">
                           <div className="flex-1 min-w-0 flex items-center">
-                            <span className="text-xs font-bold text-gray-800 whitespace-nowrap">{mat.CodMatFabricante}</span>
+                            <span 
+                              className="text-xs font-bold text-gray-800 whitespace-nowrap"
+                              title={(() => {
+                                const res: {name: string, seq: number}[] = [];
+                                const check = (txtField: string, name: string, seqField: string) => {
+                                    const val = String(mat[txtField] || '').trim().toUpperCase();
+                                    if (val === '1' || val === 'S') {
+                                        res.push({ name, seq: parseInt(mat[seqField]) || 999 });
+                                    }
+                                };
+                                check('txtCorte', 'Corte', 'CorteSequencia');
+                                check('txtDobra', 'Dobra', 'DobraSequencia');
+                                check('txtSolda', 'Solda', 'SoldaSequencia');
+                                check('txtPintura', 'Pintura', 'PinturaSequencia');
+                                check('TxtMontagem', 'Montagem', 'MontagemSequencia');
+                                check('txtmontagem', 'Montagem', 'MontagemSequencia');
+                                check('txtCorteaLaser', 'Corte a Laser', 'CorteaLaserSequencia');
+                                check('txtPUNSIONADEIRA', 'Punsionadeira', 'PunsionadeiraSequencia');
+                                check('txtGALVANIZAR', 'Galvanizar', 'GalvanizarSequencia');
+                                check('txtENGENHARIA', 'Engenharia', 'EngenhariaSequencia');
+                                check('txtMEDICAO', 'Medição', 'MedicaoSequencia');
+                                check('txtISOMETRICO', 'Isométrico', 'IsometricoSequencia');
+                                check('txtACABAMENTO', 'Acabamento', 'AcabamentoSequencia');
+                                check('txtAPROVACAO', 'Aprovação', 'AprovacaoSequencia');
+                                
+                                res.sort((a, b) => a.seq - b.seq);
+                                if (res.length > 0) {
+                                    return res.map(r => `${r.seq === 999 ? '-' : r.seq}º: ${r.name}`).join(' | ');
+                                }
+                                return 'Nenhum recurso definido';
+                              })()}
+                            >
+                              {mat.CodMatFabricante}
+                            </span>
                             <span className="text-[10px] text-gray-600 ml-2 truncate text-ellipsis">{mat.DescResumo}</span>
                           </div>
                           
@@ -866,6 +904,9 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       <ModalMontagemProcessoFabricacao
         isOpen={!!montarRecursoCod}
         codmatfabricante={montarRecursoCod || undefined}
+        osId={osId}
+        osContext={osContext}
+        qtdSelecionada={montarRecursoCod ? selectedItems[montarRecursoCod]?.qtde : undefined}
         onClose={async () => {
           const cod = montarRecursoCod;
           setMontarRecursoCod(null);

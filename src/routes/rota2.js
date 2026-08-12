@@ -1,4 +1,22 @@
 module.exports = function(app, tenantMiddleware) {
+
+app.get('/api/material-processo/item/:idItem', tenantMiddleware, async (req, res) => {
+    try {
+        const { idItem } = req.params;
+        const [rows] = await req.tenantDbPool.execute(`
+            SELECT mp.*, pf.processofabricacao AS DescricaoProcesso 
+            FROM material_processo mp
+            LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+            WHERE mp.codmatFabricante = (SELECT codmatFabricante FROM ordemservicoitem WHERE IdOrdemServicoItem = ?) 
+              AND mp.IdOrdemServico = (SELECT IdOrdemServico FROM ordemservicoitem WHERE IdOrdemServicoItem = ?)
+            ORDER BY mp.SequenciaExecucao ASC, pf.processofabricacao ASC
+        `, [idItem, idItem]);
+        res.json({ success: true, data: rows });
+    } catch (e) {
+        console.error('Error fetching material_processo for item:', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
 app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async (req, res) => {
     const recurso = req.params.recurso.toLowerCase();
     
@@ -101,7 +119,14 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 osi.Espessura,
                 os.Projeto,
                 os.Tag,
-                os.NomeCliente AS Cliente
+                os.NomeCliente AS Cliente,
+                (
+                    SELECT GROUP_CONCAT(CONCAT(mp2.SequenciaExecucao, 'º: ', COALESCE(pf.processofabricacao, '')) ORDER BY COALESCE(mp2.SequenciaExecucao, 999) SEPARATOR ' | ')
+                    FROM material_processo mp2
+                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp2.IdProcesso
+                    WHERE mp2.IdOrdemServico = mp.IdOrdemServico 
+                      AND mp2.codmatFabricante = mp.codmatFabricante
+                ) AS TodosRecursosTooltip
             FROM material_processo mp
             JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
@@ -213,11 +238,14 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
         // Vou apenas inserir em ordemservicoitemcontrole e chamar recalcularQuantidadesTotais.
         
         const txtSetor = `txt${Processo.charAt(0).toUpperCase() + Processo.slice(1)}`;
+        const criador = req.tenantUser?.login || CriadoPor || 'Sistema';
+        const idMatriz = req.tenantUser?.tenantId || null;
+
         await conn.execute(`
             INSERT INTO ordemservicoitemcontrole(
-                IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, TipoApontamento, CriadoPor, DataCriacao, D_E_L_E_T_E
-            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, '')
-        `, [IdOrdemServicoItem, IdOrdemServico, Processo.toLowerCase(), mp.TotalExecutar + mp.TotalExecutado, inputQty, TipoApontamento || 'Total', CriadoPor || 'Sistema', dateNow]);
+                IdOrdemServicoItem, IdOrdemServico, Processo, QtdeTotal, QtdeProduzida, TipoApontamento, CriadoPor, DataCriacao, IdMatriz, D_E_L_E_T_E
+            ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '')
+        `, [IdOrdemServicoItem, IdOrdemServico, Processo.toLowerCase(), mp.TotalExecutar + mp.TotalExecutado, inputQty, TipoApontamento || 'Total', criador, dateNow, idMatriz]);
 
         await conn.commit();
         conn.release();

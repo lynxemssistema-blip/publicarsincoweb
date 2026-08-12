@@ -13,6 +13,12 @@ import PlanejamentoProducaoPage from './PlanejamentoProducao';
 
 const API_BASE = '/api';
 
+const getAuthHeaders = (): HeadersInit => {
+  const token = localStorage.getItem('token');
+  if (token) return { 'Authorization': `Bearer ${token}` };
+  return {};
+};
+
 interface ApontamentoItem {
  IdOrdemServicoItem: number;
  IdOrdemServico: number;
@@ -106,7 +112,7 @@ const setores: { id: Setor; label: string; icon: typeof Scissors; color: string 
  { id: 'mapaproducao', label: 'Mapa Produção', icon: Map, color: 'bg-indigo-600' },
 ];
 
-export default function ApontamentoProducaoRecursoPage() {
+export default function ApontamentoProducaoRecursoPage({ isModal, initialItemFilter, initialOsFilter, onClose }: { isModal?: boolean, initialItemFilter?: string, initialOsFilter?: string, onClose?: () => void } = {}) {
  const { addToast } = useToast();
  const { user } = useAuth();
 
@@ -152,11 +158,18 @@ useEffect(() => {
  const [planoCorteFilter, setPlanoCorteFilter] = useState('');
  const [projetoFilter, setProjetoFilter] = useState('');
  const [tagFilter, setTagFilter] = useState('');
- const [osFilter, setOsFilter] = useState('');
+ const [osFilter, setOsFilter] = useState(initialOsFilter || '');
  const [clienteFilter, setClienteFilter] = useState('');
- const [itemFilter, setItemFilter] = useState('');
+ const [itemFilter, setItemFilter] = useState(initialItemFilter || '');
  const [codMatFabricanteFilter, setCodMatFabricanteFilter] = useState('');
  const [dataPlanejamentoInicio, setDataPlanejamentoInicio] = useState('');
+
+ // Auto-search on mount if initial filters are provided
+ useEffect(() => {
+   if (initialItemFilter || initialOsFilter) {
+     handleSearch();
+   }
+ }, [initialItemFilter, initialOsFilter]);
  const [dataPlanejamentoFim, setDataPlanejamentoFim] = useState('');
  const [statusFilter, setStatusFilter] = useState<'todos' | 'pendente' | 'concluido'>('pendente');
  const [groupBy, setGroupBy] = useState<'os' | 'projeto' | 'tag' | 'cliente' | 'produto_principal'>('os');
@@ -233,6 +246,11 @@ useEffect(() => {
 
   // Retorna os recursos ativos ordenados por sequência
   const getRecursosAtivosTooltip = (item: any): string => {
+    if (item.TodosRecursosTooltip) {
+      const lines = item.TodosRecursosTooltip.split(' | ').map((r: string) => `• ${r}`);
+      return `CÓDIGO: ${item.CodMatFabricante || '-'}\nRECURSOS ATIVOS:\n${lines.join('\n')}`;
+    }
+
     const res: {name: string, seq: number}[] = [];
     const check = (txtField: string, name: string, seqField: string) => {
         const val = String(item[txtField] || '').trim().toUpperCase();
@@ -255,8 +273,8 @@ useEffect(() => {
     
     res.sort((a,b) => a.seq - b.seq);
     
-    const lines = res.map(r => `• ${r.name} (Seq: ${r.seq === 999 ? '-' : r.seq})`);
-    return `CÓDIGO: ${item.CodMatFabricante || '-'}\nRECURSOS ATIVOS:\n${lines.join('\n')}`;
+    const fallbackLines = res.map(r => `• ${r.seq === 999 ? '-' : r.seq}º: ${r.name}`);
+    return `CÓDIGO: ${item.CodMatFabricante || '-'}\nRECURSOS ATIVOS:\n${fallbackLines.join('\n')}`;
   };
 
 
@@ -2248,6 +2266,30 @@ useEffect(() => {
                   <span className="text-[9px] font-black text-gray-400 uppercase tracking-wider">Próx.</span>
                   <span className="text-[10px] font-black text-[#32423D] bg-[#E0E800]/30 border border-[#E0E800]/50 px-2 py-0.5 rounded-full uppercase tracking-wide">
                     {(() => {
+                      const itemAny = itemDetails.item as any;
+                      
+                      // Tenta usar a nova inteligência baseada na material_processo (TodosRecursosTooltip)
+                      if (itemAny.TodosRecursosTooltip) {
+                        const recursos = String(itemAny.TodosRecursosTooltip).split('|').map(r => r.trim());
+                        const currentSetorNormalized = String(modalSetor).replace(/\s/g, '').toLowerCase();
+                        
+                        const idx = recursos.findIndex(r => {
+                           const nome = (r.split(':')[1] || '').trim().replace(/\s/g, '').toLowerCase();
+                           // Tratamento para puncionadeira/punsionadeira
+                           if (nome === 'puncionadeira' && currentSetorNormalized === 'punsionadeira') return true;
+                           if (nome === 'punsionadeira' && currentSetorNormalized === 'puncionadeira') return true;
+                           return nome === currentSetorNormalized;
+                        });
+                        
+                        if (idx !== -1 && idx < recursos.length - 1) {
+                           const proximoNome = (recursos[idx + 1].split(':')[1] || '').trim();
+                           return proximoNome.charAt(0).toUpperCase() + proximoNome.slice(1).toLowerCase();
+                        } else if (idx !== -1 && idx === recursos.length - 1) {
+                           return 'Fim ✓';
+                        }
+                      }
+
+                      // Fallback para as colunas da OS caso a nova inteligência não venha
                       const sequence = [
                         { id: 'engenharia', field: 'txtENGENHARIA', label: 'Engenharia' },
                         { id: 'isometrico', field: 'txtISOMETRICO', label: 'Isométrico' },
@@ -2267,13 +2309,12 @@ useEffect(() => {
                         { id: 'montagem', field: 'TxtMontagem', label: 'Montagem' },
                         { id: 'aprovacao', field: 'txtAPROVACAO', label: 'Aprovação' }
                       ];
-                      const idx = sequence.findIndex(s => s.id === String(modalSetor).toLowerCase());
-                      if (idx === -1) return '-';
-                      for (let i = idx + 1; i < sequence.length; i++) {
+                      const idxLegacy = sequence.findIndex(s => s.id === String(modalSetor).toLowerCase());
+                      if (idxLegacy === -1) return '-';
+                      for (let i = idxLegacy + 1; i < sequence.length; i++) {
                         const t = sequence[i];
-                        const ia = itemDetails.item as any;
-                        const v1 = String(ia[t.field] || '').trim().toUpperCase();
-                        const v2 = String(ia[t.field.toLowerCase()] || '').trim().toUpperCase();
+                        const v1 = String(itemAny[t.field] || '').trim().toUpperCase();
+                        const v2 = String(itemAny[t.field.toLowerCase()] || '').trim().toUpperCase();
                         if (v1 === '1' || v2 === '1' || v1 === 'S' || v2 === 'S') return t.label;
                       }
                       return 'Fim ✓';
@@ -2293,6 +2334,7 @@ useEffect(() => {
             // Campo auxiliar diário (retornado pelo backend) — minutos produzidos HOJE
             // Fallback para MinProd histórico do banco caso dailyMinProd não esteja disponível
             const minProdVal = parseFloat(String(
+              itemDetails.item?.MinutosProducao ??
               (itemDetails as any).dailyMinProd ??               // campo auxiliar diário (memória no server)
               itemDetails[`${secFormatted}MinProd`] ??
               itemDetails[`${secUpper}MinProd`] ??
@@ -2569,14 +2611,18 @@ useEffect(() => {
  <thead className="bg-[#567469] text-white bg-[#567469] text-white">
  <tr className=" text-[10px] uppercase tracking-wider font-bold text-white">
  <th className="px-2 py-0.5 border-b border-white/20">Data</th>
- <th className="px-2 py-0.5 border-b border-white/20">Setor</th>
+ <th className="px-2 py-0.5 border-b border-white/20">Recurso</th>
  <th className="px-2 py-0.5 border-b border-white/20">Qtde Apontada</th>
  <th className="px-2 py-0.5 border-b border-white/20">Qtde a Apontar</th>
  <th className="px-2 py-0.5 border-b border-white/20">Usuário</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-gray-100">
- {itemDetails.historico.map((h) => {
+ {(() => {
+ const historico = [...itemDetails.historico].reverse();
+ const faltantePorSetor: Record<string, number> = {};
+ 
+ const processed = historico.map((h) => {
  let sectorDisplay = '-';
  if (h.txtCorte && Number(h.txtCorte) > 0) sectorDisplay = 'Corte';
  else if (h.txtDobra && Number(h.txtDobra) > 0) sectorDisplay = 'Dobra';
@@ -2585,26 +2631,35 @@ useEffect(() => {
  else if (h.txtMontagem && Number(h.txtMontagem) > 0) sectorDisplay = 'Montagem';
  else if (h.Processo) sectorDisplay = h.Processo;
 
- return (
+ const key = sectorDisplay.toLowerCase();
+ if (faltantePorSetor[key] === undefined) {
+ faltantePorSetor[key] = h.QtdeTotal || 0;
+ }
+ faltantePorSetor[key] -= h.QtdeProduzida;
+
+ return { ...h, sectorDisplay, calculatedFaltante: Math.max(0, faltantePorSetor[key]) };
+ });
+
+ return processed.map((h) => (
  <tr key={h.IdOrdemServicoItemControle} className="hover:bg-gray-50 transition-colors">
  <td className="px-2 py-0.5 text-xs text-gray-600">{formatDate(h.DataCriacao)}</td>
  <td className="px-2 py-0.5 text-xs">
  <span className="px-2 py-0.5 rounded-full bg-[#E0E800]/40 text-[#32423D] font-bold uppercase text-[9px]">
- {sectorDisplay}
+ {h.sectorDisplay}
  </span>
  </td>
  <td className="px-2 py-0.5 text-xs font-bold text-[#32423D]">
  +{h.QtdeProduzida}
  </td>
  <td className="px-2 py-0.5 text-xs font-bold text-[#32423D]">
- {h.QtdeFaltante}
+ {h.calculatedFaltante}
  </td>
  <td className="px-2 py-0.5 text-xs text-gray-500">
  {h.CriadoPor}
  </td>
  </tr>
- );
- })}
+ ));
+ })()}
  </tbody>
  </table>
  </div>

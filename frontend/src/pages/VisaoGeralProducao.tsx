@@ -1171,17 +1171,41 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
 
   const openItemSectorsModal = async (item: any) => {
     let freshItem = item;
+    let mpData: any[] = [];
     try {
       const r = await (await fetch(`${API_BASE}/ordemservico/${item.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
       if (r.success && r.data) {
         const found = r.data.find((i: any) => String(i.IdOrdemServicoItem) === String(item.IdOrdemServicoItem));
         if (found) freshItem = found;
       }
+      const r2 = await (await fetch(`${API_BASE}/material-processo/item/${item.IdOrdemServicoItem}?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+      if (r2.success && r2.data) {
+        mpData = r2.data;
+      }
     } catch (e) {
       console.error('Error fetching fresh item for sector modal:', e);
     }
 
-    const activeSectors = getItemActiveSectors(freshItem);
+    const itemQty = parseFloat(freshItem.qtde ?? freshItem.QtdeTotal) || 1;
+    let activeSectors = [];
+    
+    if (mpData && mpData.length > 0) {
+      activeSectors = mpData.map(mp => ({
+        key: mp.DescricaoProcesso || 'Processo',
+        label: mp.DescricaoProcesso || 'Processo',
+        exec: mp.TotalExecutado || 0,
+        aExec: mp.TotalExecutar || 0,
+        itemQty: itemQty,
+        dias: mp.DiasProducao || 1,
+        pi: mp.PlanejadoInicio || null,
+        pf: mp.PlanejadoFinal || null,
+        minProd: mp.MinutosProducao || mp.TempoEstimadoMin || 0,
+        idMaterialProcesso: mp.IdMaterialProcesso
+      }));
+    } else {
+      activeSectors = getItemActiveSectors(freshItem);
+    }
+
     setSectorModal({
       title: `Produção por Setor/Recurso (Item #${item.IdOrdemServicoItem} — ${freshItem.DescResumo || item.DescResumo || 'Sem descrição'})`,
       targetType: 'item',

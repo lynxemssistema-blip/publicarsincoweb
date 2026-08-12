@@ -409,11 +409,74 @@ router.post('/material-processo', async (req, res) => {
                 [idMaterial, p.IdProcesso, p.SequenciaExecucao, 
                  p.TempoEstimadoMin ?? null, p.TempoPadraoMin ?? null, 
                  p.Observacao || null, usuarioCriacao || 'Sistema', 
-                 codmatFabricante || '', idMatriz || req.tenantId || null,
+                 codmatFabricante || '', idMatriz || req.tenantUser?.tenantId || req.tenantUser?.idEmpresa || null,
                  osId || null, idProjeto || null, idTag || null, amountToExecute]
             );
             insertedIds.push(result.insertId);
             isFirstProcess = false;
+        }
+
+        // [NOVO] Auto-inclusão na ordemservicoitem (Opção 1)
+        if (osId && codmatFabricante) {
+            const [existing] = await tenantPool.execute(
+                `SELECT IdOrdemServicoItem FROM ordemservicoitem 
+                 WHERE IdOrdemServico = ? AND CodMatFabricante = ? 
+                 AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
+                [osId, codmatFabricante]
+            );
+
+            if (existing.length === 0) {
+                // Busca dados do material e da OS
+                const [mRows] = await tenantPool.execute(
+                    `SELECT * FROM material WHERE CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1`,
+                    [codmatFabricante]
+                );
+                const [oRows] = await tenantPool.execute(
+                    `SELECT os.*, 
+                            COALESCE(p.IdEmpresa, os.IdEmpresa) AS ResolvedIdEmpresa, 
+                            COALESCE(p.DescEmpresa, os.DescEmpresa) AS ResolvedDescEmpresa 
+                     FROM ordemservico os
+                     LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
+                     WHERE os.IdOrdemServico = ? LIMIT 1`,
+                    [osId]
+                );
+
+                if (mRows.length > 0 && oRows.length > 0) {
+                    const mat = mRows[0];
+                    const osData = oRows[0];
+                    const qtdeFinal = qtdSelecionada || 1;
+                    const pesoFinal = (Number(mat.Peso) || 0) * qtdeFinal;
+                    const areaFinal = (Number(mat.AreaPintura) || 0) * qtdeFinal;
+
+                    await tenantPool.execute(
+                        `INSERT INTO ordemservicoitem (
+                            IdOrdemServico, CodMatFabricante, DescResumo, DescDetal, QtdeTotal, qtde,
+                            Peso, AreaPintura, Espessura, Altura, Largura,
+                            Unidade, MaterialSW, EnderecoArquivo, ProdutoPrincipal,
+                            IdProjeto, IdTag, Projeto, Tag, DescTag, IdEmpresa, DescEmpresa,
+                            UsuarioCriacao, CriadoPor, DataCriacao, Liberado_Engenharia, Fator,
+                            TempoSetup, TempoPadrao, TotalTempo,
+                            Autor, Palavrachave, NumeroDobras, txtSoldagem, txtTipoDesenho, Acabamento
+                        ) VALUES (
+                            ?, ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?,
+                            ?, ?, ?, ?,
+                            ?, ?, ?, ?, ?, ?, ?,
+                            'Sistema', 'Sistema', NOW(), 'N', 1,
+                            0, 0, 0,
+                            ?, ?, ?, ?, ?, ?
+                        )`,
+                        [
+                            osId, codmatFabricante, mat.DescResumo, mat.DescDetal, qtdeFinal, qtdeFinal,
+                            pesoFinal, areaFinal, mat.Espessura, mat.Altura, mat.Largura,
+                            mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
+                            idProjeto || osData.IdProjeto || null, idTag || osData.IdTag || null, osData.Projeto || null,
+                            osData.Tag || null, osData.DescTag || null, osData.ResolvedIdEmpresa || null, osData.ResolvedDescEmpresa || null,
+                            mat.Autor || null, mat.Palavrachave || null, mat.NumeroDobras || null, mat.txtSoldagem || null, mat.txtTipoDesenho || null, mat.Acabamento || null
+                        ]
+                    );
+                }
+            }
         }
 
         res.json({ success: true, message: `${insertedIds.length} processo(s) salvo(s).`, ids: insertedIds, idMaterial });

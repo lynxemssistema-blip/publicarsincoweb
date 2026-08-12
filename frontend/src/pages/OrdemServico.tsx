@@ -853,7 +853,6 @@ function OrdemServicoContent() {
                 });
                 const data = await res.json();
                 if (data.success) {
-                    addToast({ type: 'success', title: 'Sucesso', message: 'Item excluído com sucesso!' });
                     setOrdensItens(prev => ({
                         ...prev,
                         [osId]: prev[osId].filter(i => i.IdOrdemServicoItem !== item.IdOrdemServicoItem)
