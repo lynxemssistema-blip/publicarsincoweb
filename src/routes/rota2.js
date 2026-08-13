@@ -176,10 +176,12 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
         const currentExecutado = parseFloat(mp.TotalExecutado) || 0;
         const currentExecutar = parseFloat(mp.TotalExecutar) || 0;
         
+        const loggedUser = req.body.CriadoPor || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
+        
         // Na primeira vez, setar RealizadoInicio
         let dateNow = new Date().toISOString().slice(0, 19).replace('T', ' ');
         if (!mp.RealizadoInicio) {
-            await conn.execute('UPDATE material_processo SET RealizadoInicio = ?, UsuarioRealizadoInicio = ? WHERE IdMaterialProcesso = ?', [dateNow, CriadoPor || 'Sistema', IdMaterialProcesso]);
+            await conn.execute('UPDATE material_processo SET RealizadoInicio = ?, UsuarioRealizadoInicio = ? WHERE IdMaterialProcesso = ?', [dateNow, loggedUser, IdMaterialProcesso]);
         }
 
         // Atualizar Qtde Produzida (TotalExecutado += QtdeProduzida, TotalExecutar -= QtdeProduzida)
@@ -200,7 +202,7 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
         if (TipoApontamento !== 'Parcial' || novoExecutar <= 0) {
             finalizado = true;
             updateQuery += ', RealizadoFinal = ?, UsuarioRealizadoFinal = ?';
-            updateParams.push(dateNow, CriadoPor || 'Sistema');
+            updateParams.push(dateNow, loggedUser);
         }
 
         updateQuery += ' WHERE IdMaterialProcesso = ?';

@@ -211,8 +211,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (prev && prev.pf) {
             const prevPfIso = toIsoInput(prev.pf);
             if (prevPfIso) {
-              const nextPiIso = prevPfIso;
-              const nextPfIso = addBusinessDays(nextPiIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
+              const nextPiIso = getNextBusinessDay(prevPfIso, incSab, incDom, incFer);
+              const nextPfIso = addBusinessDays(nextPiIso, dias, incSab, incDom, incFer);
               curr.pi = toBrDisplay(nextPiIso);
               curr.pf = toBrDisplay(nextPfIso);
             }
@@ -235,7 +235,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
 
         if (i === updated.length - 1) {
           const pfIso = currentEndIso;
-          const piIso = subtractBusinessDays(pfIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
+          const piIso = subtractBusinessDays(pfIso, dias, incSab, incDom, incFer);
           curr.pf = toBrDisplay(pfIso);
           curr.pi = toBrDisplay(piIso);
         } else {
@@ -243,8 +243,8 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
           if (nextRes && nextRes.pi) {
             const nextPiIso = toIsoInput(nextRes.pi);
             if (nextPiIso) {
-              const pfIso = nextPiIso;
-              const piIso = subtractBusinessDays(pfIso, dias, incluirSabado, incluirDomingo, incluirFeriado);
+              const pfIso = getPreviousBusinessDay(nextPiIso, incSab, incDom, incFer);
+              const piIso = subtractBusinessDays(pfIso, dias, incSab, incDom, incFer);
               curr.pf = toBrDisplay(pfIso);
               curr.pi = toBrDisplay(piIso);
             }
@@ -282,6 +282,96 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
       setSelectedOs(modalData.allOs.map(o => o.IdOrdemServico));
     }
   }, [modalData]);
+
+  // Dynamic fetch for tag_os_bulk
+  useEffect(() => {
+    if (modalData?.targetType === 'tag_os_bulk' && selectedOs.length > 0) {
+      const fetchSectors = async () => {
+        try {
+          const res = await fetch(`/api/material-processo/setores-consolidados-os?osIds=${selectedOs.join(',')}`, {
+            headers: getAuthHeaders()
+          });
+          const r = await res.json();
+          if (r.success && r.sectors) {
+            const toBrDisplay = (isoStr?: string | null) => {
+              if (!isoStr || isoStr === '—') return '';
+              const s = String(isoStr).trim();
+              if (s.includes('-')) {
+                  const p = s.split('T')[0].split('-');
+                  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+              }
+              return s;
+            };
+
+            const initial = r.sectors.map((s: any) => ({
+              ...s,
+              dias: Math.max(1, parseInt(String(s.dias), 10) || 1),
+              pi: toBrDisplay(s.pi),
+              pf: toBrDisplay(s.pf),
+              minProd: parseInt(String(s.minProd || 0), 10) || 0,
+              qtdeTotal: parseFloat(String(s.qtdeTotal ?? 0)) || 0,
+              totalExecutado: parseFloat(String(s.totalExecutado ?? s.exec ?? 0)) || 0,
+              totalExecutar: parseFloat(String(s.totalExecutar ?? s.aExec ?? 0)) || 0
+            }));
+            
+            setSectors(initial);
+          } else {
+             setSectors([]);
+          }
+        } catch (e) {
+          console.error('Failed to fetch OS bulk sectors', e);
+        }
+      };
+      fetchSectors();
+    } else if (modalData?.targetType === 'tag_os_bulk' && selectedOs.length === 0) {
+      setSectors([]);
+    }
+  }, [selectedOs, modalData?.targetType]);
+
+  // Dynamic fetch for tag
+  useEffect(() => {
+    if (modalData?.targetType === 'tag' && selectedTags.length > 0) {
+      const fetchSectors = async () => {
+        try {
+          const res = await fetch(`/api/material-processo/setores-consolidados-tags?tagIds=${selectedTags.join(',')}`, {
+            headers: getAuthHeaders()
+          });
+          const r = await res.json();
+          if (r.success && r.sectors) {
+            const toBrDisplay = (isoStr?: string | null) => {
+              if (!isoStr || isoStr === '—') return '';
+              const s = String(isoStr).trim();
+              if (s.includes('-')) {
+                  const p = s.split('T')[0].split('-');
+                  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+              }
+              return s;
+            };
+
+            const initial = r.sectors.map((s: any) => ({
+              ...s,
+              dias: Math.max(1, parseInt(String(s.dias), 10) || 1),
+              pi: toBrDisplay(s.pi),
+              pf: toBrDisplay(s.pf),
+              minProd: parseInt(String(s.minProd || 0), 10) || 0,
+              qtdeTotal: parseFloat(String(s.qtdeTotal ?? 0)) || 0,
+              totalExecutado: parseFloat(String(s.totalExecutado ?? s.exec ?? 0)) || 0,
+              totalExecutar: parseFloat(String(s.totalExecutar ?? s.aExec ?? 0)) || 0
+            }));
+            
+            setSectors(initial);
+          } else {
+             setSectors([]);
+          }
+        } catch (e) {
+          console.error('Failed to fetch TAG bulk sectors', e);
+        }
+      };
+      fetchSectors();
+    } else if (modalData?.targetType === 'tag' && selectedTags.length === 0) {
+      setSectors([]);
+    }
+  }, [selectedTags, modalData?.targetType]);
 
   useEffect(() => {
     if (modalData && modalData.sectors) {

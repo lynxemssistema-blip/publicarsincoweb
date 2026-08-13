@@ -82,6 +82,7 @@ const tenantMiddleware = async (req, res, next) => {
         });
         
         req.tenantUser = decoded;
+        req.user = decoded;
 
         next();
     } catch (error) {

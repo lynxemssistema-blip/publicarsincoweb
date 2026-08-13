@@ -9640,14 +9640,15 @@ async function atualizarMinProdCascata(conn, idItem, processoKey, inputQty, oper
 
         let rawName = String(processoKey).trim();
         let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
-        if (rawName.toLowerCase() === 'montagem') recName = 'Montagem';
-        else if (rawName.toLowerCase() === 'corte') recName = 'Corte';
-        else if (rawName.toLowerCase() === 'dobra') recName = 'Dobra';
-        else if (rawName.toLowerCase() === 'solda') recName = 'Solda';
-        else if (rawName.toLowerCase() === 'pintura') recName = 'Pintura';
-        else if (rawName.toLowerCase() === 'galvanizar') recName = 'Galvanizar';
-        else if (rawName.toLowerCase() === 'punsionadeira') recName = 'Punsionadeira';
-        else if (rawName.toLowerCase() === 'cortealaser') recName = 'CorteaLaser';
+        const normalizedRawName = rawName.toLowerCase().replace(/\s+/g, '');
+        if (normalizedRawName === 'montagem') recName = 'Montagem';
+        else if (normalizedRawName === 'corte') recName = 'Corte';
+        else if (normalizedRawName === 'dobra') recName = 'Dobra';
+        else if (normalizedRawName === 'solda') recName = 'Solda';
+        else if (normalizedRawName === 'pintura') recName = 'Pintura';
+        else if (normalizedRawName === 'galvanizar') recName = 'Galvanizar';
+        else if (normalizedRawName === 'punsionadeira') recName = 'Punsionadeira';
+        else if (normalizedRawName === 'cortealaser' || normalizedRawName === 'laser') recName = 'CorteaLaser';
 
         const minProdCol = `${recName}MinProd`;
         const txtCol1 = `txt${recName}`;
@@ -10622,6 +10623,100 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
 
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
 
+// GET: Setores consolidados de múltiplas Tags (para Bulk Modal)
+app.get('/api/material-processo/setores-consolidados-tags', tenantMiddleware, async (req, res) => {
+    const { tagIds } = req.query;
+    if (!tagIds) return res.json({ success: true, sectors: [] });
+    
+    const ids = tagIds.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+    if (ids.length === 0) return res.json({ success: true, sectors: [] });
+    
+    try {
+        const placeholders = ids.map(() => '?').join(',');
+        const query = `
+            SELECT 
+                mp.IdProcesso, pf.processofabricacao,
+                SUM(mp.MinutosProducao) as TotalPadrao,
+                SUM(mp.TotalExecutado) as exec,
+                SUM(mp.TotalExecutar) as aExec,
+                SUM(IFNULL(mp.TotalExecutado, 0) + IFNULL(mp.TotalExecutar, 0)) as qtdeTotal
+            FROM material_processo mp
+            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            WHERE mp.IdTag IN (${placeholders})
+            GROUP BY mp.IdProcesso, pf.processofabricacao
+        `;
+        const [rows] = await req.tenantDbPool.execute(query, ids);
+        
+        const sectors = rows.map(r => {
+            const rawName = String(r.processofabricacao || '').toUpperCase();
+            return {
+                key: rawName,
+                label: rawName,
+                idMaterialProcesso: r.IdProcesso,
+                dias: 1, 
+                pi: '',
+                pf: '',
+                minProd: Math.round(parseFloat(r.TotalPadrao) || 0),
+                qtdeTotal: parseFloat(r.qtdeTotal) || 0,
+                exec: parseFloat(r.exec) || 0,
+                aExec: parseFloat(r.aExec) || 0
+            };
+        });
+        
+        res.json({ success: true, sectors });
+    } catch (e) {
+        console.error('[Consolidated Sectors TAG Error]', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
+// GET: Setores consolidados de múltiplas OSs (para Bulk Modal)
+app.get('/api/material-processo/setores-consolidados-os', tenantMiddleware, async (req, res) => {
+    const { osIds } = req.query;
+    if (!osIds) return res.json({ success: true, sectors: [] });
+    
+    const ids = osIds.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
+    if (ids.length === 0) return res.json({ success: true, sectors: [] });
+    
+    try {
+        const placeholders = ids.map(() => '?').join(',');
+        const query = `
+            SELECT 
+                mp.IdProcesso, pf.processofabricacao,
+                SUM(mp.MinutosProducao) as TotalPadrao,
+                SUM(mp.TotalExecutado) as exec,
+                SUM(mp.TotalExecutar) as aExec,
+                SUM(IFNULL(mp.TotalExecutado, 0) + IFNULL(mp.TotalExecutar, 0)) as qtdeTotal
+            FROM material_processo mp
+            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            WHERE mp.IdOrdemServico IN (${placeholders})
+            GROUP BY mp.IdProcesso, pf.processofabricacao
+        `;
+        const [rows] = await req.tenantDbPool.execute(query, ids);
+        
+        const sectors = rows.map(r => {
+            const rawName = String(r.processofabricacao || '').toUpperCase();
+            return {
+                key: rawName,
+                label: rawName,
+                idMaterialProcesso: r.IdProcesso,
+                dias: 1, 
+                pi: '',
+                pf: '',
+                minProd: Math.round(parseFloat(r.TotalPadrao) || 0),
+                qtdeTotal: parseFloat(r.qtdeTotal) || 0,
+                exec: parseFloat(r.exec) || 0,
+                aExec: parseFloat(r.aExec) || 0
+            };
+        });
+        
+        res.json({ success: true, sectors });
+    } catch (e) {
+        console.error('[Consolidated Sectors OS Error]', e);
+        res.status(500).json({ success: false, message: e.message });
+    }
+});
+
 // POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
 app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) => {
     const { targetType, targetId, sectors, targetIds } = req.body;
@@ -10671,14 +10766,15 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                 let rawName = String(s.key || s.label || '').trim();
                 let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
                 let diasName = recName;
-                if (rawName.toLowerCase() === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
-                else if (rawName.toLowerCase() === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
-                else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
-                else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
-                else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
-                else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
-                else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
-                else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
+                const normalizedRawName = rawName.toLowerCase().replace(/\s+/g, '');
+                if (normalizedRawName === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
+                else if (normalizedRawName === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
+                else if (normalizedRawName === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
+                else if (normalizedRawName === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
+                else if (normalizedRawName === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
+                else if (normalizedRawName === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
+                else if (normalizedRawName === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
+                else if (normalizedRawName === 'cortealaser' || normalizedRawName === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                 const colPi = `PlanejadoInicio${recName}`;
                 const colPf = `PlanejadoFinal${recName}`;
@@ -10721,14 +10817,15 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                     let rawName = String(s.key || s.label || '').trim();
                     let recName = rawName.charAt(0).toUpperCase() + rawName.slice(1);
                     let diasName = recName;
-                    if (rawName.toLowerCase() === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
-                    else if (rawName.toLowerCase() === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
-                    else if (rawName.toLowerCase() === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
-                    else if (rawName.toLowerCase() === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
-                    else if (rawName.toLowerCase() === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
-                    else if (rawName.toLowerCase() === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
-                    else if (rawName.toLowerCase() === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
-                    else if (rawName.toLowerCase() === 'cortealaser' || rawName.toLowerCase() === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
+                    const normalizedRawName = rawName.toLowerCase().replace(/\s+/g, '');
+                    if (normalizedRawName === 'montagem') { recName = 'Montagem'; diasName = 'Montagem'; }
+                    else if (normalizedRawName === 'corte') { recName = 'Corte'; diasName = 'Corte'; }
+                    else if (normalizedRawName === 'dobra') { recName = 'Dobra'; diasName = 'Dobra'; }
+                    else if (normalizedRawName === 'solda') { recName = 'Solda'; diasName = 'Solda'; }
+                    else if (normalizedRawName === 'pintura') { recName = 'Pintura'; diasName = 'Pintura'; }
+                    else if (normalizedRawName === 'galvanizar') { recName = 'GALVANIZAR'; diasName = 'Galvanizar'; }
+                    else if (normalizedRawName === 'punsionadeira') { recName = 'PUNSIONADEIRA'; diasName = 'Punsionadeira'; }
+                    else if (normalizedRawName === 'cortealaser' || normalizedRawName === 'laser') { recName = 'CorteaLaser'; diasName = 'CorteaLaser'; }
 
                     const colPi = `PlanejadoInicio${recName}`;
                     const colPf = `PlanejadoFinal${recName}`;
@@ -10785,24 +10882,61 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
 
         const idsToUpdate = ((targetType === 'tag' || targetType === 'tag_os_bulk') && Array.isArray(targetIds) && targetIds.length > 0) ? targetIds : [targetId];
 
+        const PROCESS_ID_MAP = {
+            'CORTE': 1, 'DOBRA': 2, 'SOLDA': 3, 'PINTURA': 4, 'MONTAGEM': 5,
+            'CORTE A LASER': 13, 'LASER': 13, 'PUNSIONADEIRA': 14, 'GALVANIZAR': 15
+        };
+
         for (const currentTargetId of idsToUpdate) {
-            if (targetType === 'os' || targetType === 'tag_os_bulk') {
-            await updateFieldsForEntity('ordemservico', 'IdOrdemServico', currentTargetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServico', currentTargetId);
+            if (targetType === 'os' || targetType === 'tag_os_bulk' || targetType === 'tag') {
+                const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
 
-            const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [currentTargetId]).catch(() => [[]]);
-            if (osRows && osRows[0]) {
-                await updateParentHierarchy(null, osRows[0].IdTag, osRows[0].IdProjeto);
-            }
-        } else if (targetType === 'tag') {
-            await updateFieldsForEntity('tags', 'IdTag', currentTargetId);
-            await updateFieldsForEntity('ordemservico', 'IdTag', currentTargetId);
-            await updateFieldsForEntity('ordemservicoitem', 'IdTag', currentTargetId);
+                for (const s of sectors) {
+                    const rawName = String(s.key || s.label || '').toUpperCase().trim();
+                    const processId = PROCESS_ID_MAP[rawName];
+                    if (processId) {
+                        const itemPiDt = parseBrDate(s.pi);
+                        const itemPfDt = parseBrDate(s.pf);
+                        const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
+                        const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
+                        const valDias = parseInt(String(s.dias), 10) || 1;
+                        
+                        const mpUpdates = [];
+                        const mpParams = [];
+                        
+                        if (itemPiSql) { 
+                            mpUpdates.push('PlanejadoInicio = ?'); mpParams.push(itemPiSql); 
+                            mpUpdates.push('UsuarioPlanejadoInicio = ?'); mpParams.push(loggedUser);
+                        }
+                        if (itemPfSql) { 
+                            mpUpdates.push('PlanejadoFinal = ?'); mpParams.push(itemPfSql); 
+                            mpUpdates.push('UsuarioPlanejadoFinal = ?'); mpParams.push(loggedUser);
+                        }
+                        
+                        if (mpUpdates.length > 0) {
+                            mpUpdates.push('DiasProducao = ?'); 
+                            mpParams.push(valDias);
+                            mpParams.push(currentTargetId, processId);
+                            
+                            const whereCol = (targetType === 'tag') ? 'IdTag' : 'IdOrdemServico';
+                            await conn.execute(`UPDATE material_processo SET ${mpUpdates.join(', ')} WHERE ${whereCol} = ? AND IdProcesso = ?`, mpParams).catch(err => {
+                                console.warn(`[Material Processo Bulk Warning]: ${err.message}`);
+                            });
+                        }
+                    }
+                }
 
-            const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [currentTargetId]).catch(() => [[]]);
-            if (tagRows && tagRows[0]) {
-                await updateParentHierarchy(null, null, tagRows[0].IdProjeto);
-            }
+                if (targetType === 'os' || targetType === 'tag_os_bulk') {
+                    const [osRows] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [currentTargetId]).catch(() => [[]]);
+                    if (osRows && osRows[0]) {
+                        await updateParentHierarchy(null, osRows[0].IdTag, osRows[0].IdProjeto);
+                    }
+                } else if (targetType === 'tag') {
+                    const [tagRows] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [currentTargetId]).catch(() => [[]]);
+                    if (tagRows && tagRows[0]) {
+                        await updateParentHierarchy(null, currentTargetId, tagRows[0].IdProjeto);
+                    }
+                }
         } else if (targetType === 'projeto') {
             await updateFieldsForEntity('projetos', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
             await updateFieldsForEntity('tags', 'IdProjeto', currentTargetId, "AND (Finalizado IS NULL OR Finalizado NOT IN ('C', 'S'))");
@@ -10810,30 +10944,52 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
             await updateFieldsForEntity('ordemservicoitem', 'IdProjeto', currentTargetId, "AND (OrdemServicoItemFinalizado IS NULL OR OrdemServicoItemFinalizado NOT IN ('C', 'S'))");
             await updateParentHierarchy(null, null, currentTargetId);
         } else if (targetType === 'item') {
-            await updateFieldsForEntity('ordemservicoitem', 'IdOrdemServicoItem', currentTargetId);
-
-            const [itemRows] = await conn.execute('SELECT IdOrdemServico, IdTag, IdProjeto FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [currentTargetId]).catch(() => [[]]);
+            const [itemRows] = await conn.execute('SELECT codmatFabricante, IdOrdemServico FROM ordemservicoitem WHERE IdOrdemServicoItem = ?', [currentTargetId]).catch(() => [[]]);
             if (itemRows && itemRows[0]) {
-                let osId = itemRows[0].IdOrdemServico;
-                let tagId = itemRows[0].IdTag;
-                let projetoId = itemRows[0].IdProjeto;
-
-                if (osId && (!tagId || !projetoId)) {
-                    const [osInfo] = await conn.execute('SELECT IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ?', [osId]).catch(() => [[]]);
-                    if (osInfo && osInfo[0]) {
-                        if (!tagId) tagId = osInfo[0].IdTag;
-                        if (!projetoId) projetoId = osInfo[0].IdProjeto;
+                const { codmatFabricante, IdOrdemServico } = itemRows[0];
+                if (codmatFabricante && IdOrdemServico) {
+                    const PROCESS_ID_MAP = {
+                        'corte': 1, 'dobra': 2, 'solda': 3, 'pintura': 4, 'montagem': 5,
+                        'cortealaser': 13, 'laser': 13, 'punsionadeira': 14, 'galvanizar': 15
+                    };
+                    
+                    for (const s of sectors) {
+                        const rawName = String(s.key || s.label || '').trim();
+                        const normalizedName = rawName.toLowerCase().replace(/\s+/g, '');
+                        const processId = PROCESS_ID_MAP[normalizedName];
+                        
+                        if (processId) {
+                            const itemPiDt = parseBrDate(s.pi);
+                            const itemPfDt = parseBrDate(s.pf);
+                            const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
+                            const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
+                            const valDias = parseInt(String(s.dias), 10) || 1;
+                            
+                            const updates = [];
+                            const params = [];
+                            const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
+                            
+                            if (itemPiSql) { 
+                                updates.push('PlanejadoInicio = ?'); params.push(itemPiSql); 
+                                updates.push('UsuarioPlanejadoInicio = ?'); params.push(loggedUser);
+                            }
+                            if (itemPfSql) { 
+                                updates.push('PlanejadoFinal = ?'); params.push(itemPfSql); 
+                                updates.push('UsuarioPlanejadoFinal = ?'); params.push(loggedUser);
+                            }
+                            
+                            if (updates.length > 0) {
+                                updates.push('DiasProducao = ?'); 
+                                params.push(valDias);
+                                params.push(codmatFabricante, IdOrdemServico, processId);
+                                
+                                await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?`, params).catch(err => {
+                                    console.warn(`[Material Processo Item Warning]: ${err.message}`);
+                                });
+                            }
+                        }
                     }
                 }
-
-                if (tagId && !projetoId) {
-                    const [tagInfo] = await conn.execute('SELECT IdProjeto FROM tags WHERE IdTag = ?', [tagId]).catch(() => [[]]);
-                    if (tagInfo && tagInfo[0]) {
-                        projetoId = tagInfo[0].IdProjeto;
-                    }
-                }
-
-                await updateParentHierarchy(osId, tagId, projetoId);
             }
         }
 
@@ -13052,7 +13208,7 @@ app.put('/api/recursos/:id', tenantMiddleware, async (req, res) => {
                 const procNameFormatado = (oldProc.processofabricacao || '').trim().replace(/\s+/g, '');
                 if (procNameFormatado) {
                     const colName = `txt${procNameFormatado}`;
-                    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE ?`, [colName]);
+                    const [cols] = await req.tenantDbPool.execute(`SHOW COLUMNS FROM ordemservicoitem LIKE '${colName}'`);
                     if (cols.length > 0) {
                         const [usage] = await req.tenantDbPool.execute(`SELECT 1 FROM ordemservicoitem WHERE \`${colName}\` = '1' LIMIT 1`);
                         if (usage.length > 0) {
@@ -14639,6 +14795,45 @@ app.put('/api/ordemservicoitem/:id/tempos', tenantMiddleware, async (req, res) =
                         console.warn(`[Tempos] Erro ao atualizar material_processo para ${secKey}:`, e.message);
                     }
                 }
+            }
+        }
+
+        // --- Recalcular TotalExecutar (Sempre no primeiro recurso) ---
+        if (itemIdMaterial || itemCodMatFabricante) {
+            try {
+                // Find all processes for this item
+                const [processes] = await dbPool.execute(
+                    `SELECT IdMaterialProcesso, SequenciaExecucao, TotalExecutar
+                     FROM material_processo 
+                     WHERE (IdMaterial = ? OR codmatFabricante = ?) AND Ativo = 'A'
+                     ORDER BY SequenciaExecucao ASC`,
+                    [itemIdMaterial || 0, itemCodMatFabricante || '']
+                );
+
+                if (processes.length > 0) {
+                    // Sum all TotalExecutar
+                    let totalToExecute = 0;
+                    for (const p of processes) {
+                        totalToExecute += parseFloat(p.TotalExecutar || 0);
+                    }
+
+                    console.log(`[Sequencia Refino] Item (IdMat: ${itemIdMaterial}, Cod: ${itemCodMatFabricante}) -> Sequencias reordenadas. Total a executar consolidado: ${totalToExecute}`);
+
+                    // First process gets the sum, the rest get 0
+                    for (let i = 0; i < processes.length; i++) {
+                        const proc = processes[i];
+                        const newTotal = (i === 0) ? totalToExecute : 0;
+                        if (parseFloat(proc.TotalExecutar || 0) !== newTotal) {
+                            await dbPool.execute(
+                                `UPDATE material_processo SET TotalExecutar = ? WHERE IdMaterialProcesso = ?`,
+                                [newTotal, proc.IdMaterialProcesso]
+                            );
+                            console.log(`[Sequencia Refino] Processo ${proc.IdMaterialProcesso} (Seq: ${proc.SequenciaExecucao}) atualizado para TotalExecutar = ${newTotal}`);
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error(`[Sequencia Refino] Erro ao recalcular TotalExecutar:`, err.message);
             }
         }
 
