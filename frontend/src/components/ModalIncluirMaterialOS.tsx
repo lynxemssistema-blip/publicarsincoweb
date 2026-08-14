@@ -131,24 +131,44 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
-  const fetchExistingOsCodigos = async () => {
-    try {
-      let qs = [];
-      if (osContext?.IdProjeto) qs.push(`idProjeto=${osContext.IdProjeto}`);
-      if (osContext?.IdTag) qs.push(`idTag=${osContext.IdTag}`);
-      const qsString = qs.length ? `?${qs.join('&')}` : '';
 
+  const fetchMateriaisNaOS = async () => {
+    try {
       const activeToken = token || localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
-      const res = await fetch(`${API_BASE}/ordemservico/${osId}/itens-codigos${qsString}`, {
+      let url = `${API_BASE}/ordemservico/${osId}/materiais-em-processo`;
+      const queryParams = new URLSearchParams();
+      if (osContext?.IdProjeto) queryParams.append('idProjeto', osContext.IdProjeto.toString());
+      if (osContext?.IdTag) queryParams.append('idTag', osContext.IdTag.toString());
+      if (queryParams.toString()) {
+        url += '?' + queryParams.toString();
+      }
+      const res = await fetch(url, {
         headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {}
       });
       const json = await res.json();
-      if (json.success && Array.isArray(json.codigos)) {
-        setExistingOsCodigos(json.codigos);
-        return json.codigos;
+      if (json.success && Array.isArray(json.data)) {
+        const loaded: any = {};
+        const codigos: string[] = [];
+        json.data.forEach((m: any) => {
+          if (m.codmatfabricante) {
+            loaded[m.codmatfabricante] = {
+              desc: m.desc || '',
+              qtde: m.qtde || 1,
+              fator: 1,
+              acabamento: '',
+              tempoSetup: 0,
+              tempoPadrao: 0,
+              recursoTempos: m.recursoTempos || {}
+            };
+            codigos.push(m.codmatfabricante);
+          }
+        });
+        setSelectedItems(loaded);
+        setExistingOsCodigos(codigos);
+        return codigos;
       }
     } catch (e) {
-      console.error('Erro ao carregar codigos existentes na OS', e);
+      console.error('Erro ao carregar materiais na OS', e);
     }
     return [];
   };
@@ -161,15 +181,13 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       setExistingOsCodigos([]);
       setSelectedItems({});
       setItemProcessos({});
-      setRecursosVisible({});
       setLoadingProcessos({});
       setGlobalAcabamento('');
       setSuccessMsg(null);
       setTotalAdded(0);
       fetchAcabamentos();
-      
-      fetchExistingOsCodigos().then((codsExistentes) => {
-        fetchExistingOsItems();
+
+      fetchMateriaisNaOS().then(codsExistentes => {
         fetchInitialMaterials(codsExistentes);
       });
     }
@@ -184,8 +202,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
-        const cods = codsExistentes || existingOsCodigos;
-        const disponiveis = json.data.filter((m: Material) => !cods.includes(m.CodMatFabricante));
+        const cods = codsExistentes || [];
+        const disponiveis = json.data.filter((m: any) => !cods.includes(m.CodMatFabricante));
         setAllMaterials(disponiveis);
         setSearchResults(disponiveis);
       }

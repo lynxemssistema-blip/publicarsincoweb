@@ -23,6 +23,8 @@ Copy-Item -Path "login_inicial.html" -Destination "PublicacaoSite" -Force -Error
 # 4. Copiar Backend
 Write-Host "Copiando arquivos do Backend..."
 Copy-Item -Path "src\*" -Destination "PublicacaoSite\src" -Recurse -Force
+Copy-Item -Path "package.json" -Destination "PublicacaoSite" -Force
+Copy-Item -Path "package-lock.json" -Destination "PublicacaoSite" -Force
 
 # 5. Commit e Push
 Write-Host "Enviando atualizações para o GitHub (sinco-web e publicarsincoweb)..."

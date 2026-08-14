@@ -249,6 +249,32 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
             ) VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, '')
         `, [IdOrdemServicoItem, IdOrdemServico, Processo.toLowerCase(), mp.TotalExecutar + mp.TotalExecutado, inputQty, TipoApontamento || 'Total', criador, dateNow, idMatriz]);
 
+        // Propagar a atualização para ordemservicoitem para que as telas (inclusive a Rota 1) vejam os totais
+        const pLower = Processo.toLowerCase();
+        const PREFIXO_MAP = { galvanizar: 'GALVANIZAR', punsionadeira: 'PUNSIONADEIRA', cortealaser: 'CorteaLaser' };
+        const pref = PREFIXO_MAP[pLower] || (Processo.charAt(0).toUpperCase() + Processo.slice(1).toLowerCase());
+        const totalCol = `${pref}TotalExecutado`;
+        const executarCol = `${pref}TotalExecutar`;
+
+        try {
+            await conn.execute(`
+                UPDATE ordemservicoitem 
+                SET ${totalCol} = COALESCE(${totalCol}, 0) + ?,
+                    ${executarCol} = GREATEST(0, COALESCE(${executarCol}, 0) - ?)
+                WHERE IdOrdemServicoItem = ?
+            `, [inputQty, inputQty, IdOrdemServicoItem]);
+        } catch(err) {
+            console.error('[Rota 2] Erro ao sincronizar ordemservicoitem:', err.message);
+        }
+
+        try {
+            if (global.cascatearFinalizados) {
+                await global.cascatearFinalizados(conn, IdOrdemServicoItem, IdOrdemServico, mp.IdTag, mp.IdProjeto, mp.codmatFabricante);
+            }
+        } catch(err) {
+            console.error('[Rota 2] Erro ao cascatear finalizados:', err.message);
+        }
+
         await conn.commit();
         conn.release();
         

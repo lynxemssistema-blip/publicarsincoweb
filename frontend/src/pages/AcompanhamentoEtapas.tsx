@@ -17,7 +17,7 @@ const getUsuarioLogado = (): string => {
 
 // Helper: monta headers com Authorization JWT
 const getAuthHeaders = (): HeadersInit => {
- const token = localStorage.getItem('sinco_token');
+ const token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token') || localStorage.getItem('token') || localStorage.getItem('jwt') || '';
  return {
  'Content-Type': 'application/json',
  ...(token ? { 'Authorization': `Bearer ${token}` } : {})

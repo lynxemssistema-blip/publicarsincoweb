@@ -6,7 +6,7 @@ const API_BASE = '/api';
 
 // Helper: monta headers com Authorization JWT
 const getAuthHeaders = (extraHeaders?: Record<string, string>): HeadersInit => {
-    const token = localStorage.getItem('sinco_token');
+    const token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token') || localStorage.getItem('token') || localStorage.getItem('jwt') || '';
     return {
         ...(extraHeaders || {}),
         ...(token ? { 'Authorization': `Bearer ${token}` } : {})

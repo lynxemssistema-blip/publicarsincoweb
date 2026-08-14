@@ -7272,7 +7272,38 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.IdMatriz || 0
             ]
         );
-        res.json({ success: true, message: 'OS cadastrada', id: result.insertId });
+                const novoId = result.insertId;
+        let enderecoBase = data.EnderecoOrdemServico || '';
+        
+        if (enderecoBase) {
+            const format5 = (num) => String(num).padStart(5, '0');
+            if (enderecoBase.endsWith('\\') || enderecoBase.endsWith('/')) {
+                enderecoBase = enderecoBase.slice(0, -1);
+            }
+            const nomePastaOs = `OS_${format5(novoId)}`;
+            const novoEndereco = `${enderecoBase}\\${nomePastaOs}`;
+            
+            // Atualiza o banco com o caminho correto da pasta da OS
+            await req.tenantDbPool.execute(
+                'UPDATE ordemservico SET EnderecoOrdemServico = ? WHERE IdOrdemServico = ?',
+                [novoEndereco, novoId]
+            );
+
+            // Cria fisicamente a pasta e subpastas
+            try {
+                const fsp = require('fs/promises');
+                const p = require('path');
+                await fsp.mkdir(novoEndereco, { recursive: true });
+                const subdirs = ['DXF', 'PDF', 'DFT', 'PUNC', 'LASER', 'Projeto', 'PEÇAS DE ESTOQUE', 'LXDS'];
+                for (const sd of subdirs) {
+                    await fsp.mkdir(p.join(novoEndereco, sd), { recursive: true }).catch(() => {});
+                }
+            } catch (fsErr) {
+                console.error('[CriarOS] Falha ao criar pastas:', fsErr.message);
+            }
+        }
+
+        res.json({ success: true, message: 'OS cadastrada', id: novoId });
 
     } catch (error) {
         console.error('Error creating ordemservico:', error);
@@ -17552,6 +17583,9 @@ app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// Rota de relatórios de OS adicionada dinamicamente
+app.use('/api/ordemservico', tenantMiddleware, require('./routes/relatorioOs'));
+
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT} and listening on all interfaces(0.0.0.0)`);
     try {

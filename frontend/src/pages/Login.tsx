@@ -122,9 +122,22 @@ export default function LoginPage() {
  transition={{ delay: 0.1, duration: 0.4 }}
  className="w-full max-w-md mx-auto"
  >
- <div className="hidden lg:block mb-10">
+ <div className="hidden lg:block mb-8">
  <h2 className="text-3xl font-extrabold text-foreground tracking-tight">Acesse sua conta</h2>
  <p className="text-muted-foreground font-medium mt-2">Insira suas credenciais corporativas abaixo</p>
+ </div>
+
+ {/* Mensagem de Aviso Adicionada */}
+ <div className="mb-6 bg-blue-50/50 border border-blue-200 rounded-lg p-4 flex items-start gap-3 shadow-sm">
+ <div className="mt-0.5 text-blue-600">
+ <ShieldCheck size={20} />
+ </div>
+ <div>
+ <h3 className="font-bold text-sm text-blue-800">Aviso do Sistema</h3>
+ <p className="text-xs text-blue-700/90 mt-1 font-medium leading-relaxed">
+ Bem-vindo ao ambiente de produção SincoWeb. O acesso é restrito a usuários autorizados e monitorado para a sua segurança.
+ </p>
+ </div>
  </div>
 
  <form onSubmit={handleSubmit} className="space-y-6">

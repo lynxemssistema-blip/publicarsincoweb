@@ -33,7 +33,9 @@ const ALL_TAG_SECTORS = [
 const API_BASE = '/api';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || localStorage.getItem('sinco_token') || localStorage.getItem('jwt') || '';
+  let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+  if (token === 'null' || token === 'undefined') token = null;
+  
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -1034,11 +1036,12 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       title: `PRODUÇÃO POR SETOR/RECURSO (PROJETO #${p.IdProjeto} - ${p.Projeto})`,
       targetType: 'projeto',
       targetId: p.IdProjeto,
-      sectors: projectSectors
+      sectors: projectSectors,
+      isLiberado: p.Finalizado === 'C' || p.Finalizado === 'S'
     });
   };
 
-      const openTagSectorsModal = async (t: any) => {
+      const openTagSectorsModal = async (t: any, parentFinalizado: boolean = false) => {
     let items: any[] = [];
     try {
       const r = await (await fetch(`${API_BASE}/visao-geral/tag/${t.IdTag}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
@@ -1076,11 +1079,12 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       targetType: 'tag',
       targetId: t.IdTag,
       sectors: mergedSectors,
-      allTags: tags
+      allTags: tags,
+      isLiberado: t.Finalizado === 'C' || t.Finalizado === 'S' || parentFinalizado
     });
   };
 
-  const openOsSectorsModal = async (os: any) => {
+  const openOsSectorsModal = async (os: any, parentFinalizado: boolean = false) => {
     let items: any[] = [];
     try {
       const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
@@ -1117,11 +1121,12 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       title: `PRODUÇÃO POR SETOR/RECURSO (ORDEM DE SERVIÇO #${os.IdOrdemServico})`,
       targetType: 'os',
       targetId: os.IdOrdemServico,
-      sectors: mergedSectors
+      sectors: mergedSectors,
+      isLiberado: os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S' || parentFinalizado
     });
   };
 
-  const openBulkOsSectorsModal = async (t: any) => {
+  const openBulkOsSectorsModal = async (t: any, parentFinalizado: boolean = false) => {
     const osList = expandedTagsOs[t.IdTag] || [];
     if (osList.length === 0) {
       alert("Nenhuma Ordem de Serviço encontrada para esta Tag.");
@@ -1165,11 +1170,12 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       targetType: 'tag_os_bulk',
       targetId: t.IdTag,
       allOs: osList,
-      sectors: mergedSectors
+      sectors: mergedSectors,
+      isLiberado: t.Finalizado === 'C' || t.Finalizado === 'S' || parentFinalizado
     });
   };
 
-  const openItemSectorsModal = async (item: any) => {
+  const openItemSectorsModal = async (item: any, parentFinalizado: boolean = false) => {
     let freshItem = item;
     let mpData: any[] = [];
     try {
@@ -1211,7 +1217,7 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
       targetType: 'item',
       targetId: item.IdOrdemServicoItem,
       sectors: activeSectors,
-      isLiberado: item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S'
+      isLiberado: item.OrdemServicoItemFinalizado === 'C' || item.OrdemServicoItemFinalizado === 'S' || parentFinalizado
     });
   };
 
@@ -2101,11 +2107,9 @@ const salvarDatasBulkTags = async () => {
  <button type="button" onClick={(e) => { e.stopPropagation(); setSelProj(p); setMsg(null); setActionModal('temposProducaoProj'); setTemposProducaoSelId(''); setTemposProducaoValores({setup:0,padrao:0,total:0}); }} className="bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-blue-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Exibir Produção em Minutos">
  <Clock size={10} className="pointer-events-none" /> T.Prod
  </button>
- {!isFin && (
  <button type="button" onClick={(e) => { e.stopPropagation(); openProjectSectorsModal(p); }} className="bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white px-1.5 py-0.5 rounded transition-colors border border-emerald-200 shadow-sm flex items-center justify-center gap-1 text-[9px] font-bold uppercase" title="Produção por Setores">
- <Activity size={10} className="pointer-events-none" /> Prod. Recursos
- </button>
- )}
+                    <Activity size={10} /> Prod. Recursos
+                  </button>
  </div>
  </td>
  <td className="px-3 py-3 align-middle text-center border-r border-slate-100">
@@ -2542,25 +2546,23 @@ const salvarDatasBulkTags = async () => {
                     <CalendarDays size={11} /> Tarefa
                   </button>
                   <button type="button" 
-                    onClick={(e) => { e.stopPropagation(); setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
+                    onClick={(e) => { e.stopPropagation(); if (isProjFin || isTagFin) return; setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
                     className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Planejar Projetista e Engenharia"
                   >
                     <Edit3 size={11} /> Plan. Eng/Proj.
                   </button>
 
-                  {!isProjFin && (
-                    <button type="button" 
-                      onClick={(e) => { e.stopPropagation(); openTagSectorsModal(t); }}
-                      className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
-                      title="Produção por Setores (Tag)"
-                    >
-                      <Activity size={11} /> Prod. Recursos
-                    </button>
-                  )}
+                  <button type="button" 
+                    onClick={(e) => { e.stopPropagation(); openTagSectorsModal(t, isProjFin); }}
+                    className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
+                    title="Produção por Setores (Tag)"
+                  >
+                    <Activity size={11} /> Prod. Recursos
+                  </button>
 
                   <button type="button" 
-                    onClick={(e) => { e.stopPropagation(); setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
+                    onClick={(e) => { e.stopPropagation(); if (isProjFin || isTagFin) return; setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
                     className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Alterar Qtde Liberada"
                   >
@@ -2690,11 +2692,9 @@ const salvarDatasBulkTags = async () => {
                   <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
                     <List size={14} className="text-[#32423D]" /> Ordens de Serviço para a Tag {t.Tag}
                   </h4>
-                  {!isProjFin && (
-                    <button type="button" onClick={(e) => { e.stopPropagation(); openBulkOsSectorsModal(t); }} className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 transition-colors">
+                  <button type="button" onClick={(e) => { e.stopPropagation(); openBulkOsSectorsModal(t, isProjFin); }} className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-3 py-1 rounded text-[10px] font-bold flex items-center gap-1.5 transition-colors">
                       <Activity size={12} /> Prod. Recursos
                     </button>
-                  )}
                 </div>
                 <div className="overflow-x-auto rounded border border-slate-200">
                   <table className="w-full text-[10px] text-left whitespace-nowrap">
@@ -2876,19 +2876,17 @@ const salvarDatasBulkTags = async () => {
                                                   </span>
                                                 </td>
                                                 <td className="px-2 py-1.5 text-center w-28">
-                                                  {!isProjFin && (
-                                                    <button
-                                                      type="button"
-                                                      onClick={(e) => { 
-                                                        e.stopPropagation(); 
-                                                        openItemSectorsModal(item);
-                                                      }}
-                                                      className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
-                                                      title="Exibir Produção dos Setores / Recursos deste Item"
-                                                    >
-                                                      <Activity size={9} /> Prod. Recursos
-                                                    </button>
-                                                  )}
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => { 
+                                                      e.stopPropagation(); 
+                                                      openItemSectorsModal(item, isProjFin || tFin || isOsFin);
+                                                    }}
+                                                    className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
+                                                    title="Exibir Produção dos Setores / Recursos deste Item"
+                                                  >
+                                                    <Activity size={9} /> Prod. Recursos
+                                                  </button>
                                                 </td>
                                             </tr>
                                             {/* ══ ROW INDEPENDENTE: PRODUÇÃO DOS SETORES DO ITEM DA OS ══ */}

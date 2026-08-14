@@ -1563,6 +1563,10 @@ function OrdemServicoContent() {
     };
 
     const handleExcluirOS = async (os: OrdemServico) => {
+        if (os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') {
+            addToast({ type: 'error', title: 'Erro', message: 'Ordem de serviço finalizada não pode ser excluída.' });
+            return;
+        }
         const confirmDelete = window.confirm(`Deseja Excluir/Cancelar a Ordem de Serviço: ${os.IdOrdemServico}?`);
         if (!confirmDelete) return;
 
@@ -2291,8 +2295,8 @@ function OrdemServicoContent() {
                                         <div className="space-y-1 text-xs">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Status:</span>
-                                                <span className={`font-medium ${os.Liberado_Engenharia === 'S' ? 'text-green-600' : 'text-yellow-600'}`}>
-                                                    {os.Liberado_Engenharia === 'S' ? 'Liberado' : 'Pendente'}
+                                                <span className={`font-medium ${(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'text-blue-600' : os.Liberado_Engenharia === 'S' ? 'text-green-600' : 'text-yellow-600'}`}>
+                                                    {(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'Finalizada' : os.Liberado_Engenharia === 'S' ? 'Liberada' : 'Pendente'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
@@ -2891,32 +2895,56 @@ function OrdemServicoContent() {
                         </button>
                     )}
                     
-                    {os.EnderecoOrdemServico && (
-                        <button
-                            onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                    addToast({ type: 'info', title: 'Aguarde', message: 'Gerando Relatório Excel...' });
-                                    const res = await fetch(`/api/ordemservico/${os.IdOrdemServico}/excel`, { 
-                                        method: 'POST',
-                                        headers: { 'Authorization': `Bearer ${token}` }
-                                    });
-                                    const data = await res.json();
-                                    if (data.success) {
-                                        addToast({ type: 'success', title: 'Concluído', message: 'Excel gerado e pasta aberta!' });
-                                    } else {
-                                        throw new Error(data.message || 'Erro do servidor');
-                                    }
-                                } catch (err: any) {
-                                    addToast({ type: 'error', title: 'Falha', message: `Ao gerar Excel: ${err.message}` });
-                                }
-                            }}
-                            className="p-2 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
-                            title="Gerar Relatório Excel"
-                        >
-                            <FileSpreadsheet size={14} />
-                        </button>
-                    )}
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                                addToast({ type: 'info', title: 'Aguarde', message: 'Gerando Relatório PDF...' });
+                                const res = await fetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/pdf`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (!res.ok) throw new Error('Falha na autenticação ou servidor');
+                                const blob = await res.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                window.open(url, '_blank');
+                                addToast({ type: 'success', title: 'Concluído', message: 'PDF gerado com sucesso!' });
+                            } catch (err: any) {
+                                addToast({ type: 'error', title: 'Falha', message: `Ao gerar PDF: ${err.message}` });
+                            }
+                        }}
+                        className="p-2 rounded-lg text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors"
+                        title="Gerar Relatório PDF"
+                    >
+                        <FileText size={14} />
+                    </button>
+                    <button
+                        onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                                addToast({ type: 'info', title: 'Aguarde', message: 'Gerando Relatório Excel...' });
+                                const res = await fetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/excel`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                if (!res.ok) throw new Error('Falha na autenticação ou servidor');
+                                const blob = await res.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `OS_${os.IdOrdemServico}_Relatorio.xlsx`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                window.URL.revokeObjectURL(url);
+                                addToast({ type: 'success', title: 'Concluído', message: 'Excel gerado com sucesso!' });
+                            } catch (err: any) {
+                                addToast({ type: 'error', title: 'Falha', message: `Ao gerar Excel: ${err.message}` });
+                            }
+                        }}
+                        className="p-2 rounded-lg text-emerald-500 hover:text-emerald-700 hover:bg-emerald-50 transition-colors"
+                        title="Gerar Relatório Excel"
+                    >
+                        <FileSpreadsheet size={14} />
+                    </button>
                     </div>
                 </motion.div>
 
@@ -3645,6 +3673,8 @@ function OrdemServicoContent() {
                 {tempoModalOpen && tempoModalItem && (() => {
                     const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
                     const hasRecursos = Object.keys(recursoTemposEdit).length > 0;
+                    const parentOs = ordens.find(o => String(o.IdOrdemServico) === String(tempoModalItem.IdOrdemServico));
+                    const isFinalizado = tempoModalItem.OrdemServicoItemFinalizado === 'C' || tempoModalItem.OrdemServicoItemFinalizado === 'S' || parentOs?.OrdemServicoFinalizado === 'C' || parentOs?.OrdemServicoFinalizado === 'S';
 
                     // Calcular total geral para exibição
                     let totalGlobal = 0;
@@ -3718,8 +3748,8 @@ function OrdemServicoContent() {
                                                 <select
                                                     id="select-novo-recurso"
                                                     defaultValue=""
-                                                    disabled={processosFabricaSIM.length === 0}
-                                                    className="flex-1 px-2 py-1 border border-dashed border-blue-300 rounded text-[10px] text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                                                    disabled={processosFabricaSIM.length === 0 || isFinalizado}
+                                                    className={`flex-1 px-2 py-1 border border-dashed border-blue-300 rounded text-[10px] text-blue-700 bg-blue-50 focus:outline-none focus:border-blue-500 disabled:opacity-50 ${isFinalizado ? 'cursor-not-allowed' : ''}`}
                                                     onChange={e => {
                                                         const key = e.target.value;
                                                         if (!key) return;
@@ -3787,8 +3817,9 @@ function OrdemServicoContent() {
                                                 return (
                                                     <div
                                                         key={secKey}
-                                                        draggable
+                                                        draggable={!isFinalizado}
                                                         onDragStart={(e) => {
+                                                            if (isFinalizado) return;
                                                             setDraggedResource(secKey);
                                                             e.dataTransfer.effectAllowed = 'move';
                                                             e.dataTransfer.setData('text/plain', secKey);
@@ -3840,7 +3871,8 @@ function OrdemServicoContent() {
                                                                 ...prev,
                                                                 [secKey]: { ...prev[secKey], seq: e.target.value }
                                                             }))}
-                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            disabled={isFinalizado}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400 ${isFinalizado ? 'opacity-60 cursor-not-allowed' : ''}`}
                                                             placeholder="Seq"
                                                         />
                                                         {/* Setup */}
@@ -3851,7 +3883,8 @@ function OrdemServicoContent() {
                                                                 ...prev,
                                                                 [secKey]: { ...prev[secKey], setup: e.target.value }
                                                             }))}
-                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            disabled={isFinalizado}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400 ${isFinalizado ? 'opacity-60 cursor-not-allowed' : ''}`}
                                                             placeholder="0"
                                                         />
                                                         {/* Padrão */}
@@ -3862,7 +3895,8 @@ function OrdemServicoContent() {
                                                                 ...prev,
                                                                 [secKey]: { ...prev[secKey], padrao: e.target.value }
                                                             }))}
-                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400`}
+                                                            disabled={isFinalizado}
+                                                            className={`w-full px-1 py-0.5 border rounded text-center text-[10px] font-semibold outline-none focus:ring-1 ${bgColor}/60 border-gray-200 focus:border-blue-400 ${isFinalizado ? 'opacity-60 cursor-not-allowed' : ''}`}
                                                             placeholder="0"
                                                         />
                                                         {/* Total */}
@@ -3872,6 +3906,7 @@ function OrdemServicoContent() {
                                                         {/* Remover recurso — botão lixeira vermelho */}
                                                         <button
                                                             type="button"
+                                                            disabled={isFinalizado}
                                                             title={`Excluir recurso ${label} deste item`}
                                                             onClick={() => {
                                                                 if (!window.confirm(`Remover o recurso "${label}" deste item?`)) return;
@@ -3904,7 +3939,8 @@ function OrdemServicoContent() {
                                                     type="number" min="0" step="0.5"
                                                     value={tempoSetupEdit}
                                                     onChange={e => setTempoSetupEdit(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                    disabled={isFinalizado}
+                                                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none ${isFinalizado ? 'opacity-60 cursor-not-allowed bg-gray-100' : ''}`}
                                                     placeholder="0"
                                                 />
                                             </div>
@@ -3916,7 +3952,8 @@ function OrdemServicoContent() {
                                                     type="number" min="0" step="0.5"
                                                     value={tempoPadraoEdit}
                                                     onChange={e => setTempoPadraoEdit(e.target.value)}
-                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none"
+                                                    disabled={isFinalizado}
+                                                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-center font-black text-lg focus:border-blue-400 focus:ring-2 focus:ring-blue-100 outline-none ${isFinalizado ? 'opacity-60 cursor-not-allowed bg-gray-100' : ''}`}
                                                     placeholder="0"
                                                 />
                                             </div>
@@ -3945,7 +3982,7 @@ function OrdemServicoContent() {
                                     </button>
                                     <button
                                         onClick={handleSaveTempos}
-                                        disabled={tempoSaving}
+                                        disabled={tempoSaving || isFinalizado}
                                         className="flex-1 py-1 rounded-lg bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
                                     >
                                         {tempoSaving ? <Loader2 size={13} className="animate-spin" /> : <Clock size={13} />}

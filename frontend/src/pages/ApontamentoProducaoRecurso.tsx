@@ -14,9 +14,11 @@ import PlanejamentoProducaoPage from './PlanejamentoProducao';
 const API_BASE = '/api';
 
 const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('token');
-  if (token) return { 'Authorization': `Bearer ${token}` };
-  return {};
+  const token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token') || localStorage.getItem('token') || localStorage.getItem('jwt') || '';
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
 };
 
 interface ApontamentoItem {
@@ -2537,23 +2539,7 @@ useEffect(() => {
           )}
 
 
- {/* Histórico */}
- {itemDetails.historico.length > 0 && (
- <div>
- <div className="flex items-center gap-2 text-xs font-semibold text-[#32423D] mb-1">
- <History size={14} />
- Histórico de Apontamentos
- </div>
- <div className="max-h-24 overflow-y-auto space-y-1 custom-scrollbar">
- {itemDetails.historico.map((h) => (
- <div key={h.IdOrdemServicoItemControle} className="flex justify-between items-center text-xs bg-gray-50 px-2 py-1.5 rounded">
- <span className="font-medium">+{h.QtdeProduzida} un</span>
- <span className="text-gray-400">{h.CriadoPor} " {formatDate(h.DataCriacao)}</span>
- </div>
- ))}
- </div>
- </div>
- )}
+ {/* Histórico Removido Conforme Solicitado */}
  </div>
  ) : null}
  </div>

@@ -37,12 +37,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
  const addToast = useCallback(({ type, title, message, duration }: Omit<Toast, 'id'>) => {
  const id = Math.random().toString(36).substring(2, 9);
 
- // Increase default duration to 8000ms (at least 5s as requested)
- // If it's an error, we can set duration to 0 (stays until clicked) 
- // or just a very long time. Let's use 0 for errors and 8000 for others.
- const finalDuration = duration !== undefined ? duration : (type === 'error' ? 0 : 8000);
-
- const newToast = { id, type, title, message, duration: finalDuration };
+  // Update durations: default to 3s (3000ms) for everything
+  const finalDuration = duration !== undefined ? duration : 3000;
+  
+  const newToast = { id, type, title, message, duration: finalDuration };
 
  setToasts((state) => [...state, newToast]);
 

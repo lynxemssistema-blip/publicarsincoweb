@@ -17,11 +17,10 @@ interface SectorProductionModalProps {
 }
 
 const getAuthHeaders = (): Record<string, string> => {
+  let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+  if (token === 'null' || token === 'undefined') token = null;
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  const token = localStorage.getItem('token') || localStorage.getItem('sincoweb_token');
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const tenant = localStorage.getItem('tenant_domain') || localStorage.getItem('sincoweb_tenant');
   if (tenant) {
     headers['x-tenant-domain'] = tenant;
@@ -786,18 +785,23 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-white">
                   {sectors.map((s, idx) => {
+                    const execVal = parseFloat(String(s.totalExecutado ?? s.exec ?? 0));
+                    const totVal = parseFloat(String(s.qtdeTotal ?? s.itemQty ?? 0));
+                    const isRowDisabled = modalData.isLiberado || (execVal > 0 && execVal >= totVal);
                     return (
                       <tr 
                         key={s.key || idx} 
-                        draggable={activeDragIndex === idx}
-                        onClick={() => handleRowClick(idx)}
-                        onDragStart={(e) => handleDragStart(e, idx)}
-                        onDragOver={handleDragOver}
+                        draggable={!isRowDisabled}
+                        onClick={() => { if(!isRowDisabled) handleRowClick(idx); }}
+                        onDragStart={(e) => { if(!isRowDisabled) handleDragStart(e, idx); }}
+                        onDragOver={(e) => { if(!isRowDisabled) handleDragOver(e); }}
                         onDrop={(e) => {
-                          handleDrop(e, idx);
-                          setActiveDragIndex(null);
+                          if(!isRowDisabled) {
+                            handleDrop(e, idx);
+                            setActiveDragIndex(null);
+                          }
                         }}
-                        className={`transition-all cursor-pointer ${
+                        className={`transition-all cursor-pointer ${isRowDisabled ? 'opacity-50 bg-slate-50 grayscale-[20%]' : ''} ${
                           activeDragIndex === idx || draggedIndex === idx
                             ? 'bg-amber-50/80 border-2 border-dashed border-amber-500 shadow-md ring-1 ring-amber-400'
                             : 'hover:bg-slate-50/90 border-b border-slate-100'
@@ -809,7 +813,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                             <div className="flex flex-col gap-0.5 shrink-0">
                               <button
                                 type="button"
-                                disabled={idx === 0}
+                                disabled={idx === 0 || isRowDisabled}
                                 onClick={(e) => { e.stopPropagation(); moveSector(idx, -1); }}
                                 className="p-0.5 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
                                 title="Mover para Cima"
@@ -818,7 +822,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                               </button>
                               <button
                                 type="button"
-                                disabled={idx === sectors.length - 1}
+                                disabled={idx === sectors.length - 1 || isRowDisabled}
                                 onClick={(e) => { e.stopPropagation(); moveSector(idx, 1); }}
                                 className="p-0.5 rounded text-slate-400 hover:text-slate-900 hover:bg-slate-200 disabled:opacity-20 disabled:hover:bg-transparent transition-colors"
                                 title="Mover para Baixo"
@@ -871,9 +875,10 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                               type="number"
                               min="1"
                               value={s.dias || 1}
+                              disabled={isRowDisabled}
                               onClick={(e) => e.stopPropagation()}
                               onChange={(e) => handleDiasChange(idx, parseInt(e.target.value, 10) || 1)}
-                              className="w-16 px-2 py-1 text-center font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] text-xs"
+                              className={`w-16 px-2 py-1 text-center font-bold text-slate-900 bg-slate-50 border border-slate-300 rounded focus:bg-white focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] text-xs ${isRowDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                             />
                             <span className="text-[10px] text-slate-500 font-bold">dias</span>
                           </div>
@@ -883,26 +888,26 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                         <td className="px-2 py-1.5 text-center border-r border-slate-100">
                           <div className="flex items-center justify-center gap-1.5">
                             {/* DATA INÍCIO */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { if (isRowDisabled) return; const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
                               <input
                                 type="date"
                                 placeholder="Início"
                                 value={toIsoInput(s.pi) || ''}
-                                disabled={modalData.isLiberado}
+                                disabled={isRowDisabled}
                                 onChange={(e) => handlePiChange(idx, toBrDisplay(e.target.value))}
-                                className="w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer"
+                                className={`w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer ${isRowDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                               />
                             </div>
 
                             <span className="text-slate-400 font-bold text-xs shrink-0">→</span>
 
                             {/* DATA FIM */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
+                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { if (isRowDisabled) return; const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
                               <input
                                 type="date"
                                 placeholder="Fim"
                                 value={toIsoInput(s.pf) || ''}
-                                disabled={modalData.isLiberado}
+                                disabled={isRowDisabled}
                                 onChange={(e) => {
                                   const newPfBr = toBrDisplay(e.target.value);
                                   const list = sectors.map(sec => ({ ...sec }));
@@ -920,7 +925,7 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                                     setSectors(list);
                                   }
                                 }}
-                                className="w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer"
+                                className={`w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer ${isRowDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
                               />
                             </div>
                           </div>

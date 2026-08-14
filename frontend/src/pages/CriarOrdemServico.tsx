@@ -31,7 +31,7 @@ export default function CriarOrdemServicoPage() {
     Descricao: '',
     IdEmpresa: '',
     DescEmpresa: '',
-    EnderecoOrdemServico: '',
+    EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço',
     DataPrevisao: '',
     ProdutoPadrao: '',
     CodDesenhoProduto: '',
@@ -214,7 +214,7 @@ export default function CriarOrdemServicoPage() {
           setMessage({ type: 'success', text: 'Ordem de Serviço criada com sucesso!' });
           setFormData({
             IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
-            IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: '', DataPrevisao: '',
+            IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço', DataPrevisao: '',
             ProdutoPadrao: '', CodDesenhoProduto: '', DescricaoProduto: '', ProdutoCriadoPor: '',
             DataCriacaoProduto: '', Fator: '1', TipoLiberacaoOrdemServico: 'Total'
           });
@@ -235,7 +235,7 @@ export default function CriarOrdemServicoPage() {
     setMessage({ type: 'success', text: `Ordem de Serviço ${newOsId} criada e itens incluídos com sucesso!` });
     setFormData({
       IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
-      IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: '', DataPrevisao: '',
+      IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço', DataPrevisao: '',
       ProdutoPadrao: '', CodDesenhoProduto: '', DescricaoProduto: '', ProdutoCriadoPor: '',
       DataCriacaoProduto: '', Fator: '1', TipoLiberacaoOrdemServico: 'Total'
     });
@@ -303,7 +303,7 @@ export default function CriarOrdemServicoPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">Endereço da Ordem de Serviço</label>
-              <input type="text" name="EnderecoOrdemServico" value={formData.EnderecoOrdemServico} onChange={handleInputChange} className={inputClass} />
+              <input type="text" name="EnderecoOrdemServico" value={formData.EnderecoOrdemServico} onChange={handleInputChange} className={`${inputClass} bg-gray-100 cursor-not-allowed text-gray-500`} readOnly />
             </div>
             <div className="flex gap-4">
               <div className="flex-1">

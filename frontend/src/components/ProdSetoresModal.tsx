@@ -4,15 +4,12 @@ import { format } from 'date-fns';
 import axios from 'axios';
 
 const getAuthHeaders = () => {
-  const token = localStorage.getItem('token') || localStorage.getItem('sinco_token') || localStorage.getItem('jwt') || '';
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
+  let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+  if (token === 'null' || token === 'undefined') token = null;
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
   const tenant = localStorage.getItem('tenant_domain') || localStorage.getItem('sincoweb_tenant');
-  if (tenant) {
-    headers['x-tenant-domain'] = tenant;
-  }
+  if (tenant) headers['x-tenant-domain'] = tenant;
   return headers;
 };
 
