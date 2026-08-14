@@ -136,6 +136,54 @@ const execute = async (sql, params, retries = 1) => {
         await new Promise(r => setTimeout(r, 250));
         return execute(sql, params, retries - 1);
     }
+
+    // --- Auto-Healing Interceptor (Missing Columns) ---
+    if (retries > 0 && err.code === 'ER_BAD_FIELD_ERROR') {
+      const match = err.sqlMessage.match(/Unknown column '([^']+)'/i);
+      if (match) {
+        let colName = match[1];
+        if (colName.includes('.')) colName = colName.split('.').pop(); // e.g. 't.TagJaExcluida' -> 'TagJaExcluida'
+        
+        console.log(`[DB-AUTO-SYNC] Unknown column detected: ${colName}. Searching in master DB (lynxlocal)...`);
+        try {
+          const [colDefs] = await executeOnDefault(
+            `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT 
+             FROM INFORMATION_SCHEMA.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(COLUMN_NAME) = LOWER(?)`, [colName]
+          );
+
+          if (colDefs.length > 0) {
+            // Found in master DB. Match table from query
+            let targetTableDef = colDefs.find(def => new RegExp(`\\b${def.TABLE_NAME}\\b`, 'i').test(cleanSql));
+            if (!targetTableDef && colDefs.length === 1) targetTableDef = colDefs[0];
+            
+            if (targetTableDef) {
+              console.log(`[DB-AUTO-SYNC] Found ${colName} in master table ${targetTableDef.TABLE_NAME}. Adding to tenant...`);
+              const isNull = targetTableDef.IS_NULLABLE === 'YES' ? 'NULL' : 'NOT NULL';
+              const defVal = targetTableDef.COLUMN_DEFAULT !== null ? `DEFAULT '${targetTableDef.COLUMN_DEFAULT}'` : '';
+              await pool.execute(`ALTER TABLE \`${targetTableDef.TABLE_NAME}\` ADD COLUMN \`${colName}\` ${targetTableDef.COLUMN_TYPE} ${isNull} ${defVal}`);
+              console.log(`[DB-AUTO-SYNC] Added ${colName} successfully. Retrying query...`);
+              return await execute(sql, params, 1); // Reset retries to handle multiple missing columns
+            }
+          } else {
+            console.log(`[DB-AUTO-SYNC] Column ${colName} NOT found in master DB either. Replacing with NULL in query...`);
+            // Replace literal column occurrences with NULL to ignore it safely
+            const exactColMatch = match[1]; // e.g. "t.TagJaExcluida"
+            const escapedMatch = exactColMatch.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+            const newSql = sql.replace(new RegExp(`\\b${escapedMatch}\\b`, 'gi'), 'NULL');
+            
+            if (newSql !== sql) {
+               console.log(`[DB-AUTO-SYNC] Query rewritten to ignore ${exactColMatch}. Retrying...`);
+               return await execute(newSql, params, 1); // Reset retries to handle multiple missing columns
+            }
+          }
+        } catch (syncErr) {
+          console.error(`[DB-AUTO-SYNC] Auto-sync failed: ${syncErr.message}`);
+        }
+      }
+    }
+    // --- End Auto-Healing ---
+
     console.error(`[DB] 🔴 ERROR: ${err.message}`);
     console.error(err);
     throw err;
