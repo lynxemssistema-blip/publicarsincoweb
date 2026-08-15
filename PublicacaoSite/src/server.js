@@ -18393,7 +18393,7 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
 });
 
 // Catch-all route for SPA React (Added to the very end)
-app.get('*', (req, res, next) => {
+app.get(/.*/, (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/fotosfuncionarios/')) {
         return next();
     }
