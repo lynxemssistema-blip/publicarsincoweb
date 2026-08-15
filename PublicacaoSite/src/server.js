@@ -17321,7 +17321,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
 
 
 // Static: landing page assets (root)
-app.use(express.static(path.join(__dirname, '../')));
+// Removed vulnerable static file serving: app.use(express.static(path.join(__dirname, '../')));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 // Rota dinâmica para fotos de funcionários (CNH) baseada no tenant
 app.get('/fotosfuncionarios/:filename', tenantMiddleware, async (req, res) => {
@@ -17348,7 +17348,8 @@ app.get('/fotosfuncionarios/:filename', tenantMiddleware, async (req, res) => {
 app.use('/css', express.static(path.join(__dirname, '../public/css')));
 app.use('/img', express.static(path.join(__dirname, '../public/img')));
 // Static: React app assets (assets/, etc.)
-app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
+app.use(express.static(path.join(__dirname, '../public')));
 
 // Root = landing page (HTML puro, sem Node.js)
 app.get('/', (req, res) => {
@@ -18388,5 +18389,20 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     } catch (error) {
         console.error('Error deleting material arquivo:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir arquivo' });
+    }
+});
+
+// Catch-all route for SPA React (Added to the very end)
+app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/fotosfuncionarios/')) {
+        return next();
+    }
+    const devPath = require('path').join(__dirname, '../frontend/dist/index.html');
+    const prodPath = require('path').join(__dirname, '../public/index.html');
+    const fs = require('fs');
+    if (fs.existsSync(devPath)) {
+        res.sendFile(devPath);
+    } else {
+        res.sendFile(prodPath);
     }
 });
