@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldAlert, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 export interface OrdemServicoItem {
  IdOrdemServicoItem: number;

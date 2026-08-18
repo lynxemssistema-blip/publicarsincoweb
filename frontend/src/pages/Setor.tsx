@@ -5,7 +5,7 @@ import {
  Loader2, RefreshCw, Briefcase, Filter
 } from 'lucide-react';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Setor {
  idSetor?: number;

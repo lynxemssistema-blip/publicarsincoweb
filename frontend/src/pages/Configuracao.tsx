@@ -8,7 +8,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { defaultMenuItems } from '../utils/constants';
 import { getMergedMenu } from '../utils/menuUtils';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Padrão de PermitirRealizadoSemPlanejamento depende do banco ativo
 const getDefaultPermitirRealizado = (): string => {

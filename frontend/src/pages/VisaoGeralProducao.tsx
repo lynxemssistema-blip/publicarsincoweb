@@ -30,7 +30,7 @@ const ALL_TAG_SECTORS = [
   { key: 'Montagem', label: 'Montagem', flagField: 'TxtMontagem', piField: 'PlanejadoInicioMontagem', pfField: 'PlanejadoFinalMontagem' },
 ];
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const getAuthHeaders = () => {
   let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');

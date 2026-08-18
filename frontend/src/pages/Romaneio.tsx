@@ -11,7 +11,7 @@ import { formatToBRDate } from '../utils/dateUtils';
 import PendenciaRomaneioPage from './PendenciaRomaneio';
 
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface PessoaJuridica {
  IdPessoa: number;

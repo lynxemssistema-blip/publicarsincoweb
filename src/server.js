@@ -152,7 +152,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, tenant-id');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -5383,7 +5383,7 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             return res.status(400).json({ success: false, message: 'Projeto e Usuário são obrigatà³rios.' });
         }
 
-        const dataLocal = new Date().toLocaleDateString('pt-BR');
+        const dataLocal = getCurrentDateTimeBR();
         const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
@@ -5406,10 +5406,11 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
-                    DataFinalizado = ?, 
+                    DataFinalizado = ?,
+                    DataFinalizacao = ?, 
                     UsuarioFinalizado = ? 
                 WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
-            `, [dataLocal, usuario, idProjeto]);
+            `, [dataLocal, dataLocal, usuario, idProjeto]);
         } else {
             if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag à© obrigatà³rio para finalizar apenas uma.' });
             
@@ -5432,10 +5433,11 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
-                    DataFinalizado = ?, 
+                    DataFinalizado = ?,
+                    DataFinalizacao = ?, 
                     UsuarioFinalizado = ? 
                 WHERE IdTag = ?
-            `, [dataLocal, usuario, idTag]);
+            `, [dataLocal, dataLocal, usuario, idTag]);
         }
 
         res.json({ success: true, message: finalizarTodas ? 'Todas as tags e OS pendentes foram finalizadas.' : 'Tag e suas respectivas OS finalizadas com sucesso.' });
@@ -6394,10 +6396,10 @@ app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req,
             `UPDATE tags SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [userFinal, now, id]
         );
-        // ordemservico: DataFinalizacao (diferente!)
+        // ordemservico: DataFinalizado e DataFinalizacao
         await req.tenantDbPool.execute(
-            `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
-            [userFinal, now, id]
+            `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
+            [userFinal, now, now, id]
         );
         // ordemservicoitem: DataFinalizado
         await req.tenantDbPool.execute(
@@ -10565,22 +10567,26 @@ WHERE osi.IdOrdemServicoItem = ?
         // Buscar hist�rico de apontamentos
         const historicoQuery = `
             SELECT
-                idordemservicoitemControle,
-                CriadoPor,
-                DataCriacao,
-                Codmatfabricante,
-                QtdeTotal,
-                QtdeProduzida,
-                QtdeFaltante,
-                txtCorte,
-                txtDobra,
-                txtSolda,
-                txtPintura,
-                txtMontagem
-            FROM viewordemservicoitemcontrole
-            WHERE IdOrdemServicoItem = ?
-            ORDER BY DataCriacao DESC, idordemservicoitemControle DESC
+                v.idordemservicoitemControle,
+                v.CriadoPor,
+                v.DataCriacao,
+                v.Codmatfabricante,
+                v.QtdeTotal,
+                v.QtdeProduzida,
+                v.QtdeFaltante,
+                v.txtCorte,
+                v.txtDobra,
+                v.txtSolda,
+                v.txtPintura,
+                v.txtMontagem,
+                c.Processo
+            FROM viewordemservicoitemcontrole v
+            LEFT JOIN ordemservicoitemcontrole c ON v.idordemservicoitemControle = c.IdOrdemServicoItemControle
+            WHERE v.IdOrdemServicoItem = ?
+            ORDER BY v.DataCriacao DESC, v.idordemservicoitemControle DESC
         `
+
+        const [historicoRows] = await req.tenantDbPool.execute(historicoQuery, [id]);
 
         // Legacy missing quantity logic
         const totalExecutado = parseFloat(item.TotalExecutado) || 0;
@@ -10630,10 +10636,14 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
                 i.EnderecoArquivo,
                 i.EnderecoArquivoItemOrdemServico,
                 os.Projeto,
-                os.Tag
+                os.Tag,
+                os.Estatus as StatusOS,
+                os.OrdemServicoFinalizado as OSFinalizado,
+                p.Finalizado as StatusProjeto
             FROM ordemservicoitemcontrole c
             INNER JOIN ordemservicoitem i ON c.IdOrdemServicoItem = i.IdOrdemServicoItem
             INNER JOIN ordemservico os ON c.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN projetos p ON os.Projeto = p.Projeto
             WHERE c.TipoApontamento = 'Parcial'
               AND c.QtdeProduzida < c.QtdeTotal
               AND (c.D_E_L_E_T_E IS NULL OR c.D_E_L_E_T_E = '')
@@ -17637,9 +17647,9 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
             whereClause += " AND STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataPrevisaoInicio, dataPrevisaoFim);
         }
-        // DataFinal (usaremos DataTermino)
+        // DataFinal (usaremos DataFinalizado)
         if (dataFinalInicio && dataFinalFim) {
-            whereClause += " AND STR_TO_DATE(p.DataTermino, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
+            whereClause += " AND STR_TO_DATE(SUBSTRING(p.DataFinalizado, 1, 10), '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataFinalInicio, dataFinalFim);
         }
 
@@ -17689,11 +17699,12 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
                 p.Projeto, 
                 p.Observacao,
                 p.DataPrevisao,
-                p.DataTermino as DataFinal,
+                SUBSTRING(p.DataFinalizado, 1, 10) as DataFinal,
                 p.DescEmpresa as Cliente,
                 p.Estado as EstadoOrigem,
                 p.StatusProj as StatusProj,
                 p.liberado as liberado,
+                p.Finalizado as Finalizado,
                 COUNT(t.IdTag) as TotalTags,
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '') THEN 1 ELSE 0 END) as FaltaMedicao,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,

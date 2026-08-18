@@ -120,6 +120,9 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 os.Projeto,
                 os.Tag,
                 os.NomeCliente AS Cliente,
+                os.Estatus AS StatusOS,
+                os.OrdemServicoFinalizado AS OSFinalizado,
+                p.Finalizado AS StatusProjeto,
                 (
                     SELECT GROUP_CONCAT(CONCAT(mp2.SequenciaExecucao, 'º: ', COALESCE(pf.processofabricacao, '')) ORDER BY COALESCE(mp2.SequenciaExecucao, 999) SEPARATOR ' | ')
                     FROM material_processo mp2
@@ -130,6 +133,7 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             FROM material_processo mp
             JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
             ORDER BY osi.IdOrdemServico DESC, osi.IdOrdemServicoItem ASC
             LIMIT ? OFFSET ?

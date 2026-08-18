@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Loader2, Search, XCircle, Trash2, Box, FileText, X, Target } from 'lucide-react';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface ReposicaoItem {
  IdOrdemServicoItem: number;

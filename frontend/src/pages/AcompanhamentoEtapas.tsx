@@ -67,8 +67,9 @@ interface EtapasRow {
  DataFinal: string;
  Cliente: string;
  EstadoOrigem: string;
- StatusProj: string;
+ StatusProj: string | null;
  liberado: string | null;
+ Finalizado: string | null;
  TotalTags: number;
  FaltaMedicao: number;
  OkMedicao: number;
@@ -601,7 +602,7 @@ export default function AcompanhamentoEtapas() {
  ))}
  </tr>
  </thead>
- <tbody className="text-xs text-gray-700">
+<tbody className="text-xs text-gray-700">
  {data.length === 0 ? (
  <tr>
  <td colSpan={18} className="p-8 text-center text-gray-500">Nenhum projeto encontrado.</td>
@@ -609,7 +610,9 @@ export default function AcompanhamentoEtapas() {
  ) : (
  data.map(row => {
  const showDates = viewDatesRow === row.IdProjeto;
+ const isFinalizado = row.Finalizado?.toUpperCase() === 'C';
  const isLiberado = row.liberado?.toUpperCase() === 'S';
+ const isBloqueado = row.liberado?.toUpperCase() === 'B';
  // Desabilitar botão calendario se não há nenhuma data
  const hasDates = !!(row.PlanMedicao || row.RealMedicao ||
  row.PlanIsometrico || row.RealIsometrico ||
@@ -633,7 +636,15 @@ export default function AcompanhamentoEtapas() {
  />
  </td>
  <td className="p-2 border-r border-gray-200 text-center">
- {isLiberado ? (
+ {isFinalizado ? (
+ <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-100 border border-blue-500 text-blue-800 text-[10px] font-bold">
+ ✔ Concluído
+ </span>
+ ) : isBloqueado ? (
+ <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-100 border border-red-500 text-red-800 text-[10px] font-bold">
+ ✖ Bloqueado
+ </span>
+ ) : isLiberado ? (
  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-100 border border-emerald-500 text-emerald-800 text-[10px] font-bold">
  ✔ Liberado
  </span>
@@ -698,14 +709,14 @@ export default function AcompanhamentoEtapas() {
  <Calendar size={14} />
  </button>
  <button 
- onClick={() => row.TotalTags > 0 && openEditModal(row)} 
- disabled={row.TotalTags === 0}
+ onClick={() => row.TotalTags > 0 && !isFinalizado && openEditModal(row)} 
+ disabled={row.TotalTags === 0 || isFinalizado}
  className={`p-1 rounded transition-colors ${
- row.TotalTags === 0
+ row.TotalTags === 0 || isFinalizado
  ? 'bg-gray-50 text-gray-300 cursor-not-allowed'
  : 'text-[#03624C] hover:text-[#024a3a] bg-teal-50 hover:bg-teal-100'
  }`} 
- title={row.TotalTags === 0 ? 'Sem tags cadastradas' : 'Editar Datas Lote'}
+ title={isFinalizado ? 'Projeto Concluído' : row.TotalTags === 0 ? 'Sem tags cadastradas' : 'Editar Datas Lote'}
  >
  <Edit3 size={14} />
  </button>

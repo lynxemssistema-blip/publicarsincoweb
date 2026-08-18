@@ -16,7 +16,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Swal from 'sweetalert2';
 import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface OrdemServico {
     IdOrdemServico: number;

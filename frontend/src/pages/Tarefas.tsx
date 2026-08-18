@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Loader2, ListTodo, CheckCircle, Edit3, Loader, Plus, Save, FileSpreadsheet, ChevronUp, ChevronDown, X } from 'lucide-react';
 import * as XLSX from 'xlsx-js-style';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const SECTORS = [
  { k: 'Corte', c: 'bg-indigo-500' },

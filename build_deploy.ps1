@@ -16,9 +16,10 @@ Remove-Item -Path "PublicacaoSite\assets" -Recurse -Force -ErrorAction SilentlyC
 
 # 3. Copiar Frontend
 Write-Host "Copiando build do Frontend..."
-Copy-Item -Path "frontend\dist\*" -Destination "PublicacaoSite" -Recurse -Force
-Copy-Item -Path "public\landing.html" -Destination "PublicacaoSite" -Force -ErrorAction SilentlyContinue
-Copy-Item -Path "login_inicial.html" -Destination "PublicacaoSite" -Force -ErrorAction SilentlyContinue
+New-Item -Path "PublicacaoSite\public" -ItemType Directory -Force | Out-Null
+Copy-Item -Path "frontend\dist\*" -Destination "PublicacaoSite\public" -Recurse -Force
+Copy-Item -Path "public\landing.html" -Destination "PublicacaoSite\public" -Force -ErrorAction SilentlyContinue
+Copy-Item -Path "login_inicial.html" -Destination "PublicacaoSite\public" -Force -ErrorAction SilentlyContinue
 
 # 4. Copiar Backend
 Write-Host "Copiando arquivos do Backend..."

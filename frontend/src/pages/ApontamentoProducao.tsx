@@ -11,7 +11,7 @@ import { Lock } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import PlanejamentoProducaoPage from './PlanejamentoProducao';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface ApontamentoItem {
  IdOrdemServicoItem: number;
@@ -50,6 +50,9 @@ interface ApontamentoItem {
  PinturaTotalExecutado?: number;
  MontagemTotalExecutado?: number;
  TotalExecutar?: number;
+ StatusOS?: string;
+ OSFinalizado?: string;
+ StatusProjeto?: string;
 }
 
 interface HistoricoItem {
@@ -1602,6 +1605,7 @@ export default function ApontamentoProducaoPage() {
  const qtdeTotal = Number(item.QtdeTotal) || 0;
  const percentual = qtdeTotal > 0 ? Math.round((qtdeProduzida / qtdeTotal) * 100) : 0;
  const concluido = percentual >= 100;
+ const isConcluidoGlobal = item.StatusOS === 'Concluído' || item.StatusOS === 'CONCLUIDO' || item.OSFinalizado === 'S' || item.OSFinalizado === 'C' || item.StatusProjeto === 'S' || item.StatusProjeto === 'Concluído' || item.StatusProjeto === 'C';
 
  return (
  <div
@@ -1660,20 +1664,21 @@ export default function ApontamentoProducaoPage() {
  <div className="w-16 shrink-0 flex justify-center">
  {(() => {
  const { allowed, predecessor } = checkPredecessorStatus(item, setorAtivo as Setor);
- return concluido ? (
- <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200">
+ const bloqueado = isConcluidoGlobal || !allowed;
+ return isConcluidoGlobal || concluido ? (
+ <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200" title={isConcluidoGlobal ? "OS Concluída" : ""}>
  <CheckCircle size={10} />
  OK
  </div>
  ) : (
  <button
- disabled={!allowed}
+ disabled={bloqueado}
  onClick={(e) => {
  e.stopPropagation();
- openModal(item, setorAtivo as Record<string, unknown>);
+ if (!bloqueado) openModal(item, setorAtivo as Record<string, unknown>);
  }}
  className={`w-full flex items-center justify-center gap-0.5 px-1 py-1 rounded text-[10px] font-bold transition-all shadow-sm ${
- !allowed 
+ bloqueado 
  ? 'bg-gray-100 text-gray-400 cursor-not-allowed border border-gray-200' 
  : `${setorInfo.color} text-white hover:opacity-90 active:scale-95`
  }`}
@@ -1762,48 +1767,53 @@ export default function ApontamentoProducaoPage() {
  </div>
 
  <div className="flex gap-0.5 border-l border-gray-200 pl-1">
- <button
- onClick={(e) => {
- e.stopPropagation();
- setSelectedItem(item);
- setQtdeReposicao('');
- setMotivoReposicao('');
- setReposicaoModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
- title="Reposição"
- >
- <RefreshCw size={12} />
- </button>
- <button
- onClick={(e) => {
- e.stopPropagation();
- setIdRncEdicao(null);
- setSelectedItem(item);
- setDescricaoPendencia('');
- setTituloRnc(item.DescResumo || '');
- setSubTituloRnc(item.DescDetal || '');
- setTipoRnc('RNC');
- setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
- setEspessuraRnc(item.Espessura || '');
- setMaterialSWRnc(item.MaterialSW || '');
- setChkCorteRnc(item.txtCorte === '1');
- setChkDobraRnc(item.txtDobra === '1');
- setChkSoldaRnc(item.txtSolda === '1');
- setChkPinturaRnc(item.txtPintura === '1');
- setChkMontagemRnc(item.TxtMontagem === '1');
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setSelectedItem(item);
+  setQtdeReposicao('');
+  setMotivoReposicao('');
+  setReposicaoModalOpen(true);
+  }}
+  className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
+  title="Reposição"
+  >
+  <RefreshCw size={12} />
+  </button>
+ )}
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setIdRncEdicao(null);
+  setSelectedItem(item);
+  setDescricaoPendencia('');
+  setTituloRnc(item.DescResumo || '');
+  setSubTituloRnc(item.DescDetal || '');
+  setTipoRnc('RNC');
+  setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
+  setEspessuraRnc(item.Espessura || '');
+  setMaterialSWRnc(item.MaterialSW || '');
+  setChkCorteRnc(item.txtCorte === '1');
+  setChkDobraRnc(item.txtDobra === '1');
+  setChkSoldaRnc(item.txtSolda === '1');
+  setChkPinturaRnc(item.txtPintura === '1');
+  setChkMontagemRnc(item.TxtMontagem === '1');
 
- setLoadingPendencias(true);
- fetchHistoricoRNC(item.CodMatFabricante || '');
+  setLoadingPendencias(true);
+  fetchHistoricoRNC(item.CodMatFabricante || '');
 
- setPendenciaModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
- title="Pendência"
- >
- <AlertTriangle size={12} />
- </button>
+  setPendenciaModalOpen(true);
+  }}
+  className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
+  title="Pendência"
+  >
+  <AlertTriangle size={12} />
+  </button>
+ )}
  </div>
+
 
  <button
  onClick={(e) => {

@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Copy, X, Loader2 } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface OrdemServico {
  IdOrdemServico: number;

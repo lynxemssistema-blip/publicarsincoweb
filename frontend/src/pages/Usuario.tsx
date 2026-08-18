@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Users, Search, Plus, Edit2, Trash2, Key, Shield, User, X, Check, Loader2 } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Usuario {
  idUsuario?: number;

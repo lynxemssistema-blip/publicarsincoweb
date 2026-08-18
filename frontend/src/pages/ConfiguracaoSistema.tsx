@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, Search, Plus, Edit2, Trash2, X, Check, Loader2, Filter, FileText, Folder, Settings2, Tag } from 'lucide-react';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface ConfiguracaoSistema {
  id?: number;

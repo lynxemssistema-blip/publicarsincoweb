@@ -4,7 +4,7 @@ import { Save, Plus, Loader2, PackagePlus } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Option {
   id: string | number;

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+// React Router DOM hook imports removed to avoid conflict with custom router
 import { useAlert } from '../../contexts/AlertContext';
 
 interface PlanilhaInfo {
@@ -24,7 +24,7 @@ interface BlockSetData {
 }
 
 const BlockSet: React.FC = () => {
- const [searchParams] = useSearchParams();
+ const searchParams = new URLSearchParams(window.location.search);
  const idPlanilha = searchParams.get('id');
  const { showAlert } = useAlert();
  const [planilha, setPlanilha] = useState<PlanilhaInfo | null>(null);

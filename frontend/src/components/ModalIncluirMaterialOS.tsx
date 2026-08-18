@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench, Trash2 } from 'lucide-react';
 import ModalMontagemProcessoFabricacao from './ModalMontagemProcessoFabricacao';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Material {
   CodMatFabricante: string;

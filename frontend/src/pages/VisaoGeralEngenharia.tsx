@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { Search, Loader, Edit3, Save, X, CalendarDays, Maximize2, Minimize2, ChevronDown, ChevronRight, Flag, Filter } from 'lucide-react';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 // Helper: monta headers com Authorization JWT
 const getAuthHeaders = (extraHeaders?: Record<string, string>): HeadersInit => {

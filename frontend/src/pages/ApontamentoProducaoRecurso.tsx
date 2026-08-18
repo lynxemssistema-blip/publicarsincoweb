@@ -11,7 +11,7 @@ import { Lock } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import PlanejamentoProducaoPage from './PlanejamentoProducao';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 const getAuthHeaders = (): HeadersInit => {
   const token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token') || localStorage.getItem('token') || localStorage.getItem('jwt') || '';
@@ -58,6 +58,9 @@ interface ApontamentoItem {
  PinturaTotalExecutado?: number;
  MontagemTotalExecutado?: number;
  TotalExecutar?: number;
+ StatusOS?: string;
+ OSFinalizado?: string;
+ StatusProjeto?: string;
 }
 
 interface HistoricoItem {
@@ -1187,7 +1190,7 @@ useEffect(() => {
     >
         {recursosList.map((r, idx) => {
             const val = r.processofabricacao.toLowerCase().replace(/\s+/g, '');
-            return <option key={idx} value={val}>{r.IdProcessoFabricacao ? `${r.IdProcessoFabricacao} - ${r.processofabricacao}` : r.processofabricacao}</option>;
+            return <option key={idx} value={val}>{r.processofabricacao}</option>;
         })}
     </select>
   </div>
@@ -1541,6 +1544,8 @@ useEffect(() => {
  const passaPintura = item.txtPintura === '1';
  const passaMontagem = item.TxtMontagem === '1';
 
+ const isConcluidoGlobal = item.StatusOS === 'Concluído' || item.StatusOS === 'CONCLUIDO' || item.OSFinalizado === 'S' || item.OSFinalizado === 'C' || item.StatusProjeto === 'S' || item.StatusProjeto === 'Concluído' || item.StatusProjeto === 'C';
+
  const getStatusCell = (passa: boolean, total: number | undefined, target: number) => {
  if (!passa) return { bg: 'bg-gray-100', text: '-', color: 'text-gray-400', pct: 0 };
  const qty = total || 0;
@@ -1619,8 +1624,8 @@ useEffect(() => {
   (!passaMontagem || montagemStatus.pct >= 100);
   const semSaldoMapa = (Number(item.QtdeTotal) || 0) <= 0;
 
-  return allDone ? (
-  <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200">
+  return isConcluidoGlobal || allDone ? (
+  <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200" title={isConcluidoGlobal ? "OS Concluída" : ""}>
   <CheckCircle size={10} />
   OK
   </div>
@@ -1648,8 +1653,8 @@ useEffect(() => {
  {visibleSetores.includes('corte') && (
  <button
  onClick={(e) => { e.stopPropagation(); setSetorAtivo('corte'); openModal(item, 'corte'); }}
- disabled={corteStatus.pct >= 100 || item.txtCorte !== '1'}
- className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${corteStatus.bg} ${corteStatus.color}`}
+ disabled={isConcluidoGlobal || corteStatus.pct >= 100 || item.txtCorte !== '1'}
+ className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${corteStatus.bg} ${corteStatus.color} ${isConcluidoGlobal ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
  >
  {corteStatus.text}
  </button>
@@ -1657,8 +1662,8 @@ useEffect(() => {
  {visibleSetores.includes('dobra') && (
  <button
  onClick={(e) => { e.stopPropagation(); setSetorAtivo('dobra'); openModal(item, 'dobra'); }}
- disabled={dobraStatus.pct >= 100 || item.txtDobra !== '1'}
- className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${dobraStatus.bg} ${dobraStatus.color}`}
+ disabled={isConcluidoGlobal || dobraStatus.pct >= 100 || item.txtDobra !== '1'}
+ className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${dobraStatus.bg} ${dobraStatus.color} ${isConcluidoGlobal ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
  >
  {dobraStatus.text}
  </button>
@@ -1666,8 +1671,8 @@ useEffect(() => {
  {visibleSetores.includes('solda') && (
  <button
  onClick={(e) => { e.stopPropagation(); setSetorAtivo('solda'); openModal(item, 'solda'); }}
- disabled={soldaStatus.pct >= 100 || item.txtSolda !== '1'}
- className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${soldaStatus.bg} ${soldaStatus.color}`}
+ disabled={isConcluidoGlobal || soldaStatus.pct >= 100 || item.txtSolda !== '1'}
+ className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${soldaStatus.bg} ${soldaStatus.color} ${isConcluidoGlobal ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
  >
  {soldaStatus.text}
  </button>
@@ -1675,8 +1680,8 @@ useEffect(() => {
  {visibleSetores.includes('pintura') && (
  <button
  onClick={(e) => { e.stopPropagation(); setSetorAtivo('pintura'); openModal(item, 'pintura'); }}
- disabled={pinturaStatus.pct >= 100 || item.txtPintura !== '1'}
- className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${pinturaStatus.bg} ${pinturaStatus.color}`}
+ disabled={isConcluidoGlobal || pinturaStatus.pct >= 100 || item.txtPintura !== '1'}
+ className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${pinturaStatus.bg} ${pinturaStatus.color} ${isConcluidoGlobal ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
  >
  {pinturaStatus.text}
  </button>
@@ -1684,8 +1689,8 @@ useEffect(() => {
  {visibleSetores.includes('montagem') && (
  <button
  onClick={(e) => { e.stopPropagation(); setSetorAtivo('montagem'); openModal(item, 'montagem'); }}
- disabled={montagemStatus.pct >= 100 || item.TxtMontagem !== '1'}
- className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${montagemStatus.bg} ${montagemStatus.color}`}
+ disabled={isConcluidoGlobal || montagemStatus.pct >= 100 || item.TxtMontagem !== '1'}
+ className={`w-14 shrink-0 text-center text-[9px] font-black py-0.5 rounded transition-transform hover:scale-105 active:scale-95 disabled:hover:scale-100 ${montagemStatus.bg} ${montagemStatus.color} ${isConcluidoGlobal ? 'opacity-50 cursor-not-allowed hover:scale-100' : ''}`}
  >
  {montagemStatus.text}
  </button>
@@ -1722,66 +1727,72 @@ useEffect(() => {
 
  <div className="flex gap-0.5 border-l border-gray-200 pl-1">
  {/* Apontamento Parcial */}
- <button
- onClick={(e) => {
- e.stopPropagation();
- if ((Number(item.QtdeTotal) || 0) <= 0) return;
-  setParcialItem(item);
-  setParcialRecurso(setorAtivo);
-  setQtdeParcial('');
-  setParcialModalOpen(true);
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  if ((Number(item.QtdeTotal) || 0) <= 0) return;
+   setParcialItem(item);
+   setParcialRecurso(setorAtivo);
+   setQtdeParcial('');
+   setParcialModalOpen(true);
+   }}
+   disabled={(Number(item.QtdeTotal) || 0) <= 0}
+  className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
+  (Number(item.QtdeTotal) || 0) <= 0
+  ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
+  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
+  }`}
+  title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
+  >
+  <Zap size={12} />
+  </button>
+ )}
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setSelectedItem(item);
+  setQtdeReposicao('');
+  setMotivoReposicao('');
+  setReposicaoModalOpen(true);
   }}
-  disabled={(Number(item.QtdeTotal) || 0) <= 0}
- className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
- (Number(item.QtdeTotal) || 0) <= 0
- ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
- : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
- }`}
- title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
- >
- <Zap size={12} />
- </button>
- <button
- onClick={(e) => {
- e.stopPropagation();
- setSelectedItem(item);
- setQtdeReposicao('');
- setMotivoReposicao('');
- setReposicaoModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
- title="Reposição"
- >
- <RefreshCw size={12} />
- </button>
- <button
- onClick={(e) => {
- e.stopPropagation();
- setIdRncEdicao(null);
- setSelectedItem(item);
- setDescricaoPendencia('');
- setTituloRnc(item.DescResumo || '');
- setSubTituloRnc(item.DescDetal || '');
- setTipoRnc('RNC');
- setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
- setEspessuraRnc(item.Espessura || '');
- setMaterialSWRnc(item.MaterialSW || '');
- setChkCorteRnc(item.txtCorte === '1');
- setChkDobraRnc(item.txtDobra === '1');
- setChkSoldaRnc(item.txtSolda === '1');
- setChkPinturaRnc(item.txtPintura === '1');
- setChkMontagemRnc(item.TxtMontagem === '1');
+  className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
+  title="Reposição"
+  >
+  <RefreshCw size={12} />
+  </button>
+ )}
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setIdRncEdicao(null);
+  setSelectedItem(item);
+  setDescricaoPendencia('');
+  setTituloRnc(item.DescResumo || '');
+  setSubTituloRnc(item.DescDetal || '');
+  setTipoRnc('RNC');
+  setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
+  setEspessuraRnc(item.Espessura || '');
+  setMaterialSWRnc(item.MaterialSW || '');
+  setChkCorteRnc(item.txtCorte === '1');
+  setChkDobraRnc(item.txtDobra === '1');
+  setChkSoldaRnc(item.txtSolda === '1');
+  setChkPinturaRnc(item.txtPintura === '1');
+  setChkMontagemRnc(item.TxtMontagem === '1');
 
- setLoadingPendencias(true);
- fetchHistoricoRNC(item.CodMatFabricante || '');
+  setLoadingPendencias(true);
+  fetchHistoricoRNC(item.CodMatFabricante || '');
 
- setPendenciaModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
- title="Pendência"
- >
- <AlertTriangle size={12} />
- </button>
+  setPendenciaModalOpen(true);
+  }}
+  className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
+  title="Pendência"
+  >
+  <AlertTriangle size={12} />
+  </button>
+ )}
  </div>
  </div>
  </div>
@@ -1809,6 +1820,8 @@ useEffect(() => {
  const concluido = qtdeAlvoSetor > 0 && qtdeProduzida >= qtdeAlvoSetor;
  // We still need the global item qtdeTotal for the checkPredecessorStatus logic
  const qtdeTotal = Number(item.QtdeTotal) || 0;
+
+ const isConcluidoGlobal = item.StatusOS === 'Concluído' || item.StatusOS === 'CONCLUIDO' || item.OSFinalizado === 'S' || item.OSFinalizado === 'C' || item.StatusProjeto === 'S' || item.StatusProjeto === 'Concluído' || item.StatusProjeto === 'C';
 
  return (
  <div
@@ -1868,9 +1881,9 @@ useEffect(() => {
  {(() => {
  const { allowed, predecessor } = checkPredecessorStatus(item, setorAtivo as Setor);
   const semSaldo = qtdeAlvoSetor <= 0;
-  const bloqueado = semSaldo;
- return concluido ? (
- <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200">
+  const bloqueado = isConcluidoGlobal || semSaldo;
+ return isConcluidoGlobal || concluido ? (
+ <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200" title={isConcluidoGlobal ? "OS Concluída" : ""}>
  <CheckCircle size={10} />
  OK
  </div>
@@ -1955,66 +1968,72 @@ useEffect(() => {
 
  <div className="flex gap-0.5 border-l border-gray-200 pl-1">
  {/* Apontamento Parcial */}
- <button
- onClick={(e) => {
- e.stopPropagation();
- if ((Number(item.QtdeTotal) || 0) <= 0) return;
-  setParcialItem(item);
-  setParcialRecurso(setorAtivo);
-  setQtdeParcial('');
-  setParcialModalOpen(true);
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  if ((Number(item.QtdeTotal) || 0) <= 0) return;
+   setParcialItem(item);
+   setParcialRecurso(setorAtivo);
+   setQtdeParcial('');
+   setParcialModalOpen(true);
+   }}
+  disabled={(Number(item.QtdeTotal) || 0) <= 0}
+  className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
+  (Number(item.QtdeTotal) || 0) <= 0
+  ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
+  : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
+  }`}
+  title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
+  >
+  <Zap size={12} />
+  </button>
+ )}
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setSelectedItem(item);
+  setQtdeReposicao('');
+  setMotivoReposicao('');
+  setReposicaoModalOpen(true);
   }}
- disabled={(Number(item.QtdeTotal) || 0) <= 0}
- className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
- (Number(item.QtdeTotal) || 0) <= 0
- ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
- : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
- }`}
- title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
- >
- <Zap size={12} />
- </button>
- <button
- onClick={(e) => {
- e.stopPropagation();
- setSelectedItem(item);
- setQtdeReposicao('');
- setMotivoReposicao('');
- setReposicaoModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
- title="Reposição"
- >
- <RefreshCw size={12} />
- </button>
- <button
- onClick={(e) => {
- e.stopPropagation();
- setIdRncEdicao(null);
- setSelectedItem(item);
- setDescricaoPendencia('');
- setTituloRnc(item.DescResumo || '');
- setSubTituloRnc(item.DescDetal || '');
- setTipoRnc('RNC');
- setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
- setEspessuraRnc(item.Espessura || '');
- setMaterialSWRnc(item.MaterialSW || '');
- setChkCorteRnc(item.txtCorte === '1');
- setChkDobraRnc(item.txtDobra === '1');
- setChkSoldaRnc(item.txtSolda === '1');
- setChkPinturaRnc(item.txtPintura === '1');
- setChkMontagemRnc(item.TxtMontagem === '1');
+  className="flex items-center justify-center w-6 h-6 bg-amber-50 text-amber-600 rounded hover:bg-amber-100 transition-colors border border-amber-200"
+  title="Reposição"
+  >
+  <RefreshCw size={12} />
+  </button>
+ )}
+ {!isConcluidoGlobal && (
+  <button
+  onClick={(e) => {
+  e.stopPropagation();
+  setIdRncEdicao(null);
+  setSelectedItem(item);
+  setDescricaoPendencia('');
+  setTituloRnc(item.DescResumo || '');
+  setSubTituloRnc(item.DescDetal || '');
+  setTipoRnc('RNC');
+  setDataExecucaoRnc(new Date().toISOString().split('T')[0]);
+  setEspessuraRnc(item.Espessura || '');
+  setMaterialSWRnc(item.MaterialSW || '');
+  setChkCorteRnc(item.txtCorte === '1');
+  setChkDobraRnc(item.txtDobra === '1');
+  setChkSoldaRnc(item.txtSolda === '1');
+  setChkPinturaRnc(item.txtPintura === '1');
+  setChkMontagemRnc(item.TxtMontagem === '1');
 
- setLoadingPendencias(true);
- fetchHistoricoRNC(item.CodMatFabricante || '');
+  setLoadingPendencias(true);
+  fetchHistoricoRNC(item.CodMatFabricante || '');
 
- setPendenciaModalOpen(true);
- }}
- className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
- title="Pendência"
- >
- <AlertTriangle size={12} />
- </button>
+  setPendenciaModalOpen(true);
+  }}
+  className="flex items-center justify-center w-6 h-6 bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors border border-red-200"
+  title="Pendência"
+  >
+  <AlertTriangle size={12} />
+  </button>
+ )}
  </div>
 
  <button
@@ -2605,17 +2624,35 @@ useEffect(() => {
  </thead>
  <tbody className="divide-y divide-gray-100">
  {(() => {
- const historico = [...itemDetails.historico].reverse();
+ let historico = [...itemDetails.historico].reverse();
+ 
+ if (setorAtivo !== 'mapa' && setorAtivo !== 'mapaproducao' && setorAtivo !== 'planejamento') {
+     historico = historico.filter(h => {
+         const processo = h.Processo || h.RecursoOrigem || '';
+         const sectorDisplayLower = processo.toLowerCase().replace(/\s+/g, '');
+         if (sectorDisplayLower === setorAtivo) return true;
+         
+         if (setorAtivo === 'corte' && Number(h.txtCorte) > 0) return true;
+         if (setorAtivo === 'dobra' && Number(h.txtDobra) > 0) return true;
+         if (setorAtivo === 'solda' && Number(h.txtSolda) > 0) return true;
+         if (setorAtivo === 'pintura' && Number(h.txtPintura) > 0) return true;
+         if (setorAtivo === 'montagem' && Number(h.txtMontagem) > 0) return true;
+         
+         return false;
+     });
+ }
+
  const faltantePorSetor: Record<string, number> = {};
  
  const processed = historico.map((h) => {
  let sectorDisplay = '-';
- if (h.txtCorte && Number(h.txtCorte) > 0) sectorDisplay = 'Corte';
+ if (h.Processo && h.Processo !== '-') sectorDisplay = h.Processo;
+ else if (h.txtCorte && Number(h.txtCorte) > 0) sectorDisplay = 'Corte';
  else if (h.txtDobra && Number(h.txtDobra) > 0) sectorDisplay = 'Dobra';
  else if (h.txtSolda && Number(h.txtSolda) > 0) sectorDisplay = 'Solda';
  else if (h.txtPintura && Number(h.txtPintura) > 0) sectorDisplay = 'Pintura';
  else if (h.txtMontagem && Number(h.txtMontagem) > 0) sectorDisplay = 'Montagem';
- else if (h.Processo) sectorDisplay = h.Processo;
+ else if (h.RecursoOrigem && h.RecursoOrigem !== '-') sectorDisplay = h.RecursoOrigem;
 
  const key = sectorDisplay.toLowerCase();
  if (faltantePorSetor[key] === undefined) {

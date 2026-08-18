@@ -3,7 +3,7 @@ import { Trash2, AlertTriangle, Loader2, Search, X, Box, FileText, Layers, FileC
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface ParcialItem {
  IdOrdemServicoItemControle: number;
@@ -20,6 +20,9 @@ interface ParcialItem {
  EnderecoArquivoItemOrdemServico?: string;
  Projeto: string;
  Tag: string;
+ StatusOS?: string;
+ OSFinalizado?: string;
+ StatusProjeto?: string;
 }
 
 export default function ApontamentosParciaisPage() {
@@ -304,22 +307,26 @@ export default function ApontamentosParciaisPage() {
  
  <div className="w-px h-5 bg-gray-200 mx-1"></div>
  
- {(user?.role === 'admin' || user?.isSuperadmin) ? (
- <button 
- onClick={() => handleDelete(item.IdOrdemServicoItemControle)}
- disabled={deletandoId === item.IdOrdemServicoItemControle}
- className="p-1.5 text-red-500 hover:bg-red-50 text-[10px] uppercase font-bold hover:text-red-700 rounded transition-colors border border-transparent hover:border-red-200"
- title="Estornar Apontamento"
- >
- {deletandoId === item.IdOrdemServicoItemControle ? (
- <Loader2 size={14} className="animate-spin" />
- ) : (
- <Trash2 size={14} />
- )}
- </button>
- ) : (
- <span className="text-gray-300 text-[10px] uppercase block px-1">—</span>
- )}
+ {(() => {
+   const isConcluidoGlobal = item.StatusOS === 'Concluído' || item.StatusOS === 'CONCLUIDO' || item.OSFinalizado === 'S' || item.OSFinalizado === 'C' || item.StatusProjeto === 'S' || item.StatusProjeto === 'Concluído' || item.StatusProjeto === 'C';
+   if (isConcluidoGlobal) return <span className="text-gray-300 text-[10px] uppercase block px-1" title="OS Concluída">—</span>;
+   return (user?.role === 'admin' || user?.isSuperadmin) ? (
+     <button 
+     onClick={() => handleDelete(item.IdOrdemServicoItemControle)}
+     disabled={deletandoId === item.IdOrdemServicoItemControle}
+     className="p-1.5 text-red-500 hover:bg-red-50 text-[10px] uppercase font-bold hover:text-red-700 rounded transition-colors border border-transparent hover:border-red-200"
+     title="Estornar Apontamento"
+     >
+     {deletandoId === item.IdOrdemServicoItemControle ? (
+     <Loader2 size={14} className="animate-spin" />
+     ) : (
+     <Trash2 size={14} />
+     )}
+     </button>
+   ) : (
+     <span className="text-gray-300 text-[10px] uppercase block px-1">—</span>
+   );
+ })()}
  </div>
  </td>
  </tr>

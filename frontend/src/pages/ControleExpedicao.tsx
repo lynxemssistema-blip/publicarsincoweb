@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { Loader2, X, ChevronDown, ChevronUp, PackageCheck, Box, FileText, FileCode2, RefreshCw, ArrowLeft } from 'lucide-react';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface ControleExpItem {
  IdProjeto: number;

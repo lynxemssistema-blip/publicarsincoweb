@@ -13,7 +13,7 @@ import { formatToBRDate, isDateInPast } from '../utils/dateUtils';
 import Swal from 'sweetalert2';
 
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Projeto {
  IdProjeto?: number;
@@ -85,6 +85,8 @@ interface Projeto {
  ValorEmbalagem?: string;
  TotalFinal?: string;
  ObservacaoFinal?: string;
+ Finalizado?: string;
+ DataFinalizado?: string;
 }
 
 interface Tag {
@@ -1144,20 +1146,22 @@ export default function ProjetoPage() {
  <>
  <span className="font-semibold text-emerald-600">Finalizado</span>
  {projeto.DataFinalizado && (
- <span className="text-gray-500">{formatToBRDate(projeto.DataFinalizado)}</span>
+ <span className="text-gray-500">{formatToBRDate(projeto.DataFinalizado.substring(0, 10))}</span>
  )}
  </>
+ ) : projeto.liberado === 'S' ? (
+ <span className="text-emerald-600 font-medium">Liberado</span>
+ ) : projeto.liberado === 'B' ? (
+ <span className="text-red-500 font-medium">Bloqueado</span>
  ) : (
- <span className="text-gray-400">Não Finalizado</span>
+ <span className="text-amber-500 font-medium">Pendente</span>
  )}
  </div>
 
  {/* Status */}
- <span className={`hidden sm:inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full w-[72px] shrink-0 justify-center ${getStatusColor(projeto.StatusProj)}`}>
- {getStatusLabel(projeto.StatusProj, projeto.DescStatus)}
+ <span className={`hidden sm:inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full w-[72px] shrink-0 justify-center ${getStatusColor(projeto.Finalizado === 'C' ? 'FN' : projeto.StatusProj)}`}>
+ {getStatusLabel(projeto.Finalizado === 'C' ? 'FN' : projeto.StatusProj, projeto.DescStatus)}
  </span>
-
-
 
  {/* Actions */}
  <div className="flex items-center justify-end w-[280px] shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>

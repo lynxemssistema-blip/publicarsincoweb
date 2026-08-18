@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { X, Loader2, RefreshCw, Eye, ChevronDown, ChevronUp, XCircle } from 'lucide-react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface PendenciaGlobal {
  IdOrdemServicoItemPendencia: string;

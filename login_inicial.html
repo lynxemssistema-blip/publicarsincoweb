@@ -221,8 +221,8 @@
                 password: passwordInput.value.trim()
             };
 
-            // URL DA API (APONTANDO PARA O SEU VPS) 
-            const API_URL = 'http://85.31.60.68:5000/api/login'; 
+            // URL DA API (Caminho relativo para suportar qualquer host)
+            const API_URL = '/api/login'; 
 
             try {
                 const response = await fetch(API_URL, {
@@ -237,7 +237,11 @@
                     const data = await response.json();
                     // Salva os dados localmente como o frontend em React faz
                     localStorage.setItem('user', JSON.stringify(data.user || data));
-                    if(data.token) localStorage.setItem('token', data.token);
+                    localStorage.setItem('sinco_user', JSON.stringify(data.user || data));
+                    if(data.token) {
+                        localStorage.setItem('token', data.token);
+                        localStorage.setItem('sinco_token', data.token);
+                    }
                     
                     // Sucesso visual
                     btnSpinner.style.display = 'none';

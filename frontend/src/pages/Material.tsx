@@ -5,7 +5,7 @@ import {
  Loader2, RefreshCw, Camera, Image as ImageIcon, Link as LinkIcon, Globe, FileText, Download
 } from 'lucide-react';
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
 interface Material {
  IdMaterial?: number;
