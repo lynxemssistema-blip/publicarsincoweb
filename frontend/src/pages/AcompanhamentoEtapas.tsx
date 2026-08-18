@@ -84,12 +84,12 @@ interface EtapasRow {
  FaltaExpedicao: number;
  OkExpedicao: number;
  Observacao?: string;
- PlanMedicao?: string; RealMedicao?: string;
- PlanIsometrico?: string; RealIsometrico?: string;
- PlanEngenharia?: string; RealEngenharia?: string;
- PlanAprovacao?: string; RealAprovacao?: string;
- PlanAcabamento?: string; RealAcabamento?: string;
- PlanExpedicao?: string; RealExpedicao?: string;
+ PlanMedicao?: string; PlanFinalMedicao?: string; RealMedicao?: string;
+ PlanIsometrico?: string; PlanFinalIsometrico?: string; RealIsometrico?: string;
+ PlanEngenharia?: string; PlanFinalEngenharia?: string; RealEngenharia?: string;
+ PlanAprovacao?: string; PlanFinalAprovacao?: string; RealAprovacao?: string;
+ PlanAcabamento?: string; PlanFinalAcabamento?: string; RealAcabamento?: string;
+ PlanExpedicao?: string; PlanFinalExpedicao?: string; RealExpedicao?: string;
 }
 
 export default function AcompanhamentoEtapas() {
@@ -235,12 +235,12 @@ export default function AcompanhamentoEtapas() {
  // Aqui estamos apenas inicializando vazio para que o usuário insira as novas datas que irão sobrepor em lote
 
  setEditForm({
- PlanejadoInicioMedicao: toISO(row.PlanMedicao), PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: toISO(row.RealMedicao),
- PlanejadoInicioIsometrico: toISO(row.PlanIsometrico), PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: toISO(row.RealIsometrico),
- PlanejadoInicioEngenharia: toISO(row.PlanEngenharia), PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: toISO(row.RealEngenharia),
- PlanejadoInicioAprovacao: toISO(row.PlanAprovacao), PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: toISO(row.RealAprovacao),
- PlanejadoInicioAcabamento: toISO(row.PlanAcabamento), PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: toISO(row.RealAcabamento),
- PlanejadoInicioExpedicao: toISO(row.PlanExpedicao), PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: toISO(row.RealExpedicao)
+ PlanejadoInicioMedicao: toISO(row.PlanMedicao), PlanejadoFinalMedicao: toISO(row.PlanFinalMedicao), RealizadoInicioMedicao: '', RealizadoFinalMedicao: toISO(row.RealMedicao),
+ PlanejadoInicioIsometrico: toISO(row.PlanIsometrico), PlanejadoFinalIsometrico: toISO(row.PlanFinalIsometrico), RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: toISO(row.RealIsometrico),
+ PlanejadoInicioEngenharia: toISO(row.PlanEngenharia), PlanejadoFinalEngenharia: toISO(row.PlanFinalEngenharia), RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: toISO(row.RealEngenharia),
+ PlanejadoInicioAprovacao: toISO(row.PlanAprovacao), PlanejadoFinalAprovacao: toISO(row.PlanFinalAprovacao), RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: toISO(row.RealAprovacao),
+ PlanejadoInicioAcabamento: toISO(row.PlanAcabamento), PlanejadoFinalAcabamento: toISO(row.PlanFinalAcabamento), RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: toISO(row.RealAcabamento),
+ PlanejadoInicioExpedicao: toISO(row.PlanExpedicao), PlanejadoFinalExpedicao: toISO(row.PlanFinalExpedicao), RealizadoInicioExpedicao: '', realizadoFinalExpedicao: toISO(row.RealExpedicao)
  });
  setIsModalOpen(true);
  setModoIndividual(false);
@@ -986,6 +986,18 @@ export default function AcompanhamentoEtapas() {
  <div className="flex flex-col">
  <span className="text-xs font-semibold text-gray-800 leading-tight">{tag.Tag}</span>
  <span className="text-[10px] text-gray-500 truncate max-w-[180px]" title={tag.DescTag}>{tag.DescTag}</span>
+ <div className="flex gap-2 mt-0.5">
+   {tag.DataEntrada && (
+     <span className="text-[9px] text-blue-600 font-medium" title="Data de Entrada">
+       Ent: {fmtBR(tag.DataEntrada)}
+     </span>
+   )}
+   {tag.DataPrevisao && (
+     <span className="text-[9px] text-orange-600 font-medium" title="Data de Previsão">
+       Prev: {fmtBR(tag.DataPrevisao)}
+     </span>
+   )}
+ </div>
  </div>
  </label>
  ))

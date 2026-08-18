@@ -1258,7 +1258,7 @@ function OrdemServicoContent() {
     const getStatusText = (os: OrdemServico) => {
         if (os.OrdemServicoFinalizado === 'C') return 'Finalizado';
         if (os.Liberado_Engenharia === 'S') return 'Em Andamento';
-        return 'Aguardando Liberação';
+        return 'Aguard. Lib.';
     };
 
     const getStatusBadge = (os: OrdemServico) => {
@@ -2393,7 +2393,7 @@ function OrdemServicoContent() {
 
                                     {/* Skeleton Table Header */}
                                     <div className="flex items-center gap-2 pl-6 py-2 text-[10px] font-medium text-gray-300 uppercase border-b border-gray-100">
-                                        <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                        <div className="flex gap-1 shrink-0" style={{ width: '18.5rem' }}>
                                             <span className="w-8 text-center">PDF</span>
                                             <span className="w-8 text-center">DXF</span>
                                             <span className="w-8 text-center">3D</span>
@@ -2415,7 +2415,7 @@ function OrdemServicoContent() {
                                     {[1, 2, 3, 4, 5].map((i) => (
                                         <div key={i} className="flex items-center gap-2 pl-6 py-3 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
                                             {/* Media Icon Skeletons */}
-                                            <div className="flex gap-1 shrink-0" style={{ width: '13.5rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '18.5rem' }}>
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
@@ -2472,7 +2472,7 @@ function OrdemServicoContent() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 pl-6 py-1 text-[10px] font-medium text-gray-400 uppercase">
-                                            <div className="flex gap-1 shrink-0" style={{ width: '16rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '21rem' }}>
                                                 <span className="w-8 text-center" title="PDF do Item">PDF</span>
                                                 <span className="w-8 text-center">DXF</span>
                                                 <span className="w-8 text-center">3D</span>
@@ -2480,6 +2480,8 @@ function OrdemServicoContent() {
                                                 <span className="w-8 text-center" title="Conjunto Principal">★</span>
                                                 <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Recursos"><Layers size={12} className="inline" /></span>
+                                                <span className="w-8 text-center" title="Pendências"><ShieldAlert size={12} className="inline" /></span>
+                                                <span className="w-8 text-center" title="Excluir"><Trash2 size={12} className="inline" /></span>
                                             </div>
                                             <span className="w-32 shrink-0">Código Desenho</span>
                                             <span className="flex-1 min-w-0">Descrição</span>
@@ -2487,9 +2489,6 @@ function OrdemServicoContent() {
                                             <span className="w-12 shrink-0 text-center">Qtde</span>
                                             <span className="w-14 shrink-0 text-center">Peso</span>
                                             {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
-                                             {/* Spacers p/ alinhar botões RNC e Excluir */}
-                                             <span className="w-8 shrink-0 ml-auto"></span>
-                                             <span className="w-8 shrink-0 mr-2"></span>
                                         </div>
 
                                         {itens.map((item) => {
@@ -2514,7 +2513,7 @@ function OrdemServicoContent() {
                                                             : 'hover:bg-gray-50'
                                                 } ${!osLiberada ? 'cursor-pointer' : ''}`}
                                               >
-                                                <div className="flex gap-1 shrink-0" style={{ width: '16rem' }}>
+                                                <div className="flex gap-1 shrink-0" style={{ width: '21rem' }}>
                                                     {item.EnderecoArquivo ? (
                                                         <button
                                                             onClick={(e) => handleOpenFile(e, item.EnderecoArquivo || '', 'pdf')}
@@ -2646,6 +2645,27 @@ function OrdemServicoContent() {
                                                             <Layers size={14} />
                                                         </div>
                                                     )}
+
+                                                    {/* Botão Gerar Pendência (RNC) - movido do final da linha */}
+                                                    <button
+                                                        onClick={(e) => handleGerarRnc(e, item, os.IdOrdemServico)}
+                                                        className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors"
+                                                        title="Gerar Pendência (RNC)"
+                                                    >
+                                                        <ShieldAlert size={14} />
+                                                    </button>
+
+                                                    {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
+                                                        <button
+                                                            onClick={(e) => handleDeleteItem(e, item, os.IdOrdemServico)}
+                                                            className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
+                                                            title="Excluir Linha Selecionada"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    ) : (
+                                                        <div className="w-8 h-8 shrink-0" />
+                                                    )}
                                                 </div>
 
                                                 <span
@@ -2715,28 +2735,7 @@ function OrdemServicoContent() {
                                                     );
                                                 })}
                                                 
-                                                {/* Botão Gerar Pendência (RNC) - sempre visível */}
-                                                <button
-                                                    onClick={(e) => handleGerarRnc(e, item, os.IdOrdemServico)}
-                                                    className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors ml-auto"
-                                                    title="Gerar Pendência (RNC)"
-                                                >
-                                                    <ShieldAlert size={14} />
-                                                </button>
-
-
-
-                                                {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
-                                                    <button
-                                                        onClick={(e) => handleDeleteItem(e, item, os.IdOrdemServico)}
-                                                        className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-red-50 text-red-500 hover:bg-red-500 hover:text-white transition-colors mr-2"
-                                                        title="Excluir Linha Selecionada"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                ) : (
-                                                    <div className="w-8 h-8 shrink-0 mr-2" />
-                                                )}
+                                                {/* Botões removidos e movidos para o início da linha */}
                                               </div>
                                               
                                               {/* Sub-grid de Recursos */}
@@ -2792,7 +2791,7 @@ function OrdemServicoContent() {
                     className={`flex items-center gap-3 px-2 py-1 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-accent/5' : ''}`}
                     onClick={() => toggleOS(os.IdOrdemServico)}
                 >
-                    <div className="w-6 h-6 flex items-center justify-center text-gray-400">
+                    <div className="w-6 h-6 flex items-center justify-center shrink-0 text-gray-400">
                         {isLoadingItens ? (
                             <Loader2 size={14} className="animate-spin" />
                         ) : isExpanded ? (
@@ -2815,7 +2814,7 @@ function OrdemServicoContent() {
 
                     
                     {/* Data de Previsão */}
-                    <div className="hidden sm:flex flex-col items-center justify-center w-24 min-w-0" title="Data de Previsão">
+                    <div className="hidden sm:flex flex-col items-center justify-center w-24 shrink-0 min-w-0" title="Data de Previsão">
                         {os.DataPrevisao ? (
                             <span className="flex items-center gap-1 text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded font-bold border border-orange-100 shadow-sm">
                                 <Calendar size={10} />
@@ -2827,23 +2826,23 @@ function OrdemServicoContent() {
                     </div>
 
                     {/* Descrição da OS */}
-                    <div className="hidden lg:flex flex-col justify-center w-44 min-w-0" title={os.Descricao || ''}>
+                    <div className="hidden lg:flex flex-col justify-center w-44 shrink-0 min-w-0" title={os.Descricao || ''}>
                         <span className="text-xs text-gray-700 truncate">{os.Descricao || '-'}</span>
                     </div>
 
                     {/* Empresa */}
-                    <div className="hidden xl:flex flex-col justify-center w-36 min-w-0" title={os.DescEmpresa || ''}>
+                    <div className="hidden xl:flex flex-col justify-center w-36 shrink-0 min-w-0" title={os.DescEmpresa || ''}>
                         <span className="text-xs text-gray-700 truncate">{os.DescEmpresa || '-'}</span>
                     </div>
 
-                    <div className="hidden md:flex flex-col items-center text-center w-16">
+                    <div className="hidden md:flex flex-col items-center text-center w-16 shrink-0">
                         <span className="text-xs font-medium text-gray-900">
                             {Number(os.QtdeItensExecutadosCalc ?? os.QtdeItensExecutados) || 0}/{Number(os.QtdeTotalItensCalc ?? os.QtdeTotalItens) || 0}
                         </span>
                         <span className="text-[10px] text-gray-400">Itens</span>
                     </div>
 
-                    <div className="hidden md:flex flex-col items-center w-20">
+                    <div className="hidden md:flex flex-col items-center w-20 shrink-0">
                         <span className="text-xs font-medium text-gray-900">{Number(os.PercentualItensCalc ?? os.PercentualItens) || 0}%</span>
                         <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mt-0.5">
                             <div
@@ -2853,9 +2852,11 @@ function OrdemServicoContent() {
                         </div>
                     </div>
 
-                    <span className={`hidden sm:inline-flex px-2 py-1 text-xs font-medium rounded-full ${getStatusBadge(os)}`}>
-                        {getStatusText(os)}
-                    </span>
+                    <div className="hidden sm:flex justify-center w-24 min-w-0 shrink-0">
+                        <span className={`inline-flex px-2 py-1 text-[10px] font-bold rounded-full border shadow-sm ${getStatusBadge(os)}`}>
+                            {getStatusText(os)}
+                        </span>
+                    </div>
 
                     <div className="flex items-center gap-1 justify-end shrink-0 w-24">
                         {os.Liberado_Engenharia !== 'S' && os.OrdemServicoFinalizado !== 'C' && (
@@ -2879,13 +2880,20 @@ function OrdemServicoContent() {
                             onClick={async (e) => {
                                 e.stopPropagation();
                                 try {
-                                    await fetch('/api/system/open-folder', {
+                                    // Exibe o endereço que está sendo montado para pesquisa
+                                    addToast({ type: 'info', title: 'Abrindo Pasta', message: `Endereço: ${os.EnderecoOrdemServico}` });
+                                    
+                                    await fetch(`${API_BASE}/system/open-folder`, {
                                         method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
+                                        headers: { 
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                        },
                                         body: JSON.stringify({ path: os.EnderecoOrdemServico })
                                     });
                                 } catch (err) {
                                     console.error('Failed to open folder', err);
+                                    addToast({ type: 'error', title: 'Erro', message: `Falha ao tentar abrir a pasta: ${os.EnderecoOrdemServico}` });
                                 }
                             }}
                             className="p-2 rounded-lg text-blue-400 hover:text-[#32423D] hover:bg-[#E0E800]/10 transition-colors"
@@ -3250,11 +3258,13 @@ function OrdemServicoContent() {
                             <div className="sticky top-0 z-20 flex items-center gap-3 px-2 py-1 bg-[#32423D] text-white text-[11px] font-semibold uppercase tracking-wide border-b border-[#32423D]/40 shadow-sm rounded-t-xl">
                                 <span className="w-6 shrink-0" />
                                 <span className="flex-1 min-w-0">OS / Tag / Projeto</span>
-                                <span className="hidden sm:block w-24 text-center">Data Prev.</span>
-                                <span className="hidden md:block w-16 text-center">Itens</span>
-                                <span className="hidden md:block w-20 text-center">Progresso</span>
-                                <span className="hidden sm:block w-24 text-center">Status</span>
-                                <span className="w-20 text-center">Ações</span>
+                                <span className="hidden sm:block w-24 text-center shrink-0">Data Prev.</span>
+                                <span className="hidden lg:block w-44 shrink-0">Descrição OS</span>
+                                <span className="hidden xl:block w-36 shrink-0">Empresa</span>
+                                <span className="hidden md:block w-16 text-center shrink-0">Itens</span>
+                                <span className="hidden md:block w-20 text-center shrink-0">Progresso</span>
+                                <span className="hidden sm:block w-24 text-center shrink-0">Status</span>
+                                <span className="w-24 text-center shrink-0">Ações</span>
                             </div>
                             {Object.entries(groupedOrdens).map(([groupName, groupOrdens]) => (
                                 <div key={groupName}>
@@ -3278,13 +3288,13 @@ function OrdemServicoContent() {
                             <div className="sticky top-0 z-20 flex items-center gap-3 px-2 py-1 bg-[#32423D] text-white text-[11px] font-semibold uppercase tracking-wide border-b border-[#32423D]/40 shadow-sm rounded-t-xl">
                                 <span className="w-6 shrink-0" />
                                 <span className="flex-1 min-w-0">OS / Tag / Projeto</span>
-                                <span className="hidden sm:block w-24 text-center">Data Prev.</span>
-                                <span className="hidden lg:block w-44">Descrição OS</span>
-                                <span className="hidden xl:block w-36">Empresa</span>
-                                <span className="hidden md:block w-16 text-center">Itens</span>
-                                <span className="hidden md:block w-20 text-center">Progresso</span>
-                                <span className="hidden sm:block w-24 text-center">Status</span>
-                                <span className="w-20 text-center">Ações</span>
+                                <span className="hidden sm:block w-24 text-center shrink-0">Data Prev.</span>
+                                <span className="hidden lg:block w-44 shrink-0">Descrição OS</span>
+                                <span className="hidden xl:block w-36 shrink-0">Empresa</span>
+                                <span className="hidden md:block w-16 text-center shrink-0">Itens</span>
+                                <span className="hidden md:block w-20 text-center shrink-0">Progresso</span>
+                                <span className="hidden sm:block w-24 text-center shrink-0">Status</span>
+                                <span className="w-24 text-center shrink-0">Ações</span>
                             </div>
                             <div className="divide-y divide-gray-100">
                                 {ordens.map((os, idx) => renderOSCard(os, idx))}
@@ -4079,7 +4089,7 @@ function OrdemServicoContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Setor</label>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Recurso</label>
                                         <select value={setorResponsavel} onChange={e => setSetorResponsavel(e.target.value)}
                                             className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:border-red-500">
                                             <option value="">Selecione...</option>
@@ -4136,43 +4146,10 @@ function OrdemServicoContent() {
                                 <div>
                                     <label className="block text-xs font-semibold text-gray-700 mb-1">Descrição da Pendência *</label>
                                     <textarea value={descricaoPendencia} onChange={e => setDescricaoPendencia(e.target.value)}
-                                        className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                                        className="w-full px-2 py-1 text-xs uppercase rounded border border-gray-300 focus:outline-none focus:ring-1 focus:ring-red-500 focus:border-red-500"
                                         placeholder="Descreva os detalhes da RNC/Pendência..." rows={4} />
                                 </div>
 
-                                {/* Processos */}
-                                <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg flex flex-wrap gap-6 justify-center">
-                                    {visibleSetores.includes('corte') && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={chkCorteRnc} onChange={e => setChkCorteRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
-                                            <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkCorteRnc ? 'text-[#32423D] font-bold bg-blue-100' : 'text-gray-700 font-semibold'}`}><Scissors size={14} className={chkCorteRnc ? 'text-[#32423D]' : 'text-[#32423D]'} /> Corte</span>
-                                        </label>
-                                    )}
-                                    {visibleSetores.includes('dobra') && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={chkDobraRnc} onChange={e => setChkDobraRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
-                                            <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkDobraRnc ? 'text-purple-700 font-bold bg-purple-100' : 'text-gray-700 font-semibold'}`}><Wrench size={14} className={chkDobraRnc ? 'text-purple-700' : 'text-purple-500'} /> Dobra</span>
-                                        </label>
-                                    )}
-                                    {visibleSetores.includes('solda') && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={chkSoldaRnc} onChange={e => setChkSoldaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
-                                            <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkSoldaRnc ? 'text-orange-700 font-bold bg-orange-100' : 'text-gray-700 font-semibold'}`}><Flame size={14} className={chkSoldaRnc ? 'text-orange-700' : 'text-orange-500'} /> Solda</span>
-                                        </label>
-                                    )}
-                                    {visibleSetores.includes('pintura') && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={chkPinturaRnc} onChange={e => setChkPinturaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
-                                            <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkPinturaRnc ? 'text-green-700 font-bold bg-green-100' : 'text-gray-700 font-semibold'}`}><Paintbrush size={14} className={chkPinturaRnc ? 'text-green-700' : 'text-green-500'} /> Acabamento</span>
-                                        </label>
-                                    )}
-                                    {visibleSetores.includes('montagem') && (
-                                        <label className="flex items-center gap-2 cursor-pointer">
-                                            <input type="checkbox" checked={chkMontagemRnc} onChange={e => setChkMontagemRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
-                                            <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkMontagemRnc ? 'text-red-700 font-bold bg-red-100' : 'text-gray-700 font-semibold'}`}><Settings2 size={14} className={chkMontagemRnc ? 'text-red-700' : 'text-red-500'} /> Montagem</span>
-                                        </label>
-                                    )}
-                                </div>
 
                                 {/* Seção Finalização - só exibida em edição */}
                                 {idRncEdicao && (

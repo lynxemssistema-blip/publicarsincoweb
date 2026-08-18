@@ -6820,8 +6820,8 @@ app.post('/api/tag', tenantMiddleware, async (req, res) => {
             `INSERT INTO tags (
                 Tag, DescTag, IdProjeto, Projeto, DataPrevisao,
                 TipoProduto, UnidadeProduto, QtdeTag, QtdeLiberada, 
-                SaldoTag, ValorTag, StatusTag, DescStatus, CriadoPor
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                SaldoTag, ValorTag, StatusTag, DescStatus, CriadoPor, DataEntrada
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.Tag?.trim(),
                 data.DescTag?.trim() || null,
@@ -6836,7 +6836,8 @@ app.post('/api/tag', tenantMiddleware, async (req, res) => {
                 data.ValorTag || null,
                 data.StatusTag || 1,
                 data.DescStatus || 'Ativo',
-                'Sistema'
+                data.CriadoPor || 'Sistema',
+                data.DataEntrada || new Date().toLocaleDateString('pt-BR')
             ]
         );
 
@@ -6896,6 +6897,40 @@ app.put('/api/tag/:id', tenantMiddleware, async (req, res) => {
     } catch (error) {
         console.error('Error updating tag:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
+    }
+});
+
+// PATCH: Atualizar DataEntrada e CriadoPor nas tags existentes com NULL
+app.patch('/api/tags/backfill-entrada', tenantMiddleware, async (req, res) => {
+    try {
+        const hoje = new Date().toLocaleDateString('pt-BR');
+        // Preenche DataEntrada com a data de previsão do projeto (ou hoje como fallback)
+        // e CriadoPor com 'Sistema' onde está NULL
+        const [r1] = await req.tenantDbPool.execute(`
+            UPDATE tags t
+            LEFT JOIN projetos p ON p.IdProjeto = t.IdProjeto
+            SET t.DataEntrada = COALESCE(
+                p.DataEntradaPedido,
+                DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y'),
+                ?
+            )
+            WHERE (t.DataEntrada IS NULL OR TRIM(t.DataEntrada) = '')
+              AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
+        `, [hoje]);
+
+        const [r2] = await req.tenantDbPool.execute(`
+            UPDATE tags SET CriadoPor = 'Sistema'
+            WHERE (CriadoPor IS NULL OR TRIM(CriadoPor) = '')
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+        `);
+
+        res.json({
+            success: true,
+            message: `DataEntrada preenchida em ${r1.affectedRows} tag(s). CriadoPor atualizado em ${r2.affectedRows} tag(s).`
+        });
+    } catch (error) {
+        console.error('Error backfilling tags:', error);
+        res.status(500).json({ success: false, message: 'Erro: ' + error.message });
     }
 });
 
@@ -12336,7 +12371,7 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 // GET /api/config/setores - Retornar Setores
 app.get('/api/config/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
+        const [rows] = await req.tenantDbPool.execute("SELECT processofabricacao AS Setor FROM processofabricacao WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY processofabricacao ASC");
         res.json({ success: true, setores: rows.map(r => r.Setor) });
     } catch (error) {
         console.error('Error fetching setores:', error);
@@ -13966,7 +14001,7 @@ app.post('/api/system/open-folder', tenantMiddleware, async (req, res) => {
     // Basic security check (optional: restrict to specific drives or patterns if needed)
     // For this internal app, we allow it but log it.
 
-    require('child_process').exec(`start "" "${folderPath}"`, (error) => {
+    require('child_process').exec(`explorer.exe "${folderPath}"`, (error) => {
         if (error) {
             console.error(`[SYSTEM] Error opening folder: ${error.message} `);
             return res.status(500).json({ success: false, message: 'Failed to open folder' });
@@ -15485,6 +15520,14 @@ app.get('/api/plano-corte/itens-disponiveis', tenantMiddleware, async (req, res)
                 AND (SttxtCorte IS NULL OR SttxtCorte = '')
                 AND (IdPlanoDeCorte IS NULL OR IdPlanoDeCorte = '')
                 AND Liberado_Engenharia = 'S'
+                AND EXISTS (
+                    SELECT 1 FROM material_processo mp 
+                    WHERE mp.CodMatFabricante = viewordemservicoitem.CodMatFabricante 
+                      AND mp.IdOrdemServico = viewordemservicoitem.IdOrdemServico 
+                      AND mp.IdTag = viewordemservicoitem.IdTag 
+                      AND mp.IdProjeto = viewordemservicoitem.IdProjeto 
+                      AND mp.IdProcesso = '1'
+                )
         `;
         
         const params = [];
@@ -17709,31 +17752,37 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '') THEN 1 ELSE 0 END) as FaltaMedicao,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioMedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanMedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalMedicao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealMedicao,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '') THEN 1 ELSE 0 END) as FaltaIsometrico,
                 SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioIsometrico),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanIsometrico,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalIsometrico,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealIsometrico,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '') THEN 1 ELSE 0 END) as FaltaEngenharia,
                 SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioEngenharia),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanEngenharia,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalEngenharia,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealEngenharia,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '') THEN 1 ELSE 0 END) as FaltaAprovacao,
                 SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAprovacao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAprovacao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAprovacao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAprovacao,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '') THEN 1 ELSE 0 END) as FaltaAcabamento,
                 SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAcabamento),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAcabamento,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAcabamento,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAcabamento,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '') THEN 1 ELSE 0 END) as FaltaExpedicao,
                 SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioExpedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanExpedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalExpedicao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.realizadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealExpedicao
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
@@ -17805,7 +17854,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
         let tagFilter = `IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
         const tagParams = [id];
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            tagFilter += ` AND IdTag IN (${tagIds.map(() => 'é').join(',')})`;
+            tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
             tagParams.push(...tagIds);
         }
         const [tagsRows] = await connection.execute(

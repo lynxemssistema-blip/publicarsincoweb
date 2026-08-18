@@ -231,8 +231,9 @@ export default function CriarOrdemServicoPage() {
   };
 
   
-  const handleModalSuccess = () => {
-    setMessage({ type: 'success', text: `Ordem de Serviço ${newOsId} criada e itens incluídos com sucesso!` });
+  const handleModalSuccess = (count?: number) => {
+    setMessage({ type: 'success', text: `Ordem de Serviço ${newOsId} criada e ${count || 0} itens incluídos com sucesso!` });
+    setTimeout(() => setMessage(null), 3000);
     setFormData({
       IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
       IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço', DataPrevisao: '',

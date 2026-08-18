@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldAlert, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '../../contexts/ToastContext';
@@ -52,9 +52,10 @@ export function PendenciaModal({ pendenciaModalOpen, setPendenciaModalOpen, sele
  const [materiaisSWRncConfig, setMateriaisSWRncConfig] = useState<{ idMaterialSw: number, MaterialSw: string }[]>([]);
  
  useEffect(() => {
- fetch(`${API_BASE}/config/setores`)
+ const activeToken = localStorage.getItem('sinco_token') || localStorage.getItem('token') || localStorage.getItem('superadmin_token') || '';
+ fetch(`${API_BASE}/recursos`, { headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {} })
  .then(res => res.json())
- .then(json => { if (json.success) setSetoresRncConfig(json.setores || json.data); })
+ .then(json => { if (json.success) setSetoresRncConfig((json.data || []).map((r: any) => r.processofabricacao)); })
  .catch(console.error);
  fetch(`${API_BASE}/config/usuarios`)
  .then(res => res.json())
@@ -358,14 +359,7 @@ export function PendenciaModal({ pendenciaModalOpen, setPendenciaModalOpen, sele
  <select value={setorResponsavel} onChange={e => setSetorResponsavel(e.target.value)}
  className="w-full px-3 py-2 text-sm rounded border border-gray-300 focus:outline-none focus:border-red-500">
  <option value="">Selecione...</option>
- {setoresRncConfig.filter(s => {
- const lower = s.toLowerCase();
- const productionSectors = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
- if (productionSectors.includes(lower)) {
- return visibleSetores.includes(lower);
- }
- return true;
- }).map((s, i) => <option key={i} value={s}>{s}</option>)}
+ {setoresRncConfig.map((s, i) => <option key={i} value={s}>{s}</option>)}
  </select>
  </div>
  <div className="grid grid-cols-2 gap-4">
@@ -415,39 +409,7 @@ export function PendenciaModal({ pendenciaModalOpen, setPendenciaModalOpen, sele
  placeholder="Descreva os detalhes da RNC/Pendência..." rows={4} />
  </div>
 
- {/* Processos */}
- <div className="p-4 bg-gray-50 border border-gray-200 rounded-md flex flex-wrap gap-6 justify-center">
- {visibleSetores.includes('corte') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkCorteRnc} onChange={e => setChkCorteRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkCorteRnc ? 'text-[#32423D] font-bold bg-blue-100' : 'text-gray-700 font-semibold'}`}><Scissors size={14} className={chkCorteRnc ? 'text-[#32423D]' : 'text-[#32423D]'} /> Corte</span>
- </label>
- )}
- {visibleSetores.includes('dobra') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkDobraRnc} onChange={e => setChkDobraRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkDobraRnc ? 'text-purple-700 font-bold bg-purple-100' : 'text-gray-700 font-semibold'}`}><Wrench size={14} className={chkDobraRnc ? 'text-purple-700' : 'text-purple-500'} /> Dobra</span>
- </label>
- )}
- {visibleSetores.includes('solda') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkSoldaRnc} onChange={e => setChkSoldaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkSoldaRnc ? 'text-orange-700 font-bold bg-orange-100' : 'text-gray-700 font-semibold'}`}><Flame size={14} className={chkSoldaRnc ? 'text-orange-700' : 'text-orange-500'} /> Solda</span>
- </label>
- )}
- {visibleSetores.includes('pintura') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkPinturaRnc} onChange={e => setChkPinturaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkPinturaRnc ? 'text-green-700 font-bold bg-green-100' : 'text-gray-700 font-semibold'}`}><Paintbrush size={14} className={chkPinturaRnc ? 'text-green-700' : 'text-green-500'} /> Acabamento</span>
- </label>
- )}
- {visibleSetores.includes('montagem') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkMontagemRnc} onChange={e => setChkMontagemRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkMontagemRnc ? 'text-red-700 font-bold bg-red-100' : 'text-gray-700 font-semibold'}`}><Settings2 size={14} className={chkMontagemRnc ? 'text-red-700' : 'text-red-500'} /> Montagem</span>
- </label>
- )}
- </div>
+
 
  {/* Seção Finalização - só exibida em edição */}
  {idRncEdicao && (

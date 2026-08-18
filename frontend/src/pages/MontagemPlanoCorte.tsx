@@ -927,7 +927,7 @@ function PainelItensOS({ tipoFiltro, onPlanosChange, onGerarRnc }: {
  <div className="shrink-0 bg-slate-50 border-b border-slate-200 px-2 py-0.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
  <div className="flex items-center gap-3">
  <div className="p-2.5 bg-indigo-100 text-indigo-600 rounded-md shadow-sm"><Database size={20} /></div>
- <div>
+ <div title="Critérios de pesquisa:&#10;• Possui arquivo 3D vinculado (.SLDPRT, .PSM, .PAR)&#10;• Espessura e Material preenchidos&#10;• Liberado pela Engenharia&#10;• Não finalizado na OS&#10;• Setor de Corte não iniciado&#10;• Não vinculado a outro Plano de Corte&#10;• Possuir processo 'Corte'" className="cursor-help">
  <h2 className="text-lg font-bold text-slate-800 tracking-tight leading-none">Itens de Ordem de Serviço</h2>
  <p className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold mt-1">Selecione e inclua no plano de corte</p>
  </div>

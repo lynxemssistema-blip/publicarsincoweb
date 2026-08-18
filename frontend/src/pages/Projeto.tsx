@@ -104,6 +104,8 @@ interface Tag {
  ValorTag?: string;
  StatusTag?: number;
  DescStatus?: string;
+ DataEntrada?: string;
+ CriadoPor?: string;
 }
 
 interface Option {
@@ -137,6 +139,7 @@ const emptyTagForm: Tag = {
 
 export default function ProjetoPage() {
  const { showAlert } = useAlert();
+ const { user } = useAuth();
 
 
  const [activeTab, setActiveTab] = useState<0 | 1 | 2 | 3>(0);
@@ -588,7 +591,6 @@ export default function ProjetoPage() {
  };
 
  // === PARAR / CANCELAR / REATIVAR PROJETO ===
- const { user } = useAuth();
 
  // Abre o modal de confirmação SEMPRE antes de alterar o status
  const handleAlterarStatus = async (projetoId: number, status: 'PA' | 'CA' | 'AT', confirmar = false, usuario?: string) => {
@@ -674,10 +676,17 @@ export default function ProjetoPage() {
  setError(null);
 
  try {
+ // Data atual no formato dd/mm/yyyy para DataEntrada
+ const hoje = new Date();
+ const dataHoje = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
+ const loginUsuario = (user as any)?.Login || (user as any)?.login || (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema';
+
  const payload = {
  ...tagFormData,
  IdProjeto: selectedProjetoForTag?.IdProjeto,
- Projeto: selectedProjetoForTag?.Projeto
+ Projeto: selectedProjetoForTag?.Projeto,
+ // Apenas na criação: define CriadoPor e DataEntrada
+ ...(!isEditingTag ? { CriadoPor: loginUsuario, DataEntrada: dataHoje } : {})
  };
 
  const url = isEditingTag ? `${API_BASE}/tag/${tagFormData.IdTag}` : `${API_BASE}/tag`;

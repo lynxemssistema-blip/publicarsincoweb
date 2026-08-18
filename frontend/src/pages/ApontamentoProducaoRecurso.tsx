@@ -2966,14 +2966,7 @@ useEffect(() => {
  className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:border-red-500"
  >
  <option value="">Selecione...</option>
- {setoresConfig.filter(s => {
- const lower = s.toLowerCase();
- const productionSectors = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
- if (productionSectors.includes(lower)) {
- return processosVisiveis.includes(lower);
- }
- return true;
- }).map((s, i) => (
+ {setoresConfig.map((s, i) => (
  <option key={i} value={s}>{s}</option>
  ))}
  </select>
@@ -3055,40 +3048,6 @@ useEffect(() => {
  placeholder="Descreva os detalhes da RNC/Pendência..."
  rows={4}
  />
- </div>
-
- {/* Processos */}
- <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg flex flex-wrap gap-6 justify-center">
- {processosVisiveis.includes('corte') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkCorteRnc} onChange={(e) => setChkCorteRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkCorteRnc ? 'text-[#32423D] font-bold bg-blue-100' : 'text-gray-700 font-semibold'}`}><Scissors size={14} className={chkCorteRnc ? "text-[#32423D]" : "text-[#32423D]"} /> Corte</span>
- </label>
- )}
- {processosVisiveis.includes('dobra') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkDobraRnc} onChange={(e) => setChkDobraRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkDobraRnc ? 'text-purple-700 font-bold bg-purple-100' : 'text-gray-700 font-semibold'}`}><Wrench size={14} className={chkDobraRnc ? "text-purple-700" : "text-purple-500"} /> Dobra</span>
- </label>
- )}
- {processosVisiveis.includes('solda') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkSoldaRnc} onChange={(e) => setChkSoldaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkSoldaRnc ? 'text-orange-700 font-bold bg-orange-100' : 'text-gray-700 font-semibold'}`}><Flame size={14} className={chkSoldaRnc ? "text-orange-700" : "text-orange-500"} /> Solda</span>
- </label>
- )}
- {processosVisiveis.includes('pintura') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkPinturaRnc} onChange={(e) => setChkPinturaRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkPinturaRnc ? 'text-green-700 font-bold bg-green-100' : 'text-gray-700 font-semibold'}`}><Paintbrush size={14} className={chkPinturaRnc ? "text-green-700" : "text-green-500"} /> Acabamento</span>
- </label>
- )}
- {processosVisiveis.includes('montagem') && (
- <label className="flex items-center gap-2 cursor-pointer">
- <input type="checkbox" checked={chkMontagemRnc} onChange={(e) => setChkMontagemRnc(e.target.checked)} className="rounded text-red-500 focus:ring-red-500" />
- <span className={`text-xs flex items-center gap-1 px-2 py-1 rounded transition-colors ${chkMontagemRnc ? 'text-red-700 font-bold bg-red-100' : 'text-gray-700 font-semibold'}`}><Settings2 size={14} className={chkMontagemRnc ? "text-red-700" : "text-red-500"} /> Montagem</span>
- </label>
- )}
  </div>
 
  {/* Seção de Finalização (Só exibida em edição) */}

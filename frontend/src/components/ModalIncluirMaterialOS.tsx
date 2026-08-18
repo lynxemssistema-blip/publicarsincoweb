@@ -16,7 +16,7 @@ interface ModalProps {
   onClose: () => void;
   osId: number | string;
   osContext: any;
-  onSuccess: () => void;
+  onSuccess: (count?: number) => void;
   token: string | null;
 }
 
@@ -548,7 +548,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
         setSuccessMsg(`✓ ${qtdAdded} material(is) incluído(s) na OS. Selecione mais ou clique em Concluir.`);
 
-        onSuccess();
+        onSuccess(qtdAdded);
       } else {
         alert('Erro: ' + json.message);
       }

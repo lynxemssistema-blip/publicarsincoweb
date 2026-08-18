@@ -66,14 +66,15 @@ export default function PesquisarDesenho() {
  setLoading(true);
  setError(null);
  try {
- const url = new URL(`${window.location.origin}${API_BASE}/pesquisar-desenho`);
- if (filProjeto) url.searchParams.append('projeto', filProjeto.trim());
- if (filTag) url.searchParams.append('tag', filTag.trim());
- if (filCodMat) url.searchParams.append('codMat', filCodMat.trim());
- if (filDescResumo) url.searchParams.append('descResumo', filDescResumo.trim());
- if (filDescDetal) url.searchParams.append('descDetal', filDescDetal.trim());
- if (filEspessura) url.searchParams.append('espessura', filEspessura.trim());
- if (filMaterialSW) url.searchParams.append('material', filMaterialSW.trim());
+  const baseUrl = API_BASE.startsWith('http') ? API_BASE : `${window.location.origin}${API_BASE}`;
+  const url = new URL(`${baseUrl}/pesquisar-desenho`);
+  if (filProjeto) url.searchParams.append('projeto', filProjeto.trim());
+  if (filTag) url.searchParams.append('tag', filTag.trim());
+  if (filCodMat) url.searchParams.append('codMat', filCodMat.trim());
+  if (filDescResumo) url.searchParams.append('descResumo', filDescResumo.trim());
+  if (filDescDetal) url.searchParams.append('descDetal', filDescDetal.trim());
+  if (filEspessura) url.searchParams.append('espessura', filEspessura.trim());
+  if (filMaterialSW) url.searchParams.append('material', filMaterialSW.trim());
 
  const res = await fetch(url.toString(), {
  headers: {
@@ -121,9 +122,10 @@ export default function PesquisarDesenho() {
  return;
  }
  try {
- const url = new URL(`${window.location.origin}${API_BASE}/controle-expedicao/abrir-arquivo`);
- url.searchParams.append('caminho', String(caminho));
- url.searchParams.append('tipo', tipo);
+  const baseUrl = API_BASE.startsWith('http') ? API_BASE : `${window.location.origin}${API_BASE}`;
+  const url = new URL(`${baseUrl}/controle-expedicao/abrir-arquivo`);
+  url.searchParams.append('caminho', String(caminho));
+  url.searchParams.append('tipo', tipo);
  const res = await fetch(url.toString(), {
  headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` }
  });
