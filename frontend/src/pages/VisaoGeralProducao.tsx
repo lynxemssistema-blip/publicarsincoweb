@@ -2546,7 +2546,7 @@ const salvarDatasBulkTags = async () => {
                     <CalendarDays size={11} /> Tarefa
                   </button>
                   <button type="button" 
-                    onClick={(e) => { e.stopPropagation(); if (isProjFin || isTagFin) return; setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
+                    onClick={(e) => { e.stopPropagation(); if (isProjFin || tFin) return; setSelTag(t); setPlanejarProjetistaForm({ projetistaPlanejado: t.ProjetistaPlanejado || '', planejadoInicioEngenharia: brToIso(t.PlanejadoInicioEngenharia || ''), planejadoFinalEngenharia: brToIso(t.PlanejadoFinalEngenharia || '') }); setMsg(null); setActionModal('planejarProjetista'); }}
                     className="bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Planejar Projetista e Engenharia"
                   >
@@ -2562,7 +2562,7 @@ const salvarDatasBulkTags = async () => {
                   </button>
 
                   <button type="button" 
-                    onClick={(e) => { e.stopPropagation(); if (isProjFin || isTagFin) return; setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
+                    onClick={(e) => { e.stopPropagation(); if (isProjFin || tFin) return; setSelTag(t); setQtdeLiberadaForm({ qtdeLiberada: t.QtdeLiberada || '0' }); setMsg(null); setActionModal('alterarQtdeLiberada'); }}
                     className="bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded text-[9.5px] font-bold flex items-center gap-1 transition-colors"
                     title="Alterar Qtde Liberada"
                   >

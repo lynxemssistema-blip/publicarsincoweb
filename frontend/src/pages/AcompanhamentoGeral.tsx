@@ -211,9 +211,10 @@ interface GanttChartProps {
  data: unknown[]; // Can be TagDetalhe[] or ProjetoAcomp[]
  mode: 'tag' | 'projeto';
  setoresVisiveis: typeof SETORES;
+ showResources?: boolean;
 }
 
-function GanttChart({ data, mode, setoresVisiveis }: GanttChartProps) {
+function GanttChart({ data, mode, setoresVisiveis, showResources = false }: GanttChartProps) {
  const today = new Date();
  today.setHours(0, 0, 0, 0);
 
@@ -273,17 +274,35 @@ function GanttChart({ data, mode, setoresVisiveis }: GanttChartProps) {
  desc: mode === 'tag' ? item.DescTag : item.DescProjeto,
  finalizado: item.Finalizado === 'C',
  bars: setoresVisiveis.map(s => {
+ // Totals/exec/pct keys differ by mode
  let tk = `${s.key}TotalExecutar`;
  let ek = `${s.key}TotalExecutado`;
  let pk = `${s.key}Percentual`;
- let dpk = s.key;
- if (s.key === 'Galvanizar') { tk = 'GALVANIZARTotalExecutar'; ek = 'GALVANIZARTotalExecutado'; pk = 'GALVANIZARPercentual'; dpk = 'GALVANIZAR'; }
- if (s.key === 'Punsionadeira') { tk = 'PUNSIONADEIRATotalExecutar'; ek = 'PUNSIONADEIRATotalExecutado'; pk = 'PUNSIONADEIRAPercentual'; dpk = 'PUNSIONADEIRA'; }
+
+ // Date key prefix: tags use PUNSIONADEIRA/GALVANIZAR (uppercase),
+ // projetos endpoint returns Punsionadeira/Galvanizar (camelCase)
+ let dpk = s.key; // default: matches for Corte, Dobra, Solda, Pintura, Montagem, CorteaLaser
+
+ if (s.key === 'Galvanizar') {
+   tk = 'GALVANIZARTotalExecutar'; ek = 'GALVANIZARTotalExecutado'; pk = 'GALVANIZARPercentual';
+   dpk = mode === 'tag' ? 'GALVANIZAR' : 'Galvanizar';
+ }
+ if (s.key === 'Punsionadeira') {
+   tk = 'PUNSIONADEIRATotalExecutar'; ek = 'PUNSIONADEIRATotalExecutado'; pk = 'PUNSIONADEIRAPercentual';
+   dpk = mode === 'tag' ? 'PUNSIONADEIRA' : 'Punsionadeira';
+ }
 
  const total = Number(mode === 'tag' ? item[tk] : item[`Total${s.key}`]) || 0;
- const exec = Number(mode === 'tag' ? item[ek] : item[`Exec${s.key}`]) || 0;
- const pct = Number(mode === 'tag' ? item[pk] : item[`Pct${s.key}`]) || 0;
- 
+ const exec  = Number(mode === 'tag' ? item[ek] : item[`Exec${s.key}`])  || 0;
+ const pct   = Number(mode === 'tag' ? item[pk] : item[`Pct${s.key}`])   || 0;
+
+ // Dates: the backend merges material_processo dates with priority,
+ // so item already has the correct PlanejadoInicio*/Realizado* fields.
+ const planStart = parseDate(item[`PlanejadoInicio${dpk}`]);
+ const planEnd   = parseDate(item[`PlanejadoFinal${dpk}`]);
+ const realStart = parseDate(item[`RealizadoInicio${dpk}`]);
+ const realEnd   = parseDate(item[`RealizadoFinal${dpk}`]);
+
  return {
  setor: s.label,
  color: s.color,
@@ -472,27 +491,652 @@ const exec = Number((tag as Record<string, unknown>)[`${s.key}TotalExecutado`]) 
  );
 }
 
+// ─── Types: Recurso por Tag ───────────────────────────────────────────────────
+interface RecursoDetalhe {
+  IdTag: number;
+  Tag: string;
+  DescTag: string | null;
+  Finalizado: string | null;
+  IdProcessoFabricacao: number;
+  DescRecurso: string;
+  TotalExecutar: number;
+  TotalExecutado: number;
+  PlanejadoInicio: string | null;
+  PlanejadoFinal: string | null;
+  RealizadoInicio: string | null;
+  RealizadoFinal: string | null;
+}
+// ─── Types: Recurso por OS ───────────────────────────────────────────────────
+interface OsRecurso {
+  IdOrdemServico: number;
+  DescricaoOS: string;
+  StatusOS: string | null;
+  IdProcessoFabricacao: number;
+  DescRecurso: string;
+  TotalExecutar: number;
+  TotalExecutado: number;
+  PlanejadoInicio: string | null;
+  PlanejadoFinal: string | null;
+  RealizadoInicio: string | null;
+  RealizadoFinal: string | null;
+}
+
+
+function GanttRecursos({ recursos, viewMode }: { recursos: RecursoDetalhe[]; viewMode: 'lista' | 'gantt' }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // ── Expandable OS state ────────────────────────────────────────────────────
+  const [expandedTags, setExpandedTags] = useState<Set<number>>(new Set());
+  const [osCache, setOsCache] = useState<Map<number, OsRecurso[]>>(new Map());
+  const [osLoading, setOsLoading] = useState<Set<number>>(new Set());
+
+  const toggleTag = async (tagId: number) => {
+    const next = new Set(expandedTags);
+    if (next.has(tagId)) { next.delete(tagId); setExpandedTags(next); return; }
+    next.add(tagId);
+    setExpandedTags(next);
+    if (!osCache.has(tagId)) {
+      setOsLoading(prev => new Set(prev).add(tagId));
+      try {
+        const res = await fetch(`${API_BASE}/acompanhamento/tag/${tagId}/os-recursos`);
+        const json = await res.json();
+        if (json.success) setOsCache(prev => { const m = new Map(prev); m.set(tagId, json.data); return m; });
+      } catch { /* ignore */ } finally {
+        setOsLoading(prev => { const s = new Set(prev); s.delete(tagId); return s; });
+      }
+    }
+  };
+
+  // Collect all dates to compute global range
+  const allDates: Date[] = [today];
+  recursos.forEach(r => {
+    const d = [r.PlanejadoInicio, r.PlanejadoFinal, r.RealizadoInicio, r.RealizadoFinal];
+    d.forEach(s => { const dt = parseDate(s); if (dt) allDates.push(dt); });
+  });
+
+  if (allDates.length <= 1) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-slate-400">
+        <GanttChartSquare size={48} className="mb-4 opacity-20" />
+        <p className="text-xs font-medium">Sem datas planejadas ou realizadas nos recursos deste projeto</p>
+        <p className="text-xs mt-1 opacity-70">Cadastre datas nos recursos (material_processo) para visualizar o cronograma</p>
+      </div>
+    );
+  }
+
+  const minDate = new Date(Math.min(...allDates.map(d => d.getTime())));
+  const maxDate = new Date(Math.max(...allDates.map(d => d.getTime())));
+  minDate.setDate(minDate.getDate() - 3);
+  maxDate.setDate(maxDate.getDate() + 3);
+  const totalDays = Math.ceil((maxDate.getTime() - minDate.getTime()) / 86400000);
+
+  const pct = (d: Date) => ((d.getTime() - minDate.getTime()) / 86400000 / totalDays) * 100;
+  const span = (s: Date, e: Date) => (Math.ceil((e.getTime() - s.getTime()) / 86400000) + 1) / totalDays * 100;
+
+  // Group by tag
+  const byTag = new Map<number, { tag: RecursoDetalhe; rows: RecursoDetalhe[] }>();
+  recursos.forEach(r => {
+    if (!byTag.has(r.IdTag)) byTag.set(r.IdTag, { tag: r, rows: [] });
+    byTag.get(r.IdTag)!.rows.push(r);
+  });
+
+  // Month header ticks
+  const months: { label: string; left: number }[] = [];
+  const cur = new Date(minDate);
+  cur.setDate(1);
+  while (cur <= maxDate) {
+    months.push({ label: cur.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), left: pct(cur < minDate ? minDate : cur) });
+    cur.setMonth(cur.getMonth() + 1);
+  }
+
+  const todayPct = pct(today);
+
+  // ── Cards summary: group by resource across all tags ──────────────────────
+  const byRecurso = new Map<string, {
+    nome: string;
+    totalExec: number; totalExecu: number;
+    planInis: Date[]; planFins: Date[];
+    realInis: Date[]; realFins: Date[];
+    emAndamento: boolean;
+  }>();
+  recursos.forEach(r => {
+    if (!byRecurso.has(r.DescRecurso)) {
+      byRecurso.set(r.DescRecurso, { nome: r.DescRecurso, totalExec: 0, totalExecu: 0, planInis: [], planFins: [], realInis: [], realFins: [], emAndamento: false });
+    }
+    const g = byRecurso.get(r.DescRecurso)!;
+    g.totalExec  += Number(r.TotalExecutar)  || 0;
+    g.totalExecu += Number(r.TotalExecutado) || 0;
+    const pi = parseDate(r.PlanejadoInicio); if (pi) g.planInis.push(pi);
+    const pf = parseDate(r.PlanejadoFinal);  if (pf) g.planFins.push(pf);
+    const ri = parseDate(r.RealizadoInicio); if (ri) g.realInis.push(ri);
+    const rf = parseDate(r.RealizadoFinal);  if (rf) g.realFins.push(rf);
+    if (ri && !rf) g.emAndamento = true;
+  });
+
+  const cardList = Array.from(byRecurso.values());
+
+  // Color palette per resource index
+  const CARD_COLORS = [
+    { bg: '#eff6ff', border: '#bfdbfe', accent: '#3b82f6', text: '#1d4ed8' },
+    { bg: '#f5f3ff', border: '#ddd6fe', accent: '#8b5cf6', text: '#6d28d9' },
+    { bg: '#fef2f2', border: '#fecaca', accent: '#ef4444', text: '#dc2626' },
+    { bg: '#ecfdf5', border: '#a7f3d0', accent: '#10b981', text: '#059669' },
+    { bg: '#fffbeb', border: '#fde68a', accent: '#f59e0b', text: '#d97706' },
+    { bg: '#fdf2f8', border: '#fbcfe8', accent: '#ec4899', text: '#db2777' },
+    { bg: '#f0fdfa', border: '#ccfbf1', accent: '#14b8a6', text: '#0d9488' },
+    { bg: '#f8fafc', border: '#e2e8f0', accent: '#64748b', text: '#475569' },
+  ];
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+
+      {/* ── Cards de Resumo por Recurso ─────────────────────────────── */}
+      {viewMode === 'lista' && (
+      <div className="flex-1 overflow-auto custom-scrollbar bg-white">
+        <div className="flex items-center gap-1.5 px-3 pt-3 pb-2 border-b border-slate-100">
+          <Calendar size={12} className="text-slate-400" />
+          <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Cronograma por Recurso</span>
+        </div>
+        <div className="flex flex-wrap gap-3 p-4">
+          {cardList.map((g, idx) => {
+            const c = CARD_COLORS[idx % CARD_COLORS.length];
+            const planIni = g.planInis.length ? new Date(Math.min(...g.planInis.map(d => d.getTime()))) : null;
+            const planFin = g.planFins.length ? new Date(Math.max(...g.planFins.map(d => d.getTime()))) : null;
+            const realIni = g.realInis.length ? new Date(Math.min(...g.realInis.map(d => d.getTime()))) : null;
+            const realFin = g.realFins.length ? new Date(Math.max(...g.realFins.map(d => d.getTime()))) : null;
+            const pct2 = g.totalExecu > 0 && g.totalExec === 0 ? 100
+              : g.totalExec > 0 ? Math.min(Math.round((g.totalExecu / g.totalExec) * 100), 100)
+              : 0;
+            const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+            const isLate = planFin && !realFin && today > planFin;
+            const isDone = realFin && (!planFin || realFin <= planFin);
+            return (
+              <div
+                key={g.nome}
+                className="rounded-xl border shrink-0 overflow-hidden shadow-sm"
+                style={{ backgroundColor: c.bg, borderColor: c.border, width: 220 }}
+              >
+                {/* Card header */}
+                <div className="flex items-center gap-2 px-3 pt-2.5 pb-1.5" style={{ borderBottom: `1px solid ${c.border}` }}>
+                  <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: c.accent }}>
+                    <Package size={9} className="text-white" />
+                  </div>
+                  <span className="text-[10px] font-black uppercase truncate" style={{ color: c.text }}>{g.nome}</span>
+                  {/* Status badge */}
+                  {g.emAndamento && !realFin && (
+                    <span className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200 shrink-0">Em andamento</span>
+                  )}
+                  {realFin && (
+                    <span className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0 flex items-center gap-1">
+                      <CheckCircle2 size={7} />Concluído
+                    </span>
+                  )}
+                  {isLate && !realFin && (
+                    <span className="ml-auto text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-200 shrink-0 flex items-center gap-1">
+                      <AlertTriangle size={7} />Atrasado
+                    </span>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="px-3 pt-2">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[8px] font-bold text-slate-400 uppercase">Progresso</span>
+                    <span className="text-[10px] font-black" style={{ color: c.accent }}>{pct2}%</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(pct2, 100)}%`, backgroundColor: c.accent }} />
+                  </div>
+                  <div className="flex items-center justify-between mt-0.5">
+                    <span className="text-[8px] text-slate-400">Exec: <b style={{ color: c.text }}>{g.totalExecu}</b></span>
+                    <span className="text-[8px] text-slate-400">Total: <b className="text-slate-600">{g.totalExec}</b></span>
+                  </div>
+                </div>
+
+                {/* Date rows */}
+                <div className="px-3 pt-2 pb-2.5 space-y-1">
+                  {/* Planejado */}
+                  <div className="rounded-lg px-2 py-1" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                    <span className="text-[8px] font-black uppercase text-indigo-400 block mb-0.5">Planejado</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] text-indigo-400 font-semibold w-5">Ini:</span>
+                      <span className={`text-[10px] font-bold ${planIni ? 'text-indigo-700' : 'text-slate-300'}`}>{fmt(planIni)}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] text-indigo-400 font-semibold w-5">Fim:</span>
+                      <span className={`text-[10px] font-bold ${planFin ? 'text-indigo-700' : 'text-slate-300'}`}>{fmt(planFin)}</span>
+                    </div>
+                  </div>
+                  {/* Realizado */}
+                  <div className="rounded-lg px-2 py-1" style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                    <span className="text-[8px] font-black uppercase text-emerald-500 block mb-0.5">Realizado</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] text-emerald-500 font-semibold w-5">Ini:</span>
+                      <span className={`text-[10px] font-bold ${realIni ? 'text-emerald-700' : 'text-slate-300'}`}>{fmt(realIni)}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span className="text-[8px] text-emerald-500 font-semibold w-5">Fim:</span>
+                      <span className={`text-[10px] font-bold ${realFin ? 'text-emerald-700' : (g.emAndamento ? 'text-amber-500' : 'text-slate-300')}`}>
+                        {realFin ? fmt(realFin) : (g.emAndamento ? 'Em andamento' : '—')}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      )}
+
+      {/* ── Gantt Table ──────────────────────────────────────────────── */}
+      {viewMode === 'gantt' && (
+      <div className="flex-1 overflow-auto custom-scrollbar">
+        <div style={{ minWidth: 1100 }}>
+
+          {/* Header: month ticks */}
+          <div className="sticky top-0 z-30 bg-[#0B3A2D] text-white border-b border-[#155A47] flex" style={{ height: 36 }}>
+            <div className="w-56 shrink-0 flex items-center px-3">
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Recurso</span>
+            </div>
+            <div className="w-24 shrink-0 flex items-center justify-center">
+              <span className="text-[9px] font-black uppercase tracking-widest text-white/60">Exec / Total</span>
+            </div>
+            {/* Date columns header */}
+            <div className="w-44 shrink-0 flex flex-col items-center justify-center border-l border-[#155A47] px-1">
+              <span className="text-[8px] font-black uppercase tracking-widest text-indigo-300">Planejado</span>
+              <div className="flex gap-1 mt-0.5">
+                <span className="text-[8px] text-white/50 font-semibold">Início</span>
+                <span className="text-[8px] text-white/30">→</span>
+                <span className="text-[8px] text-white/50 font-semibold">Fim</span>
+              </div>
+            </div>
+            <div className="w-44 shrink-0 flex flex-col items-center justify-center border-l border-[#155A47] px-1">
+              <span className="text-[8px] font-black uppercase tracking-widest text-emerald-300">Realizado</span>
+              <div className="flex gap-1 mt-0.5">
+                <span className="text-[8px] text-white/50 font-semibold">Início</span>
+                <span className="text-[8px] text-white/30">→</span>
+                <span className="text-[8px] text-white/50 font-semibold">Fim</span>
+              </div>
+            </div>
+            <div className="flex-1 relative border-l border-[#155A47]">
+              {months.map((m, i) => (
+                <span key={i} className="absolute text-[9px] font-bold text-white/50 uppercase" style={{ left: `${m.left}%`, transform: 'translateX(-50%)', top: 10 }}>{m.label}</span>
+              ))}
+            </div>
+          </div>
+
+          {/* Rows grouped by tag */}
+          {Array.from(byTag.values()).map(({ tag, rows }) => (
+            <div key={tag.IdTag}>
+              {/* Tag header — clickable to expand OS */}
+              <div
+                className={`flex items-center border-b cursor-pointer select-none transition-colors ${
+                  tag.Finalizado === 'C'
+                    ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                    : 'bg-slate-100 border-slate-200 hover:bg-slate-200'
+                }`}
+                style={{ height: 28 }}
+                onClick={() => toggleTag(tag.IdTag)}
+              >
+                <div className="w-56 shrink-0 flex items-center gap-1.5 px-3 overflow-hidden">
+                  <div className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${tag.Finalizado === 'C' ? 'bg-emerald-600' : 'bg-slate-700'}`}>
+                    <Package size={8} className="text-white" />
+                  </div>
+                  <span className="text-[10px] font-black text-slate-800 uppercase truncate">{tag.Tag}</span>
+                  {tag.Finalizado === 'C' && <CheckCircle2 size={9} className="text-emerald-500 shrink-0" />}
+                  <span className="shrink-0 flex items-center gap-0.5 ml-1">
+                    {osLoading.has(tag.IdTag)
+                      ? <Loader size={8} className="animate-spin text-slate-400" />
+                      : <span className={`text-[7px] font-bold uppercase tracking-wide px-1 py-0.5 rounded ${
+                          expandedTags.has(tag.IdTag)
+                            ? 'bg-indigo-100 text-indigo-600'
+                            : 'bg-slate-200 text-slate-500 hover:bg-slate-300'
+                        }`}>
+                          {expandedTags.has(tag.IdTag) ? '▲ OS' : '▶ OS'}
+                        </span>
+                    }
+                  </span>
+                </div>
+                <div className="w-24 shrink-0" />
+                <div className="w-44 shrink-0 border-l border-slate-200" />
+                <div className="w-44 shrink-0 border-l border-slate-200" />
+                <div className="flex-1 relative border-l border-slate-200" style={{ height: 28 }}>
+                  {todayPct >= 0 && todayPct <= 100 && (
+                    <div className="absolute top-0 bottom-0 w-px bg-red-400/50" style={{ left: `${todayPct}%` }} />
+                  )}
+                </div>
+              </div>
+
+              {/* OS expanded detail section */}
+              {expandedTags.has(tag.IdTag) && (() => {
+                const osRows = osCache.get(tag.IdTag) || [];
+                // Group by OS
+                const byOS = new Map<number, { desc: string; status: string | null; items: OsRecurso[] }>();
+                osRows.forEach(o => {
+                  if (!byOS.has(o.IdOrdemServico)) byOS.set(o.IdOrdemServico, { desc: o.DescricaoOS, status: o.StatusOS, items: [] });
+                  byOS.get(o.IdOrdemServico)!.items.push(o);
+                });
+
+                if (viewMode === 'lista') {
+                  // Cards view per OS
+                  return (
+                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-3">
+                      <div className="flex flex-wrap gap-2.5">
+                        {Array.from(byOS.entries()).map(([osId, os]) => {
+                          const CARD_COLORS = [
+                            { bg: '#eff6ff', border: '#bfdbfe', accent: '#3b82f6', text: '#1d4ed8' },
+                            { bg: '#f5f3ff', border: '#ddd6fe', accent: '#8b5cf6', text: '#6d28d9' },
+                            { bg: '#fef2f2', border: '#fecaca', accent: '#ef4444', text: '#dc2626' },
+                            { bg: '#ecfdf5', border: '#a7f3d0', accent: '#10b981', text: '#059669' },
+                            { bg: '#fffbeb', border: '#fde68a', accent: '#f59e0b', text: '#d97706' },
+                          ];
+                          return os.items.map((item, idx) => {
+                            const c = CARD_COLORS[idx % CARD_COLORS.length];
+                            const pi = parseDate(item.PlanejadoInicio);
+                            const pf = parseDate(item.PlanejadoFinal);
+                            const ri = parseDate(item.RealizadoInicio);
+                            const rf = parseDate(item.RealizadoFinal);
+                            const p2 = item.TotalExecutado > 0 && item.TotalExecutar === 0 ? 100
+                              : item.TotalExecutar > 0 ? Math.min(Math.round((item.TotalExecutado / item.TotalExecutar) * 100), 100) : 0;
+                            const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
+                            const emAnd = ri && !rf;
+                            return (
+                              <div key={`${osId}-${item.IdProcessoFabricacao}`} className="rounded-xl border overflow-hidden shadow-sm shrink-0" style={{ backgroundColor: c.bg, borderColor: c.border, width: 200 }}>
+                                <div className="flex items-center gap-1.5 px-2.5 pt-2 pb-1.5" style={{ borderBottom: `1px solid ${c.border}` }}>
+                                  <div className="w-4 h-4 rounded flex items-center justify-center shrink-0" style={{ backgroundColor: c.accent }}>
+                                    <Package size={7} className="text-white" />
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="text-[9px] font-black uppercase truncate" style={{ color: c.text }}>{item.DescRecurso}</div>
+                                    <div className="text-[8px] text-slate-400 truncate">OS #{osId} — {os.desc}</div>
+                                  </div>
+                                  {rf && <span className="ml-auto shrink-0 text-[7px] font-bold px-1 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200 flex items-center gap-0.5"><CheckCircle2 size={6} />OK</span>}
+                                  {emAnd && <span className="ml-auto shrink-0 text-[7px] font-bold px-1 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">Em and.</span>}
+                                </div>
+                                <div className="px-2.5 pt-1.5">
+                                  <div className="flex justify-between mb-0.5">
+                                    <span className="text-[8px] text-slate-400">Progresso</span>
+                                    <span className="text-[9px] font-black" style={{ color: c.accent }}>{p2}%</span>
+                                  </div>
+                                  <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full" style={{ width: `${p2}%`, backgroundColor: c.accent }} />
+                                  </div>
+                                  <div className="flex justify-between mt-0.5">
+                                    <span className="text-[7px] text-slate-400">Exec: <b style={{ color: c.text }}>{item.TotalExecutado}</b></span>
+                                    <span className="text-[7px] text-slate-400">Total: <b>{item.TotalExecutar}</b></span>
+                                  </div>
+                                </div>
+                                <div className="px-2.5 pt-1 pb-2 space-y-1">
+                                  <div className="rounded-md px-1.5 py-0.5" style={{ backgroundColor: '#eff6ff', border: '1px solid #bfdbfe' }}>
+                                    <div className="text-[7px] font-black uppercase text-indigo-400 mb-0.5">Planejado</div>
+                                    <div className="text-[9px] font-semibold text-indigo-700">{fmt(pi)} → {fmt(pf)}</div>
+                                  </div>
+                                  <div className="rounded-md px-1.5 py-0.5" style={{ backgroundColor: '#ecfdf5', border: '1px solid #a7f3d0' }}>
+                                    <div className="text-[7px] font-black uppercase text-emerald-500 mb-0.5">Realizado</div>
+                                    <div className={`text-[9px] font-semibold ${rf ? 'text-emerald-700' : emAnd ? 'text-amber-600' : 'text-slate-300'}`}>
+                                      {fmt(ri)} → {rf ? fmt(rf) : emAnd ? 'Em andamento' : '—'}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          });
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                // Gantt rows per OS
+                return (
+                  <div>
+                    {Array.from(byOS.entries()).map(([osId, os]) => (
+                      <div key={osId}>
+                        {/* OS sub-header */}
+                        <div className="flex items-center border-b border-indigo-100 bg-indigo-50" style={{ height: 24 }}>
+                          <div className="w-56 shrink-0 flex items-center gap-1.5 pl-6 pr-2">
+                            <div className="w-3 h-3 rounded-sm bg-indigo-500 flex items-center justify-center shrink-0">
+                              <Package size={6} className="text-white" />
+                            </div>
+                            <span className="text-[9px] font-bold text-indigo-700 truncate">OS #{osId}</span>
+                            <span className="text-[8px] text-indigo-400 truncate">{os.desc}</span>
+                          </div>
+                          <div className="w-24 shrink-0" />
+                          <div className="w-44 shrink-0 border-l border-indigo-100" />
+                          <div className="w-44 shrink-0 border-l border-indigo-100" />
+                          <div className="flex-1 border-l border-indigo-100" />
+                        </div>
+                        {/* OS recurso rows */}
+                        {os.items.map(item => {
+                          const pIni2 = parseDate(item.PlanejadoInicio);
+                          const pFin2 = parseDate(item.PlanejadoFinal);
+                          const rIni2 = parseDate(item.RealizadoInicio);
+                          const rFin2 = parseDate(item.RealizadoFinal);
+                          const ep = item.TotalExecutado > 0 && item.TotalExecutar === 0 ? 100
+                            : item.TotalExecutar > 0 ? Math.min(Math.round((item.TotalExecutado / item.TotalExecutar) * 100), 100) : 0;
+                          return (
+                            <div key={`${osId}-${item.IdProcessoFabricacao}`} className="flex items-center border-b border-indigo-50 bg-white hover:bg-indigo-50/30" style={{ height: 36 }}>
+                              <div className="w-56 shrink-0 flex items-center gap-2 pl-8 pr-3 border-r border-slate-100">
+                                <div className="w-1 h-1 rounded-full bg-indigo-400 shrink-0" />
+                                <span className="text-[9px] font-semibold text-indigo-600 truncate">{item.DescRecurso}</span>
+                              </div>
+                              <div className="w-24 shrink-0 flex items-center justify-center border-r border-slate-100 px-1">
+                                <div className="flex flex-col items-center w-full">
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="text-[10px] font-black text-indigo-700">{item.TotalExecutado}</span>
+                                    <span className="text-[8px] text-slate-400">/ {item.TotalExecutar}</span>
+                                  </div>
+                                  <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-0.5">
+                                    <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${ep}%` }} />
+                                  </div>
+                                </div>
+                              </div>
+                              {/* Planejado */}
+                              <div className="w-44 shrink-0 flex flex-col justify-center px-2 border-r border-slate-100 gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-bold text-indigo-400 w-7">Ini:</span>
+                                  <span className={`text-[9px] font-semibold ${pIni2 ? 'text-indigo-700' : 'text-slate-300'}`}>{item.PlanejadoInicio || '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-bold text-indigo-400 w-7">Fim:</span>
+                                  <span className={`text-[9px] font-semibold ${pFin2 ? 'text-indigo-700' : 'text-slate-300'}`}>{item.PlanejadoFinal || '—'}</span>
+                                </div>
+                              </div>
+                              {/* Realizado */}
+                              <div className="w-44 shrink-0 flex flex-col justify-center px-2 border-r border-slate-100 gap-0.5">
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-bold text-emerald-500 w-7">Ini:</span>
+                                  <span className={`text-[9px] font-semibold ${rIni2 ? 'text-emerald-700' : 'text-slate-300'}`}>{item.RealizadoInicio || '—'}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[8px] font-bold text-emerald-500 w-7">Fim:</span>
+                                  <span className={`text-[9px] font-semibold ${rFin2 ? 'text-emerald-700' : (rIni2 ? 'text-amber-500' : 'text-slate-300')}`}>
+                                    {item.RealizadoFinal || (rIni2 ? 'Em and.' : '—')}
+                                  </span>
+                                </div>
+                              </div>
+                              {/* Mini Gantt bars */}
+                              <div className="flex-1 relative" style={{ height: 36 }}>
+                                {todayPct >= 0 && todayPct <= 100 && <div className="absolute top-0 bottom-0 w-px bg-red-400/30 z-10" style={{ left: `${todayPct}%` }} />}
+                                {pIni2 && pFin2 && (
+                                  <div className="absolute rounded-sm opacity-30" style={{ left: `${pct(pIni2)}%`, width: `${Math.max(span(pIni2, pFin2), 0.5)}%`, top: 10, height: 7, backgroundColor: '#6366f1' }} />
+                                )}
+                                {rIni2 && rFin2 && (
+                                  <div className="absolute rounded-sm" style={{ left: `${pct(rIni2)}%`, width: `${Math.max(span(rIni2, rFin2), 0.5)}%`, top: 22, height: 7, backgroundColor: '#10b981' }} />
+                                )}
+                                {rIni2 && !rFin2 && (
+                                  <div className="absolute rounded-sm opacity-60" style={{ left: `${pct(rIni2)}%`, width: `${Math.max(todayPct - pct(rIni2), 0.5)}%`, top: 22, height: 7, backgroundColor: '#f59e0b' }} />
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
+              {/* Resource rows */}
+              {rows.map(r => {
+                const pIni = parseDate(r.PlanejadoInicio);
+                const pFin = parseDate(r.PlanejadoFinal);
+                const rIni = parseDate(r.RealizadoInicio);
+                const rFin = parseDate(r.RealizadoFinal);
+                const hasPlan = pIni && pFin;
+                const hasReal = rIni && rFin;
+                const execPct = r.TotalExecutado > 0 && r.TotalExecutar === 0 ? 100
+                  : r.TotalExecutar > 0 ? Math.min(Math.round((r.TotalExecutado / r.TotalExecutar) * 100), 100)
+                  : 0;
+
+                return (
+                  <div key={`${r.IdTag}-${r.IdProcessoFabricacao}`} className="flex items-center border-b border-slate-100 bg-white hover:bg-slate-50/30 transition-colors" style={{ height: 40 }}>
+                    {/* Label */}
+                    <div className="w-56 shrink-0 flex items-center gap-2 px-3 border-r border-slate-100">
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                      <span className="text-[10px] font-semibold text-slate-700 truncate" title={r.DescRecurso}>{r.DescRecurso}</span>
+                    </div>
+                    {/* Exec/Total */}
+                    <div className="w-24 shrink-0 flex items-center justify-center gap-1 border-r border-slate-100 px-1">
+                      <div className="flex flex-col items-center w-full">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[11px] font-black text-indigo-700">{r.TotalExecutado}</span>
+                          <span className="text-[9px] text-slate-400">/ {r.TotalExecutar}</span>
+                        </div>
+                        <div className="w-full h-1 bg-slate-100 rounded-full overflow-hidden mt-0.5">
+                          <div className="h-full bg-indigo-500 rounded-full" style={{ width: `${Math.min(execPct, 100)}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                    {/* Planejado dates column */}
+                    <div className="w-44 shrink-0 flex flex-col justify-center px-2 border-r border-slate-100 gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-indigo-400 uppercase w-7 shrink-0">Ini:</span>
+                        <span className={`text-[10px] font-semibold ${pIni ? 'text-indigo-700' : 'text-slate-300'}`}>
+                          {r.PlanejadoInicio || '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-indigo-400 uppercase w-7 shrink-0">Fim:</span>
+                        <span className={`text-[10px] font-semibold ${pFin ? 'text-indigo-700' : 'text-slate-300'}`}>
+                          {r.PlanejadoFinal || '—'}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Realizado dates column */}
+                    <div className="w-44 shrink-0 flex flex-col justify-center px-2 border-r border-slate-100 gap-0.5">
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-emerald-500 uppercase w-7 shrink-0">Ini:</span>
+                        <span className={`text-[10px] font-semibold ${rIni ? 'text-emerald-700' : 'text-slate-300'}`}>
+                          {r.RealizadoInicio || '—'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[8px] font-bold text-emerald-500 uppercase w-7 shrink-0">Fim:</span>
+                        <span className={`text-[10px] font-semibold ${rFin ? 'text-emerald-700' : (rIni ? 'text-amber-500' : 'text-slate-300')}`}>
+                          {r.RealizadoFinal || (rIni ? 'Em andamento' : '—')}
+                        </span>
+                      </div>
+                    </div>
+                    {/* Gantt bars */}
+                    <div className="flex-1 relative" style={{ height: 40 }}>
+                      {/* Today */}
+                      {todayPct >= 0 && todayPct <= 100 && (
+                        <div className="absolute top-0 bottom-0 w-px bg-red-400/40 z-10" style={{ left: `${todayPct}%` }} />
+                      )}
+                      {/* Planned bar */}
+                      {hasPlan && (
+                        <div
+                          className="absolute rounded-sm opacity-40"
+                          style={{
+                            left: `${pct(pIni!)}%`,
+                            width: `${Math.max(span(pIni!, pFin!), 0.5)}%`,
+                            top: 10, height: 8,
+                            backgroundColor: '#6366f1'
+                          }}
+                          title={`Planejado: ${r.PlanejadoInicio} → ${r.PlanejadoFinal}`}
+                        />
+                      )}
+                      {/* Realized bar */}
+                      {hasReal && (
+                        <div
+                          className="absolute rounded-sm"
+                          style={{
+                            left: `${pct(rIni!)}%`,
+                            width: `${Math.max(span(rIni!, rFin!), 0.5)}%`,
+                            top: 24, height: 8,
+                            backgroundColor: '#10b981'
+                          }}
+                          title={`Realizado: ${r.RealizadoInicio} → ${r.RealizadoFinal}`}
+                        />
+                      )}
+                      {/* Only start (no end) - in progress */}
+                      {rIni && !rFin && (
+                        <div
+                          className="absolute rounded-sm opacity-70"
+                          style={{ left: `${pct(rIni)}%`, width: `${Math.max((todayPct - pct(rIni)), 0.5)}%`, top: 24, height: 8, backgroundColor: '#f59e0b' }}
+                          title={`Em andamento desde: ${r.RealizadoInicio}`}
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+
+          {/* Legend */}
+          <div className="flex items-center gap-4 px-3 py-2 bg-slate-50 border-t border-slate-200">
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-2 rounded-sm bg-indigo-400 opacity-40" />
+              <span className="text-[9px] text-slate-500 font-semibold">Planejado</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-2 rounded-sm bg-emerald-500" />
+              <span className="text-[9px] text-slate-500 font-semibold">Realizado</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-6 h-2 rounded-sm bg-amber-400 opacity-70" />
+              <span className="text-[9px] text-slate-500 font-semibold">Em andamento</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-px h-3 bg-red-400" />
+              <span className="text-[9px] text-slate-500 font-semibold">Hoje</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      )}
+    </div>
+  );
+}
+
 // ─── DETAIL VIEW (Project → Tags) ────────────────────────────────────────────
 
 function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: ProjetoAcomp; onVoltar: () => void; setoresVisiveis: typeof SETORES }) {
  const [tags, setTags] = useState<TagDetalhe[]>([]);
+ const [recursos, setRecursos] = useState<RecursoDetalhe[]>([]);
  const [loading, setLoading] = useState(true);
  const [error, setError] = useState<string | null>(null);
  const [viewMode, setViewMode] = useState<'lista' | 'gantt'>('gantt');
 
  useEffect(() => {
- // eslint-disable-next-line react-hooks/set-state-in-effect
-      setLoading(true);
- setError(null);
- fetch(`${API_BASE}/acompanhamento/projeto/${projeto.IdProjeto}/tags`)
- .then(r => r.json())
- .then(d => {
- if (d.success) setTags(d.data);
- else setError(d.message);
- })
- .catch(e => setError(e.message))
- .finally(() => setLoading(false));
- }, [projeto.IdProjeto]);
+   setLoading(true);
+   setError(null);
+   Promise.all([
+      fetch(`${API_BASE}/acompanhamento/projeto/${projeto.IdProjeto}/tags`).then(r => r.json()),
+      fetch(`${API_BASE}/acompanhamento/projeto/${projeto.IdProjeto}/recursos`).then(r => r.json()),
+   ])
+     .then(([tagsData, recursosData]) => {
+       if (tagsData.success) setTags(tagsData.data);
+       else setError(tagsData.message);
+       if (recursosData.success) setRecursos(recursosData.data);
+     })
+     .catch(e => setError(e.message))
+     .finally(() => setLoading(false));
+  }, [projeto.IdProjeto]);
 
  // Totals
  const totais = useMemo(() => {
@@ -556,6 +1200,7 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  </div>
  </div>
  </div>
+ </div>{/* /shrink-0 header */}
 
  {/* View Mode Toggle */}
  <div className="flex rounded-md border border-slate-200 overflow-hidden bg-slate-50 p-0.5 gap-0.5">
@@ -588,48 +1233,6 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  </span>
  </div>
 
- {/* Totals Bar */}
- <div className="mt-4 grid grid-cols-5 gap-3">
- {setoresVisiveis.map(s => {
- const tot = totais[s.key as keyof typeof totais];
- const sumTotal = tot[0] + tot[1];
- const pct = sumTotal > 0 ? Math.round((tot[1] / sumTotal) * 100) : 0;
- const IconComp = s.icon;
- const ROW_HEIGHT = 42;
-	return (
- <div key={s.key} className="flex flex-col gap-1.5 p-3 rounded-md border" style={{ backgroundColor: s.bg, borderColor: s.border }}>
- <div className="flex items-center justify-between">
- <div className="flex items-center gap-1.5">
- <IconComp size={12} style={{ color: s.color }} />
- <span className="text-[10px] font-black uppercase tracking-wider" style={{ color: s.color }}>{s.label}</span>
- </div>
- <span className="text-xs font-black" style={{ color: s.color }}>{pct}%</span>
- </div>
- <MiniBar pct={pct} color={s.color} />
- <div className="flex flex-col gap-0.5 mt-1">
- <div className="flex justify-between items-center">
- <span className="text-[9px] font-bold text-slate-400 uppercase">Executado:</span>
- <span className="text-xs font-black" style={{ color: s.color }}>{tot[1]}</span>
- </div>
- <div className="flex justify-between items-center border-b border-black/5 pb-1 mb-1">
- <span className="text-[9px] font-bold text-slate-400 uppercase">A Executar:</span>
- <span className="text-[11px] font-bold text-slate-600">{tot[0]}</span>
- </div>
- {/* Datas Agregadas do Projeto */}
- <div className="flex justify-between items-center">
- <span className="text-[8px] font-bold text-slate-400 uppercase">Início:</span>
- <span className="text-[9px] font-black" style={{ color: s.color }}>{fmtDate((projeto as Record<string, unknown>)[`RealizadoInicio${s.key}`])}</span>
- </div>
- <div className="flex justify-between items-center">
- <span className="text-[8px] font-bold text-slate-400 uppercase">Final:</span>
- <span className="text-[9px] font-black" style={{ color: s.color }}>{fmtDate((projeto as Record<string, unknown>)[`RealizadoFinal${s.key}`])}</span>
- </div>
- </div>
- </div>
- );
- })}
- </div>
- </div>
 
  <div className="flex-1 overflow-auto custom-scrollbar">
  {loading && (
@@ -649,22 +1252,9 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  </div>
  )}
 
- {!loading && !error && tags.length > 0 && (
- <>
- {viewMode === 'lista' && (
- <div className="h-full overflow-y-auto p-4 custom-scrollbar">
- <div className="flex flex-col gap-2">
- {tags.map(tag => <TagDetailSection key={tag.IdTag} tag={tag} setoresVisiveis={setoresVisiveis} />)}
- </div>
- </div>
- )}
- {viewMode === 'gantt' && (
- <div className="h-full flex flex-col">
- <GanttChart data={tags} mode="tag" setoresVisiveis={setoresVisiveis} />
- </div>
- )}
- </>
- )}
+ {!loading && !error && (
+  <GanttRecursos recursos={recursos} viewMode={viewMode} />
+  )}
  </div>
  </div>
  );
@@ -691,6 +1281,7 @@ export default function AcompanhamentoGeralPage() {
  const [selected, setSelected] = useState<ProjetoAcomp | null>(null);
  const [detalhe, setDetalhe] = useState<ProjetoAcomp | null>(null);
  const [mainViewMode, setMainViewMode] = usePersistentState<'lista' | 'gantt'>('AcompanhamentoGeral_mainViewMode', 'lista');
+ const [showGridResources, setShowGridResources] = useState(false);
 
  const [fSearchProjeto, setFSearchProjeto] = usePersistentState('AcompanhamentoGeral_fSearchProjeto', '');
  const [fSearchDescricao, setFSearchDescricao] = usePersistentState('AcompanhamentoGeral_fSearchDescricao', '');
@@ -876,6 +1467,20 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
  </button>
  </div>
 
+ {/* Mostrar Recursos (visível só no Gantt Geral) */}
+ {mainViewMode === 'gantt' && (
+ <button
+ onClick={() => setShowGridResources(v => !v)}
+ className={`flex items-center gap-1.5 px-2 py-0.5 ml-2 text-xs font-bold rounded-lg border transition-colors ${
+ showGridResources
+ ? 'bg-blue-100 border-blue-300 text-blue-700'
+ : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'
+ }`}
+ >
+ <Package size={12} /> Mostrar Recursos
+ </button>
+ )}
+
  {/* Detalhar Tags (condicional) */}
  {selected && (
  <button id="btn-detalhar-projeto" onClick={() => setDetalhe(selected)}
@@ -911,18 +1516,19 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
 
  {projetos.length > 0 && (
  mainViewMode === 'lista' ? (
- <table className="w-full text-[11px] border-collapse" style={{ minWidth: 1000 }}>
+ <table className="w-full text-[11px] border-collapse table-fixed">
  <thead className="bg-[#567469] text-white sticky top-0 z-20 shadow-sm">
  <tr className="bg-[#0B3A2D] text-white border-b border-[#0B3A2D]">
- <th className="px-2 py-1 text-left font-black tracking-wider uppercase border-r border-[#155A47]">Projeto / Cliente</th>
- <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47] w-24">Data Previsao</th>
-  <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47] w-20">Qtde Tags</th>
+ <th className="px-2 py-2 text-left font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '30%' }}>Projeto / Cliente</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '10%' }}>Data Previsão</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '6%' }}>Tags</th>
  {setoresAtivos.map(s => (
- <th key={s.key} className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47] w-28">
- {s.label}
+ <th key={s.key} className="px-1 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]"
+   style={{ width: `${Math.floor(46 / Math.max(setoresAtivos.length, 1))}%` }}>
+   <span className="text-[9px]">{s.label}</span>
  </th>
  ))}
- <th className="px-2 py-2 text-center font-black tracking-wider uppercase w-20">Ações</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase" style={{ width: '8%' }}>Ações</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100 bg-white">
@@ -935,14 +1541,10 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
  
  const parseDateSafe = (dStr: string) => {
  if (!dStr) return null;
- // Verifica se está no formato DD/MM/YYYY (brasileiro)
  if (/^\d{2}\/\d{2}\/\d{4}/.test(dStr)) {
  const parts = dStr.split(/[\s/:]+/);
- if (parts.length >= 3) {
- return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
+ if (parts.length >= 3) return new Date(Number(parts[2]), Number(parts[1]) - 1, Number(parts[0]));
  }
- }
- // Caso contrário, tenta o parse nativo do JS (útil para formatos ISO como YYYY-MM-DDTHH:mm:ss.sssZ)
  const d = new Date(dStr);
  if (!isNaN(d.getTime())) return d;
  return null;
@@ -951,74 +1553,62 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
  if (firstSectorKey && p.DataPrevisao) {
  const dataRealizado = (p as Record<string, unknown>)[`RealizadoInicio${firstSectorKey}`];
  const dtPrevisao = parseDateSafe(p.DataPrevisao);
- 
  if (dtPrevisao) {
  dtPrevisao.setHours(0,0,0,0);
- 
  if (dataRealizado) {
- // Já tem apontamento inicial: verifica se começou atrasado
  const dtRealizado = parseDateSafe(dataRealizado);
- if (dtRealizado) {
- dtRealizado.setHours(0,0,0,0);
- if (dtRealizado > dtPrevisao) {
- isAtrasado = true;
- }
- }
+ if (dtRealizado) { dtRealizado.setHours(0,0,0,0); if (dtRealizado > dtPrevisao) isAtrasado = true; }
  } else {
- // Nenhum apontamento inicial ainda: verifica se a previsão já venceu hoje
- const hoje = new Date();
- hoje.setHours(0,0,0,0);
- if (hoje > dtPrevisao) {
- isAtrasado = true;
- }
+ const hoje = new Date(); hoje.setHours(0,0,0,0);
+ if (hoje > dtPrevisao) isAtrasado = true;
  }
  }
  }
 
- const ROW_HEIGHT = 42;
-	return (
+ return (
  <tr
  key={p.IdProjeto}
  onClick={() => setSelected(isSelected ? null : p)}
  className={`cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50/50'} ${finalizado ? 'bg-emerald-50/30' : ''}`}
  >
- 
- <td className="px-2 py-1 border-r border-slate-100">
- <div className="flex items-center gap-1.5 overflow-hidden">
- <div className="font-black text-slate-800 leading-tight truncate">{p.Projeto}</div>
- <div className="text-[10px] text-slate-500 truncate uppercase shrink-0 bg-slate-100 px-1 rounded-sm">{p.DescEmpresa || 'Sem Cliente'}</div>
+ {/* Projeto / Cliente */}
+ <td className="px-2 py-1.5 border-r border-slate-100 overflow-hidden">
+ <div className="flex items-center gap-1.5 min-w-0">
+   <div className="font-black text-slate-800 leading-tight truncate">{p.Projeto}</div>
+   {p.DescEmpresa && <div className="text-[9px] text-slate-500 truncate uppercase shrink-0 bg-slate-100 px-1 rounded-sm max-w-[40%]">{p.DescEmpresa}</div>}
  </div>
  </td>
- 
- <td className={`px-2 py-2 text-center border-r border-slate-100 font-black whitespace-nowrap ${isAtrasado && !finalizado ? 'text-red-600 bg-red-50' : 'text-slate-600'}`}>
- <div className="flex flex-col items-center justify-center gap-0.5">
- <span>{fmtDate(p.DataPrevisao)}</span>
- {finalizado && p.DataFinalizado && (
- <span className="text-[9px] text-emerald-700 bg-emerald-100 px-1.5 py-0.5 rounded border border-emerald-200" title="Data Finalização">
- ✓ {fmtDate(p.DataFinalizado)}
- </span>
- )}
+ {/* Data Previsão */}
+ <td className={`px-1 py-1.5 text-center border-r border-slate-100 font-bold whitespace-nowrap text-[10px] ${isAtrasado && !finalizado ? 'text-red-600 bg-red-50' : 'text-slate-600'}`}>
+ <div className="flex flex-col items-center gap-0.5">
+   <span>{fmtDate(p.DataPrevisao)}</span>
+   {finalizado && p.DataFinalizado && (
+   <span className="text-[8px] text-emerald-700 bg-emerald-100 px-1 py-0.5 rounded border border-emerald-200">✓ {fmtDate(p.DataFinalizado)}</span>
+   )}
  </div>
-  </td>
-  <td className="px-2 py-2 text-center border-r border-slate-100 font-black text-slate-700">
-    {p.QtdeTags || 0}
-  </td>
-  {setoresAtivos.map(s => (
- <td key={s.key} className="px-1 py-1.5">
+ </td>
+ {/* Tags */}
+ <td className="px-1 py-1.5 text-center border-r border-slate-100 font-black text-slate-700">
+ {p.QtdeTags || 0}
+ </td>
+ {/* Setores */}
+ {setoresAtivos.map(s => (
+ <td key={s.key} className="px-0.5 py-1">
  <SetorCell
- total={Number((p as Record<string, unknown>)[`Total${s.key}`]) || 0}
- exec={Number((p as Record<string, unknown>)[`Exec${s.key}`]) || 0}
- pct={Number((p as Record<string, unknown>)[`Pct${s.key}`]) || 0}
- color={s.color}
+   total={Number((p as Record<string, unknown>)[`Total${s.key}`]) || 0}
+   exec={Number((p as Record<string, unknown>)[`Exec${s.key}`]) || 0}
+   pct={Number((p as Record<string, unknown>)[`Pct${s.key}`]) || 0}
+   color={s.color}
  />
  </td>
  ))}
- <td className="px-2 py-1.5 text-right flex items-center justify-end gap-2">
+ {/* Ações */}
+ <td className="px-1 py-1.5 text-center">
  <button
- onClick={(e) => { e.stopPropagation(); setDetalhe(p); }}
- className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-[10px] font-bold shadow-sm"
+   onClick={(e) => { e.stopPropagation(); setDetalhe(p); }}
+   className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-all text-[9px] font-bold shadow-sm whitespace-nowrap"
  >
- <GanttChartSquare size={12} /> Ver Gantt
+   <GanttChartSquare size={10} /> Ver Gantt
  </button>
  </td>
  </tr>
@@ -1027,7 +1617,7 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
  </tbody>
  </table>
  ) : (
- <GanttChart data={projetos} mode="projeto" setoresVisiveis={setoresAtivos} />
+ <GanttChart data={projetos} mode="projeto" setoresVisiveis={setoresAtivos} showResources={showGridResources} />
  )
  )}
 
