@@ -7379,7 +7379,7 @@ app.get('/api/download', tenantMiddleware, async (req, res) => {
         });
 
         if (!fs.existsSync(normalizedPath)) {
-            // Tenta com extens?o em min?scula como fallback
+            // Tenta com extensão em minúscula como fallback
             const lowerExt = targetExt.toLowerCase();
             const altPath = normalizedPath.replace(/\.[^.]+$/, lowerExt);
 
@@ -7449,8 +7449,6 @@ app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
     }
 });
 
-// SEARCH: Busca global em itens por código do documento/desenho
-
 // OPTIONS: Lista de Projetos para Clonagem
 app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
@@ -7469,13 +7467,13 @@ app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) =>
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// SEARCH: Busca global em itens por código do documento/desenho
 app.get('/api/ordemservico/busca-item', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search || search.length < 2) {
             return res.json({ success: true, data: [] });
         }
-
         const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem, osi.IdOrdemServico, osi.CodMatFabricante, 
@@ -7521,7 +7519,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.IdProjeto || 0,
                 data.IdTag || 0,
                 data.DescEmpresa || '',
-                data.EnderecoOrdemServico || '',
+                '',  // endereço real definido abaixo após obter o ID
                 data.CriadoPor || 'Sistema',
                 data.DataCriacao || now,
                 data.Estatus || 'A',
@@ -7536,9 +7534,21 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.IdMatriz || 0
             ]
         );
-                const novoId = result.insertId;
-        let enderecoBase = data.EnderecoOrdemServico || '';
-        
+        const novoId = result.insertId;
+
+        // Busca o endereço base da OS na configuração do sistema (ignora valor do frontend)
+        let enderecoBase = '';
+        try {
+            const [cfgRows] = await req.tenantDbPool.execute(
+                "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoPastaRaizOS' LIMIT 1"
+            );
+            if (cfgRows.length > 0 && cfgRows[0].valor) {
+                enderecoBase = cfgRows[0].valor.trim();
+            }
+        } catch (cfgErr) {
+            console.warn('[CriarOS] Não foi possível buscar EnderecoPastaRaizOS:', cfgErr.message);
+        }
+
         if (enderecoBase) {
             const format5 = (num) => String(num).padStart(5, '0');
             if (enderecoBase.endsWith('\\') || enderecoBase.endsWith('/')) {
@@ -7565,6 +7575,8 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
             } catch (fsErr) {
                 console.error('[CriarOS] Falha ao criar pastas:', fsErr.message);
             }
+        } else {
+            console.warn('[CriarOS] EnderecoPastaRaizOS não configurado — pasta não criada para OS', novoId);
         }
 
         res.json({ success: true, message: 'OS cadastrada', id: novoId });

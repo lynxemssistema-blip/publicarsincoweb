@@ -451,7 +451,7 @@ export default function CadastroUsuarioPage() {
  </div>
 
  {/* Col 2: Dados Pessoais */}
- <div className="flex-1 grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-x-4 gap-y-1.5 min-w-0">
+ <div className="flex-1 grid grid-cols-[2.5fr_1.2fr_1.2fr_1.8fr_1.2fr_1.5fr] gap-x-5 gap-y-2 min-w-0">
 
  <EditableField icon={<User size={12} />} label="Nome Completo" value={form.NomeCompleto} onChange={v => updateField('NomeCompleto', v)} />
 
@@ -509,43 +509,10 @@ export default function CadastroUsuarioPage() {
  </div>
  </div>
 
- <EditableField icon={<Tag size={12} />} label="Sigla" value={form.Sigla} onChange={v => updateField('Sigla', v)} />
- <EditableField icon={<FileText size={12} />} label="Descrição" value={form.Descricao} onChange={v => updateField('Descricao', v)} />
- </div>
-
- {/* Col 3: Permissões */}
- <div className="shrink-0 border-l border-slate-100 pl-4 min-w-[320px]">
- <div className="flex items-center justify-between mb-1.5">
- <label className="text-[9px] font-black text-slate-400 uppercase tracking-wider block">Permissões / Módulos</label>
- <button type="button" onClick={() => {
- const allChecked = permissoes.every(p => form[p.key] === 'S');
- const newValue = allChecked ? '' : 'S';
- setForm(prev => {
- const next = { ...prev };
- permissoes.forEach(p => { next[p.key] = newValue; });
- return next;
- });
- }} className="text-[9px] text-indigo-500 hover:text-indigo-700 font-bold underline">
- {permissoes.every(p => form[p.key] === 'S') ? 'Desmarcar Todos' : 'Marcar Todos'}
- </button>
- </div>
- <div className="grid grid-cols-4 gap-1">
- {permissoes.map(p => {
- const checked = form[p.key] === 'S';
- return (
- <button key={p.key} type="button" onClick={() => toggleCheck(p.key)}
- className={`flex items-center gap-1 px-1.5 py-1 rounded-md border text-[10px] font-bold transition-all ${checked ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-slate-50 border-slate-100 text-slate-400 hover:border-slate-200'}`}>
- <div className={`w-3.5 h-3.5 rounded-sm border flex items-center justify-center shrink-0 ${checked ? 'bg-emerald-500 border-emerald-500' : 'bg-white border-slate-300'}`}>
- {checked && <svg width="8" height="8" viewBox="0 0 10 10" fill="none"><path d="M2 5L4.5 7.5L8 2.5" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>}
- </div>
- <span className={`shrink-0 ${checked ? p.color : ''}`}>{p.icon}</span>
- <span className="truncate">{p.label}</span>
- </button>
- );
- })}
- </div>
- </div>
- </div>
+  <EditableField icon={<Tag size={12} />} label="Sigla" value={form.Sigla} onChange={v => updateField('Sigla', v)} />
+  <EditableField icon={<FileText size={12} />} label="Descrição" value={form.Descricao} onChange={v => updateField('Descricao', v)} />
+  </div>{/* end grid */}
+  </div>{/* end flex gap-4 */}
  {isFormMaximized && showProcessos && form.idUsuario && (
  <div className="border-t border-amber-200 bg-white overflow-auto shrink-0 max-h-64">
  <div className="flex gap-3 p-3">

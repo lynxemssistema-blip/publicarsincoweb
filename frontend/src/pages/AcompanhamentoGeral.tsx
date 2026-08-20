@@ -645,9 +645,8 @@ function GanttRecursos({ recursos, viewMode }: { recursos: RecursoDetalhe[]; vie
             const planFin = g.planFins.length ? new Date(Math.max(...g.planFins.map(d => d.getTime()))) : null;
             const realIni = g.realInis.length ? new Date(Math.min(...g.realInis.map(d => d.getTime()))) : null;
             const realFin = g.realFins.length ? new Date(Math.max(...g.realFins.map(d => d.getTime()))) : null;
-            const pct2 = g.totalExecu > 0 && g.totalExec === 0 ? 100
-              : g.totalExec > 0 ? Math.min(Math.round((g.totalExecu / g.totalExec) * 100), 100)
-              : 0;
+            const totalPecas = g.totalExecu + g.totalExec; // total = executado + a executar
+            const pct2 = totalPecas > 0 ? Math.min(Math.round((g.totalExecu / totalPecas) * 100), 100) : 0;
             const fmt = (d: Date | null) => d ? d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—';
             const isLate = planFin && !realFin && today > planFin;
             const isDone = realFin && (!planFin || realFin <= planFin);
@@ -690,7 +689,7 @@ function GanttRecursos({ recursos, viewMode }: { recursos: RecursoDetalhe[]; vie
                   </div>
                   <div className="flex items-center justify-between mt-0.5">
                     <span className="text-[8px] text-slate-400">Exec: <b style={{ color: c.text }}>{g.totalExecu}</b></span>
-                    <span className="text-[8px] text-slate-400">Total: <b className="text-slate-600">{g.totalExec}</b></span>
+                    <span className="text-[8px] text-slate-400">Total: <b className="text-slate-600">{totalPecas}</b></span>
                   </div>
                 </div>
 
@@ -979,8 +978,8 @@ function GanttRecursos({ recursos, viewMode }: { recursos: RecursoDetalhe[]; vie
                 );
               })()}
 
-              {/* Resource rows */}
-              {rows.map(r => {
+              {/* Resource rows — ocultos quando OS expandida */}
+              {!expandedTags.has(tag.IdTag) && rows.map(r => {
                 const pIni = parseDate(r.PlanejadoInicio);
                 const pFin = parseDate(r.PlanejadoFinal);
                 const rIni = parseDate(r.RealizadoInicio);

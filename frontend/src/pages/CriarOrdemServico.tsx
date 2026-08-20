@@ -31,7 +31,6 @@ export default function CriarOrdemServicoPage() {
     Descricao: '',
     IdEmpresa: '',
     DescEmpresa: '',
-    EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço',
     DataPrevisao: '',
     ProdutoPadrao: '',
     CodDesenhoProduto: '',
@@ -213,8 +212,8 @@ export default function CriarOrdemServicoPage() {
         } else {
           setMessage({ type: 'success', text: 'Ordem de Serviço criada com sucesso!' });
           setFormData({
-            IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
-            IdEmpresa: '', DescEmpresa: '', EnderecoOrdemServico: 'G:\\Meu Drive\\00-Ordem Serviço', DataPrevisao: '',
+                    IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
+            IdEmpresa: '', DescEmpresa: '', DataPrevisao: '',
             ProdutoPadrao: '', CodDesenhoProduto: '', DescricaoProduto: '', ProdutoCriadoPor: '',
             DataCriacaoProduto: '', Fator: '1', TipoLiberacaoOrdemServico: 'Total'
           });
@@ -254,7 +253,7 @@ export default function CriarOrdemServicoPage() {
             <Plus size={24} /> Criar Ordem Serviço
           </h1>
           <p className="text-gray-500 text-xs mt-1">
-            Cadastre novas ordens de serviço, definindo projeto, endereçamento e os dados principais do produto.
+            Cadastre novas ordens de serviço, definindo projeto, previsão e os dados principais do produto.
           </p>
         </div>
       </div>
@@ -298,26 +297,20 @@ export default function CriarOrdemServicoPage() {
           </div>
         </section>
 
-        {/* Parte 2 e 4 */}
+        {/* Previsão */}
         <section>
-          <h3 className="text-sm font-semibold text-gray-700 border-b pb-1 mb-3">2. Endereço e Previsão</h3>
+          <h3 className="text-sm font-semibold text-gray-700 border-b pb-1 mb-3">2. Previsão</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Endereço da Ordem de Serviço</label>
-              <input type="text" name="EnderecoOrdemServico" value={formData.EnderecoOrdemServico} onChange={handleInputChange} className={`${inputClass} bg-gray-100 cursor-not-allowed text-gray-500`} readOnly />
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Data de Previsão (Tag)</label>
+              <input type="date" name="DataPrevisao" value={formData.DataPrevisao?.substring(0, 10) || ''} onChange={handleInputChange} className={inputClass} />
             </div>
-            <div className="flex gap-4">
-              <div className="flex-1">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Data de Previsão (Tag)</label>
-                <input type="date" name="DataPrevisao" value={formData.DataPrevisao?.substring(0, 10) || ''} onChange={handleInputChange} className={inputClass} />
-              </div>
-              <div className="flex-1 flex items-end pb-0">
-                {formData.DataPrevisao && (
-                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded border border-blue-200">
-                    Restam {getWorkingDays(formData.DataPrevisao)} dias úteis
-                  </span>
-                )}
-              </div>
+            <div className="flex items-end pb-0">
+              {formData.DataPrevisao && (
+                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded border border-blue-200">
+                  Restam {getWorkingDays(formData.DataPrevisao)} dias úteis
+                </span>
+              )}
             </div>
           </div>
         </section>
