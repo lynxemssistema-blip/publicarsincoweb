@@ -4470,7 +4470,14 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
                 p.ValorFabricacao, p.ValorRevenda, p.TotalProjeto,
                 p.CriadoPor, p.IdEmpresa, p.EnderecoProjeto, p.Observacao,
                 p.D_E_L_E_T_E,
-                COALESCE(ap.qtd, 0) AS temApontamento
+                COALESCE(ap.qtd, 0) AS temApontamento,
+                COALESCE((
+                    SELECT SUM(COALESCE(mp.TotalExecutar, 0))
+                    FROM material_processo mp
+                    JOIN ordemservico os3 ON os3.IdOrdemServico = mp.IdOrdemServico
+                    WHERE os3.IdProjeto = p.IdProjeto
+                      AND (os3.D_E_L_E_T_E IS NULL OR os3.D_E_L_E_T_E = '' OR os3.D_E_L_E_T_E != '*')
+                ), 0) AS temSaldoPendente
             FROM projetos p
             LEFT JOIN (
                 SELECT os2.IdProjeto, COUNT(c2.IdOrdemServicoItemControle) AS qtd
@@ -6569,7 +6576,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (re
                 osiParams.push(pfDb, userName);
             }
 
-            const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
+        const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
             const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
@@ -6642,15 +6649,61 @@ app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req,
     }
 });
 
-// POST: Cancelar Finalizaà§ão do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
+// GET: Pré-check — verifica se é possível cancelar a finalização do projeto
+app.get('/api/visao-geral/projeto/:id/pode-cancelar-finalizacao', tenantMiddleware, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [check] = await req.tenantDbPool.execute(
+            `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`, [id]
+        );
+        if (!check.length) return res.status(404).json({ success: false, pode: false, message: 'Projeto não encontrado.' });
+        if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
+            return res.json({ success: false, pode: false, message: `O projeto não está finalizado.` });
+        }
+        // Verifica saldo via material_processo (fonte de verdade)
+        const [mpRows] = await req.tenantDbPool.execute(
+            `SELECT COUNT(mp.IdMaterialProcesso) as TotalMP,
+                    SUM(COALESCE(mp.TotalExecutar, 0)) as SaldoMP,
+                    COUNT(osi.IdOrdemServicoItem) as TotalItens
+             FROM ordemservicoitem osi
+             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+             LEFT JOIN material_processo mp ON mp.IdOrdemServico = osi.IdOrdemServico
+                 AND mp.codmatFabricante = osi.codmatFabricante
+             WHERE os.IdProjeto = ?
+               AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`,
+            [id]
+        );
+        const r = mpRows[0] || {};
+        const totalItens = Number(r.TotalItens) || 0;
+        const totalMP    = Number(r.TotalMP)    || 0;
+        const saldoMP    = Number(r.SaldoMP)    || 0;
+
+        if (totalItens === 0) {
+            return res.json({ success: false, pode: false,
+                message: `Projeto sem itens de OS — cancelamento não permitido.` });
+        }
+        if (totalMP > 0 && saldoMP === 0) {
+            return res.json({ success: false, pode: false,
+                message: `Não é possível cancelar a finalização do projeto "${check[0].Projeto}". ` +
+                         `Todos os processos já foram concluídos (sem saldo pendente de produção).` });
+        }
+        return res.json({ success: true, pode: true,
+            message: `Projeto "${check[0].Projeto}" possui saldo pendente. Cancelamento permitido.` });
+    } catch (error) {
+        console.error('[Pre-check cancelar-finalizacao]', error);
+        return res.status(500).json({ success: false, pode: false, message: 'Erro ao verificar elegibilidade.' });
+    }
+});
+
+// POST: Cancelar Finalização do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
 app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userCancel = usuario || 'Sistema';
 
     try {
-        // 1. Verificar se está finalizado (condià§ão para cancelar)
-        const queryPool = req.tenantDbPool || pool;
+        // 1. Verificar se o projeto existe e está finalizado
         const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
@@ -6661,37 +6714,75 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, 
         if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
             return res.status(400).json({
                 success: false,
-                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteraà§ão foi realizada.`
+                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteração foi realizada.`
             });
         }
 
-        // 2. Desfazer finalizaà§ão em cascata (limpar campos)
-        // projetos
+        // 2. VALIDAÇÃO: verificar se existem quantidades a executar via material_processo
+        //    Fonte de verdade: mp.TotalExecutar > 0 significa que ainda há produção pendente.
+        //    Os campos legados (CorteTotalExecutado etc.) NÃO são usados pois são calculados
+        //    sobre todos os setores independente de o item ter ou não aquele processo.
+        const [mpRows] = await req.tenantDbPool.execute(
+            `SELECT
+                COUNT(mp.IdMaterialProcesso)       as TotalMP,
+                SUM(COALESCE(mp.TotalExecutar, 0)) as SaldoMP,
+                COUNT(osi.IdOrdemServicoItem)       as TotalItens
+             FROM ordemservicoitem osi
+             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+             LEFT JOIN material_processo mp ON mp.IdOrdemServico = osi.IdOrdemServico
+                 AND mp.codmatFabricante = osi.codmatFabricante
+             WHERE os.IdProjeto = ?
+               AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+               AND (os.D_E_L_E_T_E  IS NULL OR os.D_E_L_E_T_E  = '' OR os.D_E_L_E_T_E  != '*')`,
+            [id]
+        );
+
+        const mpR = mpRows[0] || {};
+        const totalItens = Number(mpR.TotalItens) || 0;
+        const totalMP    = Number(mpR.TotalMP)    || 0;
+        const saldoMP    = Number(mpR.SaldoMP)    || 0;
+
+        // Projeto sem itens — não faz sentido cancelar
+        if (totalItens === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Não é possível cancelar a finalização: o projeto "${check[0].Projeto}" não possui itens de OS.`
+            });
+        }
+
+        // Se há registros em material_processo, a fonte de verdade é TotalExecutar
+        if (totalMP > 0 && saldoMP === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Não é possível cancelar a finalização do projeto "${check[0].Projeto}". ` +
+                         `Todos os processos já foram concluídos (TotalExecutar = 0 em todos os registros). ` +
+                         `O cancelamento só é permitido quando há saldo pendente de produção.`
+            });
+        }
+
+        // 3. Desfazer finalização em cascata
         await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
             [id]
         );
-        // tags
         await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [id]
         );
-        // ordemservico
         await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='', UsuarioFinalizado='', DataFinalizacao='' WHERE IdProjeto=?`,
             [id]
         );
-        // ordemservicoitem
         await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='', UsuarioFinalizado='', DataFinalizado=''
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [id]
         );
 
-        res.json({ success: true, message: `Finalizaà§ão cancelada com sucesso por ${userCancel}.` });
+        res.json({ success: true, message: `Finalização cancelada com sucesso por ${userCancel}.` });
     } catch (error) {
         console.error('Error cancelling finalization:', error);
-        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaà§ão: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao cancelar finalização: ' + error.message });
     }
 });
 
@@ -10934,18 +11025,11 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
     }
 });
 
-// POST: Registrar apontamento PARCIAL como excecao (aceita qualquer recurso sem validacao de setor)
-
-// POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
-
-// GET: Setores consolidados de múltiplas Tags (para Bulk Modal)
 app.get('/api/material-processo/setores-consolidados-tags', tenantMiddleware, async (req, res) => {
     const { tagIds } = req.query;
     if (!tagIds) return res.json({ success: true, sectors: [] });
-    
     const ids = tagIds.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
     if (ids.length === 0) return res.json({ success: true, sectors: [] });
-    
     try {
         const placeholders = ids.map(() => '?').join(',');
         const query = `

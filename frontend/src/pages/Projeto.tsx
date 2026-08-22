@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
  Plus, Search, Edit2, Trash2, X, FolderKanban, Save,
  Loader2, RefreshCw, Calendar, Tag as TagIcon, FolderOpen, CheckCircle2, RotateCcw,
- Building2, Truck, Banknote, Ban, Pause, Play
+ Building2, Truck, Banknote, Ban, Pause, Play, XCircle, Flag
 , Filter} from 'lucide-react';
 import { useAlert } from '../contexts/AlertContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -87,6 +87,7 @@ interface Projeto {
  ObservacaoFinal?: string;
  Finalizado?: string;
  DataFinalizado?: string;
+ temSaldoPendente?: number;
 }
 
 interface Tag {
@@ -565,6 +566,40 @@ export default function ProjetoPage() {
     }
   };
 
+  const handleFinalizarProjeto = async (id: number) => {
+    const nomeProjeto = projetos.find(p => p.IdProjeto === id)?.Projeto || `ID ${id}`;
+    const result = await Swal.fire({
+      title: 'Finalizar Projeto',
+      html: `Deseja realmente <strong>finalizar</strong> o projeto <strong>${nomeProjeto}</strong>?<br>
+             <small style="color:#666">Esta ação marcará o projeto e todos os seus níveis (Tags, OS e Itens) como finalizados.</small>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Sim, finalizar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#059669',
+    });
+    if (!result.isConfirmed) return;
+    try {
+      const token = localStorage.getItem('sinco_token') || '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const res = await fetch(`${API_BASE}/visao-geral/projeto/${id}/finalizar`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ usuario: (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema' })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showAlert('Projeto finalizado com sucesso!', 'success');
+        fetchProjetos();
+      } else {
+        showAlert(json.message || 'Erro ao finalizar o projeto.', 'error');
+      }
+    } catch {
+      showAlert('Erro de conexão ao finalizar o projeto.', 'error');
+    }
+  };
+
   const handleCancelarLiberacao = async (id: number) => {
  if (!confirm('Deseja realmente CANCELAR a liberação deste projeto?')) return;
  try {
@@ -575,7 +610,7 @@ export default function ProjetoPage() {
  const json = await res.json();
  if (json.success) {
  showAlert('Liberação cancelada com sucesso!', "success");
- fetchProjetos(); // Recarrega
+ fetchProjetos();
  } else {
  showAlert(json.message || 'Erro ao cancelar liberação.', "error");
  }
@@ -583,6 +618,61 @@ export default function ProjetoPage() {
  showAlert('Erro de conexão ao cancelar liberação.', "error");
  }
  };
+
+  const handleCancelarFinalizacao = async (id: number, nomeProjeto: string) => {
+    try {
+      const token = localStorage.getItem('sinco_token') || '';
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      // PRÉ-CHECK: valida antes de abrir o diálogo de confirmação
+      const preCheck = await fetch(`${API_BASE}/visao-geral/projeto/${id}/pode-cancelar-finalizacao`, { headers });
+      const preJson = await preCheck.json();
+
+      if (!preJson.pode) {
+        // Bloqueado: mostra mensagem de erro sem abrir confirmação
+        await Swal.fire({
+          title: 'Cancelamento não permitido',
+          text: preJson.message || 'Não é possível cancelar a finalização deste projeto.',
+          icon: 'error',
+          confirmButtonText: 'Entendi',
+          confirmButtonColor: '#6B7280',
+        });
+        return;
+      }
+
+      // Liberado: abre confirmação
+      const result = await Swal.fire({
+        title: 'Cancelar Finalização',
+        html: `Deseja realmente <strong>cancelar a finalização</strong> do projeto <strong>${nomeProjeto}</strong>?<br>
+               <small style="color:#666">Esta ação desfaz a finalização em todos os níveis: Tags, Ordens de Serviço e Itens.<br>
+               Só é permitida quando há saldo pendente de produção nos níveis inferiores.</small>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: 'Sim, cancelar finalização',
+        cancelButtonText: 'Voltar',
+        confirmButtonColor: '#DC2626',
+      });
+      if (!result.isConfirmed) return;
+
+      // Executa o cancelamento
+      const res = await fetch(`${API_BASE}/visao-geral/projeto/${id}/cancelar-finalizacao`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ usuario: (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema' })
+      });
+      const json = await res.json();
+      if (json.success) {
+        showAlert('Finalização cancelada com sucesso! O projeto voltou ao status Liberado.', 'success');
+        fetchProjetos();
+      } else {
+        showAlert(json.message || 'Erro ao cancelar finalização.', 'error');
+      }
+    } catch {
+      showAlert('Erro de conexão ao cancelar finalização.', 'error');
+    }
+  };
+
 
  const resetProjetoForm = () => {
  setProjetoFormData(emptyProjetoForm);
@@ -1173,90 +1263,112 @@ export default function ProjetoPage() {
  </span>
 
  {/* Actions */}
- <div className="flex items-center justify-end w-[280px] shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
- <button
- onClick={() => !isDisabledStatus && projeto.IdProjeto && handleOpenFolder(projeto.IdProjeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed' : 'text-[#32423D] hover:bg-[#E0E800]/10'}`}
- title="Abrir Pasta Projeto"
- disabled={isDisabledStatus}
- >
- <FolderOpen size={14} />
- </button>
- {(!projeto.liberado || projeto.liberado.trim() === '') ? (
- <button
- onClick={() => !isDisabledStatus && projeto.IdProjeto && handleLiberar(projeto.IdProjeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-green-600 hover:bg-green-50'}`}
- title="Liberar Projeto"
- disabled={isDisabledStatus}
- >
- <CheckCircle2 size={14} />
- </button>
- ) : (
- <button
- onClick={() => !isDisabledStatus && projeto.IdProjeto && handleCancelarLiberacao(projeto.IdProjeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus || Number(projeto.temApontamento) > 0 ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-orange-600 hover:bg-orange-50'}`}
- title={Number(projeto.temApontamento) > 0 ? 'Não é possível cancelar: projeto possui apontamentos de produção' : 'Cancelar Liberação'}
- disabled={isDisabledStatus || Number(projeto.temApontamento) > 0}
- >
- <RotateCcw size={14} />
- </button>
- )}
- <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
- {/* Reativar (aparece se parado ou cancelado) */}
- {isPausedOrCanceled && (
- <button
- onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'AT')}
- className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
- title="Reativar Projeto (Ativo)"
- >
- <Play size={14} />
- </button>
- )}
- {/* Parar Projeto (oculto se já parado ou cancelado) */}
- {!isDisabledStatus && (
- <button
- onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'PA')}
- className="p-1.5 rounded-md text-yellow-600 hover:bg-yellow-50 transition-colors"
- title="Parar Projeto"
- >
- <Pause size={14} />
- </button>
- )}
- {/* Cancelar Projeto (oculto se já cancelado ou parado) */}
- {!isDisabledStatus && (
- <button
- onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'CA')}
- className="p-1.5 rounded-md text-red-600 hover:bg-red-50 transition-colors"
- title="Cancelar Projeto"
- >
- <Ban size={14} />
- </button>
- )}
- <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
- <button
- onClick={() => !isDisabledStatus && openTagForm(projeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
- title="Nova Tag"
- disabled={isDisabledStatus}
- >
- <Plus size={14} />
- </button>
- <button
- onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
- title="Editar Projeto"
- disabled={isDisabledStatus}
- >
- <Edit2 size={14} />
- </button>
- <button
- onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
- className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-red-500 hover:bg-red-50'}`}
- title="Excluir Projeto"
- disabled={isDisabledStatus}
- >
- <Trash2 size={14} />
- </button>
+ <div className="flex items-center justify-end w-[320px] shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+
+  {/* Abrir Pasta */}
+  <button
+  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleOpenFolder(projeto.IdProjeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed' : 'text-[#32423D] hover:bg-[#E0E800]/10'}`}
+  title="Abrir Pasta Projeto"
+  disabled={isDisabledStatus}
+  >
+  <FolderOpen size={14} />
+  </button>
+
+  {/* Liberar / Finalizar / Cancelar Liberação / Cancelar Finalização */}
+  {(!projeto.liberado || projeto.liberado.trim() === '') ? (
+  <button
+  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleLiberar(projeto.IdProjeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-green-600 hover:bg-green-50'}`}
+  title="Liberar Projeto"
+  disabled={isDisabledStatus}
+  >
+  <CheckCircle2 size={14} />
+  </button>
+  ) : isFinalizado && Number(projeto.temSaldoPendente) > 0 ? (
+  <button
+  onClick={() => projeto.IdProjeto && handleCancelarFinalizacao(projeto.IdProjeto, projeto.Projeto)}
+  className="p-1.5 rounded-md transition-colors text-rose-600 hover:bg-rose-50 border border-rose-200"
+  title="Cancelar Finalização do Projeto"
+  >
+  <XCircle size={14} />
+  </button>
+  ) : !isFinalizado ? (
+  <>
+  <button
+  onClick={() => projeto.IdProjeto && handleFinalizarProjeto(projeto.IdProjeto)}
+  className="p-1.5 rounded-md transition-colors text-emerald-600 hover:bg-emerald-50"
+  title="Finalizar Projeto"
+  >
+  <Flag size={14} />
+  </button>
+  <button
+  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleCancelarLiberacao(projeto.IdProjeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus || Number(projeto.temApontamento) > 0 ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-orange-600 hover:bg-orange-50'}`}
+  title={Number(projeto.temApontamento) > 0 ? 'Não é possível cancelar: projeto possui apontamentos de produção' : 'Cancelar Liberação'}
+  disabled={isDisabledStatus || Number(projeto.temApontamento) > 0}
+  >
+  <RotateCcw size={14} />
+  </button>
+  </>
+  ) : null}
+
+  <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
+
+  {/* Reativar / Parar / Cancelar Projeto */}
+  {isPausedOrCanceled ? (
+  <button
+  onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'AT')}
+  className="p-1.5 rounded-md text-emerald-600 hover:bg-emerald-50 transition-colors"
+  title="Reativar Projeto"
+  >
+  <Play size={14} />
+  </button>
+  ) : !isDisabledStatus ? (
+  <>
+  <button
+  onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'PA')}
+  className="p-1.5 rounded-md text-yellow-600 hover:bg-yellow-50 transition-colors"
+  title="Parar Projeto"
+  >
+  <Pause size={14} />
+  </button>
+  <button
+  onClick={() => projeto.IdProjeto && handleAlterarStatus(projeto.IdProjeto, 'CA')}
+  className="p-1.5 rounded-md text-red-500 hover:bg-red-50 transition-colors"
+  title="Cancelar Projeto"
+  >
+  <Ban size={14} />
+  </button>
+  </>
+  ) : null}
+
+  <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
+
+  <button
+  onClick={() => !isDisabledStatus && openTagForm(projeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+  title="Nova Tag"
+  disabled={isDisabledStatus}
+  >
+  <Plus size={14} />
+  </button>
+  <button
+  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+  title="Editar Projeto"
+  disabled={isDisabledStatus}
+  >
+  <Edit2 size={14} />
+  </button>
+  <button
+  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
+  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-red-500 hover:bg-red-50'}`}
+  title="Excluir Projeto"
+  disabled={isDisabledStatus}
+  >
+  <Trash2 size={14} />
+  </button>
  </div>
  </motion.div>
 

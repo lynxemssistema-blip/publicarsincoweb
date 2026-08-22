@@ -61,6 +61,7 @@ interface ApontamentoItem {
  StatusOS?: string;
  OSFinalizado?: string;
  StatusProjeto?: string;
+ DataPlanejamento?: string;
 }
 
 interface HistoricoItem {
@@ -599,7 +600,8 @@ useEffect(() => {
  setCodMatFabricanteFilter('');
  setStatusFilter('pendente');
  setClienteFilter('');
- setDataPlanejamentoFilter('');
+ setDataPlanejamentoInicio('');
+ setDataPlanejamentoFim('');
  
  setItens([]);
  setHasSearched(false);
