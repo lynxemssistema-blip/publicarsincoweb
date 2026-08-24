@@ -526,7 +526,7 @@ useEffect(() => {
  ? `${API_BASE}/apontamento/mapa/producao?${params}`
  : `${API_BASE}/material-processo/apontamentos/${getResourceFetchId()}?${params}`;
 
- const res = await fetch(url, { signal: controller.signal });
+ const res = await fetch(url, { signal: controller.signal, headers: getAuthHeaders() });
  const json = await res.json();
 
  if (json.success) {
@@ -541,16 +541,15 @@ useEffect(() => {
  } else {
  setError(json.message || 'Erro ao carregar itens');
  }
- } catch {
- if (err.name === 'AbortError') {
+ } catch (err: any) {
+ if (err?.name === 'AbortError') {
  console.log('Fetch aborted');
  return;
  }
+ console.error('[fetchItens] erro:', err);
  setError('Erro de conexão com o servidor');
  } finally {
- if (abortControllerRef.current === controller) {
  setLoading(false);
- }
  }
  }, [setorAtivo, projetoFilter, tagFilter, osFilter, planoCorteFilter, statusFilter, itemFilter, clienteFilter, codMatFabricanteFilter, dataPlanejamentoInicio, dataPlanejamentoFim, page]);
 
@@ -841,7 +840,7 @@ useEffect(() => {
  idOrdemServicoItem: selectedItem.IdOrdemServicoItem,
  qtdeReposicao: qtde,
  motivo: motivoReposicao,
- usuario: 'Sistema' // Em produção pegar do contexto de auth
+  usuario: (user as any)?.NomeCompleto || (user as any)?.nome || (user as any)?.login || 'Sistema'
  })
  });
 
@@ -899,12 +898,9 @@ useEffect(() => {
  txtSolda: chkSoldaRnc ? '1' : '',
  txtPintura: chkPinturaRnc ? '1' : '',
  txtMontagem: chkMontagemRnc ? '1' : '',
- descricaoPendencia,
- setorResponsavel,
- usuarioResponsavel,
- titulo: tituloRnc,
- subTitulo: subTituloRnc,
- tipoRnc,
+ usuarioCriacao: (user as any)?.NomeCompleto || (user as any)?.nome || (user as any)?.login || 'Sistema',
+ criadoporsetor: setorAtivo?.toUpperCase() || '',
+ descProjeto: selectedItem.DescProjeto || selectedItem.Projeto || '',
  dataExecucao: dataExecucaoRnc,
  usuarioCriacao: 'Sistema', // TODO: Context/Auth
  descProjeto: selectedItem.DescProjeto || selectedItem.Projeto || '',

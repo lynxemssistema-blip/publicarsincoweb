@@ -109,6 +109,8 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             params.push(dataPlanejamentoFim);
         }
 
+        // Executar COUNT e DATA em paralelo para economizar tempo de round-trip
+        const countParams = [...params];
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM material_processo mp
@@ -117,10 +119,10 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
         `;
-        
-        const [countResult] = await req.tenantDbPool.execute(countQuery, params);
-        const total = countResult[0].total;
 
+        // Pré-agregar TodosRecursosTooltip em uma única query (substitui N subqueries correlacionados)
+        // Será feita APÓS buscar os dados paginados, apenas para as linhas retornadas
+        const dataParams = [...params, limitNum, offsetNum];
         const dataQuery = `
             SELECT 
                 mp.IdMaterialProcesso,
@@ -143,17 +145,10 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 osi.Espessura,
                 os.Projeto,
                 os.Tag,
-                os.NomeCliente AS Cliente,
+                COALESCE(NULLIF(TRIM(COALESCE(os.NomeCliente, os.DescEmpresa, '')), ''), p.ClienteProjeto) AS Cliente,
                 os.Estatus AS StatusOS,
                 os.OrdemServicoFinalizado AS OSFinalizado,
-                p.Finalizado AS StatusProjeto,
-                (
-                    SELECT GROUP_CONCAT(CONCAT(mp2.SequenciaExecucao, 'º: ', COALESCE(pf.processofabricacao, '')) ORDER BY COALESCE(mp2.SequenciaExecucao, 999) SEPARATOR ' | ')
-                    FROM material_processo mp2
-                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp2.IdProcesso
-                    WHERE mp2.IdOrdemServico = mp.IdOrdemServico 
-                      AND mp2.codmatFabricante = mp.codmatFabricante
-                ) AS TodosRecursosTooltip
+                p.Finalizado AS StatusProjeto
             FROM material_processo mp
             JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
@@ -163,8 +158,46 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             LIMIT ? OFFSET ?
         `;
 
-        params.push(limitNum, offsetNum);
-        const [rows] = await req.tenantDbPool.execute(dataQuery, params);
+        // Executar COUNT e DATA em paralelo
+        const [[countResult], [rows]] = await Promise.all([
+            req.tenantDbPool.execute(countQuery, countParams),
+            req.tenantDbPool.execute(dataQuery, dataParams)
+        ]);
+        const total = countResult[0].total;
+
+        // Pós-processamento: buscar TodosRecursosTooltip apenas para as linhas retornadas
+        // (1 query para todas as linhas, não N queries)
+        if (rows.length > 0) {
+            const uniquePairs = [...new Map(rows.map(r => [`${r.IdOrdemServico}|${r.CodMatFabricante}`, r])).values()]
+                .map(r => `(mp2.IdOrdemServico = ${parseInt(r.IdOrdemServico)} AND mp2.codmatFabricante = ${req.tenantDbPool.escapeId ? JSON.stringify(r.CodMatFabricante) : `'${String(r.CodMatFabricante).replace(/'/g, "''")}'`})`);
+
+            try {
+                const [tooltipRows] = await req.tenantDbPool.execute(`
+                    SELECT 
+                        mp2.IdOrdemServico,
+                        mp2.codmatFabricante,
+                        GROUP_CONCAT(
+                            CONCAT(COALESCE(mp2.SequenciaExecucao, '?'), 'º: ', COALESCE(pf.processofabricacao, '?'))
+                            ORDER BY COALESCE(mp2.SequenciaExecucao, 999)
+                            SEPARATOR ' | '
+                        ) AS TodosRecursosTooltip
+                    FROM material_processo mp2
+                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp2.IdProcesso
+                    WHERE (${uniquePairs.join(' OR ')})
+                    GROUP BY mp2.IdOrdemServico, mp2.codmatFabricante
+                `);
+
+                // Indexar por chave composta e enriquecer rows
+                const tooltipMap = new Map(tooltipRows.map(t => [`${t.IdOrdemServico}|${t.codmatFabricante}`, t.TodosRecursosTooltip]));
+                for (const row of rows) {
+                    row.TodosRecursosTooltip = tooltipMap.get(`${row.IdOrdemServico}|${row.CodMatFabricante}`) || '';
+                }
+            } catch(tooltipErr) {
+                // Tooltip não crítico — não bloqueia a resposta
+                console.warn('[Rota2] Tooltip fetch failed (non-critical):', tooltipErr.message);
+                for (const row of rows) row.TodosRecursosTooltip = '';
+            }
+        }
 
         res.json({
             success: true,
@@ -194,15 +227,26 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
     try {
         await conn.beginTransaction();
 
-        // 1. Buscar registro atual da material_processo
-        const [mpRows] = await conn.execute('SELECT * FROM material_processo WHERE IdMaterialProcesso = ? FOR UPDATE', [IdMaterialProcesso]);
+        // 1. Buscar registro atual da material_processo + QtdeTotal do item
+        const [mpRows] = await conn.execute(`
+            SELECT mp.*, COALESCE(osi.QtdeTotal, 0) AS QtdeTotalItem
+            FROM material_processo mp
+            LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
+            WHERE mp.IdMaterialProcesso = ?
+            FOR UPDATE
+        `, [IdMaterialProcesso]);
         if (mpRows.length === 0) {
             throw new Error('Registro material_processo não encontrado');
         }
         const mp = mpRows[0];
         
         const currentExecutado = parseFloat(mp.TotalExecutado) || 0;
-        const currentExecutar = parseFloat(mp.TotalExecutar) || 0;
+        // FIX: Se TotalExecutar é NULL ou 0 e ainda não houve execuções (primeiro apontamento),
+        // inicializar com QtdeTotal do item para que a lógica de pendência funcione corretamente.
+        const storedExecutar = parseFloat(mp.TotalExecutar);
+        const currentExecutar = (storedExecutar > 0)
+            ? storedExecutar
+            : (currentExecutado === 0 ? parseFloat(mp.QtdeTotalItem) || 0 : 0);
         
         const loggedUser = req.body.CriadoPor || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
         
