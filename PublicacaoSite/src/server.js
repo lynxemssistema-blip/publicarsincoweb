@@ -152,7 +152,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, tenant-id');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(200);
     }
@@ -4470,7 +4470,14 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
                 p.ValorFabricacao, p.ValorRevenda, p.TotalProjeto,
                 p.CriadoPor, p.IdEmpresa, p.EnderecoProjeto, p.Observacao,
                 p.D_E_L_E_T_E,
-                COALESCE(ap.qtd, 0) AS temApontamento
+                COALESCE(ap.qtd, 0) AS temApontamento,
+                COALESCE((
+                    SELECT SUM(COALESCE(mp.TotalExecutar, 0))
+                    FROM material_processo mp
+                    JOIN ordemservico os3 ON os3.IdOrdemServico = mp.IdOrdemServico
+                    WHERE os3.IdProjeto = p.IdProjeto
+                      AND (os3.D_E_L_E_T_E IS NULL OR os3.D_E_L_E_T_E = '' OR os3.D_E_L_E_T_E != '*')
+                ), 0) AS temSaldoPendente
             FROM projetos p
             LEFT JOIN (
                 SELECT os2.IdProjeto, COUNT(c2.IdOrdemServicoItemControle) AS qtd
@@ -4928,6 +4935,80 @@ const queryPool = req.tenantDbPool || pool;
             GROUP BY os.IdProjeto
         `);
 
+        
+        const [mpStatsRows] = await queryPool.execute(`
+            SELECT 
+                os.IdProjeto,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorte,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorte,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorte,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorte,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorte,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorte,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalDobra,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecDobra,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioDobra,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalDobra,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioDobra,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalDobra,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalSolda,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecSolda,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioSolda,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalSolda,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioSolda,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalSolda,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPintura,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPintura,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPintura,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPintura,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPintura,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPintura,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalMontagem,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecMontagem,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioMontagem,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioMontagem,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalMontagem,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorteaLaser,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorteaLaser,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorteaLaser,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorteaLaser,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorteaLaser,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPunsionadeira,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPunsionadeira,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPunsionadeira,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPunsionadeira,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPunsionadeira,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPunsionadeira,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalGalvanizar,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecGalvanizar,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioGalvanizar,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGalvanizar,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGalvanizar,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGalvanizar
+            FROM ordemservico os
+            LEFT JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            WHERE os.IdProjeto IN (${inClause})
+              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+              AND os.IdTag IS NOT NULL
+            GROUP BY os.IdProjeto
+        `);
+        
+        const mpStatsMapProjeto = {};
+        for (const row of mpStatsRows) {
+            mpStatsMapProjeto[row.IdProjeto] = row;
+        }
+
         const osStatsMap = {};
         for (const row of osStatsRows) {
             osStatsMap[row.IdProjeto] = row;
@@ -4963,6 +5044,7 @@ const queryPool = req.tenantDbPool || pool;
         // 4. Merge all
         const enriched = projetos.map(p => {
             const osS = osStatsMap[p.IdProjeto] || {};
+            const mpS = mpStatsMapProjeto[p.IdProjeto] || {};
             const rncS = rncMap[p.IdProjeto] || {};
             
             const merged = {
@@ -4975,44 +5057,44 @@ const queryPool = req.tenantDbPool || pool;
                 qtderncPendente: rncS.qtderncPendente || 0,
                 qtderncFinalizada: rncS.qtderncFinalizada || 0,
 
-                TotalCorte: p.CorteTotalExecutar ?? osS.TotalCorte ?? 0, ExecCorte: p.CorteTotalExecutado ?? osS.ExecCorte ?? 0,
-                PlanejadoInicioCorte: p.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: p.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: p.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: p.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
+                TotalCorte: p.CorteTotalExecutar ?? mpS.mpTotalCorte ?? osS.TotalCorte ?? 0, ExecCorte: p.CorteTotalExecutado ?? mpS.mpExecCorte ?? osS.ExecCorte ?? 0,
+                PlanejadoInicioCorte: p.PlanejadoInicioCorte || mpS.mpPlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: p.PlanejadoFinalCorte || mpS.mpPlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: p.RealizadoInicioCorte || mpS.mpRealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: p.RealizadoFinalCorte || mpS.mpRealizadoFinalCorte || osS.RealizadoFinalCorte || null,
                 flagCorte: osS.flagCorte || 0,
 
-                TotalDobra: p.DobraTotalExecutar ?? osS.TotalDobra ?? 0, ExecDobra: p.DobraTotalExecutado ?? osS.ExecDobra ?? 0,
-                PlanejadoInicioDobra: p.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: p.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: p.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: p.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
+                TotalDobra: p.DobraTotalExecutar ?? mpS.mpTotalDobra ?? osS.TotalDobra ?? 0, ExecDobra: p.DobraTotalExecutado ?? mpS.mpExecDobra ?? osS.ExecDobra ?? 0,
+                PlanejadoInicioDobra: p.PlanejadoInicioDobra || mpS.mpPlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: p.PlanejadoFinalDobra || mpS.mpPlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: p.RealizadoInicioDobra || mpS.mpRealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: p.RealizadoFinalDobra || mpS.mpRealizadoFinalDobra || osS.RealizadoFinalDobra || null,
                 flagDobra: osS.flagDobra || 0,
 
-                TotalSolda: p.SoldaTotalExecutar ?? osS.TotalSolda ?? 0, ExecSolda: p.SoldaTotalExecutado ?? osS.ExecSolda ?? 0,
-                PlanejadoInicioSolda: p.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: p.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: p.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: p.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
+                TotalSolda: p.SoldaTotalExecutar ?? mpS.mpTotalSolda ?? osS.TotalSolda ?? 0, ExecSolda: p.SoldaTotalExecutado ?? mpS.mpExecSolda ?? osS.ExecSolda ?? 0,
+                PlanejadoInicioSolda: p.PlanejadoInicioSolda || mpS.mpPlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: p.PlanejadoFinalSolda || mpS.mpPlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: p.RealizadoInicioSolda || mpS.mpRealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: p.RealizadoFinalSolda || mpS.mpRealizadoFinalSolda || osS.RealizadoFinalSolda || null,
                 flagSolda: osS.flagSolda || 0,
 
-                TotalPintura: p.PinturaTotalExecutar ?? osS.TotalPintura ?? 0, ExecPintura: p.PinturaTotalExecutado ?? osS.ExecPintura ?? 0,
-                PlanejadoInicioPintura: p.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: p.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: p.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: p.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
+                TotalPintura: p.PinturaTotalExecutar ?? mpS.mpTotalPintura ?? osS.TotalPintura ?? 0, ExecPintura: p.PinturaTotalExecutado ?? mpS.mpExecPintura ?? osS.ExecPintura ?? 0,
+                PlanejadoInicioPintura: p.PlanejadoInicioPintura || mpS.mpPlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: p.PlanejadoFinalPintura || mpS.mpPlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: p.RealizadoInicioPintura || mpS.mpRealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: p.RealizadoFinalPintura || mpS.mpRealizadoFinalPintura || osS.RealizadoFinalPintura || null,
                 flagPintura: osS.flagPintura || 0,
 
-                TotalMontagem: p.MontagemTotalExecutar ?? osS.TotalMontagem ?? 0, ExecMontagem: p.MontagemTotalExecutado ?? osS.ExecMontagem ?? 0,
-                PlanejadoInicioMontagem: p.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: p.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: p.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: p.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
+                TotalMontagem: p.MontagemTotalExecutar ?? mpS.mpTotalMontagem ?? osS.TotalMontagem ?? 0, ExecMontagem: p.MontagemTotalExecutado ?? mpS.mpExecMontagem ?? osS.ExecMontagem ?? 0,
+                PlanejadoInicioMontagem: p.PlanejadoInicioMontagem || mpS.mpPlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: p.PlanejadoFinalMontagem || mpS.mpPlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: p.RealizadoInicioMontagem || mpS.mpRealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: p.RealizadoFinalMontagem || mpS.mpRealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
                 flagMontagem: osS.flagMontagem || 0,
 
-                TotalCorteaLaser: p.CorteaLaserTotalExecutar ?? osS.TotalCorteaLaser ?? 0, ExecCorteaLaser: p.CorteaLaserTotalExecutado ?? osS.ExecCorteaLaser ?? 0,
-                PlanejadoInicioCorteaLaser: p.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: p.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: p.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: p.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
+                TotalCorteaLaser: p.CorteaLaserTotalExecutar ?? mpS.mpTotalCorteaLaser ?? osS.TotalCorteaLaser ?? 0, ExecCorteaLaser: p.CorteaLaserTotalExecutado ?? mpS.mpExecCorteaLaser ?? osS.ExecCorteaLaser ?? 0,
+                PlanejadoInicioCorteaLaser: p.PlanejadoInicioCorteaLaser || mpS.mpPlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: p.PlanejadoFinalCorteaLaser || mpS.mpPlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: p.RealizadoInicioCorteaLaser || mpS.mpRealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: p.RealizadoFinalCorteaLaser || mpS.mpRealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
                 flagCorteaLaser: osS.flagCorteaLaser || 0,
 
-                TotalPunsionadeira: p.PunsionadeiraTotalExecutar ?? osS.TotalPunsionadeira ?? 0, ExecPunsionadeira: p.PunsionadeiraTotalExecutado ?? osS.ExecPunsionadeira ?? 0,
-                PlanejadoInicioPunsionadeira: p.PlanejadoInicioPunsionadeira || osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: p.PlanejadoFinalPunsionadeira || osS.PlanejadoFinalPunsionadeira || null,
-                RealizadoInicioPunsionadeira: p.RealizadoInicioPunsionadeira || osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: p.RealizadoFinalPunsionadeira || osS.RealizadoFinalPunsionadeira || null,
+                TotalPunsionadeira: p.PunsionadeiraTotalExecutar ?? mpS.mpTotalPunsionadeira ?? osS.TotalPunsionadeira ?? 0, ExecPunsionadeira: p.PunsionadeiraTotalExecutado ?? mpS.mpExecPunsionadeira ?? osS.ExecPunsionadeira ?? 0,
+                PlanejadoInicioPunsionadeira: p.PlanejadoInicioPunsionadeira || mpS.mpPlanejadoInicioPunsionadeira || osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: p.PlanejadoFinalPunsionadeira || mpS.mpPlanejadoFinalPunsionadeira || osS.PlanejadoFinalPunsionadeira || null,
+                RealizadoInicioPunsionadeira: p.RealizadoInicioPunsionadeira || mpS.mpRealizadoInicioPunsionadeira || osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: p.RealizadoFinalPunsionadeira || mpS.mpRealizadoFinalPunsionadeira || osS.RealizadoFinalPunsionadeira || null,
                 flagPunsionadeira: osS.flagPunsionadeira || 0,
 
-                TotalGalvanizar: p.GalvanizarTotalExecutar ?? osS.TotalGalvanizar ?? 0, ExecGalvanizar: p.GalvanizarTotalExecutado ?? osS.ExecGalvanizar ?? 0,
-                PlanejadoInicioGalvanizar: p.PlanejadoInicioGalvanizar || osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: p.PlanejadoFinalGalvanizar || osS.PlanejadoFinalGalvanizar || null,
-                RealizadoInicioGalvanizar: p.RealizadoInicioGalvanizar || osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: p.RealizadoFinalGalvanizar || osS.RealizadoFinalGalvanizar || null,
+                TotalGalvanizar: p.GalvanizarTotalExecutar ?? mpS.mpTotalGalvanizar ?? osS.TotalGalvanizar ?? 0, ExecGalvanizar: p.GalvanizarTotalExecutado ?? mpS.mpExecGalvanizar ?? osS.ExecGalvanizar ?? 0,
+                PlanejadoInicioGalvanizar: p.PlanejadoInicioGalvanizar || mpS.mpPlanejadoInicioGalvanizar || osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: p.PlanejadoFinalGalvanizar || mpS.mpPlanejadoFinalGalvanizar || osS.PlanejadoFinalGalvanizar || null,
+                RealizadoInicioGalvanizar: p.RealizadoInicioGalvanizar || mpS.mpRealizadoInicioGalvanizar || osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: p.RealizadoFinalGalvanizar || mpS.mpRealizadoFinalGalvanizar || osS.RealizadoFinalGalvanizar || null,
                 flagGalvanizar: osS.flagGalvanizar || 0,
             };
 
@@ -5184,8 +5266,81 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
             osStatsMap[row.IdTag] = row;
         }
 
+        
+        
+        const [mpStatsRows] = await req.tenantDbPool.execute(`
+            SELECT 
+                os.IdTag,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorte,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorte,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorte,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorte,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorte,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorte,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalDobra,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecDobra,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioDobra,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalDobra,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioDobra,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalDobra,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalSolda,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecSolda,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioSolda,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalSolda,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioSolda,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalSolda,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPintura,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPintura,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPintura,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPintura,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPintura,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPintura,
+                
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalMontagem,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecMontagem,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioMontagem,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalMontagem,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioMontagem,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalMontagem,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorteaLaser,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorteaLaser,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorteaLaser,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorteaLaser,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorteaLaser,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorteaLaser,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPunsionadeira,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPunsionadeira,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPUNSIONADEIRA,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPUNSIONADEIRA,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPUNSIONADEIRA,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPUNSIONADEIRA,
+
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalGalvanizar,
+                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecGalvanizar,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioGALVANIZAR,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGALVANIZAR,
+                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGALVANIZAR,
+                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGALVANIZAR
+            FROM ordemservico os
+            LEFT JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            WHERE os.IdTag IN (${inClause})
+              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            GROUP BY os.IdTag
+        `);
+const mpStatsMap = {};
+        for (const row of mpStatsRows) {
+            mpStatsMap[row.IdTag] = row;
+        }
+
         const rows = tagsRaw.map(t => {
             const osS = osStatsMap[t.IdTag] || {};
+            const mpS = mpStatsMap[t.IdTag] || {};
             return {
                 ...t,
                 QtdeOS: osS.QtdeOS || 0,
@@ -5207,37 +5362,37 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 txtCorteaLaser: t.txtCorteaLaser,
                 txtGALVANIZAR: t.txtGALVANIZAR,
 
-                PlanejadoInicioCorte: t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
-                CorteTotalExecutado: t.CorteTotalExecutado ?? osS.CorteTotalExecutado ?? 0, CorteTotalExecutar: t.CorteTotalExecutar ?? osS.CorteTotalExecutar ?? 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
+                PlanejadoInicioCorte: mpS.mpPlanejadoInicioCorte || t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: mpS.mpPlanejadoFinalCorte || t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
+                RealizadoInicioCorte: mpS.mpRealizadoInicioCorte || t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: mpS.mpRealizadoFinalCorte || t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
+                CorteTotalExecutado: mpS.mpExecCorte ?? t.CorteTotalExecutado ?? osS.CorteTotalExecutado ?? 0, CorteTotalExecutar: mpS.mpTotalCorte ?? t.CorteTotalExecutar ?? osS.CorteTotalExecutar ?? 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
 
-                PlanejadoInicioDobra: t.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: t.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: t.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: t.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
-                DobraTotalExecutado: t.DobraTotalExecutado ?? osS.DobraTotalExecutado ?? 0, DobraTotalExecutar: t.DobraTotalExecutar ?? osS.DobraTotalExecutar ?? 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
+                PlanejadoInicioDobra: mpS.mpPlanejadoInicioDobra || t.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: mpS.mpPlanejadoFinalDobra || t.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
+                RealizadoInicioDobra: mpS.mpRealizadoInicioDobra || t.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: mpS.mpRealizadoFinalDobra || t.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
+                DobraTotalExecutado: mpS.mpExecDobra ?? t.DobraTotalExecutado ?? osS.DobraTotalExecutado ?? 0, DobraTotalExecutar: mpS.mpTotalDobra ?? t.DobraTotalExecutar ?? osS.DobraTotalExecutar ?? 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
 
-                PlanejadoInicioSolda: t.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: t.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: t.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: t.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
-                SoldaTotalExecutado: t.SoldaTotalExecutado ?? osS.SoldaTotalExecutado ?? 0, SoldaTotalExecutar: t.SoldaTotalExecutar ?? osS.SoldaTotalExecutar ?? 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
+                PlanejadoInicioSolda: mpS.mpPlanejadoInicioSolda || t.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: mpS.mpPlanejadoFinalSolda || t.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
+                RealizadoInicioSolda: mpS.mpRealizadoInicioSolda || t.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: mpS.mpRealizadoFinalSolda || t.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
+                SoldaTotalExecutado: mpS.mpExecSolda ?? t.SoldaTotalExecutado ?? osS.SoldaTotalExecutado ?? 0, SoldaTotalExecutar: mpS.mpTotalSolda ?? t.SoldaTotalExecutar ?? osS.SoldaTotalExecutar ?? 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
 
-                PlanejadoInicioPintura: t.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: t.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: t.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: t.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
-                PinturaTotalExecutado: t.PinturaTotalExecutado ?? osS.PinturaTotalExecutado ?? 0, PinturaTotalExecutar: t.PinturaTotalExecutar ?? osS.PinturaTotalExecutar ?? 0, SumQtdePintura: osS.SumQtdePintura || 0,
+                PlanejadoInicioPintura: mpS.mpPlanejadoInicioPintura || t.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: mpS.mpPlanejadoFinalPintura || t.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
+                RealizadoInicioPintura: mpS.mpRealizadoInicioPintura || t.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: mpS.mpRealizadoFinalPintura || t.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
+                PinturaTotalExecutado: mpS.mpExecPintura ?? t.PinturaTotalExecutado ?? osS.PinturaTotalExecutado ?? 0, PinturaTotalExecutar: mpS.mpTotalPintura ?? t.PinturaTotalExecutar ?? osS.PinturaTotalExecutar ?? 0, SumQtdePintura: osS.SumQtdePintura || 0,
 
-                PlanejadoInicioMontagem: t.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: t.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: t.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: t.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
-                MontagemTotalExecutado: t.MontagemTotalExecutado ?? osS.MontagemTotalExecutado ?? 0, MontagemTotalExecutar: t.MontagemTotalExecutar ?? osS.MontagemTotalExecutar ?? 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
+                PlanejadoInicioMontagem: mpS.mpPlanejadoInicioMontagem || t.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: mpS.mpPlanejadoFinalMontagem || t.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
+                RealizadoInicioMontagem: mpS.mpRealizadoInicioMontagem || t.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: mpS.mpRealizadoFinalMontagem || t.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
+                MontagemTotalExecutado: mpS.mpExecMontagem ?? t.MontagemTotalExecutado ?? osS.MontagemTotalExecutado ?? 0, MontagemTotalExecutar: mpS.mpTotalMontagem ?? t.MontagemTotalExecutar ?? osS.MontagemTotalExecutar ?? 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
 
-                PlanejadoInicioCorteaLaser: t.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: t.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: t.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: t.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
-                CorteaLaserTotalExecutado: t.CorteaLaserTotalExecutado ?? osS.CorteaLaserTotalExecutado ?? 0, CorteaLaserTotalExecutar: t.CorteaLaserTotalExecutar ?? osS.CorteaLaserTotalExecutar ?? 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
+                PlanejadoInicioCorteaLaser: mpS.mpPlanejadoInicioCorteaLaser || t.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: mpS.mpPlanejadoFinalCorteaLaser || t.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
+                RealizadoInicioCorteaLaser: mpS.mpRealizadoInicioCorteaLaser || t.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: mpS.mpRealizadoFinalCorteaLaser || t.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
+                CorteaLaserTotalExecutado: mpS.mpExecCorteaLaser ?? t.CorteaLaserTotalExecutado ?? osS.CorteaLaserTotalExecutado ?? 0, CorteaLaserTotalExecutar: mpS.mpTotalCorteaLaser ?? t.CorteaLaserTotalExecutar ?? osS.CorteaLaserTotalExecutar ?? 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
 
-                PlanejadoInicioPUNSIONADEIRA: osS.PlanejadoInicioPUNSIONADEIRA || null, PlanejadoFinalPUNSIONADEIRA: osS.PlanejadoFinalPUNSIONADEIRA || null,
-                RealizadoInicioPUNSIONADEIRA: osS.RealizadoInicioPUNSIONADEIRA || null, RealizadoFinalPUNSIONADEIRA: osS.RealizadoFinalPUNSIONADEIRA || null,
-                PUNSIONADEIRATotalExecutado: osS.PUNSIONADEIRATotalExecutado || 0, PUNSIONADEIRATotalExecutar: osS.PUNSIONADEIRATotalExecutar || 0, SumQtdePunsionadeira: osS.SumQtdePunsionadeira || 0,
+                PlanejadoInicioPUNSIONADEIRA: mpS.mpPlanejadoInicioPUNSIONADEIRA || t.PlanejadoInicioPUNSIONADEIRA || osS.PlanejadoInicioPUNSIONADEIRA || null, PlanejadoFinalPUNSIONADEIRA: mpS.mpPlanejadoFinalPUNSIONADEIRA || t.PlanejadoFinalPUNSIONADEIRA || osS.PlanejadoFinalPUNSIONADEIRA || null,
+                RealizadoInicioPUNSIONADEIRA: mpS.mpRealizadoInicioPUNSIONADEIRA || t.RealizadoInicioPUNSIONADEIRA || osS.RealizadoInicioPUNSIONADEIRA || null, RealizadoFinalPUNSIONADEIRA: mpS.mpRealizadoFinalPUNSIONADEIRA || t.RealizadoFinalPUNSIONADEIRA || osS.RealizadoFinalPUNSIONADEIRA || null,
+                PUNSIONADEIRATotalExecutado: mpS.mpExecPunsionadeira ?? osS.PUNSIONADEIRATotalExecutado ?? 0, PUNSIONADEIRATotalExecutar: mpS.mpTotalPunsionadeira ?? osS.PUNSIONADEIRATotalExecutar ?? 0, SumQtdePunsionadeira: osS.SumQtdePunsionadeira || 0,
 
-                PlanejadoInicioGALVANIZAR: osS.PlanejadoInicioGALVANIZAR || null, PlanejadoFinalGALVANIZAR: osS.PlanejadoFinalGALVANIZAR || null,
-                RealizadoInicioGALVANIZAR: osS.RealizadoInicioGALVANIZAR || null, RealizadoFinalGALVANIZAR: osS.RealizadoFinalGALVANIZAR || null,
-                GALVANIZARTotalExecutado: osS.GALVANIZARTotalExecutado || 0, GALVANIZARTotalExecutar: osS.GALVANIZARTotalExecutar || 0, SumQtdeGalvanizar: osS.SumQtdeGalvanizar || 0,
+                PlanejadoInicioGALVANIZAR: mpS.mpPlanejadoInicioGALVANIZAR || t.PlanejadoInicioGALVANIZAR || osS.PlanejadoInicioGALVANIZAR || null, PlanejadoFinalGALVANIZAR: mpS.mpPlanejadoFinalGALVANIZAR || t.PlanejadoFinalGALVANIZAR || osS.PlanejadoFinalGALVANIZAR || null,
+                RealizadoInicioGALVANIZAR: mpS.mpRealizadoInicioGALVANIZAR || t.RealizadoInicioGALVANIZAR || osS.RealizadoInicioGALVANIZAR || null, RealizadoFinalGALVANIZAR: mpS.mpRealizadoFinalGALVANIZAR || t.RealizadoFinalGALVANIZAR || osS.RealizadoFinalGALVANIZAR || null,
+                GALVANIZARTotalExecutado: mpS.mpExecGalvanizar ?? osS.GALVANIZARTotalExecutado ?? 0, GALVANIZARTotalExecutar: mpS.mpTotalGalvanizar ?? osS.GALVANIZARTotalExecutar ?? 0, SumQtdeGalvanizar: osS.SumQtdeGalvanizar || 0,
 
                 CortePercentual: (Number(osS.SumQtdeCorte) > 0 ? Math.round((Number(osS.CorteTotalExecutado) || 0) / Number(osS.SumQtdeCorte) * 100) : 0).toString(),
                 DobraPercentual: (Number(osS.SumQtdeDobra) > 0 ? Math.round((Number(osS.DobraTotalExecutado) || 0) / Number(osS.SumQtdeDobra) * 100) : 0).toString(),
@@ -5259,6 +5414,85 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
     }
 });
 
+// ─── GET recursos (material_processo) agregados por tag do projeto ───────────
+app.get('/api/acompanhamento/projeto/:projetoId/recursos', tenantMiddleware, async (req, res) => {
+    try {
+        const { projetoId } = req.params;
+        const queryPool = req.tenantDbPool || pool;
+
+        const [rows] = await queryPool.execute(`
+            SELECT
+                t.IdTag,
+                t.Tag,
+                t.DescTag,
+                TRIM(t.Finalizado)                                             AS Finalizado,
+                pf.IdProcessoFabricacao,
+                pf.processofabricacao                                          AS DescRecurso,
+                COALESCE(SUM(mp.TotalExecutar),  0)                            AS TotalExecutar,
+                COALESCE(SUM(mp.TotalExecutado), 0)                            AS TotalExecutado,
+                DATE_FORMAT(MIN(mp.PlanejadoInicio), '%d/%m/%Y')               AS PlanejadoInicio,
+                DATE_FORMAT(MAX(mp.PlanejadoFinal),  '%d/%m/%Y')               AS PlanejadoFinal,
+                DATE_FORMAT(MIN(mp.RealizadoInicio), '%d/%m/%Y')               AS RealizadoInicio,
+                DATE_FORMAT(MAX(mp.RealizadoFinal),  '%d/%m/%Y')               AS RealizadoFinal
+            FROM tags t
+            INNER JOIN ordemservico os
+                ON  os.IdTag = t.IdTag
+                AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            INNER JOIN material_processo mp
+                ON  mp.IdOrdemServico = os.IdOrdemServico
+            INNER JOIN processofabricacao pf
+                ON  pf.IdProcessoFabricacao = mp.IdProcesso
+            WHERE t.IdProjeto = ?
+              AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '' OR t.D_E_L_E_T_E = ' ')
+            GROUP BY t.IdTag, t.Tag, t.DescTag, t.Finalizado,
+                     pf.IdProcessoFabricacao, pf.processofabricacao
+            ORDER BY t.IdTag ASC, pf.processofabricacao ASC
+        `, [projetoId]);
+
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error(`[Recursos] Error for projeto ${req.params.projetoId}:`, error.message);
+        res.status(500).json({ success: false, message: 'Erro ao buscar recursos: ' + error.message });
+    }
+});
+
+// GET OS recursos para uma tag específica (detalhe expansível por OS)
+app.get('/api/acompanhamento/tag/:tagId/os-recursos', tenantMiddleware, async (req, res) => {
+    try {
+        const { tagId } = req.params;
+        const queryPool = req.tenantDbPool || pool;
+
+        const [rows] = await queryPool.execute(`
+            SELECT
+                os.IdOrdemServico,
+                COALESCE(os.Descricao, CONCAT('OS #', os.IdOrdemServico)) AS DescricaoOS,
+                TRIM(os.Estatus)                                           AS StatusOS,
+                pf.IdProcessoFabricacao,
+                pf.processofabricacao                                      AS DescRecurso,
+                COALESCE(SUM(mp.TotalExecutar),  0)                        AS TotalExecutar,
+                COALESCE(SUM(mp.TotalExecutado), 0)                        AS TotalExecutado,
+                DATE_FORMAT(MIN(mp.PlanejadoInicio), '%d/%m/%Y')           AS PlanejadoInicio,
+                DATE_FORMAT(MAX(mp.PlanejadoFinal),  '%d/%m/%Y')           AS PlanejadoFinal,
+                DATE_FORMAT(MIN(mp.RealizadoInicio), '%d/%m/%Y')           AS RealizadoInicio,
+                DATE_FORMAT(MAX(mp.RealizadoFinal),  '%d/%m/%Y')           AS RealizadoFinal
+            FROM material_processo mp
+            INNER JOIN ordemservico os
+                ON  os.IdOrdemServico = mp.IdOrdemServico
+                AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+            INNER JOIN processofabricacao pf
+                ON  pf.IdProcessoFabricacao = mp.IdProcesso
+            WHERE mp.IdTag = ?
+            GROUP BY os.IdOrdemServico, os.Descricao, os.Estatus,
+                     pf.IdProcessoFabricacao, pf.processofabricacao
+            ORDER BY os.IdOrdemServico ASC, pf.processofabricacao ASC
+        `, [tagId]);
+
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error(`[OS Recursos] Error for tag ${req.params.tagId}:`, error.message);
+        res.status(500).json({ success: false, message: 'Erro ao buscar OS recursos: ' + error.message });
+    }
+});
 
 // PUT planejar-projetista for a tag
 app.put('/api/acompanhamento/tags/:idTag/planejar-projetista', tenantMiddleware, async (req, res) => {
@@ -5383,7 +5617,7 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             return res.status(400).json({ success: false, message: 'Projeto e Usuário são obrigatà³rios.' });
         }
 
-        const dataLocal = new Date().toLocaleDateString('pt-BR');
+        const dataLocal = getCurrentDateTimeBR();
         const queryPool = req.tenantDbPool || pool;
         
         if (finalizarTodas) {
@@ -5406,10 +5640,11 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
-                    DataFinalizado = ?, 
+                    DataFinalizado = ?,
+                    DataFinalizacao = ?, 
                     UsuarioFinalizado = ? 
                 WHERE IdProjeto = ? AND (OrdemServicoFinalizado IS NULL OR OrdemServicoFinalizado = '') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
-            `, [dataLocal, usuario, idProjeto]);
+            `, [dataLocal, dataLocal, usuario, idProjeto]);
         } else {
             if (!idTag) return res.status(400).json({ success: false, message: 'ID da Tag à© obrigatà³rio para finalizar apenas uma.' });
             
@@ -5432,10 +5667,11 @@ app.put('/api/acompanhamento/tags/finalizar', tenantMiddleware, async (req, res)
             await req.tenantDbPool.execute(`
                 UPDATE ordemservico 
                 SET OrdemServicoFinalizado = 'C', 
-                    DataFinalizado = ?, 
+                    DataFinalizado = ?,
+                    DataFinalizacao = ?, 
                     UsuarioFinalizado = ? 
                 WHERE IdTag = ?
-            `, [dataLocal, usuario, idTag]);
+            `, [dataLocal, dataLocal, usuario, idTag]);
         }
 
         res.json({ success: true, message: finalizarTodas ? 'Todas as tags e OS pendentes foram finalizadas.' : 'Tag e suas respectivas OS finalizadas com sucesso.' });
@@ -6340,7 +6576,7 @@ app.post('/api/visao-geral/os/:idOs/propagar-datas', tenantMiddleware, async (re
                 osiParams.push(pfDb, userName);
             }
 
-            const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
+        const exactOsiTxtFlag = osiColNames.find(c => c.toLowerCase() === txtFlag.toLowerCase()) || txtFlag;
 
             const [result] = await req.tenantDbPool.execute(
                 `UPDATE ordemservicoitem SET ${osiSetClauses.join(', ')}
@@ -6394,10 +6630,10 @@ app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req,
             `UPDATE tags SET Finalizado='C', UsuarioFinalizado=?, DataFinalizado=? WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [userFinal, now, id]
         );
-        // ordemservico: DataFinalizacao (diferente!)
+        // ordemservico: DataFinalizado e DataFinalizacao
         await req.tenantDbPool.execute(
-            `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
-            [userFinal, now, id]
+            `UPDATE ordemservico SET OrdemServicoFinalizado='C', UsuarioFinalizado=?, DataFinalizado=?, DataFinalizacao=? WHERE IdProjeto=?`,
+            [userFinal, now, now, id]
         );
         // ordemservicoitem: DataFinalizado
         await req.tenantDbPool.execute(
@@ -6413,15 +6649,61 @@ app.post('/api/visao-geral/projeto/:id/finalizar', tenantMiddleware, async (req,
     }
 });
 
-// POST: Cancelar Finalizaà§ão do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
+// GET: Pré-check — verifica se é possível cancelar a finalização do projeto
+app.get('/api/visao-geral/projeto/:id/pode-cancelar-finalizacao', tenantMiddleware, async (req, res) => {
+    const { id } = req.params;
+    try {
+        const [check] = await req.tenantDbPool.execute(
+            `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`, [id]
+        );
+        if (!check.length) return res.status(404).json({ success: false, pode: false, message: 'Projeto não encontrado.' });
+        if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
+            return res.json({ success: false, pode: false, message: `O projeto não está finalizado.` });
+        }
+        // Verifica saldo via material_processo (fonte de verdade)
+        const [mpRows] = await req.tenantDbPool.execute(
+            `SELECT COUNT(mp.IdMaterialProcesso) as TotalMP,
+                    SUM(COALESCE(mp.TotalExecutar, 0)) as SaldoMP,
+                    COUNT(osi.IdOrdemServicoItem) as TotalItens
+             FROM ordemservicoitem osi
+             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+             LEFT JOIN material_processo mp ON mp.IdOrdemServico = osi.IdOrdemServico
+                 AND mp.codmatFabricante = osi.codmatFabricante
+             WHERE os.IdProjeto = ?
+               AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`,
+            [id]
+        );
+        const r = mpRows[0] || {};
+        const totalItens = Number(r.TotalItens) || 0;
+        const totalMP    = Number(r.TotalMP)    || 0;
+        const saldoMP    = Number(r.SaldoMP)    || 0;
+
+        if (totalItens === 0) {
+            return res.json({ success: false, pode: false,
+                message: `Projeto sem itens de OS — cancelamento não permitido.` });
+        }
+        if (totalMP > 0 && saldoMP === 0) {
+            return res.json({ success: false, pode: false,
+                message: `Não é possível cancelar a finalização do projeto "${check[0].Projeto}". ` +
+                         `Todos os processos já foram concluídos (sem saldo pendente de produção).` });
+        }
+        return res.json({ success: true, pode: true,
+            message: `Projeto "${check[0].Projeto}" possui saldo pendente. Cancelamento permitido.` });
+    } catch (error) {
+        console.error('[Pre-check cancelar-finalizacao]', error);
+        return res.status(500).json({ success: false, pode: false, message: 'Erro ao verificar elegibilidade.' });
+    }
+});
+
+// POST: Cancelar Finalização do Projeto (desfaz cascata em projetos/tags/OS/OSitens)
 app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, async (req, res) => {
     const { id } = req.params;
     const { usuario } = req.body;
     const userCancel = usuario || 'Sistema';
 
     try {
-        // 1. Verificar se está finalizado (condià§ão para cancelar)
-        const queryPool = req.tenantDbPool || pool;
+        // 1. Verificar se o projeto existe e está finalizado
         const [check] = await req.tenantDbPool.execute(
             `SELECT Finalizado, Projeto FROM projetos WHERE IdProjeto = ?`,
             [id]
@@ -6432,37 +6714,75 @@ app.post('/api/visao-geral/projeto/:id/cancelar-finalizacao', tenantMiddleware, 
         if (!check[0].Finalizado || check[0].Finalizado.trim() === '') {
             return res.status(400).json({
                 success: false,
-                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteraà§ão foi realizada.`
+                message: `O projeto "${check[0].Projeto}" não está finalizado. Nenhuma alteração foi realizada.`
             });
         }
 
-        // 2. Desfazer finalizaà§ão em cascata (limpar campos)
-        // projetos
+        // 2. VALIDAÇÃO: verificar se existem quantidades a executar via material_processo
+        //    Fonte de verdade: mp.TotalExecutar > 0 significa que ainda há produção pendente.
+        //    Os campos legados (CorteTotalExecutado etc.) NÃO são usados pois são calculados
+        //    sobre todos os setores independente de o item ter ou não aquele processo.
+        const [mpRows] = await req.tenantDbPool.execute(
+            `SELECT
+                COUNT(mp.IdMaterialProcesso)       as TotalMP,
+                SUM(COALESCE(mp.TotalExecutar, 0)) as SaldoMP,
+                COUNT(osi.IdOrdemServicoItem)       as TotalItens
+             FROM ordemservicoitem osi
+             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+             LEFT JOIN material_processo mp ON mp.IdOrdemServico = osi.IdOrdemServico
+                 AND mp.codmatFabricante = osi.codmatFabricante
+             WHERE os.IdProjeto = ?
+               AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+               AND (os.D_E_L_E_T_E  IS NULL OR os.D_E_L_E_T_E  = '' OR os.D_E_L_E_T_E  != '*')`,
+            [id]
+        );
+
+        const mpR = mpRows[0] || {};
+        const totalItens = Number(mpR.TotalItens) || 0;
+        const totalMP    = Number(mpR.TotalMP)    || 0;
+        const saldoMP    = Number(mpR.SaldoMP)    || 0;
+
+        // Projeto sem itens — não faz sentido cancelar
+        if (totalItens === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Não é possível cancelar a finalização: o projeto "${check[0].Projeto}" não possui itens de OS.`
+            });
+        }
+
+        // Se há registros em material_processo, a fonte de verdade é TotalExecutar
+        if (totalMP > 0 && saldoMP === 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Não é possível cancelar a finalização do projeto "${check[0].Projeto}". ` +
+                         `Todos os processos já foram concluídos (TotalExecutar = 0 em todos os registros). ` +
+                         `O cancelamento só é permitido quando há saldo pendente de produção.`
+            });
+        }
+
+        // 3. Desfazer finalização em cascata
         await req.tenantDbPool.execute(
             `UPDATE projetos SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=?`,
             [id]
         );
-        // tags
         await req.tenantDbPool.execute(
             `UPDATE tags SET Finalizado='', UsuarioFinalizado='', DataFinalizado='' WHERE IdProjeto=? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E='')`,
             [id]
         );
-        // ordemservico
         await req.tenantDbPool.execute(
             `UPDATE ordemservico SET OrdemServicoFinalizado='', UsuarioFinalizado='', DataFinalizacao='' WHERE IdProjeto=?`,
             [id]
         );
-        // ordemservicoitem
         await req.tenantDbPool.execute(
             `UPDATE ordemservicoitem SET OrdemServicoItemFinalizado='', UsuarioFinalizado='', DataFinalizado=''
              WHERE IdOrdemServico IN (SELECT IdOrdemServico FROM ordemservico WHERE IdProjeto=?)`,
             [id]
         );
 
-        res.json({ success: true, message: `Finalizaà§ão cancelada com sucesso por ${userCancel}.` });
+        res.json({ success: true, message: `Finalização cancelada com sucesso por ${userCancel}.` });
     } catch (error) {
         console.error('Error cancelling finalization:', error);
-        res.status(500).json({ success: false, message: 'Erro ao cancelar finalizaà§ão: ' + error.message });
+        res.status(500).json({ success: false, message: 'Erro ao cancelar finalização: ' + error.message });
     }
 });
 
@@ -6818,8 +7138,8 @@ app.post('/api/tag', tenantMiddleware, async (req, res) => {
             `INSERT INTO tags (
                 Tag, DescTag, IdProjeto, Projeto, DataPrevisao,
                 TipoProduto, UnidadeProduto, QtdeTag, QtdeLiberada, 
-                SaldoTag, ValorTag, StatusTag, DescStatus, CriadoPor
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                SaldoTag, ValorTag, StatusTag, DescStatus, CriadoPor, DataEntrada
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.Tag?.trim(),
                 data.DescTag?.trim() || null,
@@ -6834,7 +7154,8 @@ app.post('/api/tag', tenantMiddleware, async (req, res) => {
                 data.ValorTag || null,
                 data.StatusTag || 1,
                 data.DescStatus || 'Ativo',
-                'Sistema'
+                data.CriadoPor || 'Sistema',
+                data.DataEntrada || new Date().toLocaleDateString('pt-BR')
             ]
         );
 
@@ -6894,6 +7215,40 @@ app.put('/api/tag/:id', tenantMiddleware, async (req, res) => {
     } catch (error) {
         console.error('Error updating tag:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
+    }
+});
+
+// PATCH: Atualizar DataEntrada e CriadoPor nas tags existentes com NULL
+app.patch('/api/tags/backfill-entrada', tenantMiddleware, async (req, res) => {
+    try {
+        const hoje = new Date().toLocaleDateString('pt-BR');
+        // Preenche DataEntrada com a data de previsão do projeto (ou hoje como fallback)
+        // e CriadoPor com 'Sistema' onde está NULL
+        const [r1] = await req.tenantDbPool.execute(`
+            UPDATE tags t
+            LEFT JOIN projetos p ON p.IdProjeto = t.IdProjeto
+            SET t.DataEntrada = COALESCE(
+                p.DataEntradaPedido,
+                DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y'),
+                ?
+            )
+            WHERE (t.DataEntrada IS NULL OR TRIM(t.DataEntrada) = '')
+              AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
+        `, [hoje]);
+
+        const [r2] = await req.tenantDbPool.execute(`
+            UPDATE tags SET CriadoPor = 'Sistema'
+            WHERE (CriadoPor IS NULL OR TRIM(CriadoPor) = '')
+              AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+        `);
+
+        res.json({
+            success: true,
+            message: `DataEntrada preenchida em ${r1.affectedRows} tag(s). CriadoPor atualizado em ${r2.affectedRows} tag(s).`
+        });
+    } catch (error) {
+        console.error('Error backfilling tags:', error);
+        res.status(500).json({ success: false, message: 'Erro: ' + error.message });
     }
 });
 
@@ -7115,7 +7470,7 @@ app.get('/api/download', tenantMiddleware, async (req, res) => {
         });
 
         if (!fs.existsSync(normalizedPath)) {
-            // Tenta com extens?o em min?scula como fallback
+            // Tenta com extensão em minúscula como fallback
             const lowerExt = targetExt.toLowerCase();
             const altPath = normalizedPath.replace(/\.[^.]+$/, lowerExt);
 
@@ -7185,8 +7540,6 @@ app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
     }
 });
 
-// SEARCH: Busca global em itens por código do documento/desenho
-
 // OPTIONS: Lista de Projetos para Clonagem
 app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
@@ -7205,13 +7558,13 @@ app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) =>
     } catch (error) { res.status(500).json({ success: false }); }
 });
 
+// SEARCH: Busca global em itens por código do documento/desenho
 app.get('/api/ordemservico/busca-item', tenantMiddleware, async (req, res) => {
     try {
         const search = req.query.q;
         if (!search || search.length < 2) {
             return res.json({ success: true, data: [] });
         }
-
         const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 osi.IdOrdemServicoItem, osi.IdOrdemServico, osi.CodMatFabricante, 
@@ -7257,7 +7610,7 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.IdProjeto || 0,
                 data.IdTag || 0,
                 data.DescEmpresa || '',
-                data.EnderecoOrdemServico || '',
+                '',  // endereço real definido abaixo após obter o ID
                 data.CriadoPor || 'Sistema',
                 data.DataCriacao || now,
                 data.Estatus || 'A',
@@ -7272,9 +7625,21 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.IdMatriz || 0
             ]
         );
-                const novoId = result.insertId;
-        let enderecoBase = data.EnderecoOrdemServico || '';
-        
+        const novoId = result.insertId;
+
+        // Busca o endereço base da OS na configuração do sistema (ignora valor do frontend)
+        let enderecoBase = '';
+        try {
+            const [cfgRows] = await req.tenantDbPool.execute(
+                "SELECT valor FROM configuracaosistema WHERE chave = 'EnderecoPastaRaizOS' LIMIT 1"
+            );
+            if (cfgRows.length > 0 && cfgRows[0].valor) {
+                enderecoBase = cfgRows[0].valor.trim();
+            }
+        } catch (cfgErr) {
+            console.warn('[CriarOS] Não foi possível buscar EnderecoPastaRaizOS:', cfgErr.message);
+        }
+
         if (enderecoBase) {
             const format5 = (num) => String(num).padStart(5, '0');
             if (enderecoBase.endsWith('\\') || enderecoBase.endsWith('/')) {
@@ -7301,6 +7666,8 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
             } catch (fsErr) {
                 console.error('[CriarOS] Falha ao criar pastas:', fsErr.message);
             }
+        } else {
+            console.warn('[CriarOS] EnderecoPastaRaizOS não configurado — pasta não criada para OS', novoId);
         }
 
         res.json({ success: true, message: 'OS cadastrada', id: novoId });
@@ -10565,22 +10932,26 @@ WHERE osi.IdOrdemServicoItem = ?
         // Buscar hist�rico de apontamentos
         const historicoQuery = `
             SELECT
-                idordemservicoitemControle,
-                CriadoPor,
-                DataCriacao,
-                Codmatfabricante,
-                QtdeTotal,
-                QtdeProduzida,
-                QtdeFaltante,
-                txtCorte,
-                txtDobra,
-                txtSolda,
-                txtPintura,
-                txtMontagem
-            FROM viewordemservicoitemcontrole
-            WHERE IdOrdemServicoItem = ?
-            ORDER BY DataCriacao DESC, idordemservicoitemControle DESC
+                v.idordemservicoitemControle,
+                v.CriadoPor,
+                v.DataCriacao,
+                v.Codmatfabricante,
+                v.QtdeTotal,
+                v.QtdeProduzida,
+                v.QtdeFaltante,
+                v.txtCorte,
+                v.txtDobra,
+                v.txtSolda,
+                v.txtPintura,
+                v.txtMontagem,
+                c.Processo
+            FROM viewordemservicoitemcontrole v
+            LEFT JOIN ordemservicoitemcontrole c ON v.idordemservicoitemControle = c.IdOrdemServicoItemControle
+            WHERE v.IdOrdemServicoItem = ?
+            ORDER BY v.DataCriacao DESC, v.idordemservicoitemControle DESC
         `
+
+        const [historicoRows] = await req.tenantDbPool.execute(historicoQuery, [id]);
 
         // Legacy missing quantity logic
         const totalExecutado = parseFloat(item.TotalExecutado) || 0;
@@ -10630,10 +11001,14 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
                 i.EnderecoArquivo,
                 i.EnderecoArquivoItemOrdemServico,
                 os.Projeto,
-                os.Tag
+                os.Tag,
+                os.Estatus as StatusOS,
+                os.OrdemServicoFinalizado as OSFinalizado,
+                p.Finalizado as StatusProjeto
             FROM ordemservicoitemcontrole c
             INNER JOIN ordemservicoitem i ON c.IdOrdemServicoItem = i.IdOrdemServicoItem
             INNER JOIN ordemservico os ON c.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN projetos p ON os.Projeto = p.Projeto
             WHERE c.TipoApontamento = 'Parcial'
               AND c.QtdeProduzida < c.QtdeTotal
               AND (c.D_E_L_E_T_E IS NULL OR c.D_E_L_E_T_E = '')
@@ -10650,18 +11025,11 @@ app.get('/api/apontamentos-parciais', tenantMiddleware, async (req, res) => {
     }
 });
 
-// POST: Registrar apontamento PARCIAL como excecao (aceita qualquer recurso sem validacao de setor)
-
-// POST: Salvar planejamento e datas dos setores/recursos para OS, Tag ou Item
-
-// GET: Setores consolidados de múltiplas Tags (para Bulk Modal)
 app.get('/api/material-processo/setores-consolidados-tags', tenantMiddleware, async (req, res) => {
     const { tagIds } = req.query;
     if (!tagIds) return res.json({ success: true, sectors: [] });
-    
     const ids = tagIds.split(',').map(id => parseInt(id, 10)).filter(id => !isNaN(id));
     if (ids.length === 0) return res.json({ success: true, sectors: [] });
-    
     try {
         const placeholders = ids.map(() => '?').join(',');
         const query = `
@@ -12326,7 +12694,7 @@ app.put('/api/config', tenantMiddleware, async (req, res) => {
 // GET /api/config/setores - Retornar Setores
 app.get('/api/config/setores', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute("SELECT Setor FROM setor WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY Setor");
+        const [rows] = await req.tenantDbPool.execute("SELECT processofabricacao AS Setor FROM processofabricacao WHERE (D_E_L_E_T_E = '' OR D_E_L_E_T_E IS NULL) ORDER BY processofabricacao ASC");
         res.json({ success: true, setores: rows.map(r => r.Setor) });
     } catch (error) {
         console.error('Error fetching setores:', error);
@@ -13956,7 +14324,7 @@ app.post('/api/system/open-folder', tenantMiddleware, async (req, res) => {
     // Basic security check (optional: restrict to specific drives or patterns if needed)
     // For this internal app, we allow it but log it.
 
-    require('child_process').exec(`start "" "${folderPath}"`, (error) => {
+    require('child_process').exec(`explorer.exe "${folderPath}"`, (error) => {
         if (error) {
             console.error(`[SYSTEM] Error opening folder: ${error.message} `);
             return res.status(500).json({ success: false, message: 'Failed to open folder' });
@@ -15475,6 +15843,14 @@ app.get('/api/plano-corte/itens-disponiveis', tenantMiddleware, async (req, res)
                 AND (SttxtCorte IS NULL OR SttxtCorte = '')
                 AND (IdPlanoDeCorte IS NULL OR IdPlanoDeCorte = '')
                 AND Liberado_Engenharia = 'S'
+                AND EXISTS (
+                    SELECT 1 FROM material_processo mp 
+                    WHERE mp.CodMatFabricante = viewordemservicoitem.CodMatFabricante 
+                      AND mp.IdOrdemServico = viewordemservicoitem.IdOrdemServico 
+                      AND mp.IdTag = viewordemservicoitem.IdTag 
+                      AND mp.IdProjeto = viewordemservicoitem.IdProjeto 
+                      AND mp.IdProcesso = '1'
+                )
         `;
         
         const params = [];
@@ -17321,7 +17697,7 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
 
 
 // Static: landing page assets (root)
-// Removed vulnerable static file serving: app.use(express.static(path.join(__dirname, '../')));
+app.use(express.static(path.join(__dirname, '../')));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
 // Rota dinâmica para fotos de funcionários (CNH) baseada no tenant
 app.get('/fotosfuncionarios/:filename', tenantMiddleware, async (req, res) => {
@@ -17348,8 +17724,7 @@ app.get('/fotosfuncionarios/:filename', tenantMiddleware, async (req, res) => {
 app.use('/css', express.static(path.join(__dirname, '../public/css')));
 app.use('/img', express.static(path.join(__dirname, '../public/img')));
 // Static: React app assets (assets/, etc.)
-app.use('/assets', express.static(path.join(__dirname, '../public/assets')));
-app.use(express.static(path.join(__dirname, '../public')));
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // Root = landing page (HTML puro, sem Node.js)
 app.get('/', (req, res) => {
@@ -17638,9 +18013,9 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
             whereClause += " AND STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataPrevisaoInicio, dataPrevisaoFim);
         }
-        // DataFinal (usaremos DataTermino)
+        // DataFinal (usaremos DataFinalizado)
         if (dataFinalInicio && dataFinalFim) {
-            whereClause += " AND STR_TO_DATE(p.DataTermino, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
+            whereClause += " AND STR_TO_DATE(SUBSTRING(p.DataFinalizado, 1, 10), '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)";
             params.push(dataFinalInicio, dataFinalFim);
         }
 
@@ -17690,40 +18065,47 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
                 p.Projeto, 
                 p.Observacao,
                 p.DataPrevisao,
-                p.DataTermino as DataFinal,
+                SUBSTRING(p.DataFinalizado, 1, 10) as DataFinal,
                 p.DescEmpresa as Cliente,
                 p.Estado as EstadoOrigem,
                 p.StatusProj as StatusProj,
                 p.liberado as liberado,
+                p.Finalizado as Finalizado,
                 COUNT(t.IdTag) as TotalTags,
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '') THEN 1 ELSE 0 END) as FaltaMedicao,
                 SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioMedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanMedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalMedicao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealMedicao,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '') THEN 1 ELSE 0 END) as FaltaIsometrico,
                 SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioIsometrico),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanIsometrico,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalIsometrico,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealIsometrico,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '') THEN 1 ELSE 0 END) as FaltaEngenharia,
                 SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioEngenharia),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanEngenharia,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalEngenharia,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealEngenharia,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '') THEN 1 ELSE 0 END) as FaltaAprovacao,
                 SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAprovacao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAprovacao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAprovacao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAprovacao,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '') THEN 1 ELSE 0 END) as FaltaAcabamento,
                 SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAcabamento),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAcabamento,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAcabamento,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAcabamento,
                 
                 SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '') THEN 1 ELSE 0 END) as FaltaExpedicao,
                 SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao,
                 DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioExpedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanExpedicao,
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalExpedicao,
                 DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.realizadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealExpedicao
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
@@ -17795,7 +18177,7 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
         let tagFilter = `IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`;
         const tagParams = [id];
         if (Array.isArray(tagIds) && tagIds.length > 0) {
-            tagFilter += ` AND IdTag IN (${tagIds.map(() => 'é').join(',')})`;
+            tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
             tagParams.push(...tagIds);
         }
         const [tagsRows] = await connection.execute(
@@ -18389,20 +18771,5 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     } catch (error) {
         console.error('Error deleting material arquivo:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir arquivo' });
-    }
-});
-
-// Catch-all route for SPA React (Added to the very end)
-app.get(/.*/, (req, res, next) => {
-    if (req.path.startsWith('/api/') || req.path.startsWith('/fotosfuncionarios/')) {
-        return next();
-    }
-    const devPath = require('path').join(__dirname, '../frontend/dist/index.html');
-    const prodPath = require('path').join(__dirname, '../public/index.html');
-    const fs = require('fs');
-    if (fs.existsSync(devPath)) {
-        res.sendFile(devPath);
-    } else {
-        res.sendFile(prodPath);
     }
 });

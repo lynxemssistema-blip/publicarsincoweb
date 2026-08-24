@@ -40,7 +40,7 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
         }
     }
 
-    const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
+    const { projeto, tag, os, item, search, status, codMatFabricante, cliente, planoCorte, dataPlanejamentoInicio, dataPlanejamentoFim, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const offsetNum = (pageNum - 1) * limitNum;
@@ -57,8 +57,8 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
         }
 
         if (projeto) {
-            whereClause += ' AND (os.Projeto LIKE ?)';
-            params.push(`%${projeto}%`);
+            whereClause += ' AND (os.Projeto LIKE ? OR p.DescProjeto LIKE ?)';
+            params.push(`%${projeto}%`, `%${projeto}%`);
         }
 
         if (item) {
@@ -73,18 +73,40 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
         }
 
         if (tag) {
-            whereClause += ' AND (os.Tag LIKE ?)';
-            params.push(`%${tag}%`);
+            whereClause += ' AND (os.Tag LIKE ? OR os.DescTag LIKE ?)';
+            params.push(`%${tag}%`, `%${tag}%`);
         }
 
         if (os) {
             whereClause += ' AND os.IdOrdemServico = ?';
             params.push(os);
         }
-        
+
         if (codMatFabricante) {
             whereClause += ' AND mp.codmatFabricante LIKE ?';
             params.push(`%${codMatFabricante}%`);
+        }
+
+        if (cliente) {
+            whereClause += ' AND (os.NomeCliente LIKE ? OR os.DescEmpresa LIKE ? OR p.ClienteProjeto LIKE ?)';
+            params.push(`%${cliente}%`, `%${cliente}%`, `%${cliente}%`);
+        }
+
+        if (planoCorte) {
+            whereClause += ' AND osi.IdPlanodecorte LIKE ?';
+            params.push(`%${planoCorte}%`);
+        }
+
+        // Filtro de Data de Planejamento via mp.PlanejadoInicio
+        if (dataPlanejamentoInicio && dataPlanejamentoFim) {
+            whereClause += ' AND DATE(mp.PlanejadoInicio) >= ? AND DATE(mp.PlanejadoInicio) <= ?';
+            params.push(dataPlanejamentoInicio, dataPlanejamentoFim);
+        } else if (dataPlanejamentoInicio) {
+            whereClause += ' AND DATE(mp.PlanejadoInicio) >= ?';
+            params.push(dataPlanejamentoInicio);
+        } else if (dataPlanejamentoFim) {
+            whereClause += ' AND DATE(mp.PlanejadoInicio) <= ?';
+            params.push(dataPlanejamentoFim);
         }
 
         const countQuery = `
@@ -92,6 +114,7 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             FROM material_processo mp
             JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
         `;
         
@@ -107,6 +130,7 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 COALESCE(mp.TotalExecutar, osi.QtdeTotal) AS TotalExecutar,
                 mp.RealizadoInicio,
                 mp.RealizadoFinal,
+                mp.PlanejadoInicio AS DataPlanejamento,
                 osi.IdOrdemServicoItem,
                 osi.IdOrdemServico,
                 osi.DescResumo,
@@ -120,6 +144,9 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 os.Projeto,
                 os.Tag,
                 os.NomeCliente AS Cliente,
+                os.Estatus AS StatusOS,
+                os.OrdemServicoFinalizado AS OSFinalizado,
+                p.Finalizado AS StatusProjeto,
                 (
                     SELECT GROUP_CONCAT(CONCAT(mp2.SequenciaExecucao, 'º: ', COALESCE(pf.processofabricacao, '')) ORDER BY COALESCE(mp2.SequenciaExecucao, 999) SEPARATOR ' | ')
                     FROM material_processo mp2
@@ -130,6 +157,7 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             FROM material_processo mp
             JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
             JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
             ORDER BY osi.IdOrdemServico DESC, osi.IdOrdemServicoItem ASC
             LIMIT ? OFFSET ?
