@@ -194,15 +194,26 @@ app.post('/api/material-processo/apontar', tenantMiddleware, async (req, res) =>
     try {
         await conn.beginTransaction();
 
-        // 1. Buscar registro atual da material_processo
-        const [mpRows] = await conn.execute('SELECT * FROM material_processo WHERE IdMaterialProcesso = ? FOR UPDATE', [IdMaterialProcesso]);
+        // 1. Buscar registro atual da material_processo + QtdeTotal do item
+        const [mpRows] = await conn.execute(`
+            SELECT mp.*, COALESCE(osi.QtdeTotal, 0) AS QtdeTotalItem
+            FROM material_processo mp
+            LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
+            WHERE mp.IdMaterialProcesso = ?
+            FOR UPDATE
+        `, [IdMaterialProcesso]);
         if (mpRows.length === 0) {
             throw new Error('Registro material_processo não encontrado');
         }
         const mp = mpRows[0];
         
         const currentExecutado = parseFloat(mp.TotalExecutado) || 0;
-        const currentExecutar = parseFloat(mp.TotalExecutar) || 0;
+        // FIX: Se TotalExecutar é NULL ou 0 e ainda não houve execuções (primeiro apontamento),
+        // inicializar com QtdeTotal do item para que a lógica de pendência funcione corretamente.
+        const storedExecutar = parseFloat(mp.TotalExecutar);
+        const currentExecutar = (storedExecutar > 0)
+            ? storedExecutar
+            : (currentExecutado === 0 ? parseFloat(mp.QtdeTotalItem) || 0 : 0);
         
         const loggedUser = req.body.CriadoPor || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
         
