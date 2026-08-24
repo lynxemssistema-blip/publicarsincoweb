@@ -13948,6 +13948,9 @@ app.get('/api/config/espessuras', tenantMiddleware, async (req, res) => {
         const [rows] = await req.tenantDbPool.execute("SELECT idEspessura, Espessura FROM espessura ORDER BY Espessura ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, data: [] });
+        }
         console.error('Error fetching espessuras:', error);
         res.status(500).json({ success: false, message: 'Erro ao buscar espessuras' });
     }
@@ -13959,6 +13962,9 @@ app.get('/api/config/materiais', tenantMiddleware, async (req, res) => {
         const [rows] = await req.tenantDbPool.execute("SELECT idMaterialSw, MaterialSw FROM materialsw ORDER BY MaterialSw ASC");
         res.json({ success: true, data: rows });
     } catch (error) {
+        if (error.code === 'ER_NO_SUCH_TABLE') {
+            return res.json({ success: true, data: [] });
+        }
         console.error('Error fetching materiais:', error);
         res.status(500).json({ success: false, message: 'Erro ao buscar materiais' });
     }
