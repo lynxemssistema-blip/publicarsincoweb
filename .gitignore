@@ -8,6 +8,10 @@ SINCO_Deploy/node_modules/
 frontend/dist/
 frontend/dev-dist/
 dist/
+!PublicacaoSite/frontend/dist/
+!PublicacaoSite/frontend/dist/**
+!PublicacaoSite/public/
+!PublicacaoSite/public/**
 
 # Logs temporários de desenvolvimento (raiz e subpastas)
 *.log
