@@ -16,15 +16,12 @@ Remove-Item -Path "PublicacaoSite\assets" -Recurse -Force -ErrorAction SilentlyC
 Remove-Item -Path "PublicacaoSite\public\assets" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "PublicacaoSite\frontend\dist\assets" -Recurse -Force -ErrorAction SilentlyContinue
 
-# 3. Copiar Frontend — server.js serve de '../frontend/dist' (relativo a src/)
-Write-Host "Copiando build do Frontend para PublicacaoSite\frontend\dist\ ..."
-New-Item -Path "PublicacaoSite\frontend\dist" -ItemType Directory -Force | Out-Null
-Copy-Item -Path "frontend\dist\*" -Destination "PublicacaoSite\frontend\dist" -Recurse -Force
-# Manter compatibilidade com public/ também
-New-Item -Path "PublicacaoSite\public" -ItemType Directory -Force | Out-Null
-Copy-Item -Path "frontend\dist\*" -Destination "PublicacaoSite\public" -Recurse -Force
-Copy-Item -Path "public\landing.html" -Destination "PublicacaoSite\public" -Force -ErrorAction SilentlyContinue
-Copy-Item -Path "login_inicial.html" -Destination "PublicacaoSite\public" -Force -ErrorAction SilentlyContinue
+# 3. Copiar Frontend para a raiz do PublicacaoSite (onde o Dockerfile pega os arquivos)
+Write-Host "Copiando build do Frontend para a raiz de PublicacaoSite..."
+Copy-Item -Path "frontend\dist\*" -Destination "PublicacaoSite" -Recurse -Force
+Copy-Item -Path "public\landing.html" -Destination "PublicacaoSite" -Force -ErrorAction SilentlyContinue
+Copy-Item -Path "login_inicial.html" -Destination "PublicacaoSite" -Force -ErrorAction SilentlyContinue
+
 
 # 4. Copiar Backend
 Write-Host "Copiando arquivos do Backend..."
