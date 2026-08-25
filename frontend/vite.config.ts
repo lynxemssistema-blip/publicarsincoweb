@@ -34,6 +34,8 @@ export default defineConfig({
         ]
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         navigateFallbackDenylist: [/^\/api/],
         maximumFileSizeToCacheInBytes: 5000000
       }
