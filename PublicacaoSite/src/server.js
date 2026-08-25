@@ -4471,13 +4471,7 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
                 p.CriadoPor, p.IdEmpresa, p.EnderecoProjeto, p.Observacao,
                 p.D_E_L_E_T_E,
                 COALESCE(ap.qtd, 0) AS temApontamento,
-                COALESCE((
-                    SELECT SUM(COALESCE(mp.TotalExecutar, 0))
-                    FROM material_processo mp
-                    JOIN ordemservico os3 ON os3.IdOrdemServico = mp.IdOrdemServico
-                    WHERE os3.IdProjeto = p.IdProjeto
-                      AND (os3.D_E_L_E_T_E IS NULL OR os3.D_E_L_E_T_E = '' OR os3.D_E_L_E_T_E != '*')
-                ), 0) AS temSaldoPendente
+                0 AS temSaldoPendente
             FROM projetos p
             LEFT JOIN (
                 SELECT os2.IdProjeto, COUNT(c2.IdOrdemServicoItemControle) AS qtd
@@ -7543,9 +7537,17 @@ app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
 // OPTIONS: Lista de Projetos para Clonagem
 app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
+        // Exibe projetos ativos (não deletados e não finalizados)
+        // Projetos liberados pela engenharia (liberado='S') TAMBÉM aparecem — apenas finalizados são excluídos
+        const [rows] = await req.tenantDbPool.execute(
+            "SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto"
+        );
+        console.log(`[ProjetosClonagem] Tenant: ${req.tenantId || 'default'} | Projetos disponíveis: ${rows.length}`);
         res.json({ success: true, data: rows });
-    } catch (error) { res.status(500).json({ success: false }); }
+    } catch (error) {
+        console.error('[ProjetosClonagem] Erro:', error.message);
+        res.status(500).json({ success: false });
+    }
 });
 
 // OPTIONS: Lista de Tags para Clonagem
@@ -9292,22 +9294,64 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req,
     }
 });
 
-app.get('/api/visao-geral/tag/:id/itens', tenantMiddleware, async (req, res) => {
+app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
+    console.log(`[DEBUG] Hit /api/ordemservico/:id/itens for id ${req.params.id}`);
     try {
-        const queryPool = req.tenantDbPool || pool;
-        const [rows] = await req.tenantDbPool.execute(`
-            SELECT 
-                osi.*, osi.OrdemServicoItemFinalizado as Finalizado
-            FROM ordemservicoitem osi
-            INNER JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
-            WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
-              AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
-            ORDER BY osi.IdOrdemServico, osi.IdOrdemServicoItem
-        `, [req.params.id]);
+        // Verificar se material_processo existe neste tenant
+        let hasMpTable = false;
+        try {
+            await req.tenantDbPool.execute('SELECT 1 FROM material_processo LIMIT 1');
+            hasMpTable = true;
+        } catch(e) { hasMpTable = false; }
+
+        let rows;
+        if (hasMpTable) {
+            // Schema com material_processo: enriquecer dados de OSI com mp
+            [rows] = await req.tenantDbPool.execute(`
+                SELECT osi.*,
+                    COALESCE(osi.Fator, 1) AS Fator,
+                    IF(osi.Peso IS NULL OR osi.Peso = 0, m.Peso, osi.Peso) AS Peso,
+                    COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
+                    COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
+                    COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal,
+                    -- Dados agregados de material_processo para este item
+                    (SELECT MAX(mp2.TotalExecutar)
+                     FROM material_processo mp2
+                     WHERE mp2.IdOrdemServico = osi.IdOrdemServico
+                       AND mp2.codmatFabricante = osi.CodMatFabricante
+                     LIMIT 1) AS QtdeTotalMp,
+                    (SELECT COUNT(*)
+                     FROM material_processo mp3
+                     WHERE mp3.IdOrdemServico = osi.IdOrdemServico
+                       AND mp3.codmatFabricante = osi.CodMatFabricante) AS TotalProcessos
+                FROM ordemservicoitem osi
+                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                WHERE osi.IdOrdemServico = ?
+                  AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+                ORDER BY osi.IdOrdemServicoItem
+            `, [req.params.id]);
+        } else {
+            // Fallback: schema sem material_processo - busca simples
+            [rows] = await req.tenantDbPool.execute(`
+                SELECT osi.*,
+                    COALESCE(osi.Fator, 1) AS Fator,
+                    IF(osi.Peso IS NULL OR osi.Peso = 0, m.Peso, osi.Peso) AS Peso,
+                    COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
+                    COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
+                    COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal
+                FROM ordemservicoitem osi
+                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                WHERE osi.IdOrdemServico = ?
+                  AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
+                ORDER BY osi.IdOrdemServicoItem
+            `, [req.params.id]);
+        }
+
+        console.log(`[API /itens] Request for OS ${req.params.id} returned ${rows.length} rows.`);
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('Error fetching items for tag:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar itens da tag' });
+        console.error('Error fetching ordemservicoitem:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar itens OS' });
     }
 });
 
@@ -9363,44 +9407,6 @@ app.get('/api/visao-geral/projeto/:id/ordens-servico', tenantMiddleware, async (
         res.status(500).json({ success: false, message: 'Erro ao listar ordens de servico do projeto', error: error.message });
     }
 });
-
-app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
-    console.log(`[DEBUG] Hit /api/ordemservico/:id/itens for id ${req.params.id}`);
-    try {
-        const [rows] = await req.tenantDbPool.execute(`
-            SELECT osi.*,
-                mp.codmatFabricante AS CodMatFabricante,
-                mp.IdOrdemServico,
-                COALESCE(osi.IdOrdemServicoItem, ABS(CAST(CONV(SUBSTRING(MD5(mp.codmatFabricante), 1, 8), 16, 10) AS SIGNED))) AS IdOrdemServicoItem,
-                COALESCE(osi.DescResumo, m.DescResumo) AS DescResumo,
-                COALESCE(osi.DescDetal, m.DescDetal) AS DescDetal,
-                COALESCE(osi.Fator, 1) AS Fator,
-                mp.MaxTotalExecutar AS QtdeTotal,
-                IF(osi.Peso IS NULL OR osi.Peso = 0, m.Peso, osi.Peso) AS Peso,
-                COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
-                COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
-                COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal
-            FROM (
-                SELECT mp.codmatFabricante, mp.IdOrdemServico, MAX(mp.TotalExecutar) as MaxTotalExecutar
-                FROM material_processo mp
-                JOIN ordemservico os ON os.IdOrdemServico = mp.IdOrdemServico 
-                   AND os.IdProjeto = mp.IdProjeto 
-                   AND os.IdTag = mp.IdTag
-                WHERE mp.IdOrdemServico = ? AND mp.Ativo = 'A'
-                GROUP BY mp.codmatFabricante, mp.IdOrdemServico
-            ) mp
-            LEFT JOIN ordemservicoitem osi ON osi.CodMatFabricante = mp.codmatFabricante AND osi.IdOrdemServico = mp.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
-            LEFT JOIN material m ON m.CodMatFabricante = mp.codmatFabricante
-            ORDER BY IdOrdemServicoItem
-        `, [req.params.id]);
-        console.log(`[API /itens] Request for OS ${req.params.id} returned ${rows.length} rows.`);
-        res.json({ success: true, data: rows });
-    } catch (error) {
-        console.error('Error fetching ordemservicoitem:', error);
-        res.status(500).json({ success: false, message: 'Erro ao listar itens OS' });
-    }
-});
-
 app.get('/api/ordemservico/:id/itens-disponiveis', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
@@ -9475,30 +9481,34 @@ app.get('/api/ordemservico/:id/itens-codigos', tenantMiddleware, async (req, res
 app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
-        const { idProjeto, idTag } = req.query;
-        let sql = `
-            SELECT mp.codmatFabricante, m.DescResumo, mp.TotalExecutar as Qtde,
-                   mp.IdProcesso, pf.processofabricacao, mp.TempoEstimadoMin, mp.TempoPadraoMin, mp.SequenciaExecucao
+        // Busca TODOS os materiais da OS (sem filtrar por idProjeto/idTag)
+        // para retornar processos de cada item individualmente.
+        // A chave composta codmat__idTag__idProjeto distingue itens com o mesmo
+        // código em projetos/tags diferentes dentro da mesma OS.
+        const sql = `
+            SELECT mp.codmatFabricante,
+                   COALESCE(mp.IdTag, 0)     AS IdTag,
+                   COALESCE(mp.IdProjeto, 0) AS IdProjeto,
+                   m.DescResumo, mp.TotalExecutar as Qtde,
+                   mp.IdProcesso, pf.processofabricacao,
+                   mp.TempoEstimadoMin, mp.TempoPadraoMin, mp.SequenciaExecucao
             FROM material_processo mp
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
             LEFT JOIN material m ON mp.IdMaterial = m.IdMaterial
-            WHERE mp.IdOrdemServico = ? `;
-        const params = [osId];
-        
-        if (idProjeto) { sql += ` AND mp.IdProjeto = ?`; params.push(idProjeto); }
-        else { sql += ` AND (mp.IdProjeto IS NULL OR mp.IdProjeto = 0 OR mp.IdProjeto = '')`; }
-        if (idTag) { sql += ` AND mp.IdTag = ?`; params.push(idTag); }
-        else { sql += ` AND (mp.IdTag IS NULL OR mp.IdTag = 0 OR mp.IdTag = '')`; }
-        
-        sql += ` ORDER BY mp.codmatFabricante, mp.SequenciaExecucao ASC`;
+            WHERE mp.IdOrdemServico = ?
+            ORDER BY mp.codmatFabricante, mp.SequenciaExecucao ASC`;
 
-        const [rows] = await req.tenantDbPool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, [osId]);
         const mats = {};
         for (const r of rows) {
             if (!r.codmatFabricante) continue;
-            if (!mats[r.codmatFabricante]) {
-                mats[r.codmatFabricante] = {
+            // Chave composta: codmat + idTag + idProjeto
+            const compKey = `${r.codmatFabricante}__${r.IdTag}__${r.IdProjeto}`;
+            if (!mats[compKey]) {
+                mats[compKey] = {
                     codmatfabricante: r.codmatFabricante,
+                    idTag: r.IdTag,
+                    idProjeto: r.IdProjeto,
                     desc: r.DescResumo,
                     qtde: Number(r.Qtde) || 1,
                     recursoTempos: {},
@@ -9507,12 +9517,12 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
             }
             if (r.processofabricacao) {
                 const key = r.processofabricacao.trim().replace(/\s+/g, '');
-                mats[r.codmatFabricante].recursoTempos[key] = {
+                mats[compKey].recursoTempos[key] = {
                     tempoSetup: Number(r.TempoEstimadoMin || 0),
                     tempoPadrao: Number(r.TempoPadraoMin || 0),
                     label: r.processofabricacao
                 };
-                mats[r.codmatFabricante].processos.push({
+                mats[compKey].processos.push({
                     SequenciaExecucao: r.SequenciaExecucao,
                     processofabricacao: r.processofabricacao,
                     Qtde: Number(r.Qtde) || 1,
@@ -10225,85 +10235,89 @@ async function inicializarPrimeiroSetor(conn, id) {
 // GET: Mapa da Produ??o - vis?o geral de todos os processos
 require('./routes/rota2')(app, tenantMiddleware);
 
+// GET /api/apontamento/mapa/producao
+// [ROTA 2 - NOVA LÓGICA] Usa material_processo como fonte de verdade dos recursos.
+// Exibe itens de OS que possuem ao menos 1 registro em material_processo.
 app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => {
-    const { projeto, tag, os, item, search, status, codMatFabricante, page = 1, limit = 50 } = req.query;
+    const { projeto, tag, os, item, status, codMatFabricante, page = 1, limit = 50 } = req.query;
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 50;
     const offsetNum = (pageNum - 1) * limitNum;
 
     try {
+        // Base: item não deletado, liberado pela engenharia, OS não deletada
+        // e com ao menos 1 processo em material_processo
         let whereClause = `
             (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
             AND osi.Liberado_Engenharia = 'S'
             AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')
-            AND (
-                osi.txtCorte = '1' OR 
-                osi.txtDobra = '1' OR 
-                osi.txtSolda = '1' OR 
-                osi.txtPintura = '1'
+            AND EXISTS (
+                SELECT 1 FROM material_processo mp
+                WHERE mp.IdOrdemServico = osi.IdOrdemServico
+                  AND mp.codmatFabricante = osi.CodMatFabricante
             )
         `;
         const params = [];
 
-        // Filtro Projeto: busca por descrição do projeto (LIKE)
         if (projeto) {
             whereClause += ' AND (os.Projeto LIKE ? OR p.DescProjeto LIKE ?)';
             params.push(`%${projeto}%`, `%${projeto}%`);
         }
-
-        // Filtro Tag: busca por descrição da tag (LIKE)
         if (tag) {
             whereClause += ' AND (os.DescTag LIKE ? OR os.Tag LIKE ?)';
             params.push(`%${tag}%`, `%${tag}%`);
         }
-
-        // Filtro Ordem de Serviço: busca apenas por ID da OS
         if (os) {
             whereClause += ' AND os.IdOrdemServico = ?';
             params.push(os);
         }
-
         if (item) {
             whereClause += ' AND osi.IdOrdemServicoItem = ?';
             params.push(item);
         }
-
         if (req.query.planoCorte) {
             whereClause += ' AND osi.IdPlanodecorte LIKE ?';
             params.push(`%${req.query.planoCorte}%`);
         }
-
-        // Filtro Cliente: busca por descrição (LIKE)
         if (req.query.cliente) {
             whereClause += ' AND (os.DescEmpresa LIKE ? OR p.ClienteProjeto LIKE ?)';
             params.push(`%${req.query.cliente}%`, `%${req.query.cliente}%`);
         }
-
-        // Filtro Cód. Mat. Fabricante
         if (codMatFabricante) {
             whereClause += ' AND osi.CodMatFabricante LIKE ?';
             params.push(`%${codMatFabricante}%`);
         }
+        if (req.query.dataPlanejamentoInicio) {
+            whereClause += ` AND EXISTS (SELECT 1 FROM material_processo mpd WHERE mpd.IdOrdemServico = osi.IdOrdemServico AND mpd.codmatFabricante = osi.CodMatFabricante AND DATE(mpd.PlanejadoInicio) >= ?)`;
+            params.push(req.query.dataPlanejamentoInicio);
+        }
+        if (req.query.dataPlanejamentoFim) {
+            whereClause += ` AND EXISTS (SELECT 1 FROM material_processo mpd WHERE mpd.IdOrdemServico = osi.IdOrdemServico AND mpd.codmatFabricante = osi.CodMatFabricante AND DATE(mpd.PlanejadoInicio) <= ?)`;
+            params.push(req.query.dataPlanejamentoFim);
+        }
 
-        // Filter by overall status
+        // Filtro status: pendente = ao menos 1 processo com TotalExecutar > 0 ou RealizadoFinal NULL
         if (status === 'pendente') {
-            whereClause += ` AND (
-                (osi.txtCorte = '1' AND (osi.CorteTotalExecutado IS NULL OR osi.CorteTotalExecutado < osi.QtdeTotal)) OR
-                (osi.txtDobra = '1' AND (osi.DobraTotalExecutado IS NULL OR osi.DobraTotalExecutado < osi.QtdeTotal)) OR
-                (osi.txtSolda = '1' AND (osi.SoldaTotalExecutado IS NULL OR osi.SoldaTotalExecutado < osi.QtdeTotal)) OR
-                (osi.txtPintura = '1' AND (osi.PinturaTotalExecutado IS NULL OR osi.PinturaTotalExecutado < osi.QtdeTotal))
+            whereClause += ` AND EXISTS (
+                SELECT 1 FROM material_processo mps
+                WHERE mps.IdOrdemServico = osi.IdOrdemServico
+                  AND mps.codmatFabricante = osi.CodMatFabricante
+                  AND (mps.TotalExecutado IS NULL OR mps.TotalExecutado < mps.TotalExecutar OR mps.RealizadoFinal IS NULL)
+            )`;
+        } else if (status === 'concluido') {
+            whereClause += ` AND NOT EXISTS (
+                SELECT 1 FROM material_processo mps
+                WHERE mps.IdOrdemServico = osi.IdOrdemServico
+                  AND mps.codmatFabricante = osi.CodMatFabricante
+                  AND (mps.TotalExecutado IS NULL OR mps.TotalExecutado < mps.TotalExecutar OR mps.RealizadoFinal IS NULL)
             )`;
         }
 
-        let countJoinStr = 'INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico';
-        if (projeto || req.query.cliente) {
-            countJoinStr += ' LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto';
-        }
-
         const [countResult] = await req.tenantDbPool.execute(`
-            SELECT COUNT(osi.IdOrdemServicoItem) as total
+            SELECT COUNT(DISTINCT osi.IdOrdemServicoItem) as total
             FROM ordemservicoitem osi
-            ${countJoinStr}
+            INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
+            LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
             WHERE ${whereClause}
         `, params);
         const total = countResult[0].total;
@@ -10314,47 +10328,15 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
                 osi.IdOrdemServico,
                 osi.CodMatFabricante,
                 osi.DescResumo,
+                osi.DescDetal,
                 osi.QtdeTotal,
                 osi.EnderecoArquivo,
                 osi.EnderecoArquivoItemOrdemServico,
                 osi.IdPlanodecorte as PlanoCorte,
                 osi.MaterialSW,
                 osi.Espessura,
-                osi.txtCorte,
-                osi.txtDobra,
-                osi.txtSolda,
-                osi.txtPintura,
-                osi.TxtMontagem,
-                osi.CorteSequencia, osi.DobraSequencia, osi.SoldaSequencia, osi.PinturaSequencia, osi.MontagemSequencia, 
-                osi.txtCorteaLaser, osi.CorteaLaserSequencia, osi.txtPUNSIONADEIRA, osi.PunsionadeiraSequencia, 
-                osi.txtGALVANIZAR, osi.GalvanizarSequencia, osi.txtENGENHARIA, osi.EngenhariaSequencia,
-
-                CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.CorteTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as CortePercentual,
-                CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.DobraTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as DobraPercentual,
-                CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.SoldaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as SoldaPercentual,
-                CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.PinturaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as PinturaPercentual,
-                CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.MontagemTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END as MontagemPercentual,
-                CASE 
-                    WHEN COALESCE(osi.MontagemTotalExecutado, 0) > 0 THEN osi.MontagemTotalExecutado
-                    WHEN COALESCE(osi.PinturaTotalExecutado, 0) > 0 THEN osi.PinturaTotalExecutado
-                    WHEN COALESCE(osi.SoldaTotalExecutado, 0) > 0 THEN osi.SoldaTotalExecutado
-                    WHEN COALESCE(osi.DobraTotalExecutado, 0) > 0 THEN osi.DobraTotalExecutado
-                    WHEN COALESCE(osi.CorteTotalExecutado, 0) > 0 THEN osi.CorteTotalExecutado
-                    ELSE 0
-                END as QtdeProduzidaSetor,
-                CASE 
-                    WHEN COALESCE(osi.MontagemTotalExecutado, 0) > 0 THEN CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.MontagemTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END
-                    WHEN COALESCE(osi.PinturaTotalExecutado, 0) > 0 THEN CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.PinturaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END
-                    WHEN COALESCE(osi.SoldaTotalExecutado, 0) > 0 THEN CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.SoldaTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END
-                    WHEN COALESCE(osi.DobraTotalExecutado, 0) > 0 THEN CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.DobraTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END
-                    WHEN COALESCE(osi.CorteTotalExecutado, 0) > 0 THEN CASE WHEN osi.QtdeTotal > 0 THEN ROUND((COALESCE(osi.CorteTotalExecutado, 0) / osi.QtdeTotal) * 100) ELSE 0 END
-                    ELSE 0
-                END as PercentualSetor,
-                osi.CorteTotalExecutado,
-                osi.DobraTotalExecutado,
-                osi.SoldaTotalExecutado,
-                osi.PinturaTotalExecutado,
-                osi.MontagemTotalExecutado,
+                osi.ProdutoPrincipal as IsProdutoPrincipal,
+                (SELECT DescResumo FROM ordemservicoitem WHERE IdOrdemServico = osi.IdOrdemServico AND ProdutoPrincipal = 'sim' LIMIT 1) as NomeProdutoPrincipal,
                 os.Projeto,
                 os.IdProjeto,
                 p.DescProjeto,
@@ -10362,8 +10344,40 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
                 os.IdTag,
                 os.DescTag,
                 CASE WHEN TRIM(COALESCE(os.DescEmpresa, '')) IN ('', 'Sem cliente', 'Sem Cliente', 'SEM CLIENTE') THEN p.ClienteProjeto ELSE os.DescEmpresa END as Cliente,
-                osi.ProdutoPrincipal as IsProdutoPrincipal,
-                (SELECT DescResumo FROM ordemservicoitem WHERE IdOrdemServico = osi.IdOrdemServico AND ProdutoPrincipal = 'sim' LIMIT 1) as NomeProdutoPrincipal
+                os.Estatus AS StatusOS,
+                os.OrdemServicoFinalizado AS OSFinalizado,
+                p.Finalizado AS StatusProjeto,
+                -- Agrega todos os recursos via material_processo
+                COALESCE((
+                    SELECT SUM(COALESCE(mp.TotalExecutado, 0))
+                    FROM material_processo mp
+                    WHERE mp.IdOrdemServico = osi.IdOrdemServico AND mp.codmatFabricante = osi.CodMatFabricante
+                ), 0) AS QtdeProduzidaSetor,
+                COALESCE((
+                    SELECT SUM(COALESCE(mp.TotalExecutar, osi.QtdeTotal))
+                    FROM material_processo mp
+                    WHERE mp.IdOrdemServico = osi.IdOrdemServico AND mp.codmatFabricante = osi.CodMatFabricante
+                ), osi.QtdeTotal) AS TotalExecutar,
+                COALESCE((
+                    SELECT CASE WHEN SUM(COALESCE(mp.TotalExecutar, 0)) > 0
+                        THEN ROUND((SUM(COALESCE(mp.TotalExecutado, 0)) / SUM(COALESCE(mp.TotalExecutar, 0))) * 100)
+                        ELSE 0 END
+                    FROM material_processo mp
+                    WHERE mp.IdOrdemServico = osi.IdOrdemServico AND mp.codmatFabricante = osi.CodMatFabricante
+                ), 0) AS PercentualSetor,
+                -- Tooltip com todos os recursos do item
+                (
+                    SELECT GROUP_CONCAT(CONCAT(COALESCE(mp2.SequenciaExecucao,'?'), 'º: ', COALESCE(pf.processofabricacao,'?')) ORDER BY COALESCE(mp2.SequenciaExecucao, 999) SEPARATOR ' | ')
+                    FROM material_processo mp2
+                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp2.IdProcesso
+                    WHERE mp2.IdOrdemServico = osi.IdOrdemServico AND mp2.codmatFabricante = osi.CodMatFabricante
+                ) AS TodosRecursosTooltip,
+                -- Data de planejamento do primeiro processo
+                (
+                    SELECT mp3.PlanejadoInicio FROM material_processo mp3
+                    WHERE mp3.IdOrdemServico = osi.IdOrdemServico AND mp3.codmatFabricante = osi.CodMatFabricante
+                    ORDER BY COALESCE(mp3.SequenciaExecucao, 999) ASC LIMIT 1
+                ) AS DataPlanejamento
             FROM ordemservicoitem osi
             INNER JOIN ordemservico os ON osi.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
@@ -10383,7 +10397,7 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
             }
         });
     } catch (error) {
-        console.error('Error fetching mapa producao:', error);
+        console.error('Error fetching mapa producao (Rota 2):', error);
         res.status(500).json({ success: false, message: 'Erro ao carregar mapa de produção', error: error.message });
     }
 });
@@ -11355,36 +11369,50 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                     for (const s of sectors) {
                         const rawName = String(s.key || s.label || '').trim();
                         const normalizedName = rawName.toLowerCase().replace(/\s+/g, '');
-                        const processId = PROCESS_ID_MAP[normalizedName];
-                        
-                        if (processId) {
-                            const itemPiDt = parseBrDate(s.pi);
-                            const itemPfDt = parseBrDate(s.pf);
-                            const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
-                            const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
-                            const valDias = parseInt(String(s.dias), 10) || 1;
-                            
-                            const updates = [];
-                            const params = [];
-                            const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
-                            
-                            if (itemPiSql) { 
-                                updates.push('PlanejadoInicio = ?'); params.push(itemPiSql); 
-                                updates.push('UsuarioPlanejadoInicio = ?'); params.push(loggedUser);
-                            }
-                            if (itemPfSql) { 
-                                updates.push('PlanejadoFinal = ?'); params.push(itemPfSql); 
-                                updates.push('UsuarioPlanejadoFinal = ?'); params.push(loggedUser);
-                            }
-                            
-                            if (updates.length > 0) {
-                                updates.push('DiasProducao = ?'); 
-                                params.push(valDias);
-                                params.push(codmatFabricante, IdOrdemServico, processId);
-                                
-                                await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?`, params).catch(err => {
-                                    console.warn(`[Material Processo Item Warning]: ${err.message}`);
+                        const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
+
+                        const itemPiDt = parseBrDate(s.pi);
+                        const itemPfDt = parseBrDate(s.pf);
+                        const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
+                        const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
+                        const valDias = parseInt(String(s.dias), 10) || 1;
+
+                        const updates = [];
+                        const params = [];
+
+                        if (itemPiSql) {
+                            updates.push('PlanejadoInicio = ?'); params.push(itemPiSql);
+                            updates.push('UsuarioPlanejadoInicio = ?'); params.push(loggedUser);
+                        }
+                        if (itemPfSql) {
+                            updates.push('PlanejadoFinal = ?'); params.push(itemPfSql);
+                            updates.push('UsuarioPlanejadoFinal = ?'); params.push(loggedUser);
+                        }
+
+                        if (updates.length > 0) {
+                            updates.push('DiasProducao = ?');
+                            params.push(valDias);
+
+                            // Prioridade 1: usa IdMaterialProcesso diretamente (Rota 2)
+                            const idMp = s.idMaterialProcesso || s.IdMaterialProcesso;
+                            if (idMp) {
+                                params.push(idMp);
+                                await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE IdMaterialProcesso = ?`, params).catch(err => {
+                                    console.warn(`[Material Processo Item Warning IdMp]: ${err.message}`);
                                 });
+                            } else {
+                                // Fallback: lookup por PROCESS_ID_MAP (processos-padrão legado)
+                                const PROCESS_ID_MAP_ITEM = {
+                                    'corte': 1, 'dobra': 2, 'solda': 3, 'pintura': 4, 'montagem': 5,
+                                    'cortealaser': 13, 'laser': 13, 'punsionadeira': 14, 'galvanizar': 15
+                                };
+                                const processId = PROCESS_ID_MAP_ITEM[normalizedName];
+                                if (processId) {
+                                    params.push(codmatFabricante, IdOrdemServico, processId);
+                                    await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?`, params).catch(err => {
+                                        console.warn(`[Material Processo Item Warning Fallback]: ${err.message}`);
+                                    });
+                                }
                             }
                         }
                     }
@@ -13562,6 +13590,9 @@ app.get('/api/recursos', tenantMiddleware, async (req, res) => {
     try {
         const query = "SELECT IdProcessoFabricacao, processofabricacao, CodigoProcessoFabricacao, DataLiberada, Fabrica, Setup, TempoPadrao, DataCriacao, CriadoPor FROM processofabricacao WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY processofabricacao ASC";
         const [rows] = await ensureProcessoFieldsAndRetry(req.tenantDbPool, query, []);
+        // Log distinct Fabrica values to diagnose tenant-specific issues
+        const fabricaValues = [...new Set(rows.map(r => r.Fabrica))];
+        console.log(`[Recursos] Tenant: ${req.tenantId || 'default'} | Total: ${rows.length} | Fabrica values: ${JSON.stringify(fabricaValues)}`);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching recursos:', error);
