@@ -18,6 +18,21 @@ import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
+const getAuthHeaders = () => {
+    let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+    if (token === 'null' || token === 'undefined') token = null;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+const authFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) };
+    const res = await fetch(url, { ...options, headers });
+    if (res.status === 401) {
+        window.location.href = '/login_inicial.html';
+    }
+    return res;
+};
+
 interface OrdemServico {
     IdOrdemServico: number;
     Projeto?: string;
@@ -363,7 +378,7 @@ function OrdemServicoContent() {
     const openOsSectorsModal = async (os: any) => {
       let items: any[] = [];
       try {
-        const r = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
+        const r = await (await authFetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' })).json();
         if (r.success && r.data) {
           items = r.data;
           osModalItemsCache.current[os.IdOrdemServico] = r.data;
@@ -524,7 +539,7 @@ function OrdemServicoContent() {
         e.stopPropagation();
         if (!path) return;
         try {
-            const res = await fetch(`${API_BASE}/ordemservicoitem/check-file?path=${encodeURIComponent(path)}&type=${type}`, {
+            const res = await authFetch(`${API_BASE}/ordemservicoitem/check-file?path=${encodeURIComponent(path)}&type=${type}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const data = await res.json();
@@ -548,7 +563,7 @@ function OrdemServicoContent() {
         
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservicoitem/${item.IdOrdemServicoItem}/toggle-principal`, {
+            const res = await authFetch(`${API_BASE}/ordemservicoitem/${item.IdOrdemServicoItem}/toggle-principal`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -593,7 +608,7 @@ function OrdemServicoContent() {
         // Buscar processos com Fabrica = 'SIM' do backend
         try {
             const activeToken = token || localStorage.getItem('sinco_token') || '';
-            const r = await fetch(`${API_BASE}/peca-manufaturada/processos`, {
+            const r = await authFetch(`${API_BASE}/peca-manufaturada/processos`, {
                 headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
                 cache: 'no-store'
             });
@@ -677,7 +692,7 @@ function OrdemServicoContent() {
             const activeToken = token || localStorage.getItem('sinco_token') || '';
             const codmat = itemAny.CodMatFabricante || '';
             if (codmat) {
-                const rMat = await fetch(`${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codmat)}`, {
+                const rMat = await authFetch(`${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codmat)}`, {
                     headers: activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {},
                     cache: 'no-store'
                 });
@@ -778,7 +793,7 @@ function OrdemServicoContent() {
                 IdProjeto: (tempoModalItem as any).IdProjeto || null,
             };
 
-            const res = await fetch(`${API_BASE}/ordemservicoitem/${tempoModalItem.IdOrdemServicoItem}/tempos`, {
+            const res = await authFetch(`${API_BASE}/ordemservicoitem/${tempoModalItem.IdOrdemServicoItem}/tempos`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -841,7 +856,7 @@ function OrdemServicoContent() {
             try {
                 const os = ordens.find(o => o.IdOrdemServico === osId);
                 const url = `${API_BASE}/material-processo/item`;
-                const res = await fetch(url, {
+                const res = await authFetch(url, {
                     method: 'DELETE',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -899,7 +914,7 @@ function OrdemServicoContent() {
             const doDelete = async (confirmCascade = false) => {
                 try {
                     const url = `${API_BASE}/ordemservicoitem/${itemId}${confirmCascade ? '?confirmCascade=true' : ''}`;
-                    const res = await fetch(url, {
+                    const res = await authFetch(url, {
                         method: 'DELETE',
                         headers: { 'Authorization': 'Bearer ' + token }
                     });
@@ -951,7 +966,7 @@ function OrdemServicoContent() {
             const doDelete = async () => {
                 try {
                     const url = `${API_BASE}/material-processo/item`;
-                    const res = await fetch(url, {
+                    const res = await authFetch(url, {
                         method: 'DELETE',
                         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -1013,9 +1028,9 @@ function OrdemServicoContent() {
         const fetchOptions = async () => {
             try {
                 const [projRes, tagsRes, projCloneRes] = await Promise.all([
-                    fetch(`${API_BASE}/ordemservico/projetos`),
-                    fetch(`${API_BASE}/ordemservico/tags`),
-                    fetch(`${API_BASE}/ordemservico/projetos-clonagem`)
+                    authFetch(`${API_BASE}/ordemservico/projetos`),
+                    authFetch(`${API_BASE}/ordemservico/tags`),
+                    authFetch(`${API_BASE}/ordemservico/projetos-clonagem`)
                 ]);
                 const projJson = await projRes.json();
                 const tagsJson = await tagsRes.json();
@@ -1030,7 +1045,7 @@ function OrdemServicoContent() {
         fetchOptions();
 
         // Fetch config for visible sectors
-        fetch(`${API_BASE}/config`)
+        authFetch(`${API_BASE}/config`)
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.config.ProcessosVisiveis) {
@@ -1049,7 +1064,7 @@ function OrdemServicoContent() {
     // Update tags when projeto changes
     useEffect(() => {
         if (projetoFilter) {
-            fetch(`${API_BASE}/ordemservico/tags?projeto=${encodeURIComponent(projetoFilter)}`)
+            authFetch(`${API_BASE}/ordemservico/tags?projeto=${encodeURIComponent(projetoFilter)}`)
                 .then(res => res.json())
                 .then(json => {
                     if (json.success) setTags(json.data);
@@ -1063,7 +1078,7 @@ function OrdemServicoContent() {
         setCloneTagsEmpty(false);
         if (cloneProjetoId) {
             setLoadingCloneTags(true);
-            fetch(`${API_BASE}/ordemservico/tags-clonagem?projetoId=${encodeURIComponent(cloneProjetoId)}`)
+            authFetch(`${API_BASE}/ordemservico/tags-clonagem?projetoId=${encodeURIComponent(cloneProjetoId)}`)
                 .then(res => res.json())
                 .then(json => {
                     if (json.success) {
@@ -1112,7 +1127,7 @@ function OrdemServicoContent() {
                 params.set('dataLiberacaoFim', dataLiberacaoFim);
             }
 
-            const res = await fetch(`${API_BASE}/ordemservico?${params}`);
+            const res = await authFetch(`${API_BASE}/ordemservico?${params}`);
             const json = await res.json();
 
             if (json.success) {
@@ -1141,7 +1156,7 @@ function OrdemServicoContent() {
         }
         setSearchingItems(true);
         try {
-            const res = await fetch(`${API_BASE}/ordemservico/busca-item?q=${encodeURIComponent(term)}`);
+            const res = await authFetch(`${API_BASE}/ordemservico/busca-item?q=${encodeURIComponent(term)}`);
             const json = await res.json();
             if (json.success) {
                 setItemSearchResults(json.data);
@@ -1181,8 +1196,8 @@ function OrdemServicoContent() {
             const pProjeto = os?.IdProjeto || '';
             const pTag = os?.IdTag || '';
 
-            const resItens = fetch(`${API_BASE}/ordemservico/${osId}/itens?t=${Date.now()}`, { headers, cache: 'no-store' });
-            const resProc = fetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo?idProjeto=${pProjeto}&idTag=${pTag}&t=${Date.now()}`, { headers, cache: 'no-store' });
+            const resItens = authFetch(`${API_BASE}/ordemservico/${osId}/itens?t=${Date.now()}`, { headers, cache: 'no-store' });
+            const resProc = authFetch(`${API_BASE}/ordemservico/${osId}/materiais-em-processo?idProjeto=${pProjeto}&idTag=${pTag}&t=${Date.now()}`, { headers, cache: 'no-store' });
 
             const [itensResponse, procResponse] = await Promise.all([resItens, resProc]);
             
@@ -1300,7 +1315,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/liberar`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/liberar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -1331,7 +1346,7 @@ function OrdemServicoContent() {
         if (os.IdProjeto) {
             try {
                 const tkn = token || localStorage.getItem('sinco_token') || '';
-                const rPrj = await fetch(`${API_BASE}/projeto/${os.IdProjeto}`, {
+                const rPrj = await authFetch(`${API_BASE}/projeto/${os.IdProjeto}`, {
                     headers: tkn ? { 'Authorization': `Bearer ${tkn}` } : {}
                 });
                 const jPrj = await rPrj.json();
@@ -1361,7 +1376,7 @@ function OrdemServicoContent() {
                                 'Content-Type': 'application/json'
                             } : { 'Content-Type': 'application/json' };
                             
-                            const resProj = await fetch(`${API_BASE}/projeto/${os.IdProjeto}/liberar`, {
+                            const resProj = await authFetch(`${API_BASE}/projeto/${os.IdProjeto}/liberar`, {
                                 method: 'POST',
                                 headers,
                                 body: JSON.stringify({ usuario: user?.nome || 'Sistema' })
@@ -1411,7 +1426,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/cancelar-liberacao`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/cancelar-liberacao`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ IdOrdemServico: os.IdOrdemServico })
@@ -1466,7 +1481,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/atualizar-arquivos`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/atualizar-arquivos`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ IdOrdemServico: os.IdOrdemServico })
@@ -1503,7 +1518,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/alterar-fator`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/alterar-fator`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ 
@@ -1539,7 +1554,7 @@ function OrdemServicoContent() {
         setLiberandoOS(osId);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservicoitem/alterar-fator`, {
+            const res = await authFetch(`${API_BASE}/ordemservicoitem/alterar-fator`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ 
@@ -1573,7 +1588,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/excluir`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/excluir`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({
@@ -1610,7 +1625,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/finalizar`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/finalizar`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ IdOrdemServico: os.IdOrdemServico })
@@ -1643,7 +1658,7 @@ function OrdemServicoContent() {
         setLiberandoOS(os.IdOrdemServico);
         try {
             const token = localStorage.getItem('sinco_token');
-            const res = await fetch(`${API_BASE}/ordemservico/cancelar-finalizacao`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/cancelar-finalizacao`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
                 body: JSON.stringify({ IdOrdemServico: os.IdOrdemServico })
@@ -1686,7 +1701,7 @@ function OrdemServicoContent() {
             const numeroOp = result.value;
             setLiberandoOS(os.IdOrdemServico);
             try {
-                const response = await fetch(`${API_BASE}/ordemservico/numero-op`, {
+                const response = await authFetch(`${API_BASE}/ordemservico/numero-op`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1720,19 +1735,19 @@ function OrdemServicoContent() {
     // Lógica do Modal Pendência (RNC) - idêntico ao ApontamentoProducao
     // ============================================================
     useEffect(() => {
-        fetch(`${API_BASE}/config/setores`)
+        authFetch(`${API_BASE}/config/setores`)
             .then(res => res.json())
             .then(json => { if (json.success) setSetoresRncConfig(json.setores || json.data); })
             .catch(console.error);
-        fetch(`${API_BASE}/config/usuarios`)
+        authFetch(`${API_BASE}/config/usuarios`)
             .then(res => res.json())
             .then(json => { if (json.success) setUsuariosRncConfig(json.usuarios); })
             .catch(console.error);
-        fetch(`${API_BASE}/config/espessuras`)
+        authFetch(`${API_BASE}/config/espessuras`)
             .then(res => res.json())
             .then(json => { if (json.success) setEspessurasRncConfig(json.data); })
             .catch(console.error);
-        fetch(`${API_BASE}/config/materiais`)
+        authFetch(`${API_BASE}/config/materiais`)
             .then(res => res.json())
             .then(json => { if (json.success) setMateriaisSWRncConfig(json.data); })
             .catch(console.error);
@@ -1745,7 +1760,7 @@ function OrdemServicoContent() {
         if (searchQuery1) url += '&q1=' + encodeURIComponent(searchQuery1);
         if (searchQuery2) url += '&q2=' + encodeURIComponent(searchQuery2);
         try {
-            const res = await fetch(url);
+            const res = await authFetch(url);
             const json = await res.json();
             if (json.success) setPendenciasHistorico(json.data);
             else setPendenciasHistorico([]);
@@ -1890,7 +1905,7 @@ function OrdemServicoContent() {
                 dataFinalizacao: finalizandoRnc ? dataFinalizacao : null,
                 descricaoFinalizacao: finalizandoRnc && descricaoFinalizacao ? descricaoFinalizacao.toUpperCase() : null
             };
-            const res = await fetch(`${API_BASE}/producao/pendencia`, {
+            const res = await authFetch(`${API_BASE}/producao/pendencia`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -1899,7 +1914,7 @@ function OrdemServicoContent() {
             if (json.success) {
                 setLoadingPendencias(true);
                 try {
-                    const histRes = await fetch(`${API_BASE}/producao/pendencias/historico?codMatFabricante=${encodeURIComponent(selectedItemRnc.CodMatFabricante || '')}`);
+                    const histRes = await authFetch(`${API_BASE}/producao/pendencias/historico?codMatFabricante=${encodeURIComponent(selectedItemRnc.CodMatFabricante || '')}`);
                     const histJson = await histRes.json();
                     if (histJson.success) setPendenciasHistorico(histJson.data);
                 } catch { } finally { setLoadingPendencias(false); }
@@ -1954,7 +1969,7 @@ function OrdemServicoContent() {
         try {
             const params = new URLSearchParams();
             if (search) params.set('search', search);
-            const res = await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens-disponiveis?${params}`);
+            const res = await authFetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens-disponiveis?${params}`);
             const json = await res.json();
             if (json.success) setItensDisponiveis(json.data);
             else addToast({ type: 'error', title: 'Erro', message: json.message });
@@ -1980,7 +1995,7 @@ function OrdemServicoContent() {
         if (!showModalIncluirItens || itensSelecionados.size === 0) return;
         setSalvandoItens(true);
         try {
-            const res = await fetch(`${API_BASE}/ordemservico/${showModalIncluirItens.IdOrdemServico}/incluir-itens`, {
+            const res = await authFetch(`${API_BASE}/ordemservico/${showModalIncluirItens.IdOrdemServico}/incluir-itens`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ itensSelecionados: Array.from(itensSelecionados) }),
@@ -1993,7 +2008,7 @@ function OrdemServicoContent() {
                 const osId = showModalIncluirItens.IdOrdemServico;
                 setOrdensItens(prev => { const n = { ...prev }; delete n[osId]; return n; });
                 setLoadingItens(prev => { const n = new Set(prev); n.add(osId); return n; });
-                const r = await fetch(`${API_BASE}/ordemservico/${osId}/itens`);
+                const r = await authFetch(`${API_BASE}/ordemservico/${osId}/itens`);
                 const d = await r.json();
                 if (d.success) setOrdensItens(prev => ({ ...prev, [osId]: d.data }));
                 setLoadingItens(prev => { const n = new Set(prev); n.delete(osId); return n; });
@@ -2015,7 +2030,7 @@ function OrdemServicoContent() {
 
         setLiberandoOS(os.IdOrdemServico);
         try {
-            const response = await fetch(`${API_BASE}/ordemservico/clonar`, {
+            const response = await authFetch(`${API_BASE}/ordemservico/clonar`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -2888,7 +2903,7 @@ function OrdemServicoContent() {
                                     // Exibe o endereço que está sendo montado para pesquisa
                                     addToast({ type: 'info', title: 'Abrindo Pasta', message: `Endereço: ${os.EnderecoOrdemServico}` });
                                     
-                                    await fetch(`${API_BASE}/system/open-folder`, {
+                                    await authFetch(`${API_BASE}/system/open-folder`, {
                                         method: 'POST',
                                         headers: { 
                                             'Content-Type': 'application/json',
@@ -2913,7 +2928,7 @@ function OrdemServicoContent() {
                             e.stopPropagation();
                             try {
                                 addToast({ type: 'info', title: 'Aguarde', message: 'Gerando Relatório PDF...' });
-                                const res = await fetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/pdf`, {
+                                const res = await authFetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/pdf`, {
                                     headers: { 'Authorization': `Bearer ${token}` }
                                 });
                                 if (!res.ok) throw new Error('Falha na autenticação ou servidor');
@@ -2935,7 +2950,7 @@ function OrdemServicoContent() {
                             e.stopPropagation();
                             try {
                                 addToast({ type: 'info', title: 'Aguarde', message: 'Gerando Relatório Excel...' });
-                                const res = await fetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/excel`, {
+                                const res = await authFetch(`/api/ordemservico/${os.IdOrdemServico}/relatorio/excel`, {
                                     headers: { 'Authorization': `Bearer ${token}` }
                                 });
                                 if (!res.ok) throw new Error('Falha na autenticação ou servidor');
@@ -4099,7 +4114,8 @@ function OrdemServicoContent() {
                                             className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:border-red-500">
                                             <option value="">Selecione...</option>
                                             {setoresRncConfig.filter(s => {
-                                                const lower = s.toLowerCase();
+                                                if (!s) return false;
+                                                const lower = String(s).toLowerCase();
                                                 const productionSectors = ['corte', 'dobra', 'solda', 'pintura', 'montagem'];
                                                 if (productionSectors.includes(lower)) {
                                                     return visibleSetores.includes(lower);

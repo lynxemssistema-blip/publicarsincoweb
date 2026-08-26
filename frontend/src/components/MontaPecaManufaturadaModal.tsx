@@ -5,6 +5,17 @@ import { X, Search, Loader2, Package, Layers, Plus, Trash2, ArrowRight } from 'l
 
 const API_BASE = '/api/peca-manufaturada';
 
+const getAuthHeaders = () => {
+    let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+    if (token === 'null' || token === 'undefined') token = null;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+const authFetch = (url: string, options: RequestInit = {}) => {
+    const headers = { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) };
+    return fetch(url, { ...options, headers });
+};
+
 interface MontaPecaManufaturadaModalProps {
  isOpen: boolean;
  onClose: () => void;
@@ -31,7 +42,7 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  setLoadingDesenhos(true);
  try {
  const url = pesqDesenho ? `${API_BASE}/desenhos?pesq=${encodeURIComponent(pesqDesenho)}` : `${API_BASE}/desenhos`;
- const res = await fetch(url);
+ const res = await authFetch(url);
  const json = await res.json();
  if (json.success) setDesenhos(json.data);
  } catch (err) {
@@ -45,7 +56,7 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  const fetchComposicao = async (idMaterialPeca: number) => {
  setLoadingComposicao(true);
  try {
- const res = await fetch(`${API_BASE}/composicao/${idMaterialPeca}`);
+ const res = await authFetch(`${API_BASE}/composicao/${idMaterialPeca}`);
  const json = await res.json();
  if (json.success) setComposicao(json.data);
  } catch (err) {
@@ -60,7 +71,7 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  setLoadingMateriais(true);
  try {
  const url = pesqMaterial ? `${API_BASE}/materiais?pesq=${encodeURIComponent(pesqMaterial)}` : `${API_BASE}/materiais`;
- const res = await fetch(url);
+ const res = await authFetch(url);
  const json = await res.json();
  if (json.success) setMateriais(json.data);
  } catch (err) {
@@ -89,7 +100,7 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  const handleAddMaterial = async (idMaterial: number) => {
  if (!selectedDesenho) return;
  try {
- const res = await fetch(`${API_BASE}/composicao`, {
+ const res = await authFetch(`${API_BASE}/composicao`, {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({
@@ -112,7 +123,7 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  const handleRemoveMaterial = async (idMontaPeca: number) => {
  if (!confirm('Deseja realmente excluir este item da composição?')) return;
  try {
- const res = await fetch(`${API_BASE}/composicao/${idMontaPeca}`, {
+ const res = await authFetch(`${API_BASE}/composicao/${idMontaPeca}`, {
  method: 'DELETE',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ usuario })

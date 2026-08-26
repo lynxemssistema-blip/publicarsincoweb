@@ -1,5 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { X, Clock, Plus, Trash2, AlertTriangle, ChevronRight, Save } from 'lucide-react';
+import { Plus, X, Search, Clock, Users, ArrowRight, Play, CheckCircle, Trash2, AlertTriangle, ChevronRight, Save } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+const getAuthHeaders = () => {
+    let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+    if (token === 'null' || token === 'undefined') token = null;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+const authFetch = (url: string, options: RequestInit = {}) => {
+    const headers = { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) };
+    return fetch(url, { ...options, headers });
+};
 import { useAuth } from '../contexts/AuthContext';
 
 interface Processo {
@@ -64,7 +76,7 @@ export default function ProcessoFabricacaoModal({ desenho, onConfirm, onCancel, 
  const fetchProcessos = async () => {
  setLoading(true);
  try {
- const res = await fetch('/api/peca-manufaturada/processos');
+ const res = await authFetch('/api/peca-manufaturada/processos');
  const json = await res.json();
  if (json.success) setProcessos(json.data);
  } catch (e) { console.error(e); }
@@ -158,7 +170,7 @@ export default function ProcessoFabricacaoModal({ desenho, onConfirm, onCancel, 
  codmatFabricante: desenho.CodMatFabricante, idMatriz, usuarioCriacao,
  replace: !!(processosIniciais && processosIniciais.length > 0),
  };
- const res = await fetch('/api/peca-manufaturada/material-processo', {
+ const res = await authFetch('/api/peca-manufaturada/material-processo', {
  method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
  });
  const json = await res.json();

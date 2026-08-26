@@ -38,10 +38,15 @@ export default function VisaoGeralTagsGlobais({ onVoltar }: { onVoltar?: () => v
     const [fDataRealIni, setFDataRealIni] = useState('');
     const [fDataRealFim, setFDataRealFim] = useState('');
 
+    const getAuthHeaders = () => {
+        let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+        if (token === 'null' || token === 'undefined') token = null;
+        return token ? { 'Authorization': `Bearer ${token}` } : {};
+    };
+
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
-        fetch(`${API_BASE}/visao-geral/tags-globais`)
+        fetch(`${API_BASE}/visao-geral/tags-globais`, { headers: getAuthHeaders() })
             .then(r => r.json())
             .then(d => {
                 if (d.success) setTags(d.data);

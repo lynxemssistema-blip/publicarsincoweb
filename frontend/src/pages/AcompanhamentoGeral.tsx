@@ -1185,11 +1185,11 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  <div>
  <h1 className="text-lg font-black text-slate-800 leading-tight">
  {projeto.Projeto}
- {projeto.DescProjeto && <span className="text-slate-100 font-medium ml-2">— {projeto.DescProjeto}</span>}
+ {projeto.DescProjeto && <span className="text-slate-500 font-medium ml-2">— {projeto.DescProjeto}</span>}
  </h1>
  <div className="flex items-center gap-3 mt-0.5">
  {projeto.DescEmpresa && (
- <span className="text-xs text-slate-100 flex items-center gap-1">
+ <span className="text-xs text-slate-500 flex items-center gap-1">
  <Building2 size={10} /> {projeto.DescEmpresa}
  </span>
  )}
@@ -1227,7 +1227,7 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
  </button>
  </div>
 
- <span className="text-xs text-slate-100 font-medium bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+ <span className="text-xs text-slate-600 font-medium bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
  {tags.length} Tag{tags.length !== 1 ? 's' : ''}
  </span>
  </div>

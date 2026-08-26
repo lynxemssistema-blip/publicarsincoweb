@@ -1748,19 +1748,19 @@ useEffect(() => {
   <button
   onClick={(e) => {
   e.stopPropagation();
-  if ((Number(item.QtdeTotal) || 0) <= 0) return;
+  if ((Number(item.QtdeTotal) || 0) <= 1) return;
    setParcialItem(item);
    setParcialRecurso(setorAtivo);
    setQtdeParcial('');
    setParcialModalOpen(true);
    }}
-   disabled={(Number(item.QtdeTotal) || 0) <= 0}
+   disabled={(Number(item.QtdeTotal) || 0) <= 1}
   className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
-  (Number(item.QtdeTotal) || 0) <= 0
+  (Number(item.QtdeTotal) || 0) <= 1
   ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
   : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
   }`}
-  title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
+  title={(Number(item.QtdeTotal) || 0) <= 1 ? 'Quantidade total menor ou igual a 1' : 'Apontamento Parcial'}
   >
   <Zap size={12} />
   </button>
@@ -1990,19 +1990,19 @@ useEffect(() => {
   <button
   onClick={(e) => {
   e.stopPropagation();
-  if ((Number(item.QtdeTotal) || 0) <= 0) return;
+  if ((Number(item.QtdeTotal) || 0) <= 1) return;
    setParcialItem(item);
    setParcialRecurso(setorAtivo);
    setQtdeParcial('');
    setParcialModalOpen(true);
    }}
-  disabled={(Number(item.QtdeTotal) || 0) <= 0}
+  disabled={(Number(item.QtdeTotal) || 0) <= 1}
   className={`flex items-center justify-center w-6 h-6 rounded transition-colors border ${
-  (Number(item.QtdeTotal) || 0) <= 0
+  (Number(item.QtdeTotal) || 0) <= 1
   ? 'bg-gray-50 text-gray-300 border-gray-200 cursor-not-allowed'
   : 'bg-blue-50 text-blue-600 hover:bg-blue-100 border-blue-200'
   }`}
-  title={(Number(item.QtdeTotal) || 0) <= 0 ? 'Sem saldo a executar' : 'Apontamento Parcial'}
+  title={(Number(item.QtdeTotal) || 0) <= 1 ? 'Quantidade total menor ou igual a 1' : 'Apontamento Parcial'}
   >
   <Zap size={12} />
   </button>

@@ -279,7 +279,7 @@ export default function CriarOrdemServicoPage() {
                   title=""
                 >
                   <Info size={12} className="text-blue-400 hover:text-blue-600 transition-colors" />
-                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2.5 bg-slate-800 text-white text-[10px] leading-relaxed rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal">
+                  <span className="absolute top-full left-0 mt-2 w-64 p-2.5 bg-slate-800 text-white text-[10px] leading-relaxed rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal">
                     <strong className="block text-yellow-300 mb-1">📋 Critérios de exibição:</strong>
                     Somente projetos que atendam <em>todos</em> os critérios abaixo são exibidos:
                     <ul className="mt-1 space-y-0.5 list-disc list-inside">

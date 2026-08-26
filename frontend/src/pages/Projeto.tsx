@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -14,6 +14,18 @@ import Swal from 'sweetalert2';
 
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
+
+const getAuthHeaders = () => {
+    let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+    if (token === 'null' || token === 'undefined') token = null;
+    return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
+const authFetch = (url: string, options: RequestInit = {}) => {
+    const headers = { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) };
+    return fetch(url, { ...options, headers });
+};
+
 
 interface Projeto {
  IdProjeto?: number;
@@ -202,9 +214,9 @@ export default function ProjetoPage() {
  const fetchOptions = async () => {
  try {
  const [pjRes, medRes, tipoRes] = await Promise.all([
- fetch(`${API_BASE}/pj/options`),
- fetch(`${API_BASE}/medida/options`),
- fetch(`${API_BASE}/tipoproduto/options`)
+ authFetch(`${API_BASE}/pj/options`),
+ authFetch(`${API_BASE}/medida/options`),
+ authFetch(`${API_BASE}/tipoproduto/options`)
  ]);
  const [pjJson, medJson, tipoJson] = await Promise.all([pjRes.json(), medRes.json(), tipoRes.json()]);
  if (pjJson.success) setClienteOptions(pjJson.data);
@@ -250,7 +262,7 @@ export default function ProjetoPage() {
  params.append('page', String(page));
  params.append('limit', String(PAGE_LIMIT));
  const qs = params.toString();
- const res = await fetch(`${API_BASE}/projeto${qs ? `?${qs}` : ''}`);
+ const res = await authFetch(`${API_BASE}/projeto${qs ? `?${qs}` : ''}`);
  const json = await res.json();
  if (json.success) {
  setProjetos(prev => append ? [...prev, ...json.data] : json.data);
@@ -271,7 +283,7 @@ export default function ProjetoPage() {
  const fetchTags = async (projetoId: number) => {
  setLoadingTags(prev => new Set(prev).add(projetoId));
  try {
- const res = await fetch(`${API_BASE}/projeto/${projetoId}/tags`);
+ const res = await authFetch(`${API_BASE}/projeto/${projetoId}/tags`);
  const json = await res.json();
  if (json.success) {
  setProjectTags(prev => ({ ...prev, [projetoId]: json.data }));
@@ -400,7 +412,7 @@ export default function ProjetoPage() {
  delete payload.IE;
  delete payload.Ie;
 
- const res = await fetch(url, {
+ const res = await authFetch(url, {
  method,
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify(payload),
@@ -435,7 +447,7 @@ export default function ProjetoPage() {
 
  const handleProjetoEdit = async (id: number) => {
  try {
- const res = await fetch(`${API_BASE}/projeto/${id}`);
+ const res = await authFetch(`${API_BASE}/projeto/${id}`);
  const json = await res.json();
  if (json.success) {
  const data = json.data;
@@ -469,7 +481,7 @@ export default function ProjetoPage() {
  if (!confirm('Deseja realmente excluir este projeto?')) return;
 
  try {
- const res = await fetch(`${API_BASE}/projeto/${id}`, {
+ const res = await authFetch(`${API_BASE}/projeto/${id}`, {
  method: 'DELETE',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ usuario: 'Edson' }),
@@ -489,7 +501,7 @@ export default function ProjetoPage() {
 
  const handleOpenFolder = async (id: number) => {
  try {
- const res = await fetch(`${API_BASE}/projeto/${id}/open-folder`, { method: 'POST' });
+ const res = await authFetch(`${API_BASE}/projeto/${id}/open-folder`, { method: 'POST' });
  const json = await res.json();
  if (json.success) {
  showAlert('Pasta aberta no servidor.', "success");
@@ -508,12 +520,12 @@ export default function ProjetoPage() {
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       // 1. Consulta das Tags do projeto
-      const resTags = await fetch(`${API_BASE}/projeto/${id}/tags`, { headers });
+      const resTags = await authFetch(`${API_BASE}/projeto/${id}/tags`, { headers });
       const jsonTags = await resTags.json();
       const tagsList = (jsonTags.success && Array.isArray(jsonTags.data)) ? jsonTags.data : [];
 
       // 2. Consulta das Ordens de Serviço (OS) do projeto
-      const resOs = await fetch(`${API_BASE}/visao-geral/projeto/${id}/ordens-servico`, { headers });
+      const resOs = await authFetch(`${API_BASE}/visao-geral/projeto/${id}/ordens-servico`, { headers });
       const jsonOs = await resOs.json();
       const osList = (jsonOs.success && Array.isArray(jsonOs.data)) ? jsonOs.data : [];
 
@@ -545,7 +557,7 @@ export default function ProjetoPage() {
       if (!result.isConfirmed) return;
 
       // 5. Liberação do projeto
-      const res = await fetch(`${API_BASE}/projeto/${id}/liberar`, {
+      const res = await authFetch(`${API_BASE}/projeto/${id}/liberar`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ usuario: user?.nome || 'Sistema' })
@@ -583,7 +595,7 @@ export default function ProjetoPage() {
       const token = localStorage.getItem('sinco_token') || '';
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       if (token) headers['Authorization'] = `Bearer ${token}`;
-      const res = await fetch(`${API_BASE}/visao-geral/projeto/${id}/finalizar`, {
+      const res = await authFetch(`${API_BASE}/visao-geral/projeto/${id}/finalizar`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ usuario: (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema' })
@@ -603,7 +615,7 @@ export default function ProjetoPage() {
   const handleCancelarLiberacao = async (id: number) => {
  if (!confirm('Deseja realmente CANCELAR a liberação deste projeto?')) return;
  try {
- const res = await fetch(`${API_BASE}/projeto/${id}/cancelar-liberacao`, {
+ const res = await authFetch(`${API_BASE}/projeto/${id}/cancelar-liberacao`, {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' }
  });
@@ -626,7 +638,7 @@ export default function ProjetoPage() {
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
       // PRÉ-CHECK: valida antes de abrir o diálogo de confirmação
-      const preCheck = await fetch(`${API_BASE}/visao-geral/projeto/${id}/pode-cancelar-finalizacao`, { headers });
+      const preCheck = await authFetch(`${API_BASE}/visao-geral/projeto/${id}/pode-cancelar-finalizacao`, { headers });
       const preJson = await preCheck.json();
 
       if (!preJson.pode) {
@@ -656,7 +668,7 @@ export default function ProjetoPage() {
       if (!result.isConfirmed) return;
 
       // Executa o cancelamento
-      const res = await fetch(`${API_BASE}/visao-geral/projeto/${id}/cancelar-finalizacao`, {
+      const res = await authFetch(`${API_BASE}/visao-geral/projeto/${id}/cancelar-finalizacao`, {
         method: 'POST',
         headers,
         body: JSON.stringify({ usuario: (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema' })
@@ -704,7 +716,7 @@ export default function ProjetoPage() {
 
  // Confirmado → executa no backend
  try {
- const res = await fetch(`${API_BASE}/projeto/${projetoId}/status`, {
+ const res = await authFetch(`${API_BASE}/projeto/${projetoId}/status`, {
  method: 'PATCH',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ status, confirmar: true, usuario: usuario || user?.nome || '' }),
@@ -782,7 +794,7 @@ export default function ProjetoPage() {
  const url = isEditingTag ? `${API_BASE}/tag/${tagFormData.IdTag}` : `${API_BASE}/tag`;
  const method = isEditingTag ? 'PUT' : 'POST';
 
- const res = await fetch(url, {
+ const res = await authFetch(url, {
  method,
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify(payload),
@@ -808,7 +820,7 @@ export default function ProjetoPage() {
  const handleTagEdit = async (tag: Tag, projeto: Projeto) => {
  setSelectedProjetoForTag(projeto);
  try {
- const res = await fetch(`${API_BASE}/tag/${tag.IdTag}`);
+ const res = await authFetch(`${API_BASE}/tag/${tag.IdTag}`);
  const json = await res.json();
  if (json.success) {
  setTagFormData(json.data);
@@ -824,7 +836,7 @@ export default function ProjetoPage() {
  if (!confirm('Deseja realmente excluir esta tag?')) return;
 
  try {
- const res = await fetch(`${API_BASE}/tag/${tagId}`, {
+ const res = await authFetch(`${API_BASE}/tag/${tagId}`, {
  method: 'DELETE',
  headers: { 'Content-Type': 'application/json' },
  body: JSON.stringify({ usuario: 'Edson' }),
