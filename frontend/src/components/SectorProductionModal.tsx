@@ -9,6 +9,7 @@ interface SectorProductionModalProps {
     allTags?: any[];
     allOs?: any[];
     targetId?: number;
+    item?: any;
     sectors: any[];
     isLiberado?: boolean;
   } | null;
@@ -448,6 +449,12 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
     const list = sectors.map(s => ({ ...s }));
     list[index].pi = newPiBr;
 
+    // Só recalcula a cadeia quando a data estiver completamente digitada (dd/mm/aaaa = 10 chars)
+    if (newPiBr.length < 10) {
+      setSectors(list);
+      return;
+    }
+
     if (calcMode === 'auto') {
       const isoPi = toIsoInput(newPiBr);
       if (isoPi) {
@@ -519,10 +526,19 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
       } else if (modalData.targetType === 'tag_os_bulk') {
         payload.targetIds = selectedOs;
       } else if (modalData.targetType === 'item') {
-        payload.targetType = applyLevel;
-        if (applyLevel === 'os') payload.targetId = modalData.item.IdOrdemServico;
-        else if (applyLevel === 'tag') payload.targetId = modalData.item.IdTag;
-        else if (applyLevel === 'projeto') payload.targetId = modalData.item.IdProjeto;
+        // applyLevel 'item' usa targetId (IdOrdemServicoItem) - padrão, não muda nada
+        if (applyLevel === 'item') {
+          // targetType e targetId já corretos: 'item' + IdOrdemServicoItem
+        } else if (applyLevel === 'os') {
+          payload.targetType = 'os';
+          payload.targetId = modalData.item?.IdOrdemServico ?? modalData.targetId;
+        } else if (applyLevel === 'tag') {
+          payload.targetType = 'tag';
+          payload.targetId = modalData.item?.IdTag ?? modalData.targetId;
+        } else if (applyLevel === 'projeto') {
+          payload.targetType = 'projeto';
+          payload.targetId = modalData.item?.IdProjeto ?? modalData.targetId;
+        }
       }
 
       const res = await fetch('/api/salvar-setores-planejamento', {
@@ -640,28 +656,25 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                 </button>
                 <button
                   type="button"
+                  disabled={!modalData.item?.IdOrdemServico}
                   onClick={() => setApplyLevel('os')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'os' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-                  title={modalData.item.IdOrdemServico ? "Toda a OS" : "OS não informada"}
-                  disabled={!modalData.item.IdOrdemServico}
+                  className={`px-3 py-1.5 rounded text-[11px] font-black border transition-colors ${applyLevel === 'os' ? 'bg-[#32423D] text-white border-[#32423D]' : 'bg-white text-slate-700 border-slate-300 hover:border-[#32423D] hover:text-[#32423D]'}`}
                 >
-                  OS Inteira
+                  Aplicar à OS
                 </button>
                 <button
                   type="button"
+                  disabled={!modalData.item?.IdTag}
                   onClick={() => setApplyLevel('tag')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'tag' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-                  title={modalData.item.IdTag ? "Toda a Tag" : "Tag não informada"}
-                  disabled={!modalData.item.IdTag}
+                  className={`px-3 py-1.5 rounded text-[11px] font-black border transition-colors ${applyLevel === 'tag' ? 'bg-[#32423D] text-white border-[#32423D]' : 'bg-white text-slate-700 border-slate-300 hover:border-[#32423D] hover:text-[#32423D]'}`}
                 >
-                  Tag Inteira
+                  Aplicar à Tag
                 </button>
                 <button
                   type="button"
+                  disabled={!modalData.item?.IdProjeto}
                   onClick={() => setApplyLevel('projeto')}
-                  className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${applyLevel === 'projeto' ? 'bg-[#32423D] text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-                  title={modalData.item.IdProjeto ? "Todo o Projeto" : "Projeto não informado"}
-                  disabled={!modalData.item.IdProjeto}
+                  className={`px-3 py-1.5 rounded text-[11px] font-black border transition-colors ${applyLevel === 'projeto' ? 'bg-[#32423D] text-white border-[#32423D]' : 'bg-white text-slate-700 border-slate-300 hover:border-[#32423D] hover:text-[#32423D]'}`}
                 >
                   Projeto Inteiro
                 </button>
@@ -887,47 +900,43 @@ export default function SectorProductionModal({ modalData, onClose, onSave }: Se
                         {/* COLUNA 3: INTERVALO DE DATAS */}
                         <td className="px-2 py-1.5 text-center border-r border-slate-100">
                           <div className="flex items-center justify-center gap-1.5">
-                            {/* DATA INÍCIO */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { if (isRowDisabled) return; const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
-                              <input
-                                type="date"
-                                placeholder="Início"
-                                value={toIsoInput(s.pi) || ''}
-                                disabled={isRowDisabled}
-                                onChange={(e) => handlePiChange(idx, toBrDisplay(e.target.value))}
-                                className={`w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer ${isRowDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                              />
-                            </div>
+                            {/* DATA INÍCIO — calendário nativo */}
+                            <input
+                              type="date"
+                              title="Data de Início"
+                              value={toIsoInput(s.pi) || ''}
+                              disabled={isRowDisabled}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => handlePiChange(idx, toBrDisplay(e.target.value))}
+                              className={`px-2 py-1 text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] outline-none transition-all cursor-pointer ${isRowDisabled ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:border-[#32423D]'}`}
+                            />
 
                             <span className="text-slate-400 font-bold text-xs shrink-0">→</span>
 
-                            {/* DATA FIM */}
-                            <div className="flex items-center bg-[#F8FAFC] px-1.5 py-1 border border-slate-300 rounded focus-within:bg-white focus-within:border-[#32423D] focus-within:ring-1 focus-within:ring-[#32423D] shadow-inner transition-all relative" onClick={(e) => { if (isRowDisabled) return; const input = e.currentTarget.querySelector("input"); if (input && input.showPicker) input.showPicker(); }}>
-                              <input
-                                type="date"
-                                placeholder="Fim"
-                                value={toIsoInput(s.pf) || ''}
-                                disabled={isRowDisabled}
-                                onChange={(e) => {
-                                  const newPfBr = toBrDisplay(e.target.value);
-                                  const list = sectors.map(sec => ({ ...sec }));
-                                  list[idx].pf = newPfBr;
-                                  
-                                  const isoPi = toIsoInput(list[idx].pi);
-                                  const isoPf = e.target.value;
-                                  if (isoPi && isoPf) {
-                                    list[idx].dias = calcDaysBetween(isoPi, isoPf, incluirSabado, incluirDomingo, incluirFeriado);
-                                  }
-                                  
-                                  if (calcMode === 'auto') {
-                                    setSectors(recalculateAutomaticChain(list, autoDirection, targetDeadlineIso, incluirSabado, incluirDomingo, incluirFeriado));
-                                  } else {
-                                    setSectors(list);
-                                  }
-                                }}
-                                className={`w-[130px] bg-transparent text-xs font-black text-slate-700 border-none outline-none focus:ring-0 p-1 cursor-pointer ${isRowDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
-                              />
-                            </div>
+                            {/* DATA FIM — calendário nativo */}
+                            <input
+                              type="date"
+                              title="Data de Fim"
+                              value={toIsoInput(s.pf) || ''}
+                              disabled={isRowDisabled}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                const newPfBr = toBrDisplay(e.target.value);
+                                const list = sectors.map(sec => ({ ...sec }));
+                                list[idx].pf = newPfBr;
+                                const isoPi = toIsoInput(list[idx].pi);
+                                const isoPf = e.target.value;
+                                if (isoPi && isoPf) {
+                                  list[idx].dias = calcDaysBetween(isoPi, isoPf, incluirSabado, incluirDomingo, incluirFeriado);
+                                }
+                                if (calcMode === 'auto') {
+                                  setSectors(recalculateAutomaticChain(list, autoDirection, targetDeadlineIso, incluirSabado, incluirDomingo, incluirFeriado));
+                                } else {
+                                  setSectors(list);
+                                }
+                              }}
+                              className={`px-2 py-1 text-xs font-bold text-slate-800 bg-white border border-slate-300 rounded focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D] outline-none transition-all cursor-pointer ${isRowDisabled ? 'opacity-50 cursor-not-allowed bg-slate-50' : 'hover:border-[#32423D]'}`}
+                            />
                           </div>
                         </td>
 

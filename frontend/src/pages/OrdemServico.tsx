@@ -2495,9 +2495,14 @@ function OrdemServicoContent() {
                                             const isSelected = selectedItemIds.has(item.IdOrdemServicoItem);
                                             const osLiberada = os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM';
                                             
-                                            // Recursos do material
+                                            // Recursos do material — chave composta: codmat__idTag__idProjeto
+                                            // Mesma lógica do backend para distinguir itens com o mesmo código
+                                            // em projetos/tags diferentes dentro da mesma OS.
                                             const matProcsMap = materiaisProcesso[os.IdOrdemServico] || {};
-                                            const matProcsNode = matProcsMap[item.CodMatFabricante];
+                                            const itemIdTag = (item as any).IdTag || 0;
+                                            const itemIdProjeto = (item as any).IdProjeto || 0;
+                                            const compKey = `${item.CodMatFabricante}__${itemIdTag}__${itemIdProjeto}`;
+                                            const matProcsNode = matProcsMap[compKey];
                                             const hasProcessos = matProcsNode && matProcsNode.processos && matProcsNode.processos.length > 0;
                                             const isExpandedProc = expandedItemProcessos.has(item.IdOrdemServicoItem);
 

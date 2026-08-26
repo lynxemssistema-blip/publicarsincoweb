@@ -43,6 +43,13 @@ const getAuthHeaders = () => {
   return headers;
 };
 
+// authFetch: wrapper seguro que SEMPRE envia o token de autenticação
+// Resolve falhas silenciosas em produção onde fetch() sem auth retorna 401
+const authFetch = (url: string, options: RequestInit = {}) => {
+  const headers = { ...getAuthHeaders(), ...(options.headers as Record<string, string> || {}) };
+  return fetch(url, { ...options, headers });
+};
+
 
 const getSavedEntitySectorDates = (entity: any, sectorKey: string) => {
   if (!entity) return { pi: '', pf: '' };
@@ -446,11 +453,11 @@ export default function VisaoGeralProducao() {
 
     if (nextState && !tagItemsSilentCache[idTag]) {
       try {
-        const resOs = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
+        const resOs = await (await authFetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
         if (resOs.success && resOs.data && resOs.data.length > 0) {
           const itemPromises = resOs.data.map(async (os: any) => {
             try {
-              const resItens = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
+              const resItens = await (await authFetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
               return resItens.success ? resItens.data : [];
             } catch {
               return [];
@@ -615,9 +622,9 @@ export default function VisaoGeralProducao() {
  if (ci) qs.set('criacaoInicio', isoToBr(ci));
  if (cf) qs.set('criacaoFim', isoToBr(cf));
 
- const res = await (await fetch(`${API_BASE}/acompanhamento/projetos${qs.toString() ? '?' + qs : ''}`)).json();
- if (res.success) setProjetos(res.data);
- else setError(res.message || 'Erro ao carregar projetos do servidor');
+  const r = await (await authFetch(`${API_BASE}/acompanhamento/projetos${qs.toString() ? '?' + qs : ''}`)).json();
+ if (r.success) setProjetos(r.data);
+ else setError(r.message || 'Erro ao carregar projetos do servidor');
  } catch (e: Record<string, unknown>) { console.error(e); setError(e.message || 'Erro de rede'); }
  finally { setLoad(false); }
  };
@@ -626,7 +633,7 @@ export default function VisaoGeralProducao() {
  const fetchOsForTag = async (idTag: number) => {
  setLoadOsDetails(true);
  try {
- const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
+  const r = await (await authFetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
  if (r.success) {
  setOsDetailsModal({ type: 'tag', id: idTag, osList: r.data });
  } else {
@@ -648,7 +655,7 @@ export default function VisaoGeralProducao() {
       return;
     }
     try {
-      const r = await (await fetch(`${API_BASE}/ordemservico/${idOs}/itens`)).json();
+      const r = await (await authFetch(`${API_BASE}/ordemservico/${idOs}/itens`)).json();
       if (r.success) {
         // Limpa a OS selecionada anteriormente e exibe apenas a nova OS selecionada
         setExpandedOsItems({ [idOs]: r.data });
@@ -1233,17 +1240,17 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
     setExpandedTagSectors(prev => ({ ...prev, [idTag]: !prev[idTag] }));
     if (!tagItemsCache[idTag] || tagItemsCache[idTag].length === 0) {
       try {
-        const r = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/itens`)).json();
+        const r = await (await authFetch(`${API_BASE}/visao-geral/tag/${idTag}/itens`)).json();
         if (r.success && r.data && r.data.length > 0) {
           setTagItemsCache(prev => ({ ...prev, [idTag]: r.data }));
         } else {
           // Fallback: Fetch OSs and items for each OS to ensure no items are missed
-          const osRes = await (await fetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
+          const osRes = await (await authFetch(`${API_BASE}/visao-geral/tag/${idTag}/ordens-servico`)).json();
           if (osRes.success && osRes.data) {
             setExpandedTagsOs(prev => ({ ...prev, [idTag]: osRes.data }));
             const allItems: any[] = [];
             for (const os of osRes.data) {
-              const itemRes = await (await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
+              const itemRes = await (await authFetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/itens`)).json();
               if (itemRes.success && itemRes.data) {
                 allItems.push(...itemRes.data);
               }
@@ -1337,13 +1344,13 @@ const getSectorPlanningDates = (obj: any, sectorKey: string) => {
  useEffect(() => {
  const fetchConfig = async () => {
  try {
- const resUsr = await (await fetch(`${API_BASE}/config/usuarios`)).json();
+ const resUsr = await (await authFetch(`${API_BASE}/config/usuarios`)).json();
  if (resUsr.success) setUsuarios(resUsr.usuarios);
- const resTipos = await (await fetch(`${API_BASE}/config/tipostarefa`)).json();
+ const resTipos = await (await authFetch(`${API_BASE}/config/tipostarefa`)).json();
  if (resTipos.success) setTipostarefa(resTipos.tipostarefa);
  
  // Carregar processos visíveis
- const resCfg = await (await fetch(`${API_BASE}/config`)).json();
+ const resCfg = await (await authFetch(`${API_BASE}/config`)).json();
  if (resCfg.success && resCfg.config?.ProcessosVisiveis) {
  try {
  const processes = JSON.parse(resCfg.config.ProcessosVisiveis);
@@ -2494,7 +2501,7 @@ const salvarDatasBulkTags = async () => {
  </thead>
  <tbody className="divide-y divide-slate-100">
   {filteredTags.map((t, idx) => {
-    const tFin = t.Finalizado?.trim() !== '';
+    const tFin = t.Finalizado?.trim() === 'C' || t.Finalizado?.trim() === 'S';
     const isProjFin = selProj?.Finalizado?.trim() === 'C' || selProj?.Finalizado?.trim() === 'S';
     return (
       <React.Fragment key={t.IdTag}>
@@ -2880,7 +2887,7 @@ const salvarDatasBulkTags = async () => {
                                                     type="button"
                                                     onClick={(e) => { 
                                                       e.stopPropagation(); 
-                                                      openItemSectorsModal(item, isProjFin || tFin || isOsFin);
+                                                      openItemSectorsModal(item, isProjFin || tFin || (os.OrdemServicoFinalizado?.trim() === 'C' || os.OrdemServicoFinalizado?.trim() === 'S'));
                                                     }}
                                                     className="text-[8.5px] font-bold px-2 py-0.5 rounded shadow-sm transition-colors inline-flex items-center gap-1 whitespace-nowrap bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800"
                                                     title="Exibir Produção dos Setores / Recursos deste Item"

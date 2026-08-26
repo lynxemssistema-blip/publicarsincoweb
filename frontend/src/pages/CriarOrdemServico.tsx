@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Plus, Loader2, PackagePlus } from 'lucide-react';
+import { Save, Plus, Loader2, PackagePlus, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
@@ -45,13 +45,14 @@ export default function CriarOrdemServicoPage() {
   const [saveAction, setSaveAction] = useState<'com_itens' | 'sem_itens'>('com_itens');
 
   useEffect(() => {
+    if (!token) return; // aguarda autenticação antes de buscar
     fetchProjetos();
-  }, []);
+  }, [token]); // re-executa quando o token ficar disponível
 
   const fetchProjetos = async () => {
     try {
       const res = await fetch(`${API_BASE}/ordemservico/projetos-clonagem`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       const json = await res.json();
       if (json.success) setProjetos(json.data);
@@ -271,10 +272,31 @@ export default function CriarOrdemServicoPage() {
           <h3 className="text-sm font-semibold text-gray-700 border-b pb-1 mb-3">1. Dados Principais</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">Projeto <span className="text-red-500">*</span></label>
+              <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-1">
+                Projeto <span className="text-red-500">*</span>
+                <span
+                  className="group relative cursor-help inline-flex items-center"
+                  title=""
+                >
+                  <Info size={12} className="text-blue-400 hover:text-blue-600 transition-colors" />
+                  <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2.5 bg-slate-800 text-white text-[10px] leading-relaxed rounded shadow-xl z-50 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal">
+                    <strong className="block text-yellow-300 mb-1">📋 Critérios de exibição:</strong>
+                    Somente projetos que atendam <em>todos</em> os critérios abaixo são exibidos:
+                    <ul className="mt-1 space-y-0.5 list-disc list-inside">
+                      <li>Não estão <strong>finalizados</strong> (Finalizado ≠ 'C')</li>
+                      <li>Não estão <strong>liberados pela engenharia</strong> (Liberado ≠ 'S')</li>
+                      <li>Não foram <strong>excluídos</strong> do sistema</li>
+                    </ul>
+                    <span className="block mt-1.5 text-slate-300">Se o projeto não aparecer, verifique o status dele em <em>Gestão de Projetos</em>.</span>
+                  </span>
+                </span>
+              </label>
               <select name="IdProjeto" value={formData.IdProjeto} onChange={handleProjetoChange} className={inputClass} required>
                 <option value="">Selecione um projeto...</option>
-                {projetos.map(p => <option key={p.value || p.id} value={p.value || p.id}>{p.label}</option>)}
+                {projetos.length === 0
+                  ? <option disabled value="">⚠ Nenhum projeto disponível (veja critérios ⓘ)</option>
+                  : projetos.map(p => <option key={p.value || p.id} value={p.value || p.id}>{p.label}</option>)
+                }
               </select>
             </div>
             <div>

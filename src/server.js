@@ -7537,9 +7537,17 @@ app.get('/api/ordemservico/tags', tenantMiddleware, async (req, res) => {
 // OPTIONS: Lista de Projetos para Clonagem
 app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res) => {
     try {
-        const [rows] = await req.tenantDbPool.execute("SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (liberado IS NULL OR liberado <> 'S') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto");
+        // Exibe projetos ativos (não deletados e não finalizados)
+        // Projetos liberados pela engenharia (liberado='S') TAMBÉM aparecem — apenas finalizados são excluídos
+        const [rows] = await req.tenantDbPool.execute(
+            "SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto"
+        );
+        console.log(`[ProjetosClonagem] Tenant: ${req.tenantId || 'default'} | Projetos disponíveis: ${rows.length}`);
         res.json({ success: true, data: rows });
-    } catch (error) { res.status(500).json({ success: false }); }
+    } catch (error) {
+        console.error('[ProjetosClonagem] Erro:', error.message);
+        res.status(500).json({ success: false });
+    }
 });
 
 // OPTIONS: Lista de Tags para Clonagem
@@ -9473,30 +9481,34 @@ app.get('/api/ordemservico/:id/itens-codigos', tenantMiddleware, async (req, res
 app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (req, res) => {
     try {
         const osId = req.params.id;
-        const { idProjeto, idTag } = req.query;
-        let sql = `
-            SELECT mp.codmatFabricante, m.DescResumo, mp.TotalExecutar as Qtde,
-                   mp.IdProcesso, pf.processofabricacao, mp.TempoEstimadoMin, mp.TempoPadraoMin, mp.SequenciaExecucao
+        // Busca TODOS os materiais da OS (sem filtrar por idProjeto/idTag)
+        // para retornar processos de cada item individualmente.
+        // A chave composta codmat__idTag__idProjeto distingue itens com o mesmo
+        // código em projetos/tags diferentes dentro da mesma OS.
+        const sql = `
+            SELECT mp.codmatFabricante,
+                   COALESCE(mp.IdTag, 0)     AS IdTag,
+                   COALESCE(mp.IdProjeto, 0) AS IdProjeto,
+                   m.DescResumo, mp.TotalExecutar as Qtde,
+                   mp.IdProcesso, pf.processofabricacao,
+                   mp.TempoEstimadoMin, mp.TempoPadraoMin, mp.SequenciaExecucao
             FROM material_processo mp
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
             LEFT JOIN material m ON mp.IdMaterial = m.IdMaterial
-            WHERE mp.IdOrdemServico = ? `;
-        const params = [osId];
-        
-        if (idProjeto) { sql += ` AND mp.IdProjeto = ?`; params.push(idProjeto); }
-        else { sql += ` AND (mp.IdProjeto IS NULL OR mp.IdProjeto = 0 OR mp.IdProjeto = '')`; }
-        if (idTag) { sql += ` AND mp.IdTag = ?`; params.push(idTag); }
-        else { sql += ` AND (mp.IdTag IS NULL OR mp.IdTag = 0 OR mp.IdTag = '')`; }
-        
-        sql += ` ORDER BY mp.codmatFabricante, mp.SequenciaExecucao ASC`;
+            WHERE mp.IdOrdemServico = ?
+            ORDER BY mp.codmatFabricante, mp.SequenciaExecucao ASC`;
 
-        const [rows] = await req.tenantDbPool.execute(sql, params);
+        const [rows] = await req.tenantDbPool.execute(sql, [osId]);
         const mats = {};
         for (const r of rows) {
             if (!r.codmatFabricante) continue;
-            if (!mats[r.codmatFabricante]) {
-                mats[r.codmatFabricante] = {
+            // Chave composta: codmat + idTag + idProjeto
+            const compKey = `${r.codmatFabricante}__${r.IdTag}__${r.IdProjeto}`;
+            if (!mats[compKey]) {
+                mats[compKey] = {
                     codmatfabricante: r.codmatFabricante,
+                    idTag: r.IdTag,
+                    idProjeto: r.IdProjeto,
                     desc: r.DescResumo,
                     qtde: Number(r.Qtde) || 1,
                     recursoTempos: {},
@@ -9505,12 +9517,12 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
             }
             if (r.processofabricacao) {
                 const key = r.processofabricacao.trim().replace(/\s+/g, '');
-                mats[r.codmatFabricante].recursoTempos[key] = {
+                mats[compKey].recursoTempos[key] = {
                     tempoSetup: Number(r.TempoEstimadoMin || 0),
                     tempoPadrao: Number(r.TempoPadraoMin || 0),
                     label: r.processofabricacao
                 };
-                mats[r.codmatFabricante].processos.push({
+                mats[compKey].processos.push({
                     SequenciaExecucao: r.SequenciaExecucao,
                     processofabricacao: r.processofabricacao,
                     Qtde: Number(r.Qtde) || 1,
@@ -11357,36 +11369,50 @@ app.post('/api/salvar-setores-planejamento', tenantMiddleware, async (req, res) 
                     for (const s of sectors) {
                         const rawName = String(s.key || s.label || '').trim();
                         const normalizedName = rawName.toLowerCase().replace(/\s+/g, '');
-                        const processId = PROCESS_ID_MAP[normalizedName];
-                        
-                        if (processId) {
-                            const itemPiDt = parseBrDate(s.pi);
-                            const itemPfDt = parseBrDate(s.pf);
-                            const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
-                            const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
-                            const valDias = parseInt(String(s.dias), 10) || 1;
-                            
-                            const updates = [];
-                            const params = [];
-                            const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
-                            
-                            if (itemPiSql) { 
-                                updates.push('PlanejadoInicio = ?'); params.push(itemPiSql); 
-                                updates.push('UsuarioPlanejadoInicio = ?'); params.push(loggedUser);
-                            }
-                            if (itemPfSql) { 
-                                updates.push('PlanejadoFinal = ?'); params.push(itemPfSql); 
-                                updates.push('UsuarioPlanejadoFinal = ?'); params.push(loggedUser);
-                            }
-                            
-                            if (updates.length > 0) {
-                                updates.push('DiasProducao = ?'); 
-                                params.push(valDias);
-                                params.push(codmatFabricante, IdOrdemServico, processId);
-                                
-                                await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?`, params).catch(err => {
-                                    console.warn(`[Material Processo Item Warning]: ${err.message}`);
+                        const loggedUser = req.body.usuario || req.user?.login || req.user?.nome || req.user?.NomeCompleto || 'Sistema';
+
+                        const itemPiDt = parseBrDate(s.pi);
+                        const itemPfDt = parseBrDate(s.pf);
+                        const itemPiSql = itemPiDt && !isNaN(itemPiDt.getTime()) ? `${itemPiDt.getFullYear()}-${String(itemPiDt.getMonth() + 1).padStart(2, '0')}-${String(itemPiDt.getDate()).padStart(2, '0')}` : null;
+                        const itemPfSql = itemPfDt && !isNaN(itemPfDt.getTime()) ? `${itemPfDt.getFullYear()}-${String(itemPfDt.getMonth() + 1).padStart(2, '0')}-${String(itemPfDt.getDate()).padStart(2, '0')}` : null;
+                        const valDias = parseInt(String(s.dias), 10) || 1;
+
+                        const updates = [];
+                        const params = [];
+
+                        if (itemPiSql) {
+                            updates.push('PlanejadoInicio = ?'); params.push(itemPiSql);
+                            updates.push('UsuarioPlanejadoInicio = ?'); params.push(loggedUser);
+                        }
+                        if (itemPfSql) {
+                            updates.push('PlanejadoFinal = ?'); params.push(itemPfSql);
+                            updates.push('UsuarioPlanejadoFinal = ?'); params.push(loggedUser);
+                        }
+
+                        if (updates.length > 0) {
+                            updates.push('DiasProducao = ?');
+                            params.push(valDias);
+
+                            // Prioridade 1: usa IdMaterialProcesso diretamente (Rota 2)
+                            const idMp = s.idMaterialProcesso || s.IdMaterialProcesso;
+                            if (idMp) {
+                                params.push(idMp);
+                                await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE IdMaterialProcesso = ?`, params).catch(err => {
+                                    console.warn(`[Material Processo Item Warning IdMp]: ${err.message}`);
                                 });
+                            } else {
+                                // Fallback: lookup por PROCESS_ID_MAP (processos-padrão legado)
+                                const PROCESS_ID_MAP_ITEM = {
+                                    'corte': 1, 'dobra': 2, 'solda': 3, 'pintura': 4, 'montagem': 5,
+                                    'cortealaser': 13, 'laser': 13, 'punsionadeira': 14, 'galvanizar': 15
+                                };
+                                const processId = PROCESS_ID_MAP_ITEM[normalizedName];
+                                if (processId) {
+                                    params.push(codmatFabricante, IdOrdemServico, processId);
+                                    await conn.execute(`UPDATE material_processo SET ${updates.join(', ')} WHERE codmatFabricante = ? AND IdOrdemServico = ? AND IdProcesso = ?`, params).catch(err => {
+                                        console.warn(`[Material Processo Item Warning Fallback]: ${err.message}`);
+                                    });
+                                }
                             }
                         }
                     }
@@ -13564,6 +13590,9 @@ app.get('/api/recursos', tenantMiddleware, async (req, res) => {
     try {
         const query = "SELECT IdProcessoFabricacao, processofabricacao, CodigoProcessoFabricacao, DataLiberada, Fabrica, Setup, TempoPadrao, DataCriacao, CriadoPor FROM processofabricacao WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY processofabricacao ASC";
         const [rows] = await ensureProcessoFieldsAndRetry(req.tenantDbPool, query, []);
+        // Log distinct Fabrica values to diagnose tenant-specific issues
+        const fabricaValues = [...new Set(rows.map(r => r.Fabrica))];
+        console.log(`[Recursos] Tenant: ${req.tenantId || 'default'} | Total: ${rows.length} | Fabrica values: ${JSON.stringify(fabricaValues)}`);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching recursos:', error);

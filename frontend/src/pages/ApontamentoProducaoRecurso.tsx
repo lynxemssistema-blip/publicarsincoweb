@@ -132,17 +132,36 @@ export default function ApontamentoProducaoRecursoPage({ isModal, initialItemFil
 const [setorAtivo, setSetorAtivo] = useState<any>('usinagem');
 
 useEffect(() => {
-    fetch('/api/recursos')
-      .then(res => res.json())
-      .then(data => {
-         if(data.success) {
-            const list = data.data.filter((r: any) => r.Fabrica === 'SIM' || r.Fabrica === '1');
-            setRecursosList(list);
-            if(list.length > 0) setSetorAtivo(list[0].processofabricacao.toLowerCase().replace(/\s+/g, ''));
-         }
+    if (!user) return; // aguarda autenticação
+    const headers = getAuthHeaders();
+    console.log('[Recursos] Buscando recursos... headers:', headers);
+    fetch('/api/recursos', { headers })
+      .then(res => {
+        console.log('[Recursos] Response status:', res.status);
+        return res.json();
       })
-      .catch(console.error);
-}, []);
+      .then(data => {
+        console.log('[Recursos] Resposta:', data);
+        if(data.success) {
+          const isFabrica = (v: any) => {
+            if (!v && v !== 0) return false;
+            const s = String(v).trim().toUpperCase();
+            return s === 'SIM' || s === 'S' || s === '1' || s === 'TRUE' || s === 'YES' || s === 'Y';
+          };
+          const all = data.data || [];
+          console.log('[Recursos] Total retornados:', all.length, '| Valores Fabrica:', [...new Set(all.map((r:any) => r.Fabrica))]);
+          let list = all.filter((r: any) => isFabrica(r.Fabrica));
+          // Fallback: se nenhum passar no filtro, mostra todos (sem filtro por Fabrica)
+          if (list.length === 0 && all.length > 0) {
+            console.warn('[Recursos] Nenhum recurso passou no filtro Fabrica — exibindo todos sem filtro');
+            list = all;
+          }
+          setRecursosList(list);
+          if(list.length > 0) setSetorAtivo(list[0].processofabricacao.toLowerCase().replace(/\s+/g, ''));
+        }
+      })
+      .catch(err => console.error('[Recursos] Erro ao buscar:', err));
+}, [user]);
  const [itens, setItens] = useState<ApontamentoItem[]>([]);
  const abortControllerRef = useRef<AbortController | null>(null);
  const [loading, setLoading] = useState(false);
@@ -788,10 +807,12 @@ useEffect(() => {
   CriadoPor: (user as any)?.NomeCompleto || (user as any)?.name || 'Sistema'
  };
 
- if (modalSetor !== 'mapa' && modalSetor !== 'mapaproducao' && (selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso)) {
+  // ROTA 2 — sempre usa material_processo como fonte de verdade
+  // Nunca cai na Rota 1 (/api/apontamento), independente do setor ou do item
   apiURL = `${API_BASE}/material-processo/apontar`;
-  payload.IdMaterialProcesso = selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso;
- }
+  if (selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso) {
+    payload.IdMaterialProcesso = selectedItem.IdMaterialProcesso || (selectedItem as any).idmaterialprocesso || (selectedItem as any).idMaterialProcesso;
+  }
 
  const res = await fetch(apiURL, {
   method: 'POST',
@@ -902,8 +923,6 @@ useEffect(() => {
  criadoporsetor: setorAtivo?.toUpperCase() || '',
  descProjeto: selectedItem.DescProjeto || selectedItem.Projeto || '',
  dataExecucao: dataExecucaoRnc,
- usuarioCriacao: 'Sistema', // TODO: Context/Auth
- descProjeto: selectedItem.DescProjeto || selectedItem.Projeto || '',
  origemPendencia: 'MapaProducaoPendencia',
  idOrdemServicoItemPendencia: idRncEdicao,
  acao: finalizandoRnc ? 'FINALIZAR' : 'SALVAR',
@@ -1879,7 +1898,8 @@ useEffect(() => {
  {(() => {
  const { allowed, predecessor } = checkPredecessorStatus(item, setorAtivo as Setor);
   const semSaldo = qtdeAlvoSetor <= 0;
-  const bloqueado = isConcluidoGlobal || semSaldo;
+  // Bloqueado se: OS concluída OU sem saldo OU predecessor não executado
+  const bloqueado = isConcluidoGlobal || semSaldo || !allowed;
  return isConcluidoGlobal || concluido ? (
  <div className="w-full flex items-center justify-center gap-1 px-1 py-1 rounded bg-green-50 text-green-600 text-[10px] font-black border border-green-200" title={isConcluidoGlobal ? "OS Concluída" : ""}>
  <CheckCircle size={10} />
