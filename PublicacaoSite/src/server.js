@@ -2236,7 +2236,13 @@ app.post('/api/login', loginLimiter, async (req, res) => {
         // 1. Try Central Auth First
         console.log(`[AUTH] Attempting central login for user: ${login}`);
         try {
-            const centralAuth = await authenticateCentralUser(login, pwd);
+            let centralAuth = await authenticateCentralUser(login, pwd);
+
+            if (!centralAuth.found) {
+                console.log(`[AUTH] User ${login} not found centrally. Attempting lazy sync...`);
+                await runGlobalUserSync(login);
+                centralAuth = await authenticateCentralUser(login, pwd);
+            }
 
             if (centralAuth.found) {
                 if (centralAuth.tenantConfig) {
@@ -2755,7 +2761,7 @@ app.post('/api/admin/sync-users/:dbId', authenticateAdmin, async (req, res) => {
     }
 });
 
-async function runGlobalUserSync() {
+async function runGlobalUserSync(targetLogin = null) {
     let centralConn;
     try {
         centralConn = await mysql.createConnection(CENTRAL_DB_CONFIG);
@@ -2776,7 +2782,9 @@ async function runGlobalUserSync() {
                     port: dbConfig.db_port || 3306
                 });
 
-                const [users] = await tenantConn.execute('SELECT * FROM usuario');
+                const queryStr = targetLogin ? 'SELECT * FROM usuario WHERE Login = ?' : 'SELECT * FROM usuario';
+                const queryParams = targetLogin ? [targetLogin] : [];
+                const [users] = await tenantConn.execute(queryStr, queryParams);
 
                 for (const user of users) {
                     let isAtivo = 1;
@@ -4777,27 +4785,36 @@ app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
         }
 
         if (searchProjeto) {
-            const s = pool.escape('%' + searchProjeto + '%');
-            condicoes.push(`(p.Projeto LIKE ${s} OR p.DescEmpresa LIKE ${s})`);
+            const s = pool.escape('%' + searchProjeto.toLowerCase() + '%');
+            condicoes.push(`(LOWER(p.Projeto) LIKE ${s} OR LOWER(p.DescEmpresa) LIKE ${s})`);
         }
 
         if (searchDescricao) {
-            const s = pool.escape('%' + searchDescricao + '%');
-            condicoes.push(`(p.DescProjeto LIKE ${s})`);
+            const s = pool.escape('%' + searchDescricao.toLowerCase() + '%');
+            condicoes.push(`(LOWER(p.DescProjeto) LIKE ${s})`);
         }
 
         if (search) {
-            const s = pool.escape('%' + search + '%');
-            condicoes.push(`(p.Projeto LIKE ${s} OR p.DescProjeto LIKE ${s} OR p.DescEmpresa LIKE ${s})`);
+            const s = pool.escape('%' + search.toLowerCase() + '%');
+            condicoes.push(`(LOWER(p.Projeto) LIKE ${s} OR LOWER(p.DescProjeto) LIKE ${s} OR LOWER(p.DescEmpresa) LIKE ${s})`);
         }
 
         if (dataFinalDe) {
-            // Usually dataFinalDe is YYYY-MM-DD from HTML date input
             condicoes.push(`STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') >= '${dataFinalDe}'`);
         }
         if (dataFinalAte) {
             condicoes.push(`STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') <= '${dataFinalAte}'`);
         }
+
+        const previsaoInicio = req.query.previsaoInicio;
+        const previsaoFim = req.query.previsaoFim;
+        const criacaoInicio = req.query.criacaoInicio;
+        const criacaoFim = req.query.criacaoFim;
+
+        if (previsaoInicio) condicoes.push(`STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') >= STR_TO_DATE(${pool.escape(previsaoInicio)}, '%d/%m/%Y')`);
+        if (previsaoFim) condicoes.push(`STR_TO_DATE(p.DataPrevisao, '%d/%m/%Y') <= STR_TO_DATE(${pool.escape(previsaoFim)}, '%d/%m/%Y')`);
+        if (criacaoInicio) condicoes.push(`STR_TO_DATE(p.DataCriacao, '%d/%m/%Y') >= STR_TO_DATE(${pool.escape(criacaoInicio)}, '%d/%m/%Y')`);
+        if (criacaoFim) condicoes.push(`STR_TO_DATE(p.DataCriacao, '%d/%m/%Y') <= STR_TO_DATE(${pool.escape(criacaoFim)}, '%d/%m/%Y')`);
 
         const modo = req.query.modo || 'liberados';
 
@@ -4921,7 +4938,7 @@ const queryPool = req.tenantDbPool || pool;
                 MAX(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' OR ${safeOsiFlag('txtGALVANIZAR')} = 'S' THEN 1 ELSE 0 END) as flagGalvanizar
 
             FROM ordemservico os
-            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
+            LEFT JOIN ordemservicoitem osi ON CAST(os.IdOrdemServico AS CHAR) = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
             INNER JOIN tags t ON os.IdTag = t.IdTag AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE os.IdProjeto IN (${inClause}) 
               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
@@ -4989,12 +5006,15 @@ const queryPool = req.tenantDbPool || pool;
                 DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGalvanizar,
                 DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGalvanizar,
                 DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGalvanizar
-            FROM ordemservico os
-            LEFT JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
+            FROM (
+                SELECT IdOrdemServico, IdProjeto
+                FROM ordemservico
+                WHERE IdProjeto IN (${inClause})
+                  AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
+                  AND IdTag IS NOT NULL
+            ) os
+            INNER JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-            WHERE os.IdProjeto IN (${inClause})
-              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
-              AND os.IdTag IS NOT NULL
             GROUP BY os.IdProjeto
         `);
         
@@ -5249,7 +5269,7 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
 
             FROM ordemservico os
-            LEFT JOIN ordemservicoitem osi ON os.IdOrdemServico = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
+            LEFT JOIN ordemservicoitem osi ON CAST(os.IdOrdemServico AS CHAR) = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
             WHERE os.IdTag IN (${inClause})
               AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
             GROUP BY os.IdTag
@@ -5320,11 +5340,14 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
                 DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGALVANIZAR,
                 DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGALVANIZAR,
                 DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGALVANIZAR
-            FROM ordemservico os
-            LEFT JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
+            FROM (
+                SELECT IdOrdemServico, IdTag
+                FROM ordemservico
+                WHERE IdTag IN (${inClause})
+                  AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
+            ) os
+            INNER JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-            WHERE os.IdTag IN (${inClause})
-              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
             GROUP BY os.IdTag
         `);
 const mpStatsMap = {};
