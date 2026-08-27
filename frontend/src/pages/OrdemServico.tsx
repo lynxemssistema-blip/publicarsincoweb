@@ -2700,7 +2700,7 @@ function OrdemServicoContent() {
                                                 </span>
 
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? (
-                                                    editingFatorItem?.id === item.IdOrdemServicoItem ? (
+                                                    editingFatorItem && editingFatorItem.id === item.IdOrdemServicoItem ? (
                                                         <input
                                                             type="number"
                                                             autoFocus
