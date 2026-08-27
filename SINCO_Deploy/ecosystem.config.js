@@ -1,6 +1,6 @@
-// ============================================================
-// PM2 Ecosystem Config — SincoWeb (PRODUÇÃO)
-// Domínio: alfatecsinco.lynxems.com.br
+﻿// ============================================================
+// PM2 Ecosystem Config - SincoWeb (PRODUCAO)
+// Dominio: alfatecsinco.lynxems.com.br
 // Uso: pm2 start ecosystem.config.js
 // ============================================================
 module.exports = {
@@ -8,7 +8,7 @@ module.exports = {
         {
             name: 'sinco-web-prod',
             script: 'src/server.js',
-            cwd: 'C:\\SincoWeb\\SINCO-WEB\\SINCO-WEB\\PublicaçãoSite',
+            cwd: 'C:\\SincoWeb\\SINCO-WEB\\SINCO-WEB\\PublicacaoSite',
             interpreter: 'node',
             watch: false,
             autorestart: true,

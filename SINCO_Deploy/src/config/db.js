@@ -73,17 +73,46 @@ const getPool = () => {
   return defaultPool;
 };
 
-// Wrapper for execute
-const execute = async (sql, params) => {
+const verifiedTablesCache = new Map();
+
+const execute = async (sql, params, retries = 1) => {
   const pool = getPool();
   if (!pool) {
     throw new Error('Database pool not initialized.');
   }
 
-  // PERF: Slow query logging — só loga queries acima do threshold (padrão 200ms)
-  // Configurável via variável: SLOW_QUERY_MS=200 no .env
   const SLOW_QUERY_MS = parseInt(process.env.SLOW_QUERY_MS) || 200;
   const cleanSql = sql.replace(/\s+/g, ' ').trim();
+
+  // --- IdMatriz Global Interceptor ---
+  const store = asyncLocalStorage.getStore();
+  if (store && store.dbName && store.tenantId) {
+    // Basic regex to find table name in INSERT INTO or UPDATE
+    const match = cleanSql.match(/^(?:INSERT\s+INTO|UPDATE)\s+`?([a-zA-Z0-9_]+)`?/i);
+    if (match) {
+      const tableName = match[1];
+      const cacheKey = store.dbName + '_' + tableName;
+      
+      if (!verifiedTablesCache.has(cacheKey)) {
+        try {
+          const [cols] = await pool.execute(`SHOW COLUMNS FROM \`${tableName}\` LIKE 'IdMatriz'`);
+          if (cols.length === 0) {
+            console.log(`[DB] Injecting IdMatriz into table: ${tableName} for tenant ${store.tenantId}`);
+            await pool.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN IdMatriz INT DEFAULT ${store.tenantId}`);
+            
+            // Asynchronously populate existing rows if it's an UPDATE that might affect rows without IdMatriz
+            if (cleanSql.toUpperCase().startsWith('UPDATE')) {
+              pool.execute(`UPDATE \`${tableName}\` SET IdMatriz = ${store.tenantId} WHERE IdMatriz IS NULL`).catch(e => console.error(`[DB] Async IdMatriz update failed:`, e.message));
+            }
+          }
+          verifiedTablesCache.set(cacheKey, true);
+        } catch (e) {
+          console.error(`[DB] Failed to verify/inject IdMatriz for table ${tableName}:`, e.message);
+        }
+      }
+    }
+  }
+  // --- End Interceptor ---
 
   try {
     const start = Date.now();
@@ -94,7 +123,6 @@ const execute = async (sql, params) => {
     const store = asyncLocalStorage.getStore();
     const dbLabel = store?.dbName ? `[${store.dbName}]` : '[DEFAULT]';
 
-    // Só loga se for slow query (acima do threshold) ou em modo dev explícito
     if (duration >= SLOW_QUERY_MS) {
       console.warn(`[DB] ${dbLabel} ⚠️  SLOW QUERY (${duration}ms | rows:${rowCount}): ${cleanSql.substring(0, 300)}`);
     } else if (process.env.DB_VERBOSE === 'true') {
@@ -102,6 +130,60 @@ const execute = async (sql, params) => {
     }
     return result;
   } catch (err) {
+    // Retry logic for dropped connections (common in Hostinger/remote MySQL)
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT' || err.code === 'EPIPE')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}). Retrying query in 250ms... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, 250));
+        return execute(sql, params, retries - 1);
+    }
+
+    // --- Auto-Healing Interceptor (Missing Columns) ---
+    if (retries > 0 && err.code === 'ER_BAD_FIELD_ERROR') {
+      const match = err.sqlMessage.match(/Unknown column '([^']+)'/i);
+      if (match) {
+        let colName = match[1];
+        if (colName.includes('.')) colName = colName.split('.').pop(); // e.g. 't.TagJaExcluida' -> 'TagJaExcluida'
+        
+        console.log(`[DB-AUTO-SYNC] Unknown column detected: ${colName}. Searching in master DB (lynxlocal)...`);
+        try {
+          const [colDefs] = await executeOnDefault(
+            `SELECT TABLE_NAME, COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT 
+             FROM INFORMATION_SCHEMA.COLUMNS 
+             WHERE TABLE_SCHEMA = DATABASE() AND LOWER(COLUMN_NAME) = LOWER(?)`, [colName]
+          );
+
+          if (colDefs.length > 0) {
+            // Found in master DB. Match table from query
+            let targetTableDef = colDefs.find(def => new RegExp(`\\b${def.TABLE_NAME}\\b`, 'i').test(cleanSql));
+            if (!targetTableDef && colDefs.length === 1) targetTableDef = colDefs[0];
+            
+            if (targetTableDef) {
+              console.log(`[DB-AUTO-SYNC] Found ${colName} in master table ${targetTableDef.TABLE_NAME}. Adding to tenant...`);
+              const isNull = targetTableDef.IS_NULLABLE === 'YES' ? 'NULL' : 'NOT NULL';
+              const defVal = targetTableDef.COLUMN_DEFAULT !== null ? `DEFAULT '${targetTableDef.COLUMN_DEFAULT}'` : '';
+              await pool.execute(`ALTER TABLE \`${targetTableDef.TABLE_NAME}\` ADD COLUMN \`${colName}\` ${targetTableDef.COLUMN_TYPE} ${isNull} ${defVal}`);
+              console.log(`[DB-AUTO-SYNC] Added ${colName} successfully. Retrying query...`);
+              return await execute(sql, params, 1); // Reset retries to handle multiple missing columns
+            }
+          } else {
+            console.log(`[DB-AUTO-SYNC] Column ${colName} NOT found in master DB either. Replacing with NULL in query...`);
+            // Replace literal column occurrences with NULL to ignore it safely
+            const exactColMatch = match[1]; // e.g. "t.TagJaExcluida"
+            const escapedMatch = exactColMatch.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+            const newSql = sql.replace(new RegExp(`\\b${escapedMatch}\\b`, 'gi'), 'NULL');
+            
+            if (newSql !== sql) {
+               console.log(`[DB-AUTO-SYNC] Query rewritten to ignore ${exactColMatch}. Retrying...`);
+               return await execute(newSql, params, 1); // Reset retries to handle multiple missing columns
+            }
+          }
+        } catch (syncErr) {
+          console.error(`[DB-AUTO-SYNC] Auto-sync failed: ${syncErr.message}`);
+        }
+      }
+    }
+    // --- End Auto-Healing ---
+
     console.error(`[DB] 🔴 ERROR: ${err.message}`);
     console.error(err);
     throw err;
@@ -146,14 +228,23 @@ const testConnection = async (config) => {
 };
 
 // Execute always on the default/central pool (ignores tenant context)
-const executeOnDefault = async (sql, params) => {
+const executeOnDefault = async (sql, params, retries = 3) => {
   if (!defaultPool) throw new Error('Default database pool not initialized.');
   const cleanSql = sql.replace(/\s+/g, ' ').trim();
   console.log(`\n[DB] 🔵 EXEC (DEFAULT): ${cleanSql}`);
-  const result = await defaultPool.execute(sql, params);
-  const rowCount = Array.isArray(result[0]) ? result[0].length : (result[0]?.affectedRows || 0);
-  console.log(`[DB] [DEFAULT] 🟢 OK - Rows: ${rowCount}`);
-  return result;
+  try {
+    const result = await defaultPool.execute(sql, params);
+    const rowCount = Array.isArray(result[0]) ? result[0].length : (result[0]?.affectedRows || 0);
+    console.log(`[DB] [DEFAULT] 🟢 OK - Rows: ${rowCount}`);
+    return result;
+  } catch (err) {
+    if (retries > 0 && (err.code === 'ECONNRESET' || err.code === 'PROTOCOL_CONNECTION_LOST' || err.code === 'ETIMEDOUT' || err.code === 'EPIPE')) {
+        console.warn(`[DB] ⚠️  Connection dropped (${err.code}) on DEFAULT pool. Retrying query in 250ms... (${retries} retries left)`);
+        await new Promise(r => setTimeout(r, 250));
+        return executeOnDefault(sql, params, retries - 1);
+    }
+    throw err;
+  }
 };
 
 module.exports = {
@@ -165,6 +256,7 @@ module.exports = {
   format,
   initPool,
   hasPool: (name) => pools.has(name),
+  getPoolByName: (name) => pools.get(name) || null,
   testConnection,
   getConfig: () => ({ ...dbConfig }), // Return copy of current config
   asyncLocalStorage // Export for middleware

@@ -2640,7 +2640,7 @@ function OrdemServicoContent() {
                                                         <Clock size={14} />
                                                     </button>
                                                     
-                                                    {/* Botão de Ver Recursos (Movido da coluna direita) */}
+                                                    {/* Botão de Ver/Incluir Recursos (Movido da coluna direita) */}
                                                     {hasProcessos ? (
                                                         <button
                                                             onClick={(e) => {
@@ -2657,13 +2657,13 @@ function OrdemServicoContent() {
                                                             <Layers size={14} />
                                                         </button>
                                                     ) : (
-                                                        <div 
-                                                            className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-300" 
-                                                            title="Sem recursos"
-                                                            onClick={(e) => e.stopPropagation()}
+                                                        <button 
+                                                            onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
+                                                            className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-500 transition-colors" 
+                                                            title="Adicionar Recursos"
                                                         >
                                                             <Layers size={14} />
-                                                        </div>
+                                                        </button>
                                                     )}
 
                                                     {/* Botão Gerar Pendência (RNC) - movido do final da linha */}

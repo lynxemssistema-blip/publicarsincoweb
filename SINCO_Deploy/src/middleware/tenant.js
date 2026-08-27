@@ -16,13 +16,10 @@ const tenantMiddleware = async (req, res, next) => {
     // 2. Public / Bypassed routes that don't require tenant auth token
     const pathStr = req.originalUrl || req.url || '';
     if (
-        pathStr.includes('visao-geral') ||
-        pathStr.includes('login') ||
-        pathStr.includes('public') ||
-        pathStr.includes('download') ||
-        pathStr.includes('pdf') ||
-        pathStr.includes('manutencao') ||
-        pathStr.includes('acompanhamento')
+        pathStr.includes('/api/login') ||
+        pathStr.includes('/api/admin/login') ||
+        pathStr.includes('/api/test-tag-os') ||
+        pathStr.includes('public')
     ) {
         return next();
     }
@@ -65,8 +62,27 @@ const tenantMiddleware = async (req, res, next) => {
             }
         }
 
-        req.tenantDbPool = db.getPoolByName(tenantDbName);
+        const originalPool = db.getPoolByName(tenantDbName);
+        req.tenantDbPool = new Proxy(originalPool, {
+            get(target, prop) {
+                if (prop === 'execute') {
+                    return (sql, params) => {
+                        return new Promise((resolve, reject) => {
+                            db.asyncLocalStorage.run({ dbName: tenantDbName, tenantId: decoded.tenantId || decoded.idEmpresa || 1 }, () => {
+                                db.execute(sql, params).then(resolve).catch(reject);
+                            });
+                        });
+                    };
+                }
+                if (typeof target[prop] === 'function') {
+                    return target[prop].bind(target);
+                }
+                return target[prop];
+            }
+        });
+        
         req.tenantUser = decoded;
+        req.user = decoded;
 
         next();
     } catch (error) {
