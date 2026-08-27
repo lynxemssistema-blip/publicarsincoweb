@@ -7752,8 +7752,8 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
             params.push(`%${tag}%`);
         }
         if (search) {
-            whereClause += " AND (CAST(IdOrdemServico AS CHAR) LIKE ? OR Tag LIKE ? OR DescTag LIKE ? OR Projeto LIKE ?)";
-            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
+            whereClause += " AND (CAST(IdOrdemServico AS CHAR) LIKE ? OR Tag LIKE ? OR DescTag LIKE ? OR Projeto LIKE ? OR Descricao LIKE ?)";
+            params.push(`%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`, `%${search}%`);
         }
 
         // Adicionar filtros de data independentes
