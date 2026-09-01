@@ -37,6 +37,7 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
  const [selectedActions, setSelectedActions] = useState<Set<number>>(new Set());
  const [syncResults, setSyncResults] = useState<Record<string, unknown>[]>([]);
  const [syncing, setSyncing] = useState(false);
+ const [syncProgress, setSyncProgress] = useState(0);
  const [showHistory, setShowHistory] = useState(false);
  const [history, setHistory] = useState<Record<string, unknown>[]>([]);
 
@@ -393,34 +394,67 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
  };
 
  const handleSyncSchema = async (onlySelected = true) => {
- const token = localStorage.getItem('superadmin_token');
- if (!token || !destDbId) return;
- const toRun = onlySelected && selectedActions.size > 0
- ? schemaActions.filter((_: Record<string, unknown>, i: number) => selectedActions.has(i))
- : [...schemaActions];
- if (!toRun.length) { addToast({ type: 'error', message: 'Nenhuma divergência selecionada' }); return; }
- if (!confirm('Executar ' + toRun.length + ' alteração(ões)? Erros SQL serão ignorados e listados.')) return;
- setSyncing(true); setSyncResults([]);
- try {
- const srcTenant = tenants.find((t: Record<string, unknown>) => t.id === sourceDbId);
- const res = await fetch('/api/admin/schema/sync', {
- method: 'POST',
- headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
- body: JSON.stringify({ destDbId, actions: toRun, sourceDbName: srcTenant?.db_name || 'origem' })
- });
- const data = await res.json();
- if (data.success) {
- setSyncResults(data.results || []);
- const ok = (data.results || []).filter((r: Record<string, unknown>) => r.status === 'ok').length;
- const err = (data.results || []).filter((r: Record<string, unknown>) => r.status === 'erro').length;
- addToast({ type: err > 0 ? 'error' : 'success', message: ok + ' executado(s) · ' + err + ' com erro(s)' });
- const runSet = new Set(toRun.map((a: Record<string, unknown>) => a.sql));
- setSchemaActions((prev: Record<string, unknown>[]) => prev.filter((a: Record<string, unknown>) => !runSet.has(a.sql)));
- setSelectedActions(new Set());
- } else { addToast({ type: 'error', message: data.message }); }
- } catch { addToast({ type: 'error', message: 'Erro ao sincronizar schema' }); }
- finally { setSyncing(false); }
- };
+    const token = localStorage.getItem('superadmin_token');
+    if (!token || !destDbId) return;
+    
+    const toRun = onlySelected && selectedActions.size > 0
+      ? schemaActions.filter((_: Record<string, unknown>, i: number) => selectedActions.has(i))
+      : [...schemaActions];
+      
+    if (!toRun.length) { addToast({ type: 'error', message: 'Nenhuma divergência selecionada' }); return; }
+    if (!confirm('Executar ' + toRun.length + ' alteração(ões)? Erros SQL serão ignorados e listados.')) return;
+    
+    setSyncing(true); 
+    setSyncResults([]);
+    setSyncProgress(0);
+    
+    try {
+      const srcTenant = tenants.find((t: Record<string, unknown>) => t.id === sourceDbId);
+      
+      const batchSize = 10;
+      let allResults: Record<string, unknown>[] = [];
+      let okCount = 0;
+      let errCount = 0;
+      let executedSql = new Set<string>();
+      
+      for (let i = 0; i < toRun.length; i += batchSize) {
+        const batch = toRun.slice(i, i + batchSize);
+        
+        const res = await fetch('/api/admin/schema/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+          body: JSON.stringify({ destDbId, actions: batch, sourceDbName: srcTenant?.db_name || 'origem' })
+        });
+        
+        const data = await res.json();
+        
+        if (data.success && data.results) {
+          allResults = [...allResults, ...data.results];
+          okCount += data.results.filter((r: Record<string, unknown>) => r.status === 'ok').length;
+          errCount += data.results.filter((r: Record<string, unknown>) => r.status === 'erro').length;
+          
+          batch.forEach((a) => executedSql.add(a.sql as string));
+        } else if (!data.success) {
+           addToast({ type: 'error', message: data.message });
+           break; // Stop on critical API error
+        }
+        
+        setSyncProgress(Math.min(100, Math.round(((i + batch.length) / toRun.length) * 100)));
+      }
+      
+      setSyncResults(allResults);
+      addToast({ type: errCount > 0 ? 'error' : 'success', message: okCount + ' executado(s) · ' + errCount + ' com erro(s)' });
+      
+      setSchemaActions((prev: Record<string, unknown>[]) => prev.filter((a: Record<string, unknown>) => !executedSql.has(a.sql as string)));
+      setSelectedActions(new Set());
+      
+    } catch { 
+      addToast({ type: 'error', message: 'Erro ao sincronizar schema' }); 
+    } finally { 
+      setSyncing(false); 
+      setTimeout(() => setSyncProgress(0), 2000);
+    }
+  };
 
  const fetchHistory = async () => {
  const token = localStorage.getItem('superadmin_token');
@@ -785,13 +819,23 @@ export default function SuperadminPage({ defaultTab = 'users' }: SuperadminPageP
  {selectedActions.size === schemaActions.length ? 'Desmarcar Todos' : 'Selecionar Todos'}
  </button>
  <button onClick={() => handleSyncSchema(true)} disabled={syncing || selectedActions.size === 0}
- className="px-2 py-1 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
- <RefreshCcw size={15} className={syncing ? 'animate-spin' : ''}/>
- {syncing ? 'Executando...' : 'Executar Sel. (' + selectedActions.size + ')'}
+ className="relative overflow-hidden px-3 py-1 bg-green-600 text-white rounded-lg font-bold hover:bg-green-700 disabled:opacity-50 flex items-center gap-2">
+ {syncing && (
+   <div className="absolute left-0 top-0 bottom-0 bg-black/20" style={{ width: `${syncProgress}%`, transition: 'width 0.2s' }} />
+ )}
+ <RefreshCcw size={15} className={syncing ? 'animate-spin relative z-10' : 'relative z-10'}/>
+ <span className="relative z-10">
+   {syncing ? `Executando... ${syncProgress}%` : `Executar Sel. (${selectedActions.size})`}
+ </span>
  </button>
  <button onClick={() => handleSyncSchema(false)} disabled={syncing}
- className="px-2 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
- Todos ({schemaActions.length})
+ className="relative overflow-hidden px-3 py-1 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2">
+ {syncing && (
+   <div className="absolute left-0 top-0 bottom-0 bg-black/20" style={{ width: `${syncProgress}%`, transition: 'width 0.2s' }} />
+ )}
+ <span className="relative z-10">
+   Todos ({schemaActions.length})
+ </span>
  </button>
  </div>
  )}

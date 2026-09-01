@@ -2464,7 +2464,8 @@ app.post('/api/admin/login', async (req, res) => {
                     login: user.login,
                     role: 'admin',
                     dbName: 'lynxlocal', // Superadmin can access local db by default
-                    isSuperadmin: true
+                    isSuperadmin: true,
+                    tenantId: 1
                 }, JWT_SECRET, { expiresIn: '12h' });
 
                 return res.json({ success: true, token: token, userId: user.id });
@@ -2497,6 +2498,12 @@ app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
             return res.status(403).json({ success: false, message: 'Apenas superadmins podem usar esta rota' });
         }
 
+        const [rows] = await pool.executeOnDefault(
+            'SELECT id FROM conexoes_bancos WHERE db_name = ? LIMIT 1',
+            [dbName]
+        );
+        const tenantId = rows.length > 0 ? rows[0].id : 1;
+
         const token = jwt.sign({
             id: decoded.id,
             nome: decoded.nome || 'Superadmin',
@@ -2505,7 +2512,8 @@ app.post('/api/admin/impersonate', authenticateAdmin, async (req, res) => {
             superadmin: 'S',
             dbName: dbName,
             clientName: req.body.cliente || dbName,
-            isSuperadmin: true
+            isSuperadmin: true,
+            tenantId: tenantId
         }, JWT_SECRET, { expiresIn: '12h' });
 
         return res.json({ success: true, token });
@@ -2578,7 +2586,8 @@ app.post('/api/superadmin/switch-db', tenantMiddleware, async (req, res) => {
             dbName: dbName,
             clientName: banco.nome_cliente,
             isSuperadmin: true,
-            superadmin: 'S'
+            superadmin: 'S',
+            tenantId: banco.id
         }, JWT_SECRET, { expiresIn: '12h' });
 
         console.log(`[SuperAdmin] ${decoded.login} switched to DB: ${dbName} (${banco.nome_cliente})`);
@@ -3089,7 +3098,7 @@ app.post('/api/usuario', tenantMiddleware, async (req, res) => {
         }
 
         const currentDbHost = req.tenantDbPool?.pool?.config?.connectionConfig?.host || process.env.DB_HOST;
-        const currentDbName = req.tenantDb;
+        const currentDbName = req.user?.dbName || req.tenantUser?.dbName;
         const isGlobalUnique = await checkGlobalLoginUnique(Login.trim(), Senha, currentDbHost, currentDbName);
         if (!isGlobalUnique) {
             return res.status(400).json({ success: false, message: 'Este login e senha já estão sendo usados. Escolha outro usuário ou mude a senha.' });
@@ -3146,7 +3155,7 @@ app.put('/api/usuario/:id', tenantMiddleware, async (req, res) => {
 
     try {
         const currentDbHost = req.tenantDbPool?.pool?.config?.connectionConfig?.host || process.env.DB_HOST;
-        const currentDbName = req.tenantDb;
+        const currentDbName = req.user?.dbName || req.tenantUser?.dbName;
 
         // Obter senha real caso a enviada seja placeholder ou vazia
         let senhaFinal = Senha;
@@ -3224,7 +3233,7 @@ app.delete('/api/usuario/:id', tenantMiddleware, async (req, res) => {
         );
         if (userRows.length > 0) {
             const currentDbHost = req.tenantDbPool?.pool?.config?.connectionConfig?.host || process.env.DB_HOST;
-            const currentDbName = req.tenantDb;
+            const currentDbName = req.user?.dbName || req.tenantUser?.dbName;
             syncUserToCentral({ ...userRows[0], forceInactive: true }, currentDbHost, currentDbName).catch(err => {
                 console.error('[SYNC] Failed to sync deleted user to central:', err);
             });
@@ -4248,6 +4257,8 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
+        const loggedUser = req.user?.NomeCompleto || req.user?.nome || req.user?.login || req.tenantUser?.nome || 'Sistema';
+        const idMatriz = req.tenantUser?.tenantId || req.user?.idMatriz || null;
 
         const [result] = await req.tenantDbPool.execute(
             `INSERT INTO material (
@@ -4255,8 +4266,12 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 FamiliaMat, CodigoJuridicoMat, 
                 Peso, Unidade, Altura, Largura, Profundidade,
                 Valor, PercICMS, vICMS, PercIPI, vIPI, vLiquido,
-                acabamento, ImagemProduto, DtCad, UsuarioCriacao
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                acabamento, ImagemProduto, DtCad, UsuarioCriacao,
+                Autor, Palavrachave, Titulo, SubTitulo, Notas,
+                AreaPintura, NumeroDobras, UnidadeSW, ValorSW,
+                Imagem, StatusMat, IdValor, TotalValor, EnderecoArquivo,
+                MaterialSW, ConfiguracaoArquivo, txtItemEstoque, IdMatriz
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.CodMatFabricante?.trim(),
                 data.DescResumo?.trim().toUpperCase() || null,
@@ -4278,7 +4293,25 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 data.acabamento || null,
                 data.ImagemProduto || null,
                 now,
-                'Sistema'
+                loggedUser,
+                data.Autor || null,
+                data.Palavrachave || null,
+                data.Titulo || null,
+                data.SubTitulo || null,
+                data.Notas || null,
+                data.AreaPintura || null,
+                data.NumeroDobras || null,
+                data.UnidadeSW || null,
+                data.ValorSW || null,
+                data.Imagem || null,
+                data.StatusMat || null,
+                data.IdValor || null,
+                data.TotalValor || null,
+                data.EnderecoArquivo || null,
+                data.MaterialSW || null,
+                data.ConfiguracaoArquivo || null,
+                data.txtItemEstoque || null,
+                idMatriz
             ]
         );
         res.json({ success: true, message: 'Material cadastrado com sucesso', id: result.insertId });
@@ -4303,6 +4336,8 @@ app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
 
     try {
         const now = getCurrentDateTimeBR();
+        const loggedUser = req.user?.NomeCompleto || req.user?.nome || req.user?.login || req.tenantUser?.nome || 'Sistema';
+        const idMatriz = req.tenantUser?.tenantId || req.user?.idMatriz || null;
 
         await req.tenantDbPool.execute(
             `UPDATE material SET
@@ -4310,7 +4345,11 @@ app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
                 FamiliaMat = ?, CodigoJuridicoMat = ?,
                 Peso = ?, Unidade = ?, Altura = ?, Largura = ?, Profundidade = ?,
                 Valor = ?, PercICMS = ?, vICMS = ?, PercIPI = ?, vIPI = ?, vLiquido = ?,
-                acabamento = ?, ImagemProduto = ?, DtAlteracao = ?, UsuarioAlteracao = ?
+                acabamento = ?, ImagemProduto = ?, DtAlteracao = ?, UsuarioAlteracao = ?,
+                Autor = ?, Palavrachave = ?, Titulo = ?, SubTitulo = ?, Notas = ?,
+                AreaPintura = ?, NumeroDobras = ?, UnidadeSW = ?, ValorSW = ?,
+                Imagem = ?, StatusMat = ?, IdValor = ?, TotalValor = ?, EnderecoArquivo = ?,
+                MaterialSW = ?, ConfiguracaoArquivo = ?, txtItemEstoque = ?, IdMatriz = ?
             WHERE IdMaterial = ?`,
             [
                 data.CodMatFabricante?.trim(),
@@ -4333,7 +4372,25 @@ app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
                 data.acabamento || null,
                 data.ImagemProduto || null,
                 now,
-                'Sistema',
+                loggedUser,
+                data.Autor || null,
+                data.Palavrachave || null,
+                data.Titulo || null,
+                data.SubTitulo || null,
+                data.Notas || null,
+                data.AreaPintura || null,
+                data.NumeroDobras || null,
+                data.UnidadeSW || null,
+                data.ValorSW || null,
+                data.Imagem || null,
+                data.StatusMat || null,
+                data.IdValor || null,
+                data.TotalValor || null,
+                data.EnderecoArquivo || null,
+                data.MaterialSW || null,
+                data.ConfiguracaoArquivo || null,
+                data.txtItemEstoque || null,
+                idMatriz,
                 id
             ]
         );

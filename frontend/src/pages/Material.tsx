@@ -7,7 +7,7 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
-interface Material {
+ interface Material {
  IdMaterial?: number;
  CodMatFabricante: string;
  DescResumo?: string;
@@ -28,9 +28,26 @@ interface Material {
  PercIPI?: string;
  vIPI?: string;
  vLiquido?: string;
-
  acabamento?: string;
  ImagemProduto?: string | null;
+
+ Autor?: string;
+ Palavrachave?: string;
+ Titulo?: string;
+ SubTitulo?: string;
+ Notas?: string;
+ AreaPintura?: string;
+ NumeroDobras?: string;
+ UnidadeSW?: string;
+ ValorSW?: string;
+ Imagem?: string;
+ StatusMat?: string;
+ IdValor?: string;
+ TotalValor?: string;
+ EnderecoArquivo?: string;
+ MaterialSW?: string;
+ ConfiguracaoArquivo?: string;
+ txtItemEstoque?: string;
 }
 
 interface Option {
@@ -55,6 +72,24 @@ const emptyForm: Material = {
  vIPI: '',
  vLiquido: '',
  ImagemProduto: '',
+ acabamento: '',
+ Autor: '',
+ Palavrachave: '',
+ Titulo: '',
+ SubTitulo: '',
+ Notas: '',
+ AreaPintura: '',
+ NumeroDobras: '',
+ UnidadeSW: '',
+ ValorSW: '',
+ Imagem: '',
+ StatusMat: '',
+ IdValor: '',
+ TotalValor: '',
+ EnderecoArquivo: '',
+ MaterialSW: '',
+ ConfiguracaoArquivo: '',
+ txtItemEstoque: ''
 };
 
 
@@ -80,23 +115,27 @@ export default function MaterialPage() {
  const [familiaOptions, setFamiliaOptions] = useState<Option[]>([]);
  const [fornecedorOptions, setFornecedorOptions] = useState<Option[]>([]);
  const [unidadeOptions, setUnidadeOptions] = useState<Option[]>([]);
+ const [acabamentoOptions, setAcabamentoOptions] = useState<Option[]>([]);
 
  // Fetch dropdown options
  const fetchOptions = async () => {
  try {
- const [famRes, fornRes, unidRes] = await Promise.all([
+ const [famRes, fornRes, unidRes, acabRes] = await Promise.all([
  fetch(`${API_BASE}/familia/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
  fetch(`${API_BASE}/pj/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
- fetch(`${API_BASE}/medida/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } })
+ fetch(`${API_BASE}/medida/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
+ fetch(`${API_BASE}/acabamento/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } })
  ]);
- const [famJson, fornJson, unidJson] = await Promise.all([
+ const [famJson, fornJson, unidJson, acabJson] = await Promise.all([
  famRes.json(),
  fornRes.json(),
- unidRes.json()
+ unidRes.json(),
+ acabRes.json()
  ]);
  if (famJson.success) setFamiliaOptions(famJson.data);
  if (fornJson.success) setFornecedorOptions(fornJson.data);
  if (unidJson.success) setUnidadeOptions(unidJson.data);
+ if (acabJson.success) setAcabamentoOptions(acabJson.data);
  } catch (err) {
  console.error('Error fetching options:', err);
  }
@@ -538,7 +577,7 @@ export default function MaterialPage() {
    {/* Identificação */}
  <div className="border-b border-gray-100 pb-2">
  <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Identificação</h3>
- <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+ <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
  <div className="md:col-span-2">
  <label className="block text-xs font-medium text-gray-600 mb-1">
  Código Material <span className="text-red-500 font-bold">*</span>
@@ -563,13 +602,26 @@ export default function MaterialPage() {
  className={inputOptional}
  />
  </div>
+ <div>
+ <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
+ <select
+ name="StatusMat"
+ value={formData.StatusMat || ''}
+ onChange={handleInputChange}
+ className={selectClass + " py-1 text-xs"}
+ >
+ <option value="">Selecione...</option>
+ <option value="A">Ativo</option>
+ <option value="I">Inativo</option>
+ </select>
+ </div>
  </div>
  </div>
 
  {/* Descrição */}
- <div className="border-b border-gray-100 pb-2">
+ <div className="border-b border-gray-100 pb-2 mt-2">
  <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Descrição</h3>
- <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
  <div>
  <label className="block text-xs font-medium text-gray-500 mb-1">Descrição Resumo</label>
  <input
@@ -591,86 +643,173 @@ export default function MaterialPage() {
  />
  </div>
  </div>
+ <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+ <div>
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Título</label>
+ <input type="text" name="Titulo" value={formData.Titulo || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ <div>
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Subtítulo</label>
+ <input type="text" name="SubTitulo" value={formData.SubTitulo || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ <div>
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Autor</label>
+ <input type="text" name="Autor" value={formData.Autor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ <div>
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Palavra-chave</label>
+ <input type="text" name="Palavrachave" value={formData.Palavrachave || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ <div className="md:col-span-3">
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Notas</label>
+ <input type="text" name="Notas" value={formData.Notas || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ <div>
+ <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Item Estoque (txt)</label>
+ <input type="text" name="txtItemEstoque" value={formData.txtItemEstoque || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+ </div>
+ </div>
  </div>
 
- {/* Classificação */}
-   <div className="border-b border-gray-100 pb-2 mb-2">
-     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-       <div>
-         <label className="block text-xs font-medium text-gray-500 mb-0.5">Família</label>
-         <select name="FamiliaMat" value={formData.FamiliaMat || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
-           <option value="">Selecione...</option>
-           {familiaOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-         </select>
-       </div>
-       <div>
-         <label className="block text-xs font-medium text-gray-500 mb-0.5">Fornecedor</label>
-         <select name="CodigoJuridicoMat" value={formData.CodigoJuridicoMat || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
-           <option value="">Selecione...</option>
-           {fornecedorOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
-         </select>
-       </div>
-     </div>
-   </div>
-   {/* Dimensões */}
-   <div className="border-b border-gray-100 pb-2 mb-2">
-     <h3 className="text-xs font-semibold text-gray-700 mb-1">Dados Equipamento</h3>
-     <div className="grid grid-cols-5 md:grid-cols-10 gap-2">
-       <div className="col-span-2">
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Peso</label>
-         <input type="text" name="Peso" value={formData.Peso || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div className="col-span-2">
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Unidade</label>
-         <select name="Unidade" value={formData.Unidade || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
-           <option value="">-</option>
-           {unidadeOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
-         </select>
-       </div>
-       <div className="col-span-2">
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Altura</label>
-         <input type="text" name="Altura" value={formData.Altura || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div className="col-span-2">
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Largura</label>
-         <input type="text" name="Largura" value={formData.Largura || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div className="col-span-2">
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Profundidade</label>
-         <input type="text" name="Profundidade" value={formData.Profundidade || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-     </div>
-   </div>
-   {/* Dados Fiscais */}
-   <div className="pb-2">
-     <h3 className="text-xs font-semibold text-gray-700 mb-1">Dados Fiscais</h3>
-     <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Valor Unit.</label>
-         <input type="text" name="Valor" value={formData.Valor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">% ICMS</label>
-         <input type="text" name="PercICMS" value={formData.PercICMS || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">$ ICMS</label>
-         <input type="text" name="vICMS" value={formData.vICMS || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">% IPI</label>
-         <input type="text" name="PercIPI" value={formData.PercIPI || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">$ IPI</label>
-         <input type="text" name="vIPI" value={formData.vIPI || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-       <div>
-         <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Valor Líquido</label>
-         <input type="text" name="vLiquido" value={formData.vLiquido || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
-       </div>
-     </div>
-   </div>
+    {/* Classificação */}
+    <div className="border-b border-gray-100 pb-2 mb-2 mt-2">
+      <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Classificação</h3>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Família</label>
+          <select name="FamiliaMat" value={formData.FamiliaMat || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
+            <option value="">Selecione...</option>
+            {familiaOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Fornecedor</label>
+          <input type="text" name="Fornecedor" value={formData.Fornecedor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} placeholder="Pesquisar..." />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-0.5">Código Jurídico Mat.</label>
+          <input type="number" name="CodigoJuridicoMat" value={formData.CodigoJuridicoMat || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+      </div>
+    </div>
+
+    {/* Dados Equipamento */}
+    <div className="border-b border-gray-100 pb-2 mb-2 mt-2">
+      <h3 className="text-xs font-semibold text-gray-700 mb-1">Dados Equipamento</h3>
+      <div className="grid grid-cols-3 md:grid-cols-8 gap-4 mb-2">
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Peso</label>
+          <input type="text" maxLength={5} name="Peso" value={formData.Peso || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Unidade</label>
+          <select name="Unidade" value={formData.Unidade || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
+            <option value="">-</option>
+            {unidadeOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
+          </select>
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Altura</label>
+          <input type="text" maxLength={5} name="Altura" value={formData.Altura || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Largura</label>
+          <input type="text" maxLength={5} name="Largura" value={formData.Largura || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Profundidade</label>
+          <input type="text" maxLength={5} name="Profundidade" value={formData.Profundidade || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Acabamento</label>
+          <select name="acabamento" value={formData.acabamento || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
+            <option value="">Selecione...</option>
+            {acabamentoOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
+          </select>
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Área de Pintura</label>
+          <input type="text" maxLength={5} name="AreaPintura" value={formData.AreaPintura || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Nº de Dobras</label>
+          <input type="text" maxLength={5} name="NumeroDobras" value={formData.NumeroDobras || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+      </div>
+    </div>
+
+    {/* Dados SolidWorks */}
+    <div className="border-b border-gray-100 pb-2 mb-2 mt-2">
+      <h3 className="text-xs font-semibold text-gray-700 mb-1">Dados SolidWorks (SW) / Integração - Opcional</h3>
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
+        <div className="col-span-2">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Material SW</label>
+          <input type="text" name="MaterialSW" value={formData.MaterialSW || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Unidade SW</label>
+          <input type="text" name="UnidadeSW" value={formData.UnidadeSW || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div>
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Valor SW</label>
+          <input type="text" name="ValorSW" value={formData.ValorSW || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Imagem (Ref)</label>
+          <input type="text" name="Imagem" value={formData.Imagem || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-3">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Endereço do Arquivo</label>
+          <input type="text" name="EnderecoArquivo" value={formData.EnderecoArquivo || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-3">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Configuração Arquivo</label>
+          <input type="text" name="ConfiguracaoArquivo" value={formData.ConfiguracaoArquivo || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+      </div>
+    </div>
+
+    {/* Dados Fiscais */}
+    <div className="pb-2">
+      <h3 className="text-xs font-semibold text-gray-700 mb-1">Dados Fiscais</h3>
+      <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Valor Unit.</label>
+          <input type="text" name="Valor" value={formData.Valor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">% ICMS</label>
+          <input type="text" name="PercICMS" value={formData.PercICMS || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">$ ICMS</label>
+          <input type="text" name="vICMS" value={formData.vICMS || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">% IPI</label>
+          <input type="text" name="PercIPI" value={formData.PercIPI || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">$ IPI</label>
+          <input type="text" name="vIPI" value={formData.vIPI || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Valor Líquido</label>
+          <input type="text" name="vLiquido" value={formData.vLiquido || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">ID Valor</label>
+          <input type="text" name="IdValor" value={formData.IdValor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div className="col-span-2 md:col-span-1">
+          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Total Valor</label>
+          <input type="text" name="TotalValor" value={formData.TotalValor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+      </div>
+    </div>
+
    {/* Required fields note */}
  <p className="text-xs text-gray-400 pt-2">
  <span className="text-red-500 font-bold">*</span> Campos obrigatórios

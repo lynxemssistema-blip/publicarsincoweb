@@ -99,14 +99,15 @@ export default function TarefasPage() {
  const fetchTarefas = async () => {
  setLoading(true);
  setError(null);
- try {
- const url = new URL(`${window.location.origin}${API_BASE}/tarefas`);
- if (showFinalized) url.searchParams.append('showFinalized', 'true');
+        const urlStr = API_BASE.startsWith('http') ? `${API_BASE}/tarefas` : `${window.location.origin}${API_BASE}/tarefas`;
+        const url = new URL(urlStr);
+        if (showFinalized) url.searchParams.append('showFinalized', 'true');
 
  const headers: Record<string, string> = {};
  const token = localStorage.getItem('sinco_token');
  if (token) headers['Authorization'] = `Bearer ${token}`;
 
+ try {
  const res = await fetch(url.toString(), { headers });
  const data = await res.json();
  
