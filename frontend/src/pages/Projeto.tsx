@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import PessoaJuridicaPage from './PessoaJuridica';
 import {
  Plus, Search, Edit2, Trash2, X, FolderKanban, Save,
  Loader2, RefreshCw, Calendar, Tag as TagIcon, FolderOpen, CheckCircle2, RotateCcw,
@@ -124,6 +125,7 @@ interface Tag {
 interface Option {
  id: number | string;
  label: string;
+ cnpj?: string;
 }
 
 const emptyProjetoForm: Projeto = {
@@ -201,6 +203,7 @@ export default function ProjetoPage() {
  const [tipoProdutoOptions, setTipoProdutoOptions] = useState<Option[]>([]);
 
  // Modal de confirmação para Parar/Cancelar projeto
+  const [showPessoaJuridicaModal, setShowPessoaJuridicaModal] = useState(false);
  const [confirmModal, setConfirmModal] = useState<{
  open: boolean;
  projetoId: number | null;
@@ -222,7 +225,7 @@ export default function ProjetoPage() {
  if (pjJson.success) setClienteOptions(pjJson.data);
  if (medJson.success) setMedidaOptions(medJson.data);
  if (tipoJson.success) setTipoProdutoOptions(tipoJson.data);
- } catch {
+ } catch (err) {
  console.error('Error fetching options:', err);
  }
  };
@@ -288,7 +291,7 @@ export default function ProjetoPage() {
  if (json.success) {
  setProjectTags(prev => ({ ...prev, [projetoId]: json.data }));
  }
- } catch {
+ } catch (err) {
  console.error('Error fetching tags:', err);
  } finally {
  setLoadingTags(prev => {
@@ -374,10 +377,21 @@ export default function ProjetoPage() {
  value = value.toUpperCase();
  }
 
- setProjetoFormData(prev => {
- const nextData = { ...prev, [name]: value };
+    setProjetoFormData(prev => {
+      const nextData = { ...prev, [name]: value };
 
- // Cálculo automático de 'Dias (Prazo)'
+      if (name === 'ClienteProjeto') {
+        const opt = clienteOptions.find(o => o.label === value);
+        if (opt && opt.cnpj) nextData.Cnpj = opt.cnpj;
+      } else if (name === 'ClienteEntrega') {
+        const opt = clienteOptions.find(o => o.label === value);
+        if (opt && opt.cnpj) nextData.CnpjEntrega = opt.cnpj;
+      } else if (name === 'ClienteCobranca') {
+        const opt = clienteOptions.find(o => o.label === value);
+        if (opt && opt.cnpj) nextData.CnpjCobranca = opt.cnpj;
+      }
+
+      // Cálculo automático de 'Dias (Prazo)'
  if (name === 'DataPrevisao') {
  if (value) {
  const parts = value.split('-');
@@ -472,7 +486,7 @@ export default function ProjetoPage() {
  setIsEditingProjeto(true);
  setShowProjetoForm(true);
  }
- } catch {
+ } catch (err) {
  console.error('Fetch error:', err);
  }
  };
@@ -827,7 +841,7 @@ export default function ProjetoPage() {
  setIsEditingTag(true);
  setShowTagForm(true);
  }
- } catch {
+ } catch (err) {
  console.error('Fetch error:', err);
  }
  };
@@ -1205,7 +1219,7 @@ export default function ProjetoPage() {
  </div>
  <div className="hidden sm:block w-32 shrink-0 text-center">Dt. Previsão</div>
  <div className="hidden sm:block w-20 shrink-0">Prazo</div>
- <div className="hidden sm:block w-28 shrink-0">Finalizado</div>
+ <div className="hidden sm:block w-28 shrink-0">Condição</div>
  <div className="hidden sm:block w-[72px] shrink-0 text-center">Status</div>
  <div className="flex items-center justify-end w-[280px] shrink-0">Ações</div>
  </div>
@@ -1605,10 +1619,15 @@ export default function ProjetoPage() {
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <div className="md:col-span-1">
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Cliente</label>
+ <div className="flex items-center gap-1">
  <select name="ClienteProjeto" value={projetoFormData.ClienteProjeto || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded shadow-sm">
  <option value="">Selecione...</option>
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
  </select>
+ <button type="button" onClick={() => setShowPessoaJuridicaModal(true)} className="p-1 bg-[#32423D] text-[#E0E800] rounded hover:bg-[#2a3833] transition-colors" title="Cadastrar Novo Cliente">
+ <Plus size={16} />
+ </button>
+ </div>
  </div>
  <div>
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">CNPJ</label>
@@ -2026,11 +2045,11 @@ export default function ProjetoPage() {
  </div>
  <div>
  <label className="block text-xs font-medium text-gray-500 mb-1">Qt. Liberada</label>
- <input type="text" name="QtdeLiberada" value={tagFormData.QtdeLiberada || ''} onChange={handleTagInputChange} className={inputOptional} />
+ <input type="text" name="QtdeLiberada" value={tagFormData.QtdeLiberada || ''} readOnly className={`${inputOptional} bg-gray-100 cursor-not-allowed`} />
  </div>
  <div>
  <label className="block text-xs font-medium text-gray-500 mb-1">Saldo</label>
- <input type="text" name="SaldoTag" value={tagFormData.SaldoTag || ''} onChange={handleTagInputChange} className={inputOptional} />
+ <input type="text" name="SaldoTag" value={tagFormData.SaldoTag || ''} readOnly className={`${inputOptional} bg-gray-100 cursor-not-allowed`} />
  </div>
  <div>
  <label className="block text-xs font-medium text-gray-500 mb-1">Medida</label>
@@ -2055,7 +2074,27 @@ export default function ProjetoPage() {
  </motion.div>
  )
  }
- </AnimatePresence >
- </div >
+ </AnimatePresence>
+
+ {showPessoaJuridicaModal && (
+ <div className="fixed inset-0 z-[60] overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+ <div className="bg-white w-full max-w-7xl h-[90vh] overflow-y-auto relative rounded-xl shadow-2xl">
+ <div className="p-2 pt-8">
+ <PessoaJuridicaPage 
+    isModal={true} 
+    onCloseModal={() => {
+      setShowPessoaJuridicaModal(false);
+      fetch(`${API_BASE}/pj/options`)
+        .then(res => res.json())
+        .then(json => {
+          if (json.success) setClienteOptions(json.data);
+        });
+    }} 
+  />
+ </div>
+ </div>
+ </div>
+ )}
+ </div>
  );
 }

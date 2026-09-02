@@ -32,14 +32,19 @@ const emptyForm: PessoaJuridica = {
  Bairro: '', Complemento: '', Cep: '', Cidade: '', Estado: '', Telefone: ''
 };
 
-export default function PessoaJuridicaPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: () => void;
+}
+
+export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Props) {
  const [empresas, setEmpresas] = useState<PessoaJuridica[]>([]);
  const [formData, setFormData] = useState<PessoaJuridica>(emptyForm);
  const [isEditing, setIsEditing] = useState(false);
  const [searchCliente, setSearchCliente] = useState('');
  const [searchCnpj, setSearchCnpj] = useState('');
  const [showFilters, setShowFilters] = useState(true);
- const [showForm, setShowForm] = useState(false);
+ const [showForm, setShowForm] = useState(isModal);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -48,6 +53,7 @@ export default function PessoaJuridicaPage() {
  const [logoFile, setLogoFile] = useState<File | null>(null);
  const [logoPreview, setLogoPreview] = useState<string | null>(null);
  const logoInputRef = useRef<HTMLInputElement>(null);
+ const formRef = useRef<HTMLFormElement>(null);
 
  // Fetch data from API
  const fetchEmpresas = async () => {
@@ -63,7 +69,7 @@ export default function PessoaJuridicaPage() {
  }
  } catch {
  setError('Erro de conexão com o servidor. Verifique se o backend está rodando na porta 3000.');
- console.error('Fetch error:', err);
+ console.error('Fetch error:');
  } finally {
  setLoading(false);
  }
@@ -81,11 +87,11 @@ export default function PessoaJuridicaPage() {
  return matchCliente && matchCnpj;
  });
 
- const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
- const name = e.target.name;
-    const value = name.toLowerCase().includes('desc') ? e.target.value.toUpperCase() : e.target.value;
- setFormData(prev => ({ ...prev, [name]: value }));
- };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const name = e.target.name;
+    const value = e.target.value.toUpperCase();
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
  // Mask functions - apply formatting progressively during typing
  const maskCNPJ = (value: string): string => {
@@ -142,7 +148,7 @@ export default function PessoaJuridicaPage() {
  }));
  }
  } catch {
- console.error('Erro ao buscar CEP:', err);
+ console.error('Erro ao buscar CEP:');
  }
  }
  };
@@ -171,8 +177,14 @@ export default function PessoaJuridicaPage() {
  }
  };
 
- const handleSubmit = async (e: React.FormEvent) => {
- e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
+    
+    if (formRef.current && !formRef.current.checkValidity()) {
+      formRef.current.reportValidity();
+      return;
+    }
+
  setSaving(true);
  setError(null);
 
@@ -207,7 +219,7 @@ export default function PessoaJuridicaPage() {
  }
  } catch {
  setError('Erro ao salvar. Verifique a conexão.');
- console.error('Save error:', err);
+ console.error('Save error:');
  } finally {
  setSaving(false);
  }
@@ -223,7 +235,7 @@ export default function PessoaJuridicaPage() {
  setShowForm(true);
  }
  } catch {
- console.error('Fetch error:', err);
+ console.error('Fetch error:');
  }
  };
 
@@ -249,16 +261,20 @@ export default function PessoaJuridicaPage() {
  }
  };
 
- const resetForm = () => {
- setFormData(emptyForm);
- setIsEditing(false);
- setShowForm(false);
- setLogoFile(null);
- setLogoPreview(null);
- if (logoInputRef.current) {
- logoInputRef.current.value = '';
- }
- };
+  const resetForm = () => {
+    setFormData(emptyForm);
+    setIsEditing(false);
+    if (isModal && onCloseModal) {
+      onCloseModal();
+    } else {
+      setShowForm(false);
+    }
+    setLogoFile(null);
+    setLogoPreview(null);
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
+    }
+  };
 
  return (
  <div className="space-y-6 h-full flex flex-col min-h-0">
@@ -394,7 +410,7 @@ export default function PessoaJuridicaPage() {
  </button>
  </div>
 
- <form onSubmit={handleSubmit} className="p-5 space-y-5">
+ <form ref={formRef} className="p-5 space-y-5">
  {/* Logo + Basic Info */}
  <div className="flex gap-5">
  <div className="flex flex-col items-center gap-2">
@@ -645,8 +661,9 @@ export default function PessoaJuridicaPage() {
 
  {/* Actions */}
  <div className="pt-2 flex justify-end w-full">
-<motion.button
- type="submit"
+ <motion.button
+ type="button"
+ onClick={handleSubmit}
  whileHover={{ scale: 1.02 }}
  whileTap={{ scale: 0.98 }}
  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium text-xs hover:bg-[#3d4f49] transition-colors disabled:opacity-50"
@@ -655,7 +672,7 @@ export default function PessoaJuridicaPage() {
  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
  {isEditing ? 'Atualizar' : 'Salvar'}
  </motion.button>
-</div>
+ </div>
  </form>
  </motion.div>
  </motion.div>

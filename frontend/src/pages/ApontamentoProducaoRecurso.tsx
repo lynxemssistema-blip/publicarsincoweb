@@ -2199,18 +2199,9 @@ useEffect(() => {
  <span className="text-gray-400 font-medium">Código:</span>
  <span className="font-black text-[#32423D]">{itemDetails.item.CodMatFabricante}</span>
  </div>
- <div className="flex items-center justify-between border-b border-gray-100 pb-0.5">
- <span className="text-gray-400 font-medium">Plano Corte:</span>
- <span className="font-black text-purple-700">{(itemDetails.item as Record<string, unknown>).PlanoCorte || '-'}</span>
- </div>
- <div className="flex items-center justify-between border-b border-gray-100 pb-0.5">
- <span className="text-gray-400 font-medium">Projeto:</span>
- <span className="font-bold flex-1 text-right truncate ml-2 text-[#32423D]">{itemDetails.item.Projeto}</span>
- </div>
- <div className="flex items-center justify-between border-b border-gray-100 pb-0.5">
- <span className="text-gray-400 font-medium">Tag:</span>
- <span className="font-bold flex-1 text-right truncate ml-2 text-purple-700">{itemDetails.item.Tag}</span>
- </div>
+ <div className="flex items-center border-b border-gray-100 pb-0.5"><span className="text-gray-400 font-medium w-20 shrink-0">Plano Corte:</span><span className="font-black text-purple-700 truncate">{(itemDetails.item as Record<string, unknown>).PlanoCorte || '-'}</span></div>
+ <div className="flex items-center border-b border-gray-100 pb-0.5"><span className="text-gray-400 font-medium w-16 shrink-0">Projeto:</span><span className="font-bold text-[#32423D] truncate">{itemDetails.item.Projeto}</span></div>
+ <div className="flex items-center border-b border-gray-100 pb-0.5"><span className="text-gray-400 font-medium w-20 shrink-0">Tag:</span><span className="font-bold text-purple-700 truncate">{itemDetails.item.Tag}</span></div>
  <div className="col-span-2 pt-1">
  <span className="text-gray-400 font-medium">Descrição:</span>
  <span className="ml-2 text-gray-700 font-medium">{itemDetails.item.DescResumo}</span>
@@ -2494,8 +2485,7 @@ useEffect(() => {
                     type="number"
                     min="1"
                     max={itemDetails.qtdeFaltante}
-                    value={qtdeApontar}
-                    onChange={(e) => {
+                    value={qtdeApontar} autoFocus onFocus={(e) => e.target.select()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!submitting) handleSubmit(); } }} onChange={(e) => {
                       let val = e.target.value;
                       if (val !== '') {
                         const num = parseInt(val) || 0;

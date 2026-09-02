@@ -211,7 +211,7 @@ export default function CriarOrdemServicoPage() {
           setNewOsContext(payload);
           setShowModal(true);
         } else {
-          setMessage({ type: 'success', text: 'Ordem de Serviço criada com sucesso!' });
+          setMessage({ type: 'success', text: `Ordem de Serviço ${json.id} criada com sucesso!` });
           setFormData({
                     IdProjeto: '', Projeto: '', IdTag: '', Tag: '', DescTag: '', Descricao: '',
             IdEmpresa: '', DescEmpresa: '', DataPrevisao: '',

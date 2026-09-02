@@ -360,7 +360,7 @@ export default function ConfiguracaoPage() {
  };
 
  const handleMove = (path: number[], direction: 'up' | 'down') => {
- const newMenu = [...menuItems];
+ const newMenu = JSON.parse(JSON.stringify(menuItems)) as MenuItem[];
  let currentLevel = newMenu;
 
  for (let i = 0; i < path.length - 1; i++) {
@@ -380,7 +380,7 @@ export default function ConfiguracaoPage() {
  const index = path[path.length - 1];
  if (index === 0) return;
 
- const newMenu = [...menuItems];
+ const newMenu = JSON.parse(JSON.stringify(menuItems)) as MenuItem[];
  let currentLevel = newMenu;
  for (let i = 0; i < path.length - 1; i++) {
  currentLevel = currentLevel[path[i]].children!;
@@ -399,7 +399,7 @@ export default function ConfiguracaoPage() {
  const handleOutdent = (path: number[]) => {
  if (path.length <= 1) return;
 
- const newMenu = [...menuItems];
+ const newMenu = JSON.parse(JSON.stringify(menuItems)) as MenuItem[];
  let parentLevel = newMenu;
  for (let i = 0; i < path.length - 2; i++) {
  parentLevel = parentLevel[path[i]].children!;
@@ -917,7 +917,7 @@ export default function ConfiguracaoPage() {
  </div>
  </div>
  ) : (
- <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden animate-fade-in-up">
+ <div className="bg-white rounded-md shadow-sm border border-gray-100 relative animate-fade-in-up">
  <div className="p-4 border-b border-gray-100 bg-gray-50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
  <h2 className="font-semibold text-gray-700 flex items-center gap-2">
  <Menu size={15} className="text-[#32423D]" />
@@ -942,7 +942,7 @@ export default function ConfiguracaoPage() {
  {menuItems.length === 0 && <p className="text-gray-400 text-center italic py-10">O menu está vazio. Restaure o padrão.</p>}
  </div>
 
- <div className="mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2 pt-4 border-t border-gray-100">
+ <div className="sticky bottom-0 z-50 bg-white p-4 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 mt-4 sm:mt-6 flex flex-col-reverse sm:flex-row justify-end gap-2 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] rounded-b-md">
  <button onClick={() => setMenuItems(defaultMenuItems)} className="px-2 py-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg text-xs transition-colors text-center">
  Restaurar Padrão
  </button>
@@ -959,7 +959,6 @@ export default function ConfiguracaoPage() {
 
 const sortMenuRecursive = (items: MenuItem[]): MenuItem[] => {
  return [...items]
- .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
  .map(item => ({
  ...item,
  children: item.children ? sortMenuRecursive(item.children) : undefined

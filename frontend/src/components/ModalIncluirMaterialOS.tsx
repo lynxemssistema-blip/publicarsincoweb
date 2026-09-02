@@ -160,7 +160,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
               tempoPadrao: 0,
               recursoTempos: m.recursoTempos || {}
             };
-            codigos.push(m.codmatfabricante);
+            codigos.push(String(m.codmatfabricante).toUpperCase());
           }
         });
         setSelectedItems(loaded);
@@ -202,8 +202,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
-        const cods = codsExistentes || [];
-        const disponiveis = json.data.filter((m: any) => !cods.includes(m.CodMatFabricante));
+        const cods = (codsExistentes || existingOsCodigos || []).map(c => String(c).toUpperCase());
+        const disponiveis = json.data.filter((m: any) => m.CodMatFabricante && !cods.includes(String(m.CodMatFabricante).toUpperCase()));
         setAllMaterials(disponiveis);
         setSearchResults(disponiveis);
       }
@@ -303,7 +303,8 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
       });
       const json = await res.json();
       if (json.success && Array.isArray(json.data)) {
-        const disponiveis = json.data.filter((m: Material) => !existingOsCodigos.includes(m.CodMatFabricante));
+        const cods = existingOsCodigos.map(c => String(c).toUpperCase());
+        const disponiveis = json.data.filter((m: Material) => m.CodMatFabricante && !cods.includes(String(m.CodMatFabricante).toUpperCase()));
         setSearchResults(disponiveis);
       }
     } catch (e) {
@@ -458,22 +459,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
   const handleSubmit = async () => {
     setValidationError(null);
 
-    // Validação: cada item deve ter pelo menos 1 recurso ativo
-    const semRecurso = Object.keys(selectedItems).filter(cod => {
-      const procs = itemProcessos[cod];
-      return !procs || procs.length === 0;
-    });
 
-    if (semRecurso.length > 0) {
-      const nomes = semRecurso.map(cod => {
-        const mat = searchResults.find(m => m.CodMatFabricante === cod);
-        return mat ? `${cod} – ${mat.DescResumo}` : cod;
-      });
-      setValidationError(
-        `Os seguintes materiais não possuem nenhum recurso/processo cadastrado e não podem ser incluídos:\n• ${nomes.join('\n• ')}\n\nCadastre ao menos 1 recurso via "Montar Recursos" antes de confirmar.`
-      );
-      return;
-    }
 
   const itensArray = Object.keys(selectedItems).filter(cod => !selectedItems[cod].alreadyInOS).map(cod => {
       const item = selectedItems[cod];
@@ -515,7 +501,7 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
     if (itensArray.length === 0) {
       alert('Selecione pelo menos um material.');
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -543,24 +529,32 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
         setItemProcessos({});
         setSearchTerm('');
         
-        const novosCodigos = await fetchExistingOsCodigos();
+        const novosCodigos = await fetchMateriaisNaOS();
         fetchInitialMaterials(novosCodigos);
 
         setSuccessMsg(`✓ ${qtdAdded} material(is) incluído(s) na OS. Selecione mais ou clique em Concluir.`);
 
         onSuccess(qtdAdded);
+        return true;
       } else {
         alert('Erro: ' + json.message);
+        return false;
       }
     } catch (e) {
       console.error(e);
       alert('Erro de conexão ao salvar itens.');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  const handleConcluir = () => {
+  const handleConcluir = async () => {
+    const temItensNaoSalvos = Object.keys(selectedItems).some(cod => !selectedItems[cod].alreadyInOS);
+    if (temItensNaoSalvos) {
+      const success = await handleSubmit();
+      if (!success) return;
+    }
     onSuccess();
     onClose();
   };

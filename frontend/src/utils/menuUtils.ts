@@ -69,8 +69,8 @@ export const getMergedMenu = (savedMenu: MenuItem[]): MenuItem[] => {
     }
   }
 
-  // Explicitly remove 'visao-geral-engenharia' (the new one with Network icon) as requested
-  menu = menu.filter(item => item.id !== 'visao-geral-engenharia');
+  // Explicitly remove 'visao-geral-engenharia' and 'apontamento'
+  menu = menu.filter(item => item.id !== 'visao-geral-engenharia' && item.id !== 'apontamento');
 
   // Remover itens flat de plano de corte para evitar duplicidade com a pasta (dropdown)
   menu = menu.filter(item => item.id !== 'producao-plano-corte' && item.id !== 'montagem-plano-corte');

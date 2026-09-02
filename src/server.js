@@ -3571,7 +3571,7 @@ app.get('/api/pj', tenantMiddleware, async (req, res) => {
 app.get('/api/pj/options', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(
-            "SELECT IdPessoa as id, RazaoSocial as label FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
+            "SELECT IdPessoa as id, RazaoSocial as label, Cnpj as cnpj FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -11023,6 +11023,22 @@ WHERE osi.IdOrdemServicoItem = ?
 
         const item = itemRows[0];
 
+        // Fetch actual totals from material_processo table instead of legacy OS item
+        try {
+            const [mpRows] = await req.tenantDbPool.execute(`SELECT mp.TotalExecutado, mp.TotalExecutar 
+                FROM material_processo mp 
+                JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao 
+                WHERE mp.IdOrdemServico = ? AND mp.codmatFabricante = ? AND REPLACE(LOWER(pf.processofabricacao), ' ', '') = ?`, [item.IdOrdemServico, item.CodMatFabricante, processo.toLowerCase()]);
+            
+            if (mpRows.length > 0) {
+                item.TotalExecutado = mpRows[0].TotalExecutado || 0;
+                item.TotalExecutar = mpRows[0].TotalExecutar || item.QtdeTotal;
+                item.QtdeFaltanteCalculada = item.TotalExecutar - item.TotalExecutado;
+                item.PercentualSetor = (item.TotalExecutado / item.TotalExecutar) * 100;
+            }
+        } catch(err) {
+            console.error("[API] Error fetching material_processo:", err.message);
+        }
         // Buscar hist�rico de apontamentos
         const historicoQuery = `
             SELECT

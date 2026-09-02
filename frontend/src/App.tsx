@@ -492,7 +492,6 @@ const findItemById = (items: MenuItem[], id: string): MenuItem | undefined => {
 
 const sortMenuRecursive = (items: MenuItem[]): MenuItem[] => {
   return [...items]
-    .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'))
     .map(item => ({
       ...item,
       children: item.children ? sortMenuRecursive(item.children) : undefined
