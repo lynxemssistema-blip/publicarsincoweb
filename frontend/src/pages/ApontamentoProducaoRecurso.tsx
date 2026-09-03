@@ -2195,8 +2195,8 @@ useEffect(() => {
  <FileText size={10} /> Informações do Item
  </h3>
  <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[11px]">
- <div className="flex items-center justify-between border-b border-gray-100 pb-0.5">
- <span className="text-gray-400 font-medium">Código:</span>
+ <div className="flex items-center border-b border-gray-100 pb-0.5">
+ <span className="text-gray-400 font-medium w-16 shrink-0">Código:</span>
  <span className="font-black text-[#32423D]">{itemDetails.item.CodMatFabricante}</span>
  </div>
  <div className="flex items-center border-b border-gray-100 pb-0.5"><span className="text-gray-400 font-medium w-20 shrink-0">Plano Corte:</span><span className="font-black text-purple-700 truncate">{(itemDetails.item as Record<string, unknown>).PlanoCorte || '-'}</span></div>

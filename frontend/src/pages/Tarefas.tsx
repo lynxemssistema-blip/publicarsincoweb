@@ -433,7 +433,17 @@ export default function TarefasPage() {
  </div>
  
  <div>
- <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 block mb-0.5">Responsável</label>
+ <label className="text-[10px] font-bold text-slate-500 uppercase ml-1 flex items-center gap-2 mb-0.5">
+  <button
+    type="button"
+    onClick={() => setShowUsuarioModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-slate-200 text-slate-500 hover:bg-[#32423D] hover:text-white transition-colors"
+    title="Novo Usuário"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Responsável
+</label>
  <select disabled={rncForm.estatus === 'TarefaFinalizada'} value={rncForm.usuario} onChange={e => setRncForm(prev => ({...prev, usuario: e.target.value}))} className="w-full border border-slate-300 rounded-md px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-[#32423D] disabled:bg-slate-50 disabled:cursor-not-allowed transition-colors">
  <option value="">Selecione...</option>
  {rncForm.usuario && !(usuarios || []).find(u => u.NomeCompleto === rncForm.usuario) && <option value={rncForm.usuario}>{rncForm.usuario}</option>}

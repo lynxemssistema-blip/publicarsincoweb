@@ -14,14 +14,19 @@ interface Usuario {
  status: string;
 }
 
-export default function UsuarioPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: () => void;
+}
+
+export default function UsuarioPage({ isModal = false, onCloseModal }: Props = {}) {
  const { addToast } = useToast();
  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
  const [loading, setLoading] = useState(true);
  const [searchTerm, setSearchTerm] = useState('');
 
  // Modal state
- const [showModal, setShowModal] = useState(false);
+ const [showModal, setShowModal] = useState(isModal);
  const [editingUsuario, setEditingUsuario] = useState<Usuario | null>(null);
  const [formData, setFormData] = useState<Usuario>({
  NomeCompleto: '',
@@ -44,7 +49,7 @@ export default function UsuarioPage() {
  if (data.success) {
  setUsuarios(data.data);
  }
- } catch {
+ } catch (error) {
  console.error('Error fetching users:', error);
  addToast({ type: 'error', title: 'Erro', message: 'Erro ao carregar usuários' });
  } finally {
@@ -79,6 +84,19 @@ export default function UsuarioPage() {
  });
  }
  setShowModal(true);
+ };
+
+ const handleCloseModal = () => {
+   setShowModal(false);
+   setEditingUsuario(null);
+   if (isModal && onCloseModal) onCloseModal();
+   setFormData({
+     NomeCompleto: '',
+     Login: '',
+     Senha: '',
+     TipoUsuario: 'C',
+     status: 'A'
+   });
  };
 
  const handleSubmit = async (e: React.FormEvent) => {
@@ -136,14 +154,118 @@ export default function UsuarioPage() {
  } else {
  addToast({ type: 'error', title: 'Erro', message: 'Erro ao excluir' });
  }
- } catch {
+ } catch (error) {
  console.error('Error deleting user:', error);
  addToast({ type: 'error', title: 'Erro', message: 'Erro de conexão' });
  }
  };
 
+  const modalContent = (
+    <>
+      {showModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 p-4 animate-fade-in">
+          <div className="bg-white rounded-md shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="px-2 py-1 border-b border-gray-100 flex items-center justify-between bg-gray-50">
+              <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                {editingUsuario ? <Edit2 size={20} className="text-[#32423D]" /> : <Plus size={20} className="text-[#32423D]" />}
+                {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
+              </h2>
+              <button onClick={() => handleCloseModal()} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
+                <X size={14} /> Fechar
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Nome Completo</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                  <input
+                    type="text"
+                    required
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
+                    placeholder="Ex: João da Silva"
+                    value={formData.NomeCompleto}
+                    onChange={(e) => setFormData({ ...formData, NomeCompleto: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Login</label>
+                  <div className="relative">
+                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                    <input
+                      type="text"
+                      required
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
+                      placeholder="Ex: joao.silva"
+                      value={formData.Login}
+                      onChange={(e) => setFormData({ ...formData, Login: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de Acesso</label>
+                  <div className="relative">
+                    <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                    <select
+                      className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all appearance-none bg-white"
+                      value={formData.TipoUsuario}
+                      onChange={(e) => setFormData({ ...formData, TipoUsuario: e.target.value })}
+                    >
+                      <option value="C">Comum</option>
+                      <option value="A">Administrador</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">
+                  {editingUsuario ? 'Nova Senha (opcional)' : 'Senha'}
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
+                  <input
+                    type="password"
+                    required={!editingUsuario}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
+                    placeholder={editingUsuario ? 'Deixe em branco para manter' : '••••••'}
+                    value={formData.Senha}
+                    onChange={(e) => setFormData({ ...formData, Senha: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-50">
+                <button
+                  type="button"
+                  onClick={() => handleCloseModal()}
+                  className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded-lg font-medium transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex items-center gap-2 bg-[#32423D] text-[#E0E800] px-6 py-2 rounded-lg font-bold hover:bg-[#2a3833] transition-colors shadow-lg shadow-[#32423D]/20 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
+                  {editingUsuario ? 'Salvar Alterações' : 'Cadastrar Usuário'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
  return (
  <div className="p-6 max-w-[1600px] mx-auto animate-fade-in pb-20 h-full flex flex-col min-h-0">
+ {modalContent}
  {/* Header */}
  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
  <div className="flex items-center gap-3">
@@ -188,7 +310,7 @@ export default function UsuarioPage() {
  <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden">
  <div className="overflow-auto flex-1">
  <table className="w-full">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white text-white bg-[#567469] border-b border-white/20">
+ <thead className="bg-[#567469] text-white border-b border-white/20">
  <tr>
  <th className="text-left py-4 px-6 text-xs font-semibold text-white uppercase tracking-wider">Nome</th>
  <th className="text-left py-4 px-6 text-xs font-semibold text-white uppercase tracking-wider">Login</th>
@@ -269,106 +391,6 @@ export default function UsuarioPage() {
  </table>
  </div>
  </div>
-
- {/* Modal */}
- {showModal && (
- <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 animate-fade-in">
- <div className="bg-white rounded-md shadow-2xl w-full max-w-lg overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
- <div className="px-2 py-1 border-b border-gray-100 flex items-center justify-between bg-gray-50">
- <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
- {editingUsuario ? <Edit2 size={20} className="text-[#32423D]" /> : <Plus size={20} className="text-[#32423D]" />}
- {editingUsuario ? 'Editar Usuário' : 'Novo Usuário'}
- </h2>
- <button onClick={() => setShowModal(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
-
- <form onSubmit={handleSubmit} className="p-6 space-y-4">
- <div>
- <label className="block text-xs font-medium text-gray-700 mb-1">Nome Completo</label>
- <div className="relative">
- <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
- <input
- type="text"
- required
- className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
- placeholder="Ex: João da Silva"
- value={formData.NomeCompleto}
- onChange={(e) => setFormData({ ...formData, NomeCompleto: e.target.value })}
- />
- </div>
- </div>
-
- <div className="grid grid-cols-2 gap-4">
- <div>
- <label className="block text-xs font-medium text-gray-700 mb-1">Login</label>
- <div className="relative">
- <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
- <input
- type="text"
- required
- className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
- placeholder="Ex: joao.silva"
- value={formData.Login}
- onChange={(e) => setFormData({ ...formData, Login: e.target.value })}
- />
- </div>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-700 mb-1">Tipo de Acesso</label>
- <div className="relative">
- <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
- <select
- className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all appearance-none bg-white"
- value={formData.TipoUsuario}
- onChange={(e) => setFormData({ ...formData, TipoUsuario: e.target.value })}
- >
- <option value="C">Comum</option>
- <option value="A">Administrador</option>
- </select>
- </div>
- </div>
- </div>
-
- <div>
- <label className="block text-xs font-medium text-gray-700 mb-1">
- {editingUsuario ? 'Nova Senha (opcional)' : 'Senha'}
- </label>
- <div className="relative">
- <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={15} />
- <input
- type="password"
- required={!editingUsuario}
- className="w-full pl-10 pr-4 py-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#32423D] focus:border-transparent outline-none transition-all"
- placeholder={editingUsuario ? 'Deixe em branco para manter' : '••••••'}
- value={formData.Senha}
- onChange={(e) => setFormData({ ...formData, Senha: e.target.value })}
- />
- </div>
- </div>
-
- <div className="flex justify-end gap-3 pt-4 mt-2 border-t border-gray-50">
- <button
- type="button"
- onClick={() => setShowModal(false)}
- className="px-2 py-1 text-gray-500 hover:bg-gray-100 rounded-lg font-medium transition-colors"
- >
- Cancelar
- </button>
- <button
- type="submit"
- disabled={submitting}
- className="flex items-center gap-2 bg-[#32423D] text-[#E0E800] px-6 py-2 rounded-lg font-bold hover:bg-[#2a3833] transition-colors shadow-lg shadow-[#32423D]/20 disabled:opacity-70 disabled:cursor-not-allowed"
- >
- {submitting ? <Loader2 className="animate-spin" size={20} /> : <Check size={20} />}
- {editingUsuario ? 'Salvar Alterações' : 'Cadastrar Usuário'}
- </button>
- </div>
- </form>
- </div>
- </div>
- )}
  </div>
  );
 }

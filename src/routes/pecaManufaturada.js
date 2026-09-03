@@ -73,18 +73,46 @@ router.get('/composicao/:idMaterialPeca', async (req, res) => {
                         COALESCE(m.DescDetal, m.DescResumo, mp.CodMatFabricante) AS DescDetal,
                         mp.PecaQtde,
                         mp.QtdeUnitaria,
+                        mp.Ordem,
                         m.EnderecoArquivo,
-                        m.PecaManufat
+                        m.PecaManufat,
+                        (SELECT COUNT(1) FROM montapeca sub WHERE sub.IdMaterialPeca = mp.IdMaterial AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
                      FROM montapeca mp
                      LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
                      WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
                        AND mp.IdMaterialPeca = ?
-                     ORDER BY mp.CodMatFabricante`;
+                     ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
         const [rows] = await db(req).execute(sql, [idMaterialPeca]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[PecaManufaturada] GET /composicao:', error.message);
         res.status(500).json({ success: false, message: 'Erro ao buscar composição: ' + error.message });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────────
+// POST /composicao-ordem — Reordena os itens na composição
+// ────────────────────────────────────────────────────────────────────────────────
+router.post('/composicao-ordem', async (req, res) => {
+    try {
+        const { itens } = req.body; // array de { IdMontaPeca, Ordem }
+        if (!itens || !Array.isArray(itens) || itens.length === 0) {
+            return res.json({ success: true });
+        }
+
+        const pool = db(req);
+        // Atualiza a ordem de cada item (executa em paralelo para otimizar, ou um por um)
+        for (const item of itens) {
+            await pool.execute(
+                `UPDATE montapeca SET Ordem = ? WHERE IdMontaPeca = ?`,
+                [item.Ordem, item.IdMontaPeca]
+            );
+        }
+
+        res.json({ success: true, message: 'Ordem atualizada com sucesso' });
+    } catch (error) {
+        console.error('[PecaManufaturada] POST /composicao-ordem:', error.message);
+        res.status(500).json({ success: false, message: 'Erro ao reordenar composição: ' + error.message });
     }
 });
 
@@ -179,8 +207,8 @@ router.patch('/composicao-qtde/:idMontaPeca', async (req, res) => {
         
         if (rows.length > 0 && rows[0].IdMaterial) {
             const idMaterialEditado = rows[0].IdMaterial;
-            // 3. Cascata: recalcular a arvore de filhos
-            await updateRecursiveQtde(pool, idMaterialEditado, newQtde);
+            // 3. Cascata desativada para evitar corrupção de BOM em componentes compartilhados e cíclicos
+            // await updateRecursiveQtde(pool, idMaterialEditado, newQtde);
         }
 
         res.json({ success: true, message: 'Quantidade atualizada (e cascata aplicada) com sucesso.' });
@@ -343,7 +371,7 @@ router.get('/processos-existentes/:codmatFabricante', async (req, res) => {
                 COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso
              FROM material_processo mp
              LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-             WHERE mp.codmatFabricante = ?
+             WHERE mp.codmatFabricante = ? AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
              ORDER BY mp.SequenciaExecucao ASC`,
             [codmatFabricante]
         );
@@ -362,7 +390,7 @@ router.post('/material-processo', async (req, res) => {
         const { processos, codmatFabricante, idMatriz, usuarioCriacao, replace, osId, idProjeto, idTag, qtdSelecionada } = req.body;
         const tenantPool = db(req);
 
-        if (!Array.isArray(processos) || processos.length === 0) {
+        if (!Array.isArray(processos)) {
             return res.status(400).json({ success: false, message: 'Nenhum processo informado.' });
         }
 

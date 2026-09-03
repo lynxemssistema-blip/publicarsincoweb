@@ -64,6 +64,8 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   
   // Grid 2 Inline Edição
   const [editSq,setEditSq]=useState<number|null>(null);
+  const [draggedProc, setDraggedProc] = useState<number | null>(null);
+  const [dragOverProc, setDragOverProc] = useState<{ seq: number, position: 'top' | 'bottom' } | null>(null);
   const [inlineOb, setInlineOb] = useState('');
   const [inlineSeq, setInlineSeq] = useState('');
   const [inlineEst, setInlineEst] = useState('');
@@ -292,16 +294,20 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
   const handleAddProc = async () => {
     if (!selId) return;
-    const tipo = tipos.find(t => t.IdProcessoFabricacao === selId);
+    const tipo = tipos.find(t => t.IdProcessoFabricacao == selId);
     
     const userTyped = seq.trim() !== '';
     const seqN = userTyped ? (parseInt(seq) || nextSeq()) : nextSeq();
-    if (!estMin || !padMin) { alert('Informe o Tempo Setup e Tempo Padrão'); return; }
+    
+    const isFabricaNao = tipo && ['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipo.Fabrica || tipo.fabrica || '').toUpperCase().trim());
+    if (!isFabricaNao) {
+       if (!estMin || !padMin) { alert('Informe o Tempo Setup e Tempo Padrão'); return; }
+    }
 
     if (staging.some(s => s.seq === seqN)) { alert(`Sequência ${seqN} já existe`); return; }
     
     if (!userTyped) setLastAutoSeq(seqN);
-    const updated = [...staging, { seq: seqN, IdProcesso: Number(selId), nome: tipo?.ProcessoFabricacao || '', estMin: Number(estMin), padMin: Number(padMin), obs: ob }].sort((a, b) => a.seq - b.seq);
+    const updated = [...staging, { seq: seqN, IdProcesso: Number(selId), nome: tipo?.ProcessoFabricacao || '', estMin: estMin ? Number(estMin) : null, padMin: padMin ? Number(padMin) : null, obs: ob }].sort((a, b) => a.seq - b.seq);
     await saveProcs(updated);
     
     clearForm();
@@ -326,13 +332,20 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
     const newSeq = parseInt(inlineSeq);
     if (isNaN(newSeq) || newSeq <= 0) { alert('Sequência inválida'); return; }
-    if (!inlineEst || !inlinePad) { alert('Informe o Tempo Setup e Tempo Padrão'); return; }
+    
+    const sToEdit = staging.find(p => p.seq === editSq);
+    const tipo = tipos.find(t => t.IdProcessoFabricacao == sToEdit?.IdProcesso);
+    const isFabricaNao = tipo && ['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipo.Fabrica || tipo.fabrica || '').toUpperCase().trim());
+
+    if (!isFabricaNao) {
+      if (!inlineEst || !inlinePad) { alert('Informe o Tempo Setup e Tempo Padrão'); return; }
+    }
 
     let isValid = true;
     if (newSeq !== editSq && staging.some(p => p.seq === newSeq)) {
       isValid = false;
     } else {
-      const updated = staging.map(s => s.seq === editSq ? { ...s, seq: newSeq, estMin: Number(inlineEst), padMin: Number(inlinePad), obs: inlineOb } : s).sort((a, b) => a.seq - b.seq);
+      const updated = staging.map(s => s.seq === editSq ? { ...s, seq: newSeq, estMin: inlineEst ? Number(inlineEst) : null, padMin: inlinePad ? Number(inlinePad) : null, obs: inlineOb } : s).sort((a, b) => a.seq - b.seq);
       await saveProcs(updated);
     }
 
@@ -343,6 +356,37 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     }
   };
 
+  const handleDropProc = async (e: React.DragEvent, targetSeq: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (draggedProc === null || draggedProc === targetSeq || !dragOverProc) {
+      setDraggedProc(null);
+      setDragOverProc(null);
+      return;
+    }
+
+    const currentProcs = [...staging].sort((a, b) => a.seq - b.seq);
+    const draggedIdx = currentProcs.findIndex(p => p.seq === draggedProc);
+    const targetIdx = currentProcs.findIndex(p => p.seq === targetSeq);
+    
+    if (draggedIdx === -1 || targetIdx === -1) return;
+    
+    const itemToMove = currentProcs.splice(draggedIdx, 1)[0];
+    
+    let insertIdx = currentProcs.findIndex(p => p.seq === targetSeq);
+    if (dragOverProc.position === 'bottom') {
+      insertIdx++;
+    }
+
+    currentProcs.splice(insertIdx, 0, itemToMove);
+    
+    const updated = currentProcs.map((p, idx) => ({ ...p, seq: (idx + 1) * 10 }));
+    
+    setDraggedProc(null);
+    setDragOverProc(null);
+    
+    await saveProcs(updated);
+  };
   
   // GRID 3 Logic
   const fetchMateriais3 = useCallback(async (cod: string, desc: string) => {
@@ -641,18 +685,18 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                        className="px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500 bg-white">
                        <option value="">- Selecione -</option>
                        {tipos.map(t=>(<option key={t.IdProcessoFabricacao} value={t.IdProcessoFabricacao}>{t.ProcessoFabricacao}</option>))}
-                     </select>
+                      </select>
                    </div>
                                       <div className="flex flex-col items-center shrink-0">
                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Seq.</span>
                      <input type="number" min="1" step="1" value={seq} onChange={e=>setSeq(e.target.value)} placeholder={String(nextSeq())} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
-                   <div className="flex flex-col items-center shrink-0">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Setup <span className="text-red-500">*</span></span>
+                    <div className="flex flex-col items-center shrink-0">
+                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Setup {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
                      <input type="number" min="0" step="0.01" value={estMin} onChange={e=>setEstMin(e.target.value)} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
-                   <div className="flex flex-col items-center shrink-0">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Padrão <span className="text-red-500">*</span></span>
+                    <div className="flex flex-col items-center shrink-0">
+                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Padrão {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
                      <input type="number" min="0" step="0.01" value={padMin} onChange={e=>setPadMin(e.target.value)} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
                    </div>
 
@@ -694,9 +738,28 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {staging.filter(s => !procTableFiltro || s.nome.toLowerCase().includes(procTableFiltro.toLowerCase())).map(s => (
-                    <tr key={s.seq} className={`hover:bg-teal-50/40 transition-colors ${editSq === s.seq ? 'bg-amber-50' : ''}`}>
-                      <td className="p-1.5 px-2 text-center">
+                  {staging.filter(s => !procTableFiltro || s.nome.toLowerCase().includes(procTableFiltro.toLowerCase())).map(s => {
+                    const isDragged = draggedProc === s.seq;
+                    const isDragOver = dragOverProc?.seq === s.seq;
+                    const dragPos = dragOverProc?.position;
+                    
+                    return (
+                    <tr 
+                      key={s.seq} 
+                      draggable={!editSq}
+                      onDragStart={() => setDraggedProc(s.seq)}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedProc === null || draggedProc === s.seq) return;
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const position = (e.clientY - rect.top) < (rect.height / 2) ? 'top' : 'bottom';
+                        setDragOverProc({ seq: s.seq, position });
+                      }}
+                      onDragLeave={() => setDragOverProc(null)}
+                      onDrop={(e) => handleDropProc(e, s.seq)}
+                      className={`transition-colors ${editSq === s.seq ? 'bg-amber-50' : 'hover:bg-teal-50/40'} ${isDragged ? 'opacity-50' : ''} ${isDragOver && dragPos === 'top' ? 'border-t-2 border-t-indigo-500' : ''} ${isDragOver && dragPos === 'bottom' ? 'border-b-2 border-b-indigo-500' : ''}`}
+                    >
+                      <td className={`p-1.5 px-2 text-center ${!editSq ? 'cursor-grab active:cursor-grabbing' : ''}`}>
                         {editSq === s.seq ? (
                           <input type="number" min="1" value={inlineSeq} onChange={e=>setInlineSeq(e.target.value)} className="w-10 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
                         ) : (
@@ -734,7 +797,8 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         <button onClick={()=>delProc(s.seq)} disabled={editSq === s.seq} className="p-0.5 text-red-400 hover:text-red-600 bg-red-50 rounded border border-red-200 shadow-sm disabled:opacity-30" title="Excluir"><Trash2 size={11}/></button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             )}

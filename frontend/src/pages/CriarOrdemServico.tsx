@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Save, Plus, Loader2, PackagePlus, Info } from 'lucide-react';
+import { Save, Plus, Loader2, PackagePlus, Info, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
@@ -11,7 +11,12 @@ interface Option {
   label: string;
 }
 
-export default function CriarOrdemServicoPage() {
+interface CriarOrdemServicoProps {
+  onClose?: () => void;
+  onSuccess?: () => void;
+}
+
+export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdemServicoProps = {}) {
   const { user, token } = useAuth();
   
   const [projetos, setProjetos] = useState<Option[]>([]);
@@ -219,6 +224,7 @@ export default function CriarOrdemServicoPage() {
             DataCriacaoProduto: '', Fator: '1', TipoLiberacaoOrdemServico: 'Total'
           });
           setTags([]);
+          if (onSuccess) onSuccess();
         }
       } else {
         setMessage({ type: 'error', text: json.message || 'Erro ao salvar.' });
@@ -242,6 +248,7 @@ export default function CriarOrdemServicoPage() {
     });
     setTags([]);
     setShowModal(false);
+    if (onSuccess) onSuccess();
   };
 
   const inputClass = "w-full px-2 py-1.5 rounded border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] bg-white";
@@ -257,6 +264,14 @@ export default function CriarOrdemServicoPage() {
             Cadastre novas ordens de serviço, definindo projeto, previsão e os dados principais do produto.
           </p>
         </div>
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600 transition-colors bg-white hover:bg-gray-100 p-2 rounded-full shadow-sm"
+          >
+            <X size={20} />
+          </button>
+        )}
       </div>
 
       {message && (

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Search, Edit2, Trash2, X, Boxes, Save, Loader2, RefreshCw } from 'lucide-react';
+import UnidadeMedidaPage from './UnidadeMedida';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -22,11 +23,17 @@ const emptyForm: TipoProduto = {
  Descricao: '',
 };
 
-export default function TipoProdutoPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: () => void;
+}
+
+export default function TipoProdutoPage({ isModal = false, onCloseModal }: Props = {}) {
  const [items, setItems] = useState<TipoProduto[]>([]);
  const [formData, setFormData] = useState<TipoProduto>(emptyForm);
  const [isEditing, setIsEditing] = useState(false);
- const [showForm, setShowForm] = useState(false);
+ const [showForm, setShowForm] = useState(isModal);
+  const [showUnidadeModal, setShowUnidadeModal] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
@@ -289,97 +296,7 @@ export default function TipoProdutoPage() {
  )}
  </div>
 
- {/* Modal Form */}
- <AnimatePresence>
- {showForm && (
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
- onClick={(e) => e.target === e.currentTarget && resetForm()}
- >
- <motion.div
- initial={{ opacity: 0, y: -20, scale: 0.95 }}
- animate={{ opacity: 1, y: 0, scale: 1 }}
- exit={{ opacity: 0, y: -20, scale: 0.95 }}
- className="bg-white rounded-md shadow-xl w-full max-w-lg my-8"
- >
- <div className="flex items-center justify-between p-5 border-b border-gray-100">
- <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-lg bg-[#32423D] text-white flex items-center justify-center">
- <Boxes size={20} />
- </div>
- <h2 className="text-lg font-semibold text-[#32423D]">
- {isEditing ? 'Editar Tipo de Produto' : 'Novo Tipo de Produto'}
- </h2>
- </div>
- <button onClick={resetForm} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100">
- <X size={20} />
- </button>
- </div>
-
- <form onSubmit={handleSubmit} className="p-5 space-y-4">
  
-
- <div>
- <label className="block text-xs font-medium text-gray-600 mb-1">
- Tipo Produto <span className="text-red-500">*</span>
- </label>
- <input
- type="text"
- name="TipoProduto"
- value={formData.TipoProduto}
- onChange={handleInputChange}
- className={inputRequired}
- required
- maxLength={200}
- />
- </div>
-
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Unidade</label>
- <select
- name="Unidade"
- value={formData.Unidade || ''}
- onChange={handleInputChange}
- className={selectClass}
- >
- <option value="">Selecione...</option>
- {medidaOptions.map(opt => (
- <option key={opt.id} value={opt.id}>{opt.id} - {opt.label}</option>
- ))}
- </select>
- </div>
-
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
- <textarea
- name="Descricao"
- value={formData.Descricao || ''}
- onChange={(e) => setFormData(prev => ({ ...prev, Descricao: e.target.value.toUpperCase() }))}
- rows={4}
- className={`${inputOptional} uppercase`}
- />
- </div>
-
- <div className="pt-2 flex justify-end w-full">
-<motion.button
- type="submit"
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium hover:bg-[#3d4f49] transition-colors disabled:opacity-50"
- disabled={saving}
- >
- {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
- {isEditing ? 'Atualizar' : 'Salvar'}
- </motion.button>
-</div>
- </form>
- </motion.div>
- </motion.div>
- )}
- </AnimatePresence>
  </div>
  );
 }

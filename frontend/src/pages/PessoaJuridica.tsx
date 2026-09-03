@@ -276,107 +276,8 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
     }
   };
 
- return (
- <div className="space-y-6 h-full flex flex-col min-h-0">
- {/* Page Header */}
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
- <div>
- 
- <p className="text-gray-500 text-xs">Gerencie o cadastro de empresas</p>
- </div>
- <div className="flex gap-2">
- <motion.button
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- onClick={fetchEmpresas}
- className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
- disabled={loading}
- >
- <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
- </motion.button>
- <motion.button
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- onClick={() => { resetForm(); setShowForm(true); }}
- className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#32423D] text-white font-medium hover:bg-[#3d4f49] transition-colors shadow-sm"
- >
- <Plus size={15} />
- Nova Empresa
- </motion.button>
- </div>
- </div>
-
- {/* Error Alert */}
- {error && (
- <motion.div
- initial={{ opacity: 0, y: -10 }}
- animate={{ opacity: 1, y: 0 }}
- className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs"
- >
- {error}
- </motion.div>
- )}
-
- {/* Search Filters Section */}
- <div className="bg-white rounded-md shadow-sm border border-gray-100 mb-2 shrink-0">
- <div className="flex justify-between items-center px-2 py-1 border-b border-gray-100">
- <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 flex items-center gap-2 m-0">
- <Search size={12} /> Dados para Pesquisa
- </h3>
- <button
- type="button"
- onClick={() => setShowFilters(!showFilters)}
- className="text-[10px] flex items-center gap-1.5 text-blue-500 hover:text-blue-700 hover:bg-gray-50 px-2 py-1 rounded transition-colors border border-gray-200 uppercase font-bold"
- >
- <Filter size={11} /> {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
- </button>
- </div>
- {showFilters && (
- <div className="px-4 pb-3 pt-2">
- <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
- {/* Cliente */}
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">Cliente:</label>
- <div className="relative">
- <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
- <input
- type="search"
- placeholder="Nome ou Razão Social..."
- value={searchCliente}
- onChange={(e) => setSearchCliente(e.target.value)}
- className="w-full pl-7 pr-3 py-1.5 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D]/20 rounded-sm"
- />
- </div>
- </div>
- {/* CNPJ */}
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">CNPJ:</label>
- <div className="relative">
- <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
- <input
- type="search"
- placeholder="00.000.000/0001-00"
- value={searchCnpj}
- onChange={(e) => setSearchCnpj(e.target.value)}
- className="w-full pl-7 pr-3 py-1.5 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D]/20 rounded-sm"
- />
- </div>
- </div>
- </div>
- {(searchCliente || searchCnpj) && (
- <div className="flex justify-end mt-2">
- <button
- onClick={() => { setSearchCliente(''); setSearchCnpj(''); }}
- className="px-3 py-1 text-red-500 font-semibold text-[10px] tracking-wide rounded border border-gray-200 hover:bg-gray-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5 uppercase"
- >
- <X size={11} /> Limpar Filtros
- </button>
- </div>
- )}
- </div>
- )}
- </div>
-
+  const modalContent = (
+    <>
  {/* Form Modal */}
  <AnimatePresence>
  {showForm && (
@@ -384,7 +285,7 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}
- className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
+ className="fixed inset-0 bg-black/40 z-[100] flex items-start justify-center p-4 overflow-y-auto"
  onClick={(e) => e.target === e.currentTarget && resetForm()}
  >
  <motion.div
@@ -678,6 +579,117 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
  </motion.div>
  )}
  </AnimatePresence>
+    </>
+  );
+
+  if (isModal) {
+    if (!showForm) return null;
+    return modalContent;
+  }
+
+ return (
+ <div className="space-y-6 h-full flex flex-col min-h-0">
+ {modalContent}
+ {/* Page Header */}
+ <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+ <div>
+ 
+ <p className="text-gray-500 text-xs">Gerencie o cadastro de empresas</p>
+ </div>
+ <div className="flex gap-2">
+ <motion.button
+ whileHover={{ scale: 1.02 }}
+ whileTap={{ scale: 0.98 }}
+ onClick={fetchEmpresas}
+ className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+ disabled={loading}
+ >
+ <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+ </motion.button>
+ <motion.button
+ whileHover={{ scale: 1.02 }}
+ whileTap={{ scale: 0.98 }}
+ onClick={() => { resetForm(); setShowForm(true); }}
+ className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#32423D] text-white font-medium hover:bg-[#3d4f49] transition-colors shadow-sm"
+ >
+ <Plus size={15} />
+ Nova Empresa
+ </motion.button>
+ </div>
+ </div>
+
+ {/* Error Alert */}
+ {error && (
+ <motion.div
+ initial={{ opacity: 0, y: -10 }}
+ animate={{ opacity: 1, y: 0 }}
+ className="p-4 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs"
+ >
+ {error}
+ </motion.div>
+ )}
+
+ {/* Search Filters Section */}
+ <div className="bg-white rounded-md shadow-sm border border-gray-100 mb-2 shrink-0">
+ <div className="flex justify-between items-center px-2 py-1 border-b border-gray-100">
+ <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 flex items-center gap-2 m-0">
+ <Search size={12} /> Dados para Pesquisa
+ </h3>
+ <button
+ type="button"
+ onClick={() => setShowFilters(!showFilters)}
+ className="text-[10px] flex items-center gap-1.5 text-blue-500 hover:text-blue-700 hover:bg-gray-50 px-2 py-1 rounded transition-colors border border-gray-200 uppercase font-bold"
+ >
+ <Filter size={11} /> {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
+ </button>
+ </div>
+ {showFilters && (
+ <div className="px-4 pb-3 pt-2">
+ <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+ {/* Cliente */}
+ <div>
+ <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">Cliente:</label>
+ <div className="relative">
+ <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+ <input
+ type="search"
+ placeholder="Nome ou Razão Social..."
+ value={searchCliente}
+ onChange={(e) => setSearchCliente(e.target.value)}
+ className="w-full pl-7 pr-3 py-1.5 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D]/20 rounded-sm"
+ />
+ </div>
+ </div>
+ {/* CNPJ */}
+ <div>
+ <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wide">CNPJ:</label>
+ <div className="relative">
+ <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+ <input
+ type="search"
+ placeholder="00.000.000/0001-00"
+ value={searchCnpj}
+ onChange={(e) => setSearchCnpj(e.target.value)}
+ className="w-full pl-7 pr-3 py-1.5 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] focus:ring-1 focus:ring-[#32423D]/20 rounded-sm"
+ />
+ </div>
+ </div>
+ </div>
+ {(searchCliente || searchCnpj) && (
+ <div className="flex justify-end mt-2">
+ <button
+ onClick={() => { setSearchCliente(''); setSearchCnpj(''); }}
+ className="px-3 py-1 text-red-500 font-semibold text-[10px] tracking-wide rounded border border-gray-200 hover:bg-gray-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5 uppercase"
+ >
+ <X size={11} /> Limpar Filtros
+ </button>
+ </div>
+ )}
+ </div>
+ )}
+ </div>
+
+
 
  {/* Data Table */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">

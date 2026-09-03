@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import PessoaJuridicaPage from './PessoaJuridica';
+import TipoProdutoPage from './TipoProduto';
+import UnidadeMedidaPage from './UnidadeMedida';
 import {
  Plus, Search, Edit2, Trash2, X, FolderKanban, Save,
  Loader2, RefreshCw, Calendar, Tag as TagIcon, FolderOpen, CheckCircle2, RotateCcw,
@@ -174,6 +176,8 @@ export default function ProjetoPage() {
  const [tagFormData, setTagFormData] = useState<Tag>(emptyTagForm);
  const [isEditingTag, setIsEditingTag] = useState(false);
  const [showTagForm, setShowTagForm] = useState(false);
+ const [showTipoProdutoModal, setShowTipoProdutoModal] = useState(false);
+  const [showUnidadeModal, setShowUnidadeModal] = useState(false);
  const [selectedProjetoForTag, setSelectedProjetoForTag] = useState<Projeto | null>(null);
 
  // Common state
@@ -1618,16 +1622,21 @@ export default function ProjetoPage() {
  </h3>
  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
  <div className="md:col-span-1">
- <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Cliente</label>
- <div className="flex items-center gap-1">
+ <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowPessoaJuridicaModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Novo Cliente"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Cliente
+</label>
  <select name="ClienteProjeto" value={projetoFormData.ClienteProjeto || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded shadow-sm">
  <option value="">Selecione...</option>
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
  </select>
- <button type="button" onClick={() => setShowPessoaJuridicaModal(true)} className="p-1 bg-[#32423D] text-[#E0E800] rounded hover:bg-[#2a3833] transition-colors" title="Cadastrar Novo Cliente">
- <Plus size={16} />
- </button>
- </div>
  </div>
  <div>
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">CNPJ</label>
@@ -1674,7 +1683,17 @@ export default function ProjetoPage() {
  <h4 className="text-[10px] uppercase tracking-widest font-bold text-gray-500 mb-3 flex items-center gap-1"><Building2 size={12} />Dados do Cliente (Faturamento)</h4>
  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
  <div className="md:col-span-2">
- <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente</label>
+ <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowPessoaJuridicaModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Novo Cliente"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Cliente
+</label>
  <select name="ClienteProjeto" value={projetoFormData.ClienteProjeto || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded-none">
  <option value="">Selecione...</option>
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
@@ -1743,7 +1762,17 @@ export default function ProjetoPage() {
  <div className="p-4 border border-gray-200 bg-gray-50/50 space-y-3">
  <h4 className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1"><Truck size={12} />Entrega</h4>
  <div>
- <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente Entrega</label>
+ <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowPessoaJuridicaModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Novo Cliente"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Cliente Entrega
+</label>
  <select name="ClienteEntrega" value={projetoFormData.ClienteEntrega || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded-none">
  <option value="">Selecione...</option>
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
@@ -1775,7 +1804,17 @@ export default function ProjetoPage() {
  <div className="p-4 border border-gray-200 bg-gray-50/50 space-y-3">
  <h4 className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-1"><Banknote size={12} />Cobrança</h4>
  <div>
- <label className="block text-xs font-semibold text-gray-600 mb-1">Cliente Cobrança</label>
+ <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowPessoaJuridicaModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Novo Cliente"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Cliente Cobrança
+</label>
  <select name="ClienteCobranca" value={projetoFormData.ClienteCobranca || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded-none">
  <option value="">Selecione...</option>
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
@@ -2032,7 +2071,17 @@ export default function ProjetoPage() {
 
  </div>
  <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Tipo Produto</label>
+ <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowTipoProdutoModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Novo Tipo Produto"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Tipo Produto
+ </label>
  <select name="TipoProduto" value={tagFormData.TipoProduto || ''} onChange={handleTagInputChange} className={selectClass}>
  <option value="">Selecione...</option>
  {tipoProdutoOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
@@ -2052,7 +2101,17 @@ export default function ProjetoPage() {
  <input type="text" name="SaldoTag" value={tagFormData.SaldoTag || ''} readOnly className={`${inputOptional} bg-gray-100 cursor-not-allowed`} />
  </div>
  <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Medida</label>
+ <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-2">
+  <button
+    type="button"
+    onClick={() => setShowUnidadeModal(true)}
+    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+    title="Nova Medida"
+  >
+    <Plus size={10} strokeWidth={3} />
+  </button>
+  Medida
+</label>
  <select name="UnidadeProduto" value={tagFormData.UnidadeProduto || ''} onChange={handleTagInputChange} className={selectClass}>
  <option value="">-</option>
  {medidaOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
@@ -2095,6 +2154,33 @@ export default function ProjetoPage() {
  </div>
  </div>
  )}
+
+  {showTipoProdutoModal && (
+    <TipoProdutoPage
+      isModal
+      onCloseModal={() => {
+        setShowTipoProdutoModal(false);
+        fetchOptions();
+      }}
+    />
+  )}
+
+  {showUnidadeModal && (
+    <div className="fixed inset-0 z-[120] overflow-y-auto bg-black bg-opacity-50 flex items-center justify-center p-4">
+      <div className="bg-white w-full max-w-7xl h-[90vh] overflow-y-auto relative rounded-xl shadow-2xl">
+        <div className="p-2 pt-8">
+          <UnidadeMedidaPage 
+            isModal={true} 
+            onCloseModal={() => {
+              setShowUnidadeModal(false);
+              fetchOptions();
+            }} 
+          />
+        </div>
+      </div>
+    </div>
+  )}
+
  </div>
  );
 }

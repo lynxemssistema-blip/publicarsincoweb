@@ -97,6 +97,7 @@ export default function MaterialPage() {
  const [materiais, setMateriais] = useState<Material[]>([]);
  const [showFilters, setShowFilters] = useState(true);
  const [formData, setFormData] = useState<Material>(emptyForm);
+ const [pendingPdfFile, setPendingPdfFile] = useState<File | null>(null);
  const [isEditing, setIsEditing] = useState(false);
  const [searchCodigo, setSearchCodigo] = useState('');
  const [searchDesc, setSearchDesc] = useState('');
@@ -178,7 +179,7 @@ export default function MaterialPage() {
  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
  const name = e.target.name;
     const value = name.toLowerCase().includes('desc') ? e.target.value.toUpperCase() : e.target.value;
- const finalValue = (name === 'DescResumo' || name === 'DescDetal') ? value.toUpperCase() : value;
+ const finalValue = (name === 'DescResumo' || name === 'DescDetal' || name === 'CodMatFabricante') ? value.toUpperCase() : value;
  setFormData(prev => ({ ...prev, [name]: finalValue }));
  };
 
@@ -214,12 +215,27 @@ export default function MaterialPage() {
  });
 
  const json = await res.json();
- if (json.success) {
- await fetchMateriais();
- resetForm();
- } else {
- setError(json.message || 'Erro ao salvar');
- }
+  if (json.success) {
+      const newId = json.id || formData.IdMaterial;
+      if (pendingPdfFile && newId) {
+          const uploadFormData = new FormData();
+          uploadFormData.append('arquivo', pendingPdfFile);
+          try {
+              await fetch(`${API_BASE}/materiais/${newId}/arquivos`, {
+                  method: 'POST',
+                  headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` },
+                  body: uploadFormData
+              });
+          } catch (e) {
+              console.error('Failed to upload pending PDF:', e);
+          }
+      }
+      
+      await fetchMateriais();
+      resetForm();
+  } else {
+  setError(json.message || 'Erro ao salvar');
+  }
  } catch (err) {
  setError('Erro ao salvar. Verifique a conexão.');
  console.error('Save error:', err);
@@ -282,12 +298,13 @@ export default function MaterialPage() {
  }
  };
 
- const resetForm = () => {
- setFormData(emptyForm);
- setIsEditing(false);
- setShowForm(false);
- setArquivos([]);
- };
+  const resetForm = () => {
+  setFormData(emptyForm);
+  setIsEditing(false);
+  setPendingPdfFile(null);
+  setShowForm(false);
+  setArquivos([]);
+  };
 
   const fetchArquivos = async (idMaterial: number) => {
     setLoadingArquivos(true);
@@ -306,7 +323,12 @@ export default function MaterialPage() {
 
   const handleUploadArquivo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files || files.length === 0 || !formData.IdMaterial) return;
+    if (!files || files.length === 0) return;
+    
+    if (!formData.IdMaterial) {
+      setPendingPdfFile(files[0]);
+      return;
+    }
     
     const uploadFormData = new FormData();
     uploadFormData.append('arquivo', files[0]);
@@ -538,9 +560,15 @@ export default function MaterialPage() {
          </button>
          <label className="p-1.5 rounded border border-gray-200 hover:bg-gray-50 cursor-pointer text-[#32423D]" title="Anexar PDF">
            <input type="file" accept="application/pdf" onChange={handleUploadArquivo} className="hidden" />
-           <FileText size={14} />
+           <FileText size={14} className={pendingPdfFile ? "text-green-500" : ""} />
          </label>
        </div>
+       {pendingPdfFile && (
+           <div className="text-[10px] text-green-600 font-semibold bg-green-50 p-1 rounded inline-block mt-1">
+               PDF na fila: {pendingPdfFile.name} (será salvo com o material)
+               <button onClick={() => setPendingPdfFile(null)} className="ml-2 text-red-500 hover:text-red-700">X</button>
+           </div>
+       )}
        {showUrlInput && (
          <input type="text" value={formData.ImagemProduto || ''} onChange={(e) => setFormData(prev => ({ ...prev, ImagemProduto: e.target.value }))} placeholder="URL da imagem (https://...)" className={inputOptional + " py-1 text-xs"} />
        )}
@@ -593,12 +621,14 @@ export default function MaterialPage() {
  />
  </div>
  <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Numero RP</label>
+ <label className="block text-xs font-medium text-gray-500 mb-1">Numero RP <span className="text-[10px] font-normal text-gray-400 ml-1">(Máx 45)</span></label>
  <input
  type="text"
  name="NumeroRP"
  value={formData.NumeroRP || ''}
  onChange={handleInputChange}
+ maxLength={45}
+ placeholder="Máx 45 caracteres"
  className={inputOptional}
  />
  </div>

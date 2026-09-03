@@ -18,12 +18,17 @@ const emptyForm: UnidadeMedida = {
  DescMedida: ''
 };
 
-export default function UnidadeMedidaPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: () => void;
+}
+
+export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Props = {}) {
  const [unidades, setUnidades] = useState<UnidadeMedida[]>([]);
  const [formData, setFormData] = useState<UnidadeMedida>(emptyForm);
  const [isEditing, setIsEditing] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
- const [showForm, setShowForm] = useState(false);
+ const [showForm, setShowForm] = useState(isModal);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -202,98 +207,7 @@ export default function UnidadeMedidaPage() {
  )}
  </div>
 
- {/* Form Modal */}
- <AnimatePresence>
- {showForm && (
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
- onClick={(e) => e.target === e.currentTarget && resetForm()}
- >
- <motion.div
- initial={{ opacity: 0, y: -20, scale: 0.95 }}
- animate={{ opacity: 1, y: 0, scale: 1 }}
- exit={{ opacity: 0, y: -20, scale: 0.95 }}
- className="bg-white rounded-md shadow-xl w-full max-w-md my-8"
- >
- <div className="flex items-center justify-between p-5 border-b border-gray-100">
- <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-lg bg-[#32423D] text-white flex items-center justify-center">
- <Ruler size={20} />
- </div>
- <h2 className="text-lg font-semibold text-[#32423D]">
- {isEditing ? 'Editar Unidade' : 'Nova Unidade'}
- </h2>
- </div>
- <button
- onClick={resetForm}
- className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
- >
- <X size={20} />
- </button>
- </div>
-
- <form onSubmit={handleSubmit} className="p-5 space-y-5">
- {/* ID Field (readonly when editing) */}
  
-
- {/* TipoMedida */}
- <div>
- <label className="block text-xs font-medium text-gray-600 mb-1">
- Unidade <span className="text-red-500 font-bold">*</span>
- </label>
- <input
- type="text"
- name="TipoMedida"
- value={formData.TipoMedida || ''}
- onChange={handleInputChange}
- placeholder="UN, KG, M..."
- className={`${inputRequired} uppercase`}
- maxLength={3}
- required
- />
- <p className="text-xs text-gray-400 mt-1">Máximo 3 caracteres</p>
- </div>
-
- {/* DescMedida */}
- <div>
- <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
- <input
- type="text"
- name="DescMedida"
- value={formData.DescMedida || ''}
- onChange={handleInputChange}
- placeholder="Descrição da unidade..."
- className={inputOptional}
- maxLength={50}
- />
- </div>
-
- {/* Required fields note */}
- <p className="text-xs text-gray-400 pt-2">
- <span className="text-red-500 font-bold">*</span> Campos obrigatórios
- </p>
-
- {/* Actions */}
- <div className="pt-2 flex justify-end w-full">
-<motion.button
- type="submit"
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium text-xs hover:bg-[#3d4f49] transition-colors disabled:opacity-50"
- disabled={saving}
- >
- {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
- {isEditing ? 'Atualizar' : 'Salvar'}
- </motion.button>
-</div>
- </form>
- </motion.div>
- </motion.div>
- )}
- </AnimatePresence>
 
  {/* Data Table */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">

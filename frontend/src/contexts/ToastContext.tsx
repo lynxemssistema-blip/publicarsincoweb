@@ -35,7 +35,10 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
  }, []);
 
  const addToast = useCallback(({ type, title, message, duration }: Omit<Toast, 'id'>) => {
- const id = Math.random().toString(36).substring(2, 9);
+  // Ignorar mensagens de sucesso conforme pedido do usuário
+  if (type === 'success') return;
+
+  const id = Math.random().toString(36).substring(2, 9);
 
   // Update durations: default to 3s (3000ms) for everything
   const finalDuration = duration !== undefined ? duration : 3000;

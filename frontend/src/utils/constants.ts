@@ -20,7 +20,6 @@ export const defaultMenuItems: MenuItem[] = [
     { id: 'config', icon: 'Settings', label: 'Configurações', href: '/config' },
     { id: 'controle-expedicao', icon: 'PackageCheck', label: 'Controle Expedição', href: '/controle-expedicao' },
     { id: 'dashboard', icon: 'LayoutDashboard', label: 'Dashboard', href: '/dashboard' },
-    { id: 'criar-ordem-servico', icon: 'PlusCircle', label: 'Criar Ordem Serviço', href: '/criar-ordem-servico' },
     { id: 'familia', icon: 'FolderTree', label: 'Família', href: '/familia' },
     { id: 'pecas-reposicao', icon: 'Wrench', label: 'Lista Peças de Reposição', href: '/pecas-reposicao' },
     { id: 'materiais', icon: 'Package', label: 'Materiais', href: '/materiais' },

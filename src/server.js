@@ -8743,9 +8743,10 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
 
         // Verifica ITENS
         const [itemRows] = await connection.query('SELECT IdOrdemServicoItem, Qtde, AreaPintura, Peso FROM ordemservicoitem WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (itemRows.length === 0) {
+        // Permite alterar fator mesmo sem itens
+        /* if (itemRows.length === 0) {
             return res.status(400).json({ success: false, message: 'Não há itens a serem alterados!' });
-        }
+        } */
 
         for (const item of itemRows) {
             let qtdeNum = parseFloat(item.Qtde) || 0;

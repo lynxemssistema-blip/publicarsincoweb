@@ -172,8 +172,8 @@ function AppContent() {
             }
           }
 
-          // Remove any manually-created 'Login' entries from the menu
-          savedMenu = savedMenu.filter(item => item.id !== 'login' && item.label?.toLowerCase() !== 'login');
+          // Remove any manually-created 'Login' entries and the old 'Criar Ordem Serviço' from the menu
+          savedMenu = savedMenu.filter(item => item.id !== 'login' && item.label?.toLowerCase() !== 'login' && item.id !== 'criar-ordem-servico');
 
           let finalMenu = savedMenu;
           if (!isSuperUser) {
@@ -191,7 +191,7 @@ function AppContent() {
             user.superadmin === 'S' ||
             user.login?.toLowerCase() === 'superadmin';
           if (isSuperDefault) {
-            const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao');
+            const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao' && i.id !== 'criar-ordem-servico');
             setMenuItems(sortMenuRecursive(superFiltered));
           } else {
             // Qualquer outro usuário: menu sem SuperAdmin
@@ -213,7 +213,7 @@ function AppContent() {
           user.superadmin === 'S' ||
           user.login?.toLowerCase() === 'superadmin';
         if (isSuperFallback) {
-          const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao');
+          const superFiltered = defaultMenuItems.filter(i => i.id !== 'tipos-transporte' && i.id !== 'recursos-fabricacao' && i.id !== 'criar-ordem-servico');
           setMenuItems(sortMenuRecursive(superFiltered));
           return;
         }
@@ -221,6 +221,7 @@ function AppContent() {
           if (item.id === 'superadmin') return false;
           if (item.id === 'tipos-transporte') return false;
           if (item.id === 'recursos-fabricacao') return false;
+          if (item.id === 'criar-ordem-servico') return false;
           
           return true;
         });

@@ -1,4 +1,7 @@
 import SectorProductionModal from '../components/SectorProductionModal';
+import CriarOrdemServicoPage from './CriarOrdemServico';
+import UsuarioPage from './Usuario';
+import SetorPage from './Setor';
 /* eslint-disable */
 import { createPortal } from 'react-dom';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -7,7 +10,7 @@ import {
     Activity, Search, ChevronRight, ChevronDown, ChevronUp, ClipboardList, Eye,
     Loader2, RefreshCw, Box, CheckCircle, Clock, XCircle, User, Calendar, Settings2, FileText, FolderOpen,
     Filter, Layers, X, ArrowLeft, Trash2, Flag, RotateCcw, Hash, Copy, FileSpreadsheet, PenTool, AlertTriangle, Star,
-    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus
+    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus, Plus
 } from 'lucide-react';
 import { ProgressBar } from '../components/ordem-servico/ProgressBar';
 import { SetorDatas } from '../components/ordem-servico/SetorDatas';
@@ -336,6 +339,7 @@ function OrdemServicoContent() {
     const [expandedItemProcessos, setExpandedItemProcessos] = useState<Set<number>>(new Set());
     const [loadingItens, setLoadingItens] = useState<Set<number>>(new Set());
     const [liberandoOS, setLiberandoOS] = useState<number | null>(null);
+    const [isCriarOSModalOpen, setIsCriarOSModalOpen] = useState(false);
 
     const toggleItemProcessos = useCallback((itemId: number) => {
         setExpandedItemProcessos(prev => {
@@ -1501,10 +1505,11 @@ function OrdemServicoContent() {
 
     const handleAlterarFator = async (os: OrdemServico) => {
         const items = ordensItens[os.IdOrdemServico];
-        if (!items || items.length === 0) {
+        // Permite alterar o fator mesmo sem itens (solicitação do usuário)
+        /* if (!items || items.length === 0) {
             addToast({ type: 'error', title: 'Atenção', message: 'Não há itens a serem alterados!' });
             return;
-        }
+        } */
 
         const novoFator = window.prompt("Informe o novo valor Multiplicador", os.Fator?.toString() || "1");
         if (!novoFator) return;
@@ -3161,6 +3166,15 @@ function OrdemServicoContent() {
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}
+                            onClick={() => setIsCriarOSModalOpen(true)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#32423D] text-white hover:bg-[#E0E800]/100 hover:text-black transition-colors text-xs font-medium mr-2"
+                        >
+                            <Plus size={14} />
+                            Nova OS
+                        </motion.button>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
                             onClick={() => fetchOrdens(1)}
                             className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors text-xs font-medium bg-white"
                             disabled={loading}
@@ -3251,6 +3265,32 @@ function OrdemServicoContent() {
                     </div>
                 </div>
             )}
+
+            {/* Criar OS Modal */}
+            <AnimatePresence>
+                {isCriarOSModalOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, opacity: 0 }}
+                            animate={{ scale: 1, opacity: 1 }}
+                            exit={{ scale: 0.95, opacity: 0 }}
+                            className="bg-white rounded-lg shadow-xl w-full max-w-6xl h-[90vh] overflow-hidden flex flex-col"
+                        >
+                            <CriarOrdemServicoPage 
+                                onClose={() => setIsCriarOSModalOpen(false)} 
+                                onSuccess={() => {
+                                    fetchOrdens(1);
+                                }} 
+                            />
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Main Content */}
             {searchMode === 'os' && selectedOSId && ordens.find(o => o.IdOrdemServico === selectedOSId) ? renderOSDetail(ordens.find(o => o.IdOrdemServico === selectedOSId)!) : searchMode === 'os' && (
@@ -3626,6 +3666,7 @@ function OrdemServicoContent() {
         onClose={() => setShowModalIncluirItens(null)}
         osId={showModalIncluirItens.IdOrdemServico}
         osContext={showModalIncluirItens}
+        codsExistentes={(ordensItens[showModalIncluirItens.IdOrdemServico] || []).map((i: any) => i.CodMatFabricante)}
         onSuccess={() => {
             // Force-refresh the item list for this OS so newly added items appear immediately
             fetchItens(showModalIncluirItens.IdOrdemServico);
@@ -4101,7 +4142,17 @@ function OrdemServicoContent() {
                                             placeholder="Sub-título da RNC" />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Colaborador</label>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-2">
+    <button
+        type="button"
+        onClick={() => setShowUsuarioModal(true)}
+        className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+        title="Novo Usuário"
+    >
+        <Plus size={10} strokeWidth={3} />
+    </button>
+    Colaborador
+</label>
                                         <select value={usuarioResponsavel} onChange={e => setUsuarioResponsavel(e.target.value)}
                                             className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:border-red-500">
                                             <option value="">Selecione...</option>
@@ -4109,7 +4160,17 @@ function OrdemServicoContent() {
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-semibold text-gray-700 mb-1">Recurso</label>
+                                        <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-2">
+    <button
+        type="button"
+        onClick={() => setShowSetorModal(true)}
+        className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200"
+        title="Novo Recurso"
+    >
+        <Plus size={10} strokeWidth={3} />
+    </button>
+    Recurso
+</label>
                                         <select value={setorResponsavel} onChange={e => setSetorResponsavel(e.target.value)}
                                             className="w-full px-2 py-1 text-xs rounded border border-gray-300 focus:outline-none focus:border-red-500">
                                             <option value="">Selecione...</option>

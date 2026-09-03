@@ -22,13 +22,18 @@ const emptyForm: Setor = {
  DataLiberada: 'NAO'
 };
 
-export default function SetorPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: () => void;
+}
+
+export default function SetorPage({ isModal = false, onCloseModal }: Props = {}) {
  const [setores, setSetores] = useState<Setor[]>([]);
  const [formData, setFormData] = useState<Setor>(emptyForm);
  const [isEditing, setIsEditing] = useState(false);
  const [searchNome, setSearchNome] = useState('');
  const [showFilters, setShowFilters] = useState(false);
- const [showForm, setShowForm] = useState(false);
+ const [showForm, setShowForm] = useState(isModal);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -215,111 +220,7 @@ export default function SetorPage() {
  )}
  </div>
 
- {/* Form Modal */}
- <AnimatePresence>
- {showForm && (
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-4 overflow-y-auto"
- onClick={(e) => e.target === e.currentTarget && resetForm()}
- >
- <motion.div
- initial={{ opacity: 0, y: -20, scale: 0.95 }}
- animate={{ opacity: 1, y: 0, scale: 1 }}
- exit={{ opacity: 0, y: -20, scale: 0.95 }}
- className="bg-white rounded-md shadow-xl w-full max-w-lg my-8"
- >
- <div className="flex items-center justify-between p-5 border-b border-gray-100">
- <div className="flex items-center gap-3">
- <div className="w-10 h-10 rounded-lg bg-[#32423D] text-white flex items-center justify-center">
- <Briefcase size={20} />
- </div>
- <h2 className="text-lg font-semibold text-[#32423D]">
- {isEditing ? 'Editar Setor' : 'Novo Setor'}
- </h2>
- </div>
- <button
- onClick={resetForm}
- className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
- >
- <X size={20} />
- </button>
- </div>
-
- <form onSubmit={handleSubmit} className="p-5 space-y-5">
- <div className="space-y-4">
- <div>
- <label className="block text-xs font-medium text-gray-600 mb-1">
- Nome do Setor <span className="text-red-500 font-bold">*</span>
- </label>
- <input
- type="text"
- name="Setor"
- value={formData.Setor || ''}
- onChange={handleInputChange}
- className={inputRequired}
- placeholder="Ex: Montagem, Pintura..."
- required
- />
- </div>
  
- <div className="grid grid-cols-2 gap-4">
- <div>
- <label className="block text-xs font-medium text-gray-600 mb-1">
- Fábrica <span className="text-red-500 font-bold">*</span>
- </label>
- <select
- name="Fabrica"
- value={formData.Fabrica}
- onChange={handleInputChange}
- className={inputRequired}
- required
- >
- <option value="SIM">Sim</option>
- <option value="NAO">Não</option>
- </select>
- </div>
- <div>
- <label className="block text-xs font-medium text-gray-600 mb-1">
- Data Liberada <span className="text-red-500 font-bold">*</span>
- </label>
- <select
- name="DataLiberada"
- value={formData.DataLiberada}
- onChange={handleInputChange}
- className={inputRequired}
- required
- >
- <option value="SIM">Sim</option>
- <option value="NAO">Não</option>
- </select>
- </div>
- </div>
- </div>
-
- <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
- <span className="text-red-500 font-bold">*</span> Campos obrigatórios
- </p>
-
- <div className="flex justify-end pt-2">
- <motion.button
- type="submit"
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium text-xs hover:bg-[#3d4f49] transition-colors disabled:opacity-50"
- disabled={saving}
- >
- {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
- {isEditing ? 'Atualizar' : 'Salvar'}
- </motion.button>
- </div>
- </form>
- </motion.div>
- </motion.div>
- )}
- </AnimatePresence>
 
  {/* Data Table */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">
