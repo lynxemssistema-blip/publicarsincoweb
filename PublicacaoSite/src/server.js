@@ -8979,6 +8979,29 @@ app.post('/api/ordemservico/liberar', tenantMiddleware, async (req, res) => {
             return res.status(400).json({ success: false, message: 'Verifique se há um produto principal para a Ordem de Serviço cadastrado.' });
         }
 
+        // 1.5 Validar se todos os itens possuem pelo menos um recurso associado
+        const [itensSemRecurso] = await connection.execute(
+            `SELECT osi.CodMatFabricante
+             FROM ordemservicoitem osi
+             LEFT JOIN material_processo mp 
+               ON osi.IdOrdemServico = mp.IdOrdemServico 
+              AND osi.CodMatFabricante = mp.codmatFabricante
+              AND COALESCE(osi.IdTag, 0) = COALESCE(mp.IdTag, 0)
+              AND COALESCE(osi.IdProjeto, 0) = COALESCE(mp.IdProjeto, 0)
+             WHERE osi.IdOrdemServico = ?
+             GROUP BY osi.IdOrdemServicoItem
+             HAVING COUNT(mp.IdProcesso) = 0`,
+            [IdOrdemServico]
+        );
+        if (itensSemRecurso.length > 0) {
+            await connection.rollback();
+            const codigosSemRecurso = itensSemRecurso.map(i => i.CodMatFabricante).join(', ');
+            return res.status(400).json({ 
+                success: false, 
+                message: `Não é possível liberar a OS. O(s) item(ns) a seguir não possuem nenhum recurso (processo) associado: ${codigosSemRecurso}. Adicione pelo menos um recurso para cada item.` 
+            });
+        }
+
         // 2. Limpar Diretà³rios e Copiar Arquivos
         const [items] = await connection.execute(
             `SELECT EnderecoArquivo FROM ordemservicoitem WHERE IdOrdemServico = ? AND EnderecoArquivo IS NOT NULL AND EnderecoArquivo != ''`,
