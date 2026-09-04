@@ -3571,7 +3571,7 @@ app.get('/api/pj', tenantMiddleware, async (req, res) => {
 app.get('/api/pj/options', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(
-            "SELECT IdPessoa as id, RazaoSocial as label FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
+            "SELECT IdPessoa as id, RazaoSocial as label, Cnpj as cnpj FROM pessoajuridica WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != '*' ORDER BY RazaoSocial"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -8743,9 +8743,10 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
 
         // Verifica ITENS
         const [itemRows] = await connection.query('SELECT IdOrdemServicoItem, Qtde, AreaPintura, Peso FROM ordemservicoitem WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (itemRows.length === 0) {
+        // Permite alterar fator mesmo sem itens
+        /* if (itemRows.length === 0) {
             return res.status(400).json({ success: false, message: 'Não há itens a serem alterados!' });
-        }
+        } */
 
         for (const item of itemRows) {
             let qtdeNum = parseFloat(item.Qtde) || 0;
@@ -11023,6 +11024,22 @@ WHERE osi.IdOrdemServicoItem = ?
 
         const item = itemRows[0];
 
+        // Fetch actual totals from material_processo table instead of legacy OS item
+        try {
+            const [mpRows] = await req.tenantDbPool.execute(`SELECT mp.TotalExecutado, mp.TotalExecutar 
+                FROM material_processo mp 
+                JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao 
+                WHERE mp.IdOrdemServico = ? AND mp.codmatFabricante = ? AND REPLACE(LOWER(pf.processofabricacao), ' ', '') = ?`, [item.IdOrdemServico, item.CodMatFabricante, processo.toLowerCase()]);
+            
+            if (mpRows.length > 0) {
+                item.TotalExecutado = mpRows[0].TotalExecutado || 0;
+                item.TotalExecutar = mpRows[0].TotalExecutar || item.QtdeTotal;
+                item.QtdeFaltanteCalculada = item.TotalExecutar - item.TotalExecutado;
+                item.PercentualSetor = (item.TotalExecutado / item.TotalExecutar) * 100;
+            }
+        } catch(err) {
+            console.error("[API] Error fetching material_processo:", err.message);
+        }
         // Buscar hist�rico de apontamentos
         const historicoQuery = `
             SELECT
@@ -18835,14 +18852,26 @@ app.post('/api/materiais/:id/arquivos', tenantMiddleware, uploadMemory.single('a
     if (!file) return res.status(400).json({ success: false, message: 'Nenhum arquivo enviado' });
 
     const usuario = req.tenantUser?.login || req.tenantUser?.nomeCompleto || 'Sistema';
+    const dbName = req.tenantUser?.dbName || 'default';
     const now = new Date();
     const nowFormat = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}:${String(now.getSeconds()).padStart(2, '0')}`;
 
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
+
+        const dir = path.join(__dirname, '../public/uploads/materiais', dbName, String(id));
+        if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+        }
+        
+        const filePath = path.join(dir, file.originalname);
+        await fs.promises.writeFile(filePath, file.buffer);
+
+        const marker = Buffer.from('[FILE_SYSTEM]');
+        
         await req.tenantDbPool.execute(
             "INSERT INTO material_arquivos (IdMaterial, NomeArquivo, TipoArquivo, Tamanho, Dados, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [id, file.originalname, file.mimetype, file.size, file.buffer, nowFormat, usuario]
+            [id, file.originalname, file.mimetype, file.size, marker, nowFormat, usuario]
         );
         res.json({ success: true, message: 'Arquivo salvo com sucesso' });
     } catch (error) {
@@ -18857,7 +18886,7 @@ app.get('/api/materiais/arquivos/:idArquivo/download', tenantMiddleware, async (
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
         const [rows] = await req.tenantDbPool.execute(
-            "SELECT NomeArquivo, TipoArquivo, Dados FROM material_arquivos WHERE idArquivo = ?",
+            "SELECT IdMaterial, NomeArquivo, TipoArquivo, Dados FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]
         );
         
@@ -18866,9 +18895,23 @@ app.get('/api/materiais/arquivos/:idArquivo/download', tenantMiddleware, async (
         }
 
         const file = rows[0];
+        const dbName = req.tenantUser?.dbName || 'default';
+        const diskPath = path.join(__dirname, '../public/uploads/materiais', dbName, String(file.IdMaterial), file.NomeArquivo);
+
         res.setHeader('Content-Disposition', `inline; filename="${file.NomeArquivo}"`);
         res.setHeader('Content-Type', file.TipoArquivo);
-        res.send(file.Dados);
+
+        if (fs.existsSync(diskPath)) {
+            const fileStream = fs.createReadStream(diskPath);
+            fileStream.pipe(res);
+        } else {
+            if (file.Dados) {
+                 res.send(file.Dados);
+            } else {
+                 return res.status(404).json({ success: false, message: 'Arquivo não encontrado fisicamente ou no banco' });
+            }
+        }
+
     } catch (error) {
         console.error('Error downloading material arquivo:', error);
         res.status(500).json({ success: false, message: 'Erro ao baixar arquivo' });
@@ -18880,6 +18923,22 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     const { idArquivo } = req.params;
     try {
         await ensureMaterialArquivosTable(req.tenantDbPool);
+        
+        const [rows] = await req.tenantDbPool.execute(
+            "SELECT IdMaterial, NomeArquivo FROM material_arquivos WHERE idArquivo = ?",
+            [idArquivo]
+        );
+
+        if (rows.length > 0) {
+            const file = rows[0];
+            const dbName = req.tenantUser?.dbName || 'default';
+            const diskPath = path.join(__dirname, '../public/uploads/materiais', dbName, String(file.IdMaterial), file.NomeArquivo);
+            
+            if (fs.existsSync(diskPath)) {
+                fs.unlinkSync(diskPath);
+            }
+        }
+
         await req.tenantDbPool.execute(
             "DELETE FROM material_arquivos WHERE idArquivo = ?",
             [idArquivo]

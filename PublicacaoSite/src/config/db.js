@@ -99,16 +99,20 @@ const execute = async (sql, params, retries = 1) => {
           if (cols.length === 0) {
             console.log(`[DB] Injecting IdMatriz into table: ${tableName} for tenant ${store.tenantId}`);
             await pool.execute(`ALTER TABLE \`${tableName}\` ADD COLUMN IdMatriz INT DEFAULT ${store.tenantId}`);
-            
-            // Asynchronously populate existing rows if it's an UPDATE that might affect rows without IdMatriz
-            if (cleanSql.toUpperCase().startsWith('UPDATE')) {
-              pool.execute(`UPDATE \`${tableName}\` SET IdMatriz = ${store.tenantId} WHERE IdMatriz IS NULL`).catch(e => console.error(`[DB] Async IdMatriz update failed:`, e.message));
-            }
           }
           verifiedTablesCache.set(cacheKey, true);
         } catch (e) {
           console.error(`[DB] Failed to verify/inject IdMatriz for table ${tableName}:`, e.message);
         }
+      }
+
+      // Conforme solicitado, qualquer tabela que receber inclusão de registro ou update 
+      // deve ter o IdMatriz preenchido com o ID do banco ativo.
+      // O update assíncrono abaixo garante que a linha recém-inserida receba o IdMatriz caso tenha vindo nula,
+      // e também corrige eventuais registros antigos da tabela que estejam com NULL.
+      if (cleanSql.toUpperCase().startsWith('INSERT') || cleanSql.toUpperCase().startsWith('UPDATE')) {
+        pool.execute(`UPDATE \`${tableName}\` SET IdMatriz = ${store.tenantId} WHERE IdMatriz IS NULL`)
+          .catch(e => console.error(`[DB] Async IdMatriz update failed for ${tableName}:`, e.message));
       }
     }
   }
