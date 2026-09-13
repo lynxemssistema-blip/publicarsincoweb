@@ -714,7 +714,10 @@ export default function MaterialPage() {
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-0.5">Fornecedor</label>
-          <input type="text" name="Fornecedor" value={formData.Fornecedor || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} placeholder="Pesquisar..." />
+          <select name="Fornecedor" value={formData.Fornecedor || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
+            <option value="">Selecione...</option>
+            {fornecedorOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-0.5">Código Jurídico Mat.</label>

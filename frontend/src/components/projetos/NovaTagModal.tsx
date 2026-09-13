@@ -64,7 +64,10 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
   };
 
   const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
+    let { name, value } = e.target;
+    if (name === 'Tag' || name === 'DescTag' || name.toLowerCase().includes('desc')) {
+      value = value.toUpperCase();
+    }
     setTagFormData(prev => ({ ...prev, [name]: value }));
   };
 

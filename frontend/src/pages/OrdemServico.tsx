@@ -445,7 +445,7 @@ function OrdemServicoContent() {
     const [recursoTemposOriginal, setRecursoTemposOriginal] = useState<Record<string, { setup: string; padrao: string }>>({});
     // Lista dinâmica de processos com Fabrica = 'SIM' buscada do backend
     const [processosFabricaSIM, setProcessosFabricaSIM] = useState<{ key: string; label: string; IdProcesso: number }[]>([]);
-    const [materialProcessos, setMaterialProcessos] = useState<{ IdProcesso: number; key: string; sequencia: number }[]>([]);
+    const [materialProcessos, setMaterialProcessos] = useState<{ IdProcesso: number; key: string; sequencia: number; label?: string }[]>([]);
     const [draggedResource, setDraggedResource] = useState<string | null>(null);
     const [dragOverResource, setDragOverResource] = useState<string | null>(null);
 
@@ -705,6 +705,7 @@ function OrdemServicoContent() {
                     const matList = jMat.data.map((row: any) => ({
                         IdProcesso: row.IdProcesso,
                         key: mapProcessNameToKey(row.NomeProcesso).key,
+                        label: row.NomeProcesso,
                         sequencia: row.SequenciaExecucao,
                         setup: row.TempoEstimadoMin,
                         padrao: row.TempoPadraoMin
@@ -1297,21 +1298,55 @@ function OrdemServicoContent() {
     
     const proceedWithLiberacao = async (os: OrdemServico, fator: number | string) => {
         const result = await Swal.fire({
-            html: `Você está prestes a enviar a <b>Ordem de Serviço ${os.IdOrdemServico}</b> para a linha de produção.`,
-            icon: 'success',
+            title: 'Confirmar Liberação',
+            html: `
+                <div style="text-align: left; font-size: 0.9em; padding-bottom: 10px;">
+                    <p style="margin-bottom: 15px;">Você está prestes a enviar a <b>Ordem de Serviço ${os.IdOrdemServico}</b> para a linha de produção.</p>
+                    <p style="margin-bottom: 10px; font-weight: bold; color: #1f2937;">Escolha a forma de Liberação:</p>
+                    
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; margin-bottom: 10px; cursor: pointer;" onclick="document.getElementById('radioTotal').checked = true">
+                        <label style="display: flex; align-items: flex-start; cursor: pointer; margin: 0;">
+                            <input type="radio" name="tipoLiberacao" value="Total" checked id="radioTotal" style="margin-top: 4px; margin-right: 10px;" />
+                            <div>
+                                <b style="color: #111827;">Total (Baixa Automática no Saldo)</b>
+                                <div style="font-size: 0.85em; color: #6b7280; margin-top: 4px;">
+                                    Toda a quantidade da tag será produzida de uma única vez em lote fechado.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                    
+                    <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; cursor: pointer;" onclick="document.getElementById('radioParcial').checked = true">
+                        <label style="display: flex; align-items: flex-start; cursor: pointer; margin: 0;">
+                            <input type="radio" name="tipoLiberacao" value="Parcial" id="radioParcial" style="margin-top: 4px; margin-right: 10px;" />
+                            <div>
+                                <b style="color: #111827;">Parcial (Sem baixa na Tag)</b>
+                                <div style="font-size: 0.85em; color: #6b7280; margin-top: 4px;">
+                                    Usado em liberações por etapas, retrabalhos, ou lotes fracionados.
+                                </div>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            `,
+            icon: 'question',
             showCancelButton: true,
             confirmButtonText: 'Sim, liberar agora! 🚀',
             cancelButtonText: 'Ainda não',
             confirmButtonColor: '#10B981',
             cancelButtonColor: '#9CA3AF',
-            reverseButtons: true
+            reverseButtons: true,
+            preConfirm: () => {
+                const selected = document.querySelector('input[name="tipoLiberacao"]:checked') as HTMLInputElement;
+                return selected ? selected.value : 'Total';
+            }
         });
 
         if (!result.isConfirmed) {
             return;
         }
 
-        const tipoLiberacao = 'Total';
+        const tipoLiberacao = result.value as string;
 
         setLiberandoOS(os.IdOrdemServico);
         try {
@@ -2301,6 +2336,16 @@ function OrdemServicoContent() {
                                                 <span className="text-gray-400">Data Previsão:</span>
                                                 <span className="text-gray-600 font-medium">{formatDateBR(os.DataPrevisao)}</span>
                                             </div>
+                                            <div className="flex flex-col mt-2 pt-2 border-t border-gray-50">
+                                                <div className="flex justify-between gap-2">
+                                                    <span className="text-gray-400 whitespace-nowrap">Projeto:</span>
+                                                    <span className="text-gray-700 font-medium text-right truncate" title={`${os.IdProjeto || '-'} - ${os.Projeto || '-'}`}>{os.IdProjeto || '-'} - {os.Projeto || '-'}</span>
+                                                </div>
+                                                <div className="flex justify-between gap-2">
+                                                    <span className="text-gray-400 whitespace-nowrap">Tag:</span>
+                                                    <span className="text-gray-700 font-medium text-right truncate" title={`${os.IdTag || '-'} - ${os.DescTag || os.Tag || '-'}`}>{os.IdTag || '-'} - {os.DescTag || os.Tag || '-'}</span>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2516,8 +2561,8 @@ function OrdemServicoContent() {
                                             // Mesma lógica do backend para distinguir itens com o mesmo código
                                             // em projetos/tags diferentes dentro da mesma OS.
                                             const matProcsMap = materiaisProcesso[os.IdOrdemServico] || {};
-                                            const itemIdTag = (item as any).IdTag || 0;
-                                            const itemIdProjeto = (item as any).IdProjeto || 0;
+                                            const itemIdTag = (item as any).IdTag || (item as any).idTag || 0;
+                                            const itemIdProjeto = (item as any).IdProjeto || (item as any).idProjeto || 0;
                                             const compKey = `${item.CodMatFabricante}__${itemIdTag}__${itemIdProjeto}`;
                                             const matProcsNode = matProcsMap[compKey];
                                             const hasProcessos = matProcsNode && matProcsNode.processos && matProcsNode.processos.length > 0;
@@ -3876,7 +3921,9 @@ function OrdemServicoContent() {
                                                 })
                                                 .map(([secKey, vals], idx) => {
                                                 const colorCls = SETOR_COLORS[secKey] || 'bg-gray-100 text-gray-700 border-gray-200';
-                                                const label = SETOR_LABELS[secKey] || secKey;
+                                                const matProc = materialProcessos.find(p => p.key === secKey);
+                                                const fallbackName = matProc && matProc.label ? matProc.label : secKey;
+                                                const label = SETOR_LABELS[secKey] || fallbackName;
                                                 const s = parseFloat(vals.setup) || 0;
                                                 const p = parseFloat(vals.padrao) || 0;
                                                 const tot = (qtde * p) + s;

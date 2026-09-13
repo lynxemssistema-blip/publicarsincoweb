@@ -1,0 +1,7 @@
+2026-08-20 08:07 -03:00: [dotenv@17.2.3] injecting env (13) from .env -- tip: ⚙️  override existing env vars with { override: true }
+2026-08-20 08:07 -03:00: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+2026-08-20 08:07 -03:00: [dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  override existing env vars with { override: true }
+2026-08-20 08:10 -03:00: [dotenv@17.2.3] injecting env (13) from .env -- tip: ⚙️  suppress all logs with { quiet: true }
+2026-08-20 08:10 -03:00: [DB] Default Pool initialized with host: lynxlocal.mysql.uhserver.com, database: lynxlocal
+2026-08-20 08:10 -03:00: [dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+2026-08-20 08:10 -03:00: Server running on port 3000 and listening on all interfaces(0.0.0.0)

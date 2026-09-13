@@ -3245,7 +3245,7 @@ const salvarDatasBulkTags = async () => {
         
         <div className="p-5 flex-1 overflow-y-auto space-y-4">
           <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 p-3 rounded text-sm">
-            <strong>Atenção:</strong> Ao finalizar esta tag todos os seus níveis abaixo serão automaticamente finalizados.
+            <strong>Atenção:</strong> Ao finalizar esta tag todos os seus níveis abaixo serão automaticamente finalizados. <strong className="text-red-600">Processo irreversível.</strong>
           </div>
         </div>
         

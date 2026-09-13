@@ -1,0 +1,63 @@
+--- SYNCHRONIZING STRUCTURE ---
+[ERROR NEW COLUMN] ordemservicoitem.UsuarioPlanejadoInicioPUNSIONADEIRA: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+[ERROR NEW COLUMN] ordemservicoitem.UsuarioPlanejadoInicioGALVANIZAR: Unknown column 'UsuarioPlanejadoInicioPUNSIONADEIRA' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.UsuarioPlanejadoInicioPULSIONADEIRA: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+[ERROR NEW COLUMN] ordemservicoitem.MEDICAOTempoPadrao: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+[ERROR NEW COLUMN] ordemservicoitem.MEDICAOTotalTempo: Unknown column 'MEDICAOTempoPadrao' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.MEDICAOSequencia: Unknown column 'MEDICAOTotalTempo' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.APROVACAOTempoSetup: Unknown column 'MEDICAOSequencia' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.APROVACAOTempoPadrao: Unknown column 'APROVACAOTempoSetup' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.APROVACAOTotalTempo: Unknown column 'APROVACAOTempoPadrao' in 'ordemservicoitem'
+[ERROR NEW COLUMN] ordemservicoitem.APROVACAOSequencia: Unknown column 'APROVACAOTotalTempo' in 'ordemservicoitem'
+[SYNCED VIEW] ViewMedicaoLiberacaoEngenharia
+[SYNCED VIEW] ViewVisaoGeralOrdemServico
+[ERROR SYNCING VIEW] ViewWeWebTags: View 'lynxlocal.ViewWeWebTags' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+[SYNCED VIEW] VireResumoRNCProjetoTag
+[SYNCED VIEW] kpiviewalimentacaoproducaoprojetista
+[SYNCED VIEW] kpiviewnumeroosliberadasporprojetista
+[SYNCED VIEW] kpiviewpesoproducaoporprojetistamesmaterial
+[SYNCED VIEW] n8n_ordemservicoitempendencia
+[SYNCED VIEW] n8n_viewordemservico
+[SYNCED VIEW] v_rom_itens_disponiveis
+[SYNCED VIEW] v_rom_itens_incluidos
+[SYNCED VIEW] view_material_gabarito
+[ERROR SYNCING VIEW] view_retorno_itens: Unknown column 'osi.DescTag' in 'field list'
+[SYNCED VIEW] viewcomercialordemServico
+[ERROR SYNCING VIEW] viewcontroleexpedicao: View 'lynxlocal.viewcontroleexpedicao' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+[SYNCED VIEW] viewdesenho
+[SYNCED VIEW] viewevolucaoprocessoproducao
+[SYNCED VIEW] viewitensprojetoemaberto
+[SYNCED VIEW] viewmapaapontamentoproducao01
+[SYNCED VIEW] viewmapaproducaoapontamento
+[SYNCED VIEW] viewmapaproducaoapontamento01
+[SYNCED VIEW] viewmaterialconcatenado
+[SYNCED VIEW] viewmaterialprocesso
+[SYNCED VIEW] viewmontapeca
+[SYNCED VIEW] viewmontapeca1
+[SYNCED VIEW] viewmontapecafab
+[ERROR SYNCING VIEW] viewmostratotalsetor: View 'lynxlocal.viewmostratotalsetor' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+[SYNCED VIEW] viewordemservicofinalizado
+[SYNCED VIEW] viewordemservicoitem
+[SYNCED VIEW] viewordemservicoitemcontrole
+[SYNCED VIEW] viewordemservicoitemfinalizado
+[SYNCED VIEW] viewordemservicoitempendencia
+[SYNCED VIEW] viewordemservicoitemstatussetor
+[SYNCED VIEW] viewplanejamentotag
+[SYNCED VIEW] viewprodutosfinalizados
+[SYNCED VIEW] viewresumorncprojeto
+[SYNCED VIEW] viewresumorncprojetotag
+[SYNCED VIEW] viewresumototalpendencia
+[SYNCED VIEW] viewromaneioitem
+[SYNCED VIEW] viewromaneioitemcontrole
+[ERROR SYNCING VIEW] viewsomatotalsetor: View 'lynxlocal.viewsomatotalsetor' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+[SYNCED VIEW] viewtagfinalizada
+[SYNCED VIEW] viewtotalelovucaoprocessoproducao
+[SYNCED VIEW] viewtotalevolucaoproducaoprojeto
+[SYNCED VIEW] viewtotalevolucaoproducaoprojetototalpendenia
+[SYNCED VIEW] viewtotalevolucaproducaotag
+[SYNCED VIEW] viewvisaovrojetostatus
+[SYNCED VIEW] vw_controle_producao
+[SYNCED VIEW] vw_controle_producao1
+[ERROR SYNCING VIEW] vw_controle_producao1_analytics: View 'lynxlocal.vw_controle_producao1_analytics' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+[SYNCED VIEW] vw_controle_producao2
+[SYNCED VIEW] vw_evolucao_producao_proj_tag_proc_dia

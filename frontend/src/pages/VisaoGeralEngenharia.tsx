@@ -153,6 +153,14 @@ export default function VisaoGeralEngenharia() {
     const [, setError] = useState<string | null>(null);
 
     const [activeSectors, setActiveSectors] = useState<Set<SectorType>>(new Set());
+
+    useEffect(() => {
+        if (visibleSectorsArray.length > 0 && activeSectors.size === 0) {
+            setActiveSectors(new Set(visibleSectorsArray));
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [visibleSectorsArray]);
+
     const [isExpanded, setIsExpanded] = useState(false);
     // Acordeão: qual projeto está expandido (exibe linha-resumo de datas)
     const [expandedProjeto, setExpandedProjeto] = useState<string | null>(null);

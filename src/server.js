@@ -5809,12 +5809,8 @@ app.get('/api/visao-geral/tags-globais', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.executeOnDefault(`
             SELECT 
-                t.IdTag, t.IdProjeto, t.Tag, t.DescTag, DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y') AS DataPrevisao,
-                t.PlanejadoInicioCorte, t.PlanejadoFinalCorte, t.RealizadoInicioCorte, t.RealizadoFinalCorte, t.CorteTotalExecutar, t.CorteTotalExecutado, t.CortePercentual,
-                t.PlanejadoInicioDobra, t.PlanejadoFinalDobra, t.RealizadoInicioDobra, t.RealizadoFinalDobra, t.DobraTotalExecutar, t.DobraTotalExecutado, t.DobraPercentual,
-                t.PlanejadoInicioSolda, t.PlanejadoFinalSolda, t.RealizadoInicioSolda, t.RealizadoFinalSolda, t.SoldaTotalExecutar, t.SoldaTotalExecutado, t.SoldaPercentual,
-                t.PlanejadoInicioPintura, t.PlanejadoFinalPintura, t.RealizadoInicioPintura, t.RealizadoFinalPintura, t.PinturaTotalExecutar, t.PinturaTotalExecutado, t.PinturaPercentual,
-                t.PlanejadoInicioMontagem, t.PlanejadoFinalMontagem, t.RealizadoInicioMontagem, t.RealizadoFinalMontagem, t.MontagemTotalExecutar, t.MontagemTotalExecutado, t.MontagemPercentual,
+                t.*,
+                DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y') AS DataPrevisao,
                 p.Projeto as Projeto,
                 p.DescProjeto as ProjetoDescricao,
                 p.Finalizado as ProjetoFinalizado
@@ -7654,7 +7650,7 @@ app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) =>
     try {
         const projetoId = req.query.projetoId;
         if (!projetoId) return res.json({ success: true, data: [] });
-        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (Finalizado IS NULL OR Finalizado <> 'C') AND (SaldoTag IS NULL OR SaldoTag = '' OR CAST(SaldoTag AS DECIMAL(10,2)) > 0) AND IdProjeto = ? ORDER BY Tag", [projetoId]);
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR TRIM(D_E_L_E_T_E) = '') AND (Finalizado IS NULL OR (TRIM(Finalizado) <> 'C' AND TRIM(Finalizado) <> 'S')) AND IdProjeto = ? ORDER BY Tag", [projetoId]);
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
@@ -10032,6 +10028,12 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             
             if (matRows.length === 0) continue;
             const mat = matRows[0];
+
+            const [existRows] = await conn.execute(
+                `SELECT IdOrdemServicoItem FROM ordemservicoitem WHERE IdOrdemServico = ? AND CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [osId, codmatfabricante]
+            );
+            if (existRows.length > 0) continue;
             
             const qtdeTotalNum = Number(qtde) || 1;
             const fatorNum = Math.max(1, parseInt(String(fator), 10) || 1);

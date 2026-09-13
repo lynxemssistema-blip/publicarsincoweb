@@ -14,14 +14,6 @@ interface GlobalTag {
     [key: string]: Record<string, unknown>;
 }
 
-const SECTORS = [
-    { k: 'Corte', l: 'Corte', c: 'bg-blue-500' },
-    { k: 'Dobra', l: 'Dobra', c: 'bg-purple-500' },
-    { k: 'Solda', l: 'Solda', c: 'bg-red-500' },
-    { k: 'Pintura', l: 'Pintura', c: 'bg-amber-500' },
-    { k: 'Montagem', l: 'Montagem', c: 'bg-emerald-500' }
-] as const;
-
 export default function VisaoGeralTagsGlobais({ onVoltar }: { onVoltar?: () => void }) {
     const [tags, setTags] = useState<GlobalTag[]>([]);
     const [loading, setLoading] = useState(true);
@@ -119,7 +111,29 @@ export default function VisaoGeralTagsGlobais({ onVoltar }: { onVoltar?: () => v
         });
     }, [tags, fProjeto, fTag, fSetor, fDataPrevIni, fDataPrevFim, fDataPlanIni, fDataPlanFim, fDataRealIni, fDataRealFim]);
 
-    const limparFiltros = () => {
+    
+
+    const availableSectors = useMemo(() => {
+        const sectorsMap = new Map();
+        const presetColors = { Corte: 'bg-blue-500', Dobra: 'bg-purple-500', Solda: 'bg-red-500', Pintura: 'bg-amber-500', Montagem: 'bg-emerald-500', Medicao: 'bg-indigo-500', Isometrico: 'bg-teal-500', Engenharia: 'bg-amber-600', Aprovacao: 'bg-emerald-600', Acabamento: 'bg-pink-500', Expedicao: 'bg-blue-600', CorteaLaser: 'bg-cyan-500', Punsionadeira: 'bg-purple-600', Galvanizar: 'bg-gray-500' };
+        const colorPalette = ['bg-blue-500', 'bg-purple-500', 'bg-red-500', 'bg-amber-500', 'bg-emerald-500', 'bg-indigo-500', 'bg-teal-500', 'bg-pink-500', 'bg-cyan-500'];
+        let cIdx = 0;
+
+        filtered.forEach(t => {
+            Object.keys(t).forEach(k => {
+                if (k.endsWith('TotalExecutar') && Number(t[k]) > 0) {
+                    const sec = k.replace('TotalExecutar', '');
+                    if (!sectorsMap.has(sec)) {
+                        sectorsMap.set(sec, { k: sec, l: sec, c: presetColors[sec] || colorPalette[cIdx++ % colorPalette.length] });
+                    }
+                }
+            });
+        });
+
+        return Array.from(sectorsMap.values()).sort((a,b) => a.l.localeCompare(b.l));
+    }, [filtered]);
+
+const limparFiltros = () => {
         setFProjeto(''); setFTag(''); setFSetor('');
         setFDataPrevIni(''); setFDataPrevFim('');
         setFDataPlanIni(''); setFDataPlanFim('');
@@ -247,7 +261,7 @@ export default function VisaoGeralTagsGlobais({ onVoltar }: { onVoltar?: () => v
                             <th className="px-2 py-1 text-[10px] font-black text-white uppercase tracking-wider border-r border-white/20 min-w-[200px]">Tag / Descrição</th>
                             <th className="px-2 py-1 text-[10px] font-black text-white uppercase tracking-wider border-r border-white/20 min-w-[200px]">Projeto (Segundo Plano)</th>
                             <th className="px-2 py-1 text-[10px] font-black text-white uppercase tracking-wider border-r border-white/20">Previsão</th>
-                            {SECTORS.map(s => {
+                            {availableSectors.map(s => {
                                 if (fSetor && fSetor !== s.k) return null;
                                 return (
                                     <th key={s.k} className="px-2 py-3 text-[10px] font-black text-white uppercase tracking-wider border-r border-white/20 text-center min-w-[120px]">
@@ -271,7 +285,7 @@ export default function VisaoGeralTagsGlobais({ onVoltar }: { onVoltar?: () => v
                                 <td className="px-2 py-1 border-r border-slate-100">
                                     <span className="text-xs font-bold text-slate-600">{t.DataPrevisao || '—'}</span>
                                 </td>
-                                {SECTORS.map(s => {
+                                {availableSectors.map(s => {
                                     if (fSetor && fSetor !== s.k) return null;
                                     const pIni = t[`PlanejadoInicio${s.k}` as keyof GlobalTag] as string;
                                     const pFim = t[`PlanejadoFinal${s.k}` as keyof GlobalTag] as string;

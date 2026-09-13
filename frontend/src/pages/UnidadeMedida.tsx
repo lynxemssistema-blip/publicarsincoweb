@@ -45,7 +45,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  } else {
  setError(json.message || 'Erro ao carregar dados');
  }
- } catch {
+ } catch (err) {
  setError('Erro de conexão com o servidor. Verifique se o backend está rodando na porta 3000.');
  console.error('Fetch error:', err);
  } finally {

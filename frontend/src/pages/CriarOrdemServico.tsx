@@ -76,7 +76,7 @@ export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdem
       const json = await res.json();
       if (json.success) {
         setTags(json.data);
-        if (json.data.length === 1) {
+        if (json.data.length > 0) {
           const singleTag = json.data[0];
           setFormData(prev => ({ ...prev, IdTag: (singleTag.value || singleTag.id).toString(), Tag: singleTag.label }));
           fetchTagDetails((singleTag.value || singleTag.id).toString(), true);
@@ -94,14 +94,7 @@ export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdem
       });
       const json = await res.json();
       if (json.success && json.data) {
-        const saldo = parseFloat(json.data.SaldoTag || '0');
-        if (saldo <= 0) {
-          setMessage({ type: 'error', text: `A Tag selecionada possui saldo zero e não pode ser usada. ${isAutoSelected ? 'Por favor, escolha outro projeto ou crie outra tag para este projeto.' : ''}` });
-          setFormData(prev => ({ ...prev, IdTag: '', Tag: '', DescTag: '', DataPrevisao: '' }));
-          return;
-        } else {
-          setMessage(null);
-        }
+        setMessage(null);
 
         setFormData(prev => ({
           ...prev,
@@ -153,7 +146,7 @@ export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdem
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     let { name, value } = e.target;
-    if (name === 'Descricao') {
+    if (name === 'Descricao' || name.toLowerCase().includes('desc')) {
       value = value.toUpperCase();
     }
     setFormData(prev => ({ ...prev, [name]: value }));

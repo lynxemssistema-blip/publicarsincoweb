@@ -163,7 +163,7 @@ const MiniBar = ({ pct, color }: { pct: number; color: string }) => (
  </div>
 );
 
-const SetorCell = ({ total, exec, pct, color }: { total: number; exec: number; pct: number; color: string }) => {
+const SetorCell = ({ total, exec, pct, color, pIni, pFin, rIni, rFin }: { total: number; exec: number; pct: number; color: string; pIni?: string; pFin?: string; rIni?: string; rFin?: string }) => {
  const active = total > 0;
  const ROW_HEIGHT = 42;
 	return (
@@ -174,15 +174,28 @@ const SetorCell = ({ total, exec, pct, color }: { total: number; exec: number; p
  <div className="flex items-center gap-1"><span className="text-[8px] font-bold text-slate-500">({pct}%)</span>
  <span className="text-[9px] font-black" style={{ color }}>{exec}</span></div>
  </div>
- <div className="flex justify-between items-center bg-slate-50 px-1 rounded-sm border border-slate-100">
+ <div className="flex justify-between items-center bg-slate-50 px-1 rounded-sm border border-slate-100 mb-0.5">
  <span className="text-[7.5px] font-bold text-slate-400 uppercase">A Exec:</span>
  <span className="text-[9px] font-bold text-slate-600">{total}</span>
  </div>
  </div>
- <div className="mt-1">
+ <div className="mt-0.5">
  <MiniBar pct={pct} color={color} />
- <span className="text-[8px] text-slate-100 font-bold block text-center mt-0.5">{pct}%</span>
  </div>
+ 
+ {/* Datas */}
+ {active && (
+ <div className="mt-1 flex flex-col gap-0.5">
+   <div className="flex justify-between items-center bg-indigo-50/50 px-1 rounded-sm border border-indigo-100/50">
+     <span className="text-[7px] font-bold text-indigo-400 uppercase">Plan:</span>
+     <span className="text-[7px] font-semibold text-indigo-700">{pIni ? pIni.slice(0,5) : '-'} / {pFin ? pFin.slice(0,5) : '-'}</span>
+   </div>
+   <div className="flex justify-between items-center bg-emerald-50/50 px-1 rounded-sm border border-emerald-100/50">
+     <span className="text-[7px] font-bold text-emerald-500 uppercase">Real:</span>
+     <span className="text-[7px] font-semibold text-emerald-700">{rIni ? rIni.slice(0,5) : '-'} / {rFin ? rFin.slice(0,5) : (rIni ? 'Andam.' : '-')}</span>
+   </div>
+ </div>
+ )}
  </div>
  );
 };
@@ -349,7 +362,7 @@ function GanttChart({ data, mode, setoresVisiveis, showResources = false }: Gant
  {row.bars.map((bar) => (
  <div key={bar.setor} className="flex items-stretch" style={{ height: ROW_HEIGHT }}>
  <div className="sticky left-0 z-10 shrink-0 flex items-center gap-2 px-2 w-full border-b border-slate-100/50" style={{ backgroundColor: `${bar.color}05` }}>
- <div className="flex-1 min-w-0 grid grid-cols-[130px_90px_90px_1fr] items-center gap-2">
+ <div className="flex-1 min-w-0 grid grid-cols-[130px_90px_90px_160px_1fr] items-center gap-2">
  <div className="flex items-center gap-1.5 min-w-0">
  <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: bar.color }} />
  <span className="text-[10px] font-bold uppercase truncate" style={{ color: bar.color }}>{bar.setor}</span>
@@ -371,10 +384,13 @@ function GanttChart({ data, mode, setoresVisiveis, showResources = false }: Gant
                                                     </div>
 
                                                     {/* Col 4: Totals */}
-                                                    <div className="flex justify-end gap-6 pr-4">
+                                                    <div className="flex justify-start gap-4 pl-4">
                                                         <span className="text-[10px] font-bold text-slate-600 tabular-nums">Exec: {bar.exec}</span>
                                                         <span className="text-[10px] font-medium text-slate-400 tabular-nums">A Exec: {bar.total}</span>
                                                     </div>
+                                                    
+                                                    {/* Col 5: Spacer to take up remaining space */}
+                                                    <div />
                                                 </div>
                                             </div>
                                         </div>
@@ -1678,6 +1694,10 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
    exec={Number((p as Record<string, unknown>)[`Exec${s.key}`]) || 0}
    pct={Number((p as Record<string, unknown>)[`Pct${s.key}`]) || 0}
    color={s.color}
+   pIni={(p as Record<string, unknown>)[`PlanejadoInicio${s.key}`] as string}
+   pFin={(p as Record<string, unknown>)[`PlanejadoFinal${s.key}`] as string}
+   rIni={(p as Record<string, unknown>)[`RealizadoInicio${s.key}`] as string}
+   rFin={(p as Record<string, unknown>)[`RealizadoFinal${s.key}`] as string}
  />
  </td>
  ))}
