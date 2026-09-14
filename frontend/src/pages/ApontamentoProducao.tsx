@@ -910,18 +910,21 @@ export default function ApontamentoProducaoPage() {
  const s = String(val).trim();
  if (s === '0' || s === '0/0/0' || s === '00/00/0000') return '—';
  
- // Se já estiver no formato DD/MM/YYYY, retorna como está (pode ter hora)
+ // Se já estiver no formato DD/MM/YYYY, retorna como está
  if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) return s;
  
- // Se for ISO ou formato MySQL (YYYY-MM-DD), converte
- if (s.includes('-')) {
- try {
- const d = new Date(s.replace(/-/g, '/')); // replace para Safari/Chrome stability
- if (!isNaN(d.getTime())) return d.toLocaleDateString('pt-BR');
- } catch { /* ignore */ }
+ // Se for ISO ou formato MySQL (YYYY-MM-DD), extrai data e tempo e formata pra pt-BR
+ const match = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}:\d{2}))?/);
+ if (match) {
+    const [, ano, mes, dia, hora] = match;
+    if (hora) return `${dia}/${mes}/${ano} ${hora}`;
+    return `${dia}/${mes}/${ano}`;
  }
  
- if (s.includes('T')) return new Date(s).toLocaleDateString('pt-BR');
+ if (s.includes('T')) {
+     const p = s.replace('T', ' ').substring(0, 16).split(/[\s-:]/);
+     if (p.length >= 5) return `${p[2]}/${p[1]}/${p[0]} ${p[3]}:${p[4]}`;
+ }
  
  return s;
  };

@@ -115,7 +115,6 @@ export default function RecursoFabricacaoPage() {
       if (json.success) {
         await fetchRecursos();
         setFormData(emptyForm);
-        setShowForm(false);
       } else {
         setError(json.message || 'Erro ao salvar');
       }

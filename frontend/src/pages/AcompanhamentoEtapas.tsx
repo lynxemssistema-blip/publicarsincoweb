@@ -123,6 +123,8 @@ export default function AcompanhamentoEtapas() {
  const [isModalOpen, setIsModalOpen] = useState(false);
  const [editForm, setEditForm] = useState<Record<string, unknown>>({});
  const [saving, setSaving] = useState(false);
+ const [setoresDinamicos, setSetoresDinamicos] = useState<{titulo: string, sulfixo: string}[]>([]);
+ const [setoresVisiveis, setSetoresVisiveis] = useState<string[]>([]);
  
  // Tag Selection for Modal
  const [projetoTags, setProjetoTags] = useState<unknown[]>([]);
@@ -190,6 +192,24 @@ export default function AcompanhamentoEtapas() {
  });
  const res = await response.json();
  setData(res.data || []);
+
+ const resSect = await fetch('/api/recursos', { headers: getAuthHeaders() });
+ const jsonSect = await resSect.json();
+ if (jsonSect.success) {
+      const list = jsonSect.data
+         .filter((r: any) => r.Fabrica === 'NÃO' || r.Fabrica === 'NÂO' || r.Fabrica === 'NAO')
+         .filter((r: any) => !r.D_E_L_E_T_E)
+         .map((r: any) => {
+            const titulo = r.processofabricacao;
+            const clean = titulo.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '');
+            const sulfixo = clean.charAt(0).toUpperCase() + clean.slice(1);
+            return { titulo, sulfixo };
+         });
+      const unique = Array.from(new Map(list.map((item: any) => [item.sulfixo, item])).values()) as {titulo: string, sulfixo: string}[];
+      setSetoresDinamicos(unique);
+      // Inicializa setoresVisiveis vazio por padrão (desativados)
+      // setSetoresVisiveis(prev => prev.length === 0 ? unique.map(u => u.sulfixo) : prev);
+ }
  } catch (err) {
  console.error('Erro ao buscar dados:', err);
  } finally {
@@ -283,33 +303,20 @@ export default function AcompanhamentoEtapas() {
  };
 
  // Pré-carrega as datas da tag selecionada nos campos do formulário
- const loadTagDates = (tag: unknown) => {
- setEditForm({
- PlanejadoInicioMedicao: toISO(tag.PlanejadoInicioMedicao),
- PlanejadoFinalMedicao: toISO(tag.PlanejadoFinalMedicao),
- RealizadoInicioMedicao: toISO(tag.RealizadoInicioMedicao),
- RealizadoFinalMedicao: toISO(tag.RealizadoFinalMedicao),
- PlanejadoInicioIsometrico: toISO(tag.PlanejadoInicioIsometrico),
- PlanejadoFinalIsometrico: toISO(tag.PlanejadoFinalIsometrico),
- RealizadoInicioIsometrico: toISO(tag.RealizadoInicioIsometrico),
- RealizadoFinalIsometrico: toISO(tag.RealizadoFinalIsometrico),
- PlanejadoInicioEngenharia: toISO(tag.PlanejadoInicioEngenharia),
- PlanejadoFinalEngenharia: toISO(tag.PlanejadoFinalEngenharia),
- RealizadoInicioEngenharia: toISO(tag.RealizadoInicioEngenharia),
- RealizadoFinalEngenharia: toISO(tag.RealizadoFinalEngenharia),
- PlanejadoInicioAprovacao: toISO(tag.PlanejadoInicioAprovacao),
- PlanejadoFinalAprovacao: toISO(tag.PlanejadoFinalAprovacao),
- RealizadoInicioAprovacao: toISO(tag.RealizadoInicioAprovacao),
- RealizadoFinalAprovacao: toISO(tag.RealizadoFinalAprovacao),
- PlanejadoInicioAcabamento: toISO(tag.PlanejadoInicioAcabamento),
- PlanejadoFinalAcabamento: toISO(tag.PlanejadoFinalAcabamento),
- RealizadoInicioAcabamento: toISO(tag.RealizadoInicioAcabamento),
- RealizadoFinalAcabamento: toISO(tag.RealizadoFinalAcabamento),
- PlanejadoInicioExpedicao: toISO(tag.PlanejadoInicioExpedicao),
- PlanejadoFinalExpedicao: toISO(tag.PlanejadoFinalExpedicao),
- RealizadoInicioExpedicao: toISO(tag.RealizadoInicioExpedicao),
- realizadoFinalExpedicao: toISO(tag.realizadoFinalExpedicao),
+ const loadTagDates = (tag: any) => {
+ const init: Record<string, string> = {};
+ setoresDinamicos.forEach(s => {
+ const suffix = s.sulfixo;
+ init[`PlanejadoInicio${suffix}`] = toISO(tag[`PlanejadoInicio${suffix}`]) || '';
+ init[`PlanejadoFinal${suffix}`] = toISO(tag[`PlanejadoFinal${suffix}`]) || '';
+ init[`RealizadoInicio${suffix}`] = toISO(tag[`RealizadoInicio${suffix}`]) || '';
+ init[`RealizadoFinal${suffix}`] = toISO(tag[`RealizadoFinal${suffix}`]) || '';
+
+ if (suffix === 'Expedicao') {
+ init[`realizadoFinalExpedicao`] = toISO(tag.realizadoFinalExpedicao) || '';
+ }
  });
+ setEditForm(init);
  };
 
  const handleSave = async () => {
@@ -413,6 +420,22 @@ export default function AcompanhamentoEtapas() {
  </div>
  </div>
  );
+ };
+
+  const generateInitialForm = (isLote: boolean) => {
+  const init: Record<string, string> = {};
+  setoresDinamicos.forEach(s => {
+  const suffix = s.sulfixo;
+  init[`PlanejadoInicio${suffix}`] = isLote ? toISO(selectedProjeto?.[`Plan${suffix}` as keyof typeof selectedProjeto] as string) || '' : '';
+  init[`PlanejadoFinal${suffix}`] = isLote ? toISO(selectedProjeto?.[`PlanFinal${suffix}` as keyof typeof selectedProjeto] as string) || '' : '';
+  init[`RealizadoInicio${suffix}`] = isLote ? toISO(selectedProjeto?.[`RealInicio${suffix}` as keyof typeof selectedProjeto] as string) || '' : '';
+  init[`RealizadoFinal${suffix}`] = isLote ? toISO(selectedProjeto?.[`Real${suffix}` as keyof typeof selectedProjeto] as string) || '' : '';
+ 
+  if (suffix === 'Expedicao') {
+  init[`realizadoFinalExpedicao`] = isLote ? toISO(selectedProjeto?.[`Real${suffix}` as keyof typeof selectedProjeto] as string) || '' : '';
+  }
+  });
+  return init;
  };
 
  return (
@@ -552,8 +575,27 @@ export default function AcompanhamentoEtapas() {
 
  {/* Main Grid Toolbar */}
  <div className="px-6 py-2 border-b border-gray-300 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
- <div className="font-bold text-gray-800 text-xs flex items-center gap-2">
- Acompanhamento Etapas
+ <div className="font-bold text-gray-800 text-xs flex flex-col gap-2">
+ <div>Acompanhamento Etapas</div>
+ <div className="flex flex-wrap gap-4 items-center">
+ {setoresDinamicos.map(s => (
+ <label key={s.sulfixo} className="flex items-center gap-1 cursor-pointer font-normal text-xs">
+ <input 
+ type="checkbox" 
+ checked={setoresVisiveis.includes(s.sulfixo)}
+ onChange={(e) => {
+ if (e.target.checked) {
+ setSetoresVisiveis(prev => [...prev, s.sulfixo]);
+ } else {
+ setSetoresVisiveis(prev => prev.filter(v => v !== s.sulfixo));
+ }
+ }}
+ className="rounded border-gray-300 text-[#03624C] focus:ring-[#03624C] w-3 h-3"
+ />
+ <span>{s.titulo}</span>
+ </label>
+ ))}
+ </div>
  </div>
  <div className="flex items-center gap-2">
  <button onClick={() => setIsExpanded(!isExpanded)} className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition-colors" title={isExpanded ? "Restaurar tamanho" : "Expandir grid"}>
@@ -584,18 +626,15 @@ export default function AcompanhamentoEtapas() {
  </th>
  <th rowSpan={2} className="p-2 border-r-4 border-[#1b6351] text-center">Data Fim</th>
  
- {isVisible('medicao') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('medicao', 'Medição')}</th>}
- {isVisible('isometrico') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('isometrico', 'Isométrico')}</th>}
- {isVisible('engenharia') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('engenharia', 'Engenharia')}</th>}
- {isVisible('aprovacao') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('aprovacao', 'Aprovação')}</th>}
- {isVisible('acabamento') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('acabamento', 'Acabamento')}</th>}
- {isVisible('expedicao') && <th colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{customName('expedicao', 'Expedição')}</th>}
+ {setoresDinamicos.filter(s => setoresVisiveis.includes(s.sulfixo)).map(s => (
+ <th key={s.sulfixo} colSpan={2} className="p-2 text-center border-r-2 border-[#1b6351]">{s.titulo}</th>
+ ))}
  <th rowSpan={2} className="p-2 border-l border-[#1b6351] text-center sticky right-0 bg-[#0B3A2D] z-50">Ações</th>
  </tr>
  {/* SUB-CABEÇALHO (Falta/Ok) */}
  <tr className="text-[10px] uppercase text-white border-b border-[#1b6351]">
- {visibleEngSectors.map((s, i) => (
- <React.Fragment key={i}>
+ {setoresDinamicos.filter(s => setoresVisiveis.includes(s.sulfixo)).map(s => (
+ <React.Fragment key={s.sulfixo}>
  <th className="p-1.5 text-center border-r border-[#1b6351] bg-[#0f4a3b] font-bold min-w-[70px]">Falta</th>
  <th className="p-1.5 text-center border-r-2 border-[#1b6351] bg-[#145d4b] font-bold min-w-[70px]">Ok</th>
  </React.Fragment>
@@ -613,13 +652,13 @@ export default function AcompanhamentoEtapas() {
  const isFinalizado = row.Finalizado?.toUpperCase() === 'C';
  const isLiberado = row.liberado?.toUpperCase() === 'S';
  const isBloqueado = row.liberado?.toUpperCase() === 'B';
- // Desabilitar botão calendario se não há nenhuma data
- const hasDates = !!(row.PlanMedicao || row.RealMedicao ||
- row.PlanIsometrico || row.RealIsometrico ||
- row.PlanEngenharia || row.RealEngenharia ||
- row.PlanAprovacao || row.RealAprovacao ||
- row.PlanAcabamento || row.RealAcabamento ||
- row.PlanExpedicao || row.RealExpedicao);
+  // Desabilitar botão calendario se não há nenhuma data
+  const hasDates = setoresDinamicos.some(s => 
+      row[`Plan${s.sulfixo}` as keyof EtapasRow] || 
+      row[`PlanFinal${s.sulfixo}` as keyof EtapasRow] ||
+      row[`RealInicio${s.sulfixo}` as keyof EtapasRow] ||
+      row[`Real${s.sulfixo}` as keyof EtapasRow]
+  );
  return (
  <React.Fragment key={row.IdProjeto}>
  <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors group">
@@ -668,29 +707,16 @@ export default function AcompanhamentoEtapas() {
  </td>
  <td className="p-2 border-r-4 border-gray-400 text-center whitespace-nowrap">{row.DataFinal}</td>
  
- {/* MEDIÇÃO */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaMedicao}</td>
- <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{row.OkMedicao}</td>
- 
- {/* ISOMETRICO */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaIsometrico}</td>
- <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{row.OkIsometrico}</td>
- 
- {/* ENGENHARIA */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaEngenharia}</td>
- <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{row.OkEngenharia}</td>
- 
- {/* APROVACAO */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaAprovacao}</td>
- <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{row.OkAprovacao}</td>
- 
- {/* ACABAMENTO */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaAcabamento}</td>
- <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{row.OkAcabamento}</td>
- 
- {/* EXPEDICAO */}
- <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{row.FaltaExpedicao}</td>
- <td className="p-2 text-center font-semibold text-green-600 bg-green-50/30 border-r-2 border-gray-400">{row.OkExpedicao}</td>
+ {setoresDinamicos.filter(s => setoresVisiveis.includes(s.sulfixo)).map(s => {
+ const falta = row[`Falta${s.sulfixo}` as keyof EtapasRow] as number || 0;
+ const ok = row[`Ok${s.sulfixo}` as keyof EtapasRow] as number || 0;
+ return (
+ <React.Fragment key={s.sulfixo}>
+ <td className="p-2 border-r border-gray-200 text-center font-semibold text-red-600 bg-red-50/30">{falta}</td>
+ <td className="p-2 border-r-2 border-gray-400 text-center font-semibold text-green-600 bg-green-50/30">{ok}</td>
+ </React.Fragment>
+ );
+ })}
 
  {/* AÇÕES */}
  <td className="p-2 border-l border-gray-200 text-center sticky right-0 z-10 bg-white group-hover:bg-gray-50 flex items-center justify-center gap-1 h-full min-h-[40px]">
@@ -726,89 +752,44 @@ export default function AcompanhamentoEtapas() {
  <tr className="border-b-2 border-indigo-300 bg-slate-50">
  <td colSpan={7} className="p-0 border-r-4 border-gray-400 sticky left-0 z-10 bg-slate-100"></td>
 
- {/* MEDIÇÃO */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanMedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanMedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
+ {setoresDinamicos.filter(s => setoresVisiveis.includes(s.sulfixo)).map(s => {
+ const pi = row[`Plan${s.sulfixo}` as keyof EtapasRow] as string;
+ const pf = row[`PlanFinal${s.sulfixo}` as keyof EtapasRow] as string;
+ const ri = row[`RealInicio${s.sulfixo}` as keyof EtapasRow] as string;
+ const rf = row[`Real${s.sulfixo}` as keyof EtapasRow] as string;
+ return (
+ <React.Fragment key={s.sulfixo}>
+ {/* PLANEJADO */}
+ <td className="p-1 border-r border-indigo-200 bg-blue-50 align-top">
+ <div className="flex flex-col gap-1 items-center justify-center min-h-[28px]">
+ {pi && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-600 text-white text-[9px] font-bold whitespace-nowrap"><span className="text-blue-200">PI:</span> {fmtBR(pi)}</span>}
+ {pf && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-blue-700 text-white text-[9px] font-bold whitespace-nowrap"><span className="text-blue-200">PF:</span> {fmtBR(pf)}</span>}
+ {!pi && !pf && <span className="text-slate-400 text-[10px]">-</span>}
+ </div>
  </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {(() => {
- const status = checkRealVsPrevisao(row.RealMedicao, row.DataPrevisao);
- return fmtBR(row.RealMedicao)
- ? <span title={status === 'late' ? `Atrasado! Real (${fmtBR(row.RealMedicao)}) > Prev. Projeto (${row.DataPrevisao})` : `No prazo`} className={`inline-block px-2 py-0.5 rounded text-white text-[10px] font-bold whitespace-nowrap ${
+ {/* REALIZADO */}
+ <td className="p-1 border-r-2 border-gray-400 bg-emerald-50 align-top">
+ <div className="flex flex-col gap-1 items-center justify-center min-h-[28px]">
+ {ri && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-emerald-600 text-white text-[9px] font-bold whitespace-nowrap"><span className="text-emerald-200">RI:</span> {fmtBR(ri)}</span>}
+ {rf && (() => {
+ const status = checkRealVsPrevisao(rf, row.DataPrevisao);
+ return (
+ <span title={status === 'late' ? `Atrasado! RF (${fmtBR(rf)}) > Prev. Projeto (${row.DataPrevisao})` : `No prazo`} 
+ className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-white text-[9px] font-bold whitespace-nowrap ${
  status === 'late' ? 'bg-red-600 ring-1 ring-red-300' :
  status === 'ok' ? 'bg-green-600 ring-1 ring-green-300' :
- 'bg-emerald-600'
- }`}>{fmtBR(row.RealMedicao)}</span>
- : <span className="text-slate-400 text-[10px]">-</span>;
+ 'bg-emerald-700'
+ }`}>
+ <span className={status === 'late' ? "text-red-200" : "text-emerald-200"}>RF:</span> {fmtBR(rf)}
+ </span>
+ );
  })()}
+ {!ri && !rf && <span className="text-slate-400 text-[10px]">-</span>}
+ </div>
  </td>
-
- {/* ISOMÉTRICO */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanIsometrico) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanIsometrico)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {(() => {
- const status = checkRealVsPrevisao(row.RealIsometrico, row.DataPrevisao);
- return fmtBR(row.RealIsometrico)
- ? <span title={status === 'late' ? `Atrasado! Real (${fmtBR(row.RealIsometrico)}) > Prev. Projeto (${row.DataPrevisao})` : `No prazo`} className={`inline-block px-2 py-0.5 rounded text-white text-[10px] font-bold whitespace-nowrap ${
- status === 'late' ? 'bg-red-600 ring-1 ring-red-300' :
- status === 'ok' ? 'bg-green-600 ring-1 ring-green-300' :
- 'bg-emerald-600'
- }`}>{fmtBR(row.RealIsometrico)}</span>
- : <span className="text-slate-400 text-[10px]">-</span>;
- })()}
- </td>
-
- {/* ENGENHARIA */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanEngenharia) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanEngenharia)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {(() => {
- const status = checkRealVsPrevisao(row.RealEngenharia, row.DataPrevisao);
- return fmtBR(row.RealEngenharia)
- ? <span title={status === 'late' ? `Atrasado! Real (${fmtBR(row.RealEngenharia)}) > Prev. Projeto (${row.DataPrevisao})` : `No prazo`} className={`inline-block px-2 py-0.5 rounded text-white text-[10px] font-bold whitespace-nowrap ${
- status === 'late' ? 'bg-red-600 ring-1 ring-red-300' :
- status === 'ok' ? 'bg-green-600 ring-1 ring-green-300' :
- 'bg-emerald-600'
- }`}>{fmtBR(row.RealEngenharia)}</span>
- : <span className="text-slate-400 text-[10px]">-</span>;
- })()}
- </td>
-
- {/* APROVAÇÃO */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanAprovacao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanAprovacao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {(() => {
- const status = checkRealVsPrevisao(row.RealAprovacao, row.DataPrevisao);
- return fmtBR(row.RealAprovacao)
- ? <span title={status === 'late' ? `Atrasado! Real (${fmtBR(row.RealAprovacao)}) > Prev. Projeto (${row.DataPrevisao})` : `No prazo`} className={`inline-block px-2 py-0.5 rounded text-white text-[10px] font-bold whitespace-nowrap ${
- status === 'late' ? 'bg-red-600 ring-1 ring-red-300' :
- status === 'ok' ? 'bg-green-600 ring-1 ring-green-300' :
- 'bg-emerald-600'
- }`}>{fmtBR(row.RealAprovacao)}</span>
- : <span className="text-slate-400 text-[10px]">-</span>;
- })()}
- </td>
-
- {/* ACABAMENTO */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanAcabamento) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanAcabamento)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {fmtBR(row.RealAcabamento) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealAcabamento)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
-
- {/* EXPEDIÇÃO */}
- <td className="p-1.5 border-r border-indigo-200 text-center bg-blue-50">
- {fmtBR(row.PlanExpedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-blue-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.PlanExpedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
- <td className="p-1.5 border-r-2 border-gray-400 text-center bg-emerald-50">
- {fmtBR(row.RealExpedicao) ? <span className="inline-block px-2 py-0.5 rounded bg-emerald-600 text-white text-[10px] font-bold whitespace-nowrap">{fmtBR(row.RealExpedicao)}</span> : <span className="text-slate-400 text-[10px]">-</span>}
- </td>
+ </React.Fragment>
+ );
+ })}
 
  <td className="p-2 border-l border-gray-200 sticky right-0 z-10 bg-slate-100"></td>
  </tr>
@@ -823,79 +804,68 @@ export default function AcompanhamentoEtapas() {
  )}
  </div>
 
+
+
  {/* MODAL DE EDIÇÃO EM LOTE */}
  {isModalOpen && selectedProjeto && (
- <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
- <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
- {/* Modal Header */}
- <div className="flex justify-between items-center p-4 border-b border-gray-200 bg-gray-50">
- <div>
- <h3 className="text-lg font-bold text-[#32423D] flex items-center gap-2">
- <Edit3 className="text-[#03624C]" size={20} />
- Alterar Datas em Lote (Etapas)
- </h3>
- <p className="text-xs text-gray-500 mt-1">
- Projeto: <strong className="text-gray-800">{selectedProjeto.Projeto || selectedProjeto.IdProjeto}</strong> - {selectedProjeto.Cliente}
- </p>
- </div>
- <button onClick={() => setIsModalOpen(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
-            <X size={14} /> Fechar
-        </button>
- </div>
+ <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+ <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200">
+        
+        {/* Modal Header */}
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-white relative">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-[#03624C] to-[#128C7E]"></div>
+            <div>
+            <h3 className="text-lg font-bold text-[#32423D] flex items-center gap-2">
+                <Edit3 className="text-[#03624C]" size={20} />
+                Alterar Datas em Lote (Etapas)
+            </h3>
+            <p className="text-xs text-gray-500 mt-1">
+                Projeto: <strong className="text-gray-800">{selectedProjeto.Projeto || selectedProjeto.IdProjeto}</strong> - {selectedProjeto.Cliente}
+            </p>
+            </div>
+            <button onClick={() => setIsModalOpen(false)} className="bg-white border border-slate-300 hover:bg-red-50 hover:text-red-600 hover:border-red-200 px-3 py-1.5 rounded-lg text-slate-600 transition-colors shadow-sm flex items-center gap-1.5 font-bold text-xs shrink-0">
+                <X size={14} /> Fechar
+            </button>
+        </div>
 
- {/* Modal Body */}
- <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
+        {/* Modal Body */}
+        <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-4">
 
- {/* Toggle Modo */}
- <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg w-fit">
- <button
- type="button"
- onClick={() => {
- setModoIndividual(false);
- setSelectedSingleTagId(null);
- // Restaura todos selecionados
- setSelectedTagIds(new Set(projetoTags.map(t => t.IdTag)));
- setEditForm({
- PlanejadoInicioMedicao: toISO(selectedProjeto?.PlanMedicao), PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: toISO(selectedProjeto?.RealMedicao),
- PlanejadoInicioIsometrico: toISO(selectedProjeto?.PlanIsometrico), PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: toISO(selectedProjeto?.RealIsometrico),
- PlanejadoInicioEngenharia: toISO(selectedProjeto?.PlanEngenharia), PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: toISO(selectedProjeto?.RealEngenharia),
- PlanejadoInicioAprovacao: toISO(selectedProjeto?.PlanAprovacao), PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: toISO(selectedProjeto?.RealAprovacao),
- PlanejadoInicioAcabamento: toISO(selectedProjeto?.PlanAcabamento), PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: toISO(selectedProjeto?.RealAcabamento),
- PlanejadoInicioExpedicao: toISO(selectedProjeto?.PlanExpedicao), PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: toISO(selectedProjeto?.RealExpedicao)
- });
- }}
- className={`px-2 py-0.5 rounded text-xs font-semibold transition-all ${
- !modoIndividual
- ? 'bg-white shadow text-[#03624C] border border-[#03624C]/20'
- : 'text-gray-500 hover:text-gray-700'
- }`}
- >
- 📋 Em Lote
- </button>
- <button
- type="button"
- onClick={() => {
- setModoIndividual(true);
- setSelectedSingleTagId(null);
- setSelectedTagIds(new Set());
- setEditForm({
- PlanejadoInicioMedicao: '', PlanejadoFinalMedicao: '', RealizadoInicioMedicao: '', RealizadoFinalMedicao: '',
- PlanejadoInicioIsometrico: '', PlanejadoFinalIsometrico: '', RealizadoInicioIsometrico: '', RealizadoFinalIsometrico: '',
- PlanejadoInicioEngenharia: '', PlanejadoFinalEngenharia: '', RealizadoInicioEngenharia: '', RealizadoFinalEngenharia: '',
- PlanejadoInicioAprovacao: '', PlanejadoFinalAprovacao: '', RealizadoInicioAprovacao: '', RealizadoFinalAprovacao: '',
- PlanejadoInicioAcabamento: '', PlanejadoFinalAcabamento: '', RealizadoInicioAcabamento: '', RealizadoFinalAcabamento: '',
- PlanejadoInicioExpedicao: '', PlanejadoFinalExpedicao: '', RealizadoInicioExpedicao: '', realizadoFinalExpedicao: ''
- });
- }}
- className={`px-2 py-0.5 rounded text-xs font-semibold transition-all ${
- modoIndividual
- ? 'bg-white shadow text-blue-700 border border-blue-300'
- : 'text-gray-500 hover:text-gray-700'
- }`}
- >
- 🎯 Tag Individual
- </button>
- </div>
+          {/* Toggle Modo */}
+          <div className="flex items-center gap-2 p-2 bg-gray-100 rounded-lg w-fit">
+            <button
+              type="button"
+              onClick={() => {
+                setModoIndividual(false);
+                setSelectedSingleTagId(null);
+                setSelectedTagIds(new Set(projetoTags.map((t: any) => t.IdTag)));
+                setEditForm(generateInitialForm(true));
+              }}
+              className={`px-2 py-0.5 rounded text-xs font-semibold transition-all ${
+                !modoIndividual
+                  ? 'bg-white shadow text-[#03624C] border border-[#03624C]/20'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              📋 Em Lote
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setModoIndividual(true);
+                setSelectedSingleTagId(null);
+                setSelectedTagIds(new Set());
+                setEditForm(generateInitialForm(false));
+              }}
+              className={`px-2 py-0.5 rounded text-xs font-semibold transition-all ${
+                modoIndividual
+                  ? 'bg-white shadow text-blue-700 border border-blue-300'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              🎯 Tag Individual
+            </button>
+          </div>
 
  {/* Aviso contextual */}
  <div className={`border-l-4 p-3 rounded flex items-start gap-2 ${
@@ -907,13 +877,13 @@ export default function AcompanhamentoEtapas() {
  <p className={`text-xs ${modoIndividual ? 'text-blue-800' : 'text-amber-800'}`}>
  {modoIndividual ? (
  <>
- Modo <strong>Tag Individual</strong>: selecione <strong>exatamente uma tag</strong> na lista. As datas atuais dessa tag serão carregadas automaticamente para edição.
+ Modo <strong>Tag Individual</strong>: selecione <strong>exatamente uma tag</strong> na lista. As datas atuais dessa tag serão carregadas automaticamente para edição. A montagem das datas afetará tambem os niveis abaixo da tag.
  {!selectedSingleTagId && (
  <span className="ml-1 font-bold text-blue-700"> ← Nenhuma tag selecionada ainda.</span>
  )}
  </>
  ) : (
- <>As datas informadas serão aplicadas <strong>às Tags selecionadas</strong> deste projeto, sobrescrevendo valores antigos. Deixe em branco o que não quiser alterar.</>
+ <>As datas informadas serão aplicadas <strong>às Tags selecionadas</strong> deste projeto, sobrescrevendo valores antigos. Deixe em branco o que não quiser alterar. A montagem das datas afetará tambem os niveis abaixo da tag.</>
  )}
  </p>
  </div>
@@ -1032,12 +1002,13 @@ export default function AcompanhamentoEtapas() {
  : 'Restrito (exige Planejamento preenchido)'}
  </span>
  </div>
- {renderFormRow('Medição', 'Medicao')}
- {renderFormRow('Isométrico', 'Isometrico')}
- {renderFormRow('Engenharia', 'Engenharia')}
- {renderFormRow('Aprovação', 'Aprovacao')}
- {renderFormRow('Acabamento', 'Acabamento')}
- {renderFormRow('Expedição', 'Expedicao')}
+ {setoresDinamicos.length > 0 ? (
+     setoresDinamicos.map(s => <React.Fragment key={s.sulfixo}>{renderFormRow(s.titulo, s.sulfixo)}</React.Fragment>)
+ ) : (
+     <div className="p-4 text-center text-gray-500 text-sm">
+         Carregando setores ou nenhum setor encontrado (Fabrica = NÃO).
+     </div>
+ )}
  </div>
 
  </div>

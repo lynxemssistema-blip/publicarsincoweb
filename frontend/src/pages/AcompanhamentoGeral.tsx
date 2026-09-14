@@ -1358,18 +1358,39 @@ function DetalheProjetoView({ projeto, onVoltar, setoresVisiveis }: { projeto: P
 // ─── MAIN LIST VIEW ──────────────────────────────────────────────────────────
 
 export default function AcompanhamentoGeralPage() {
+
+  const [setoresDinamicos, setSetoresDinamicos] = useState<string[]>([]);
+  const [setoresVisiveis, setSetoresVisiveis] = usePersistentState<string[]>('AcompanhamentoGeral_setoresVisiveis', []);
+
+  const SECTOR_COLORS = [
+      { color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe', solid: '#2563eb' },
+      { color: '#ec4899', bg: '#fdf2f8', border: '#fbcfe8', solid: '#db2777' },
+      { color: '#14b8a6', bg: '#f0fdfa', border: '#ccfbf1', solid: '#0d9488' },
+      { color: '#8b5cf6', bg: '#f5f3ff', border: '#ddd6fe', solid: '#7c3aed' },
+      { color: '#ef4444', bg: '#fef2f2', border: '#fecaca', solid: '#dc2626' },
+      { color: '#64748b', bg: '#f8fafc', border: '#e2e8f0', solid: '#475569' },
+      { color: '#f59e0b', bg: '#fffbeb', border: '#fde68a', solid: '#d97706' },
+      { color: '#10b981', bg: '#ecfdf5', border: '#a7f3d0', solid: '#059669' }
+  ];
+
+  const getDynamicSectors = () => {
+      return setoresDinamicos.map((s, idx) => {
+          const cDef = SECTOR_COLORS[idx % SECTOR_COLORS.length];
+          return { key: s, label: s, ...cDef };
+      });
+  };
+
  const { processosVisiveis } = useAppConfig();
  const [projetos, setProjetos] = useState<ProjetoAcomp[]>([]);
 
+ 
  const setoresAtivos = useMemo(() => {
     if (!projetos || projetos.length === 0) {
-      return SETORES.filter(s => processosVisiveis.includes(s.label.toLowerCase()) || processosVisiveis.includes(s.key.toLowerCase()));
+      return getDynamicSectors().filter(s => setoresVisiveis.includes(s.key));
     }
-    return SETORES.filter(s => projetos.some(p => {
-        const pObj = p as any;
-        return Number(pObj[`Total${s.key}`]) > 0 || String(pObj[`flag${s.key}`]) === '1' || String(pObj[`txt${s.key}`]) === '1';
-    }));
- }, [projetos, processosVisiveis]);
+    return getDynamicSectors().filter(s => setoresVisiveis.includes(s.key));
+ }, [projetos, setoresVisiveis, setoresDinamicos]);
+
 
  const [loading, setLoading] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -1432,7 +1453,10 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
  const res = await fetch(`${API_BASE}/acompanhamento/projetos?${params}`);
  if (!res.ok) throw new Error('Erro ao buscar projetos');
  const result = await res.json();
- if (result.success) setProjetos(result.data);
+ if (result.success) {
+ setProjetos(result.data);
+ if (result.setoresDinamicos) { setSetoresDinamicos(result.setoresDinamicos); if (setoresVisiveis.length === 0) setSetoresVisiveis(result.setoresDinamicos); }
+ }
  else throw new Error(result.message);
  } catch {
  setError(e.message || 'Erro na requisição');
@@ -1469,6 +1493,26 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
 
  {/* ── Header (Sticky) ── */}
  <div className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+ 
+{/* SETORES DINAMICOS CHECKBOXES */}
+<div className="flex flex-wrap items-center gap-2 px-5 pt-2 pb-1 border-b border-slate-100">
+    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Colunas Produção:</span>
+    {setoresDinamicos.map(s => (
+        <label key={s} className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 transition-colors">
+            <input 
+                type="checkbox" 
+                checked={setoresVisiveis.includes(s)}
+                onChange={(e) => {
+                    if (e.target.checked) setSetoresVisiveis([...setoresVisiveis, s]);
+                    else setSetoresVisiveis(setoresVisiveis.filter(x => x !== s));
+                }}
+                className="w-3 h-3 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+            />
+            <span className="text-[10px] font-bold text-slate-700">{s}</span>
+        </label>
+    ))}
+</div>
+
  <div className="px-5 py-2 flex items-center gap-2 flex-wrap">
 
  {/* Busca Projeto/Cliente */}
@@ -1611,19 +1655,19 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
 
  {projetos.length > 0 && (
  mainViewMode === 'lista' ? (
- <table className="w-full text-[11px] border-collapse table-fixed">
+ <table className="w-full text-[11px] border-collapse" style={{ minWidth: `${300 + 100 + 60 + 80 + (setoresAtivos.length * 150)}px` }}>
  <thead className="bg-[#567469] text-white sticky top-0 z-20 shadow-sm">
  <tr className="bg-[#0B3A2D] text-white border-b border-[#0B3A2D]">
- <th className="px-2 py-2 text-left font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '30%' }}>Projeto / Cliente</th>
- <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '10%' }}>Data Previsão</th>
- <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '6%' }}>Tags</th>
+ <th className="px-2 py-2 text-left font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '300px' }}>Projeto / Cliente</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '100px' }}>Data Previsão</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]" style={{ width: '60px' }}>Tags</th>
  {setoresAtivos.map(s => (
  <th key={s.key} className="px-1 py-2 text-center font-black tracking-wider uppercase border-r border-[#155A47]"
-   style={{ width: `${Math.floor(46 / Math.max(setoresAtivos.length, 1))}%` }}>
+   style={{ width: '150px' }}>
    <span className="text-[9px]">{s.label}</span>
  </th>
  ))}
- <th className="px-2 py-2 text-center font-black tracking-wider uppercase" style={{ width: '8%' }}>Ações</th>
+ <th className="px-2 py-2 text-center font-black tracking-wider uppercase" style={{ width: '80px' }}>Ações</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-slate-100 bg-white">

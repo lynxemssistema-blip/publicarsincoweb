@@ -92,7 +92,12 @@ export default function ApontamentosParciaisPage() {
 
  const formatDate = (dateString: string) => {
  if (!dateString) return '-';
- return dateString.replace('T', ' ').substring(0, 16);
+ const s = dateString.replace('T', ' ').substring(0, 16);
+ const parts = s.split(/[\s-:]/);
+ if (parts.length >= 5) {
+    return `${parts[2]}/${parts[1]}/${parts[0]} ${parts[3]}:${parts[4]}`;
+ }
+ return s;
  };
 
  const handleAbrirDesenho = async (it: ParcialItem, tipo: '3D' | 'PDF' | 'DXF' | 'PDF_ITEM') => {
