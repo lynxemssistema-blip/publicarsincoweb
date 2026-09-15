@@ -45,6 +45,10 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
  const [searchCnpj, setSearchCnpj] = useState('');
  const [showFilters, setShowFilters] = useState(true);
  const [showForm, setShowForm] = useState(isModal);
+ useEffect(() => {
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('action') === 'new' && !isModal) setShowForm(true);
+ }, [isModal]);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -269,6 +273,8 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
     } else {
       setShowForm(false);
     }
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'new') window.close();
     setLogoFile(null);
     setLogoPreview(null);
     if (logoInputRef.current) {
@@ -276,18 +282,19 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
     }
   };
 
+  const isActionNew = new URLSearchParams(window.location.search).get('action') === 'new';
   const modalContent = (
     <>
- {/* Form Modal */}
- <AnimatePresence>
- {showForm && (
- <motion.div
- initial={{ opacity: 0 }}
- animate={{ opacity: 1 }}
- exit={{ opacity: 0 }}
- className="fixed inset-0 bg-black/40 z-[100] flex items-start justify-center p-4 overflow-y-auto"
- onClick={(e) => e.target === e.currentTarget && resetForm()}
- >
+      {/* Form Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 z-[100] flex items-start justify-center p-4 overflow-y-auto ${isActionNew ? 'bg-[#f4f7f6]' : 'bg-black/40'}`}
+            onClick={(e) => e.target === e.currentTarget && resetForm()}
+          >
  <motion.div
  initial={{ opacity: 0, y: -20, scale: 0.95 }}
  animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -582,7 +589,7 @@ export default function PessoaJuridicaPage({ isModal = false, onCloseModal }: Pr
     </>
   );
 
-  if (isModal) {
+  if (isModal || isActionNew) {
     if (!showForm) return null;
     return modalContent;
   }

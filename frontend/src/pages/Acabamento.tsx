@@ -28,6 +28,10 @@ export default function AcabamentoPage({ isModal = false, onCloseModal }: Props 
  const [isEditing, setIsEditing] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
  const [showForm, setShowForm] = useState(isModal);
+ useEffect(() => {
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('action') === 'new' && !isModal) setShowForm(true);
+ }, [isModal]);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -135,12 +139,15 @@ export default function AcabamentoPage({ isModal = false, onCloseModal }: Props 
  };
 
  const resetForm = () => {
- setFormData(emptyForm);
- setIsEditing(false);
- setShowForm(false);
- if (isModal && onCloseModal) onCloseModal();
+   setFormData(emptyForm);
+   setIsEditing(false);
+   setShowForm(false);
+   if (isModal && onCloseModal) onCloseModal();
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('action') === 'new') window.close();
  };
 
+  const isActionNew = new URLSearchParams(window.location.search).get('action') === 'new';
   const modalContent = (
     <AnimatePresence>
       {showForm && (
@@ -148,7 +155,7 @@ export default function AcabamentoPage({ isModal = false, onCloseModal }: Props 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/40 z-[100] flex items-start justify-center p-4 overflow-y-auto"
+          className={`fixed inset-0 z-[100] flex items-start justify-center p-4 overflow-y-auto ${isActionNew ? 'bg-[#f4f7f6]' : 'bg-black/40'}`}
           onClick={(e) => e.target === e.currentTarget && resetForm()}
         >
           <motion.div
@@ -218,7 +225,7 @@ export default function AcabamentoPage({ isModal = false, onCloseModal }: Props 
     </AnimatePresence>
   );
 
-  if (isModal) {
+  if (isModal || isActionNew) {
     if (!showForm) return null;
     return modalContent;
   }

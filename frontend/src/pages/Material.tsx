@@ -706,14 +706,24 @@ export default function MaterialPage() {
       <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Classificação</h3>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-0.5">Família</label>
+          <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
+            Família
+            <button type="button" onClick={() => window.open('/familia?action=new', '_blank')} className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors" title="Adicionar Família">
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </label>
           <select name="FamiliaMat" value={formData.FamiliaMat || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
             <option value="">Selecione...</option>
             {familiaOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-gray-500 mb-0.5">Fornecedor</label>
+          <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
+            Fornecedor
+            <button type="button" onClick={() => window.open('/cadastro-pj?action=new', '_blank')} className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors" title="Adicionar Fornecedor">
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </label>
           <select name="Fornecedor" value={formData.Fornecedor || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
             <option value="">Selecione...</option>
             {fornecedorOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
@@ -735,7 +745,12 @@ export default function MaterialPage() {
           <input type="text" maxLength={5} name="Peso" value={formData.Peso || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
         </div>
         <div className="col-span-1">
-          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Unidade</label>
+          <label className="flex items-center justify-between text-[10px] font-medium text-gray-500 mb-0.5">
+            Unidade
+            <button type="button" onClick={() => window.open('/unidades-medida?action=new', '_blank')} className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors" title="Adicionar Unidade">
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </label>
           <select name="Unidade" value={formData.Unidade || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
             <option value="">-</option>
             {unidadeOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.id}</option>)}
@@ -756,7 +771,12 @@ export default function MaterialPage() {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div className="col-span-2">
-          <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Acabamento</label>
+          <label className="flex items-center justify-between text-[10px] font-medium text-gray-500 mb-0.5">
+            Acabamento
+            <button type="button" onClick={() => window.open('/acabamento?action=new', '_blank')} className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors" title="Adicionar Acabamento">
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </label>
           <select name="acabamento" value={formData.acabamento || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
             <option value="">Selecione...</option>
             {acabamentoOptions.map(opt => <option key={opt.id} value={opt.id}>{opt.label}</option>)}

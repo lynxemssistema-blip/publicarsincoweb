@@ -1497,6 +1497,18 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
 {/* SETORES DINAMICOS CHECKBOXES */}
 <div className="flex flex-wrap items-center gap-2 px-5 pt-2 pb-1 border-b border-slate-100">
     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Colunas Produção:</span>
+    <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 transition-colors">
+        <input 
+            type="checkbox" 
+            checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
+            onChange={(e) => {
+                if (e.target.checked) setSetoresVisiveis([...setoresDinamicos]);
+                else setSetoresVisiveis([]);
+            }}
+            className="w-3 h-3 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+        />
+        <span className="text-[10px] font-bold text-emerald-700">TODOS</span>
+    </label>
     {setoresDinamicos.map(s => (
         <label key={s} className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 transition-colors">
             <input 

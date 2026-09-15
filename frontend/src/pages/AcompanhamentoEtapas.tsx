@@ -578,6 +578,21 @@ export default function AcompanhamentoEtapas() {
  <div className="font-bold text-gray-800 text-xs flex flex-col gap-2">
  <div>Acompanhamento Etapas</div>
  <div className="flex flex-wrap gap-4 items-center">
+ <label className="flex items-center gap-1 cursor-pointer font-normal text-xs font-semibold text-[#03624C]">
+ <input 
+ type="checkbox" 
+ checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
+ onChange={(e) => {
+ if (e.target.checked) {
+ setSetoresVisiveis(setoresDinamicos.map(s => s.sulfixo));
+ } else {
+ setSetoresVisiveis([]);
+ }
+ }}
+ className="rounded border-gray-300 text-[#03624C] focus:ring-[#03624C] w-3 h-3"
+ />
+ <span>TODOS</span>
+ </label>
  {setoresDinamicos.map(s => (
  <label key={s.sulfixo} className="flex items-center gap-1 cursor-pointer font-normal text-xs">
  <input 

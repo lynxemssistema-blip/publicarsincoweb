@@ -29,6 +29,10 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  const [isEditing, setIsEditing] = useState(false);
  const [searchTerm, setSearchTerm] = useState('');
  const [showForm, setShowForm] = useState(isModal);
+ useEffect(() => {
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('action') === 'new' && !isModal) setShowForm(true);
+ }, [isModal]);
  const [loading, setLoading] = useState(true);
  const [saving, setSaving] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -142,10 +146,108 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  };
 
  const resetForm = () => {
- setFormData(emptyForm);
- setIsEditing(false);
- setShowForm(false);
+   setFormData(emptyForm);
+   setIsEditing(false);
+   setShowForm(false);
+   if (isModal && onCloseModal) onCloseModal();
+   const params = new URLSearchParams(window.location.search);
+   if (params.get('action') === 'new') window.close();
  };
+
+  const isActionNew = new URLSearchParams(window.location.search).get('action') === 'new';
+  const modalContent = (
+    <AnimatePresence>
+      {showForm && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className={`fixed inset-0 z-[100] flex items-start justify-center p-4 overflow-y-auto ${isActionNew ? 'bg-[#f4f7f6]' : 'bg-black/40'}`}
+          onClick={(e) => e.target === e.currentTarget && resetForm()}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            className="bg-white rounded-md shadow-xl w-full max-w-md my-8"
+          >
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-[#32423D] text-white flex items-center justify-center">
+                  <Ruler size={20} />
+                </div>
+                <h2 className="text-lg font-semibold text-[#32423D]">
+                  {isEditing ? 'Editar Unidade' : 'Nova Unidade'}
+                </h2>
+              </div>
+              <button
+                onClick={resetForm}
+                className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-5 space-y-5">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Sigla <span className="text-red-500 font-bold">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="TipoMedida"
+                    value={formData.TipoMedida || ''}
+                    onChange={handleInputChange}
+                    placeholder="Ex: KG"
+                    className={inputRequired}
+                    maxLength={10}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Descrição
+                  </label>
+                  <input
+                    type="text"
+                    name="DescMedida"
+                    value={formData.DescMedida || ''}
+                    onChange={handleInputChange}
+                    placeholder="Ex: QUILOGRAMA"
+                    className={inputOptional}
+                    maxLength={50}
+                  />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-400 pt-2">
+                <span className="text-red-500 font-bold">*</span> Campos obrigatórios
+              </p>
+
+              <div className="pt-2 flex justify-end w-full">
+                <motion.button
+                  type="submit"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium text-xs hover:bg-[#3d4f49] transition-colors disabled:opacity-50"
+                  disabled={saving}
+                >
+                  {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  {isEditing ? 'Atualizar' : 'Salvar'}
+                </motion.button>
+              </div>
+            </form>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+
+  if (isModal || isActionNew) {
+    if (!showForm) return null;
+    return modalContent;
+  }
 
  return (
  <div className="space-y-6 h-full flex flex-col min-h-0">
@@ -297,6 +399,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  </p>
  </div>
  )}
+ {modalContent}
  </div>
  </div>
  );
