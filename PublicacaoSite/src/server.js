@@ -4892,14 +4892,34 @@ app.get('/api/acompanhamento/projetos', tenantMiddleware, async (req, res) => {
 
         const where = condicoes.join(' AND ');
 
-        console.log(`[API] Projetos - status: ${status || 'default(ativos)'} | where: ${where}`);
+        const queryPool = req.tenantDbPool || pool;
 
-
-
-
-const queryPool = req.tenantDbPool || pool;
+        // Fetch dynamic resources
+        const [recursos] = await queryPool.execute("SELECT processofabricacao FROM processofabricacao WHERE (Fabrica = 'SIM' OR Fabrica = 'sim') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')");
+        const setoresDinamicos = [...new Set(recursos.map(r => r.processofabricacao.trim().replace(/\s+/g, '')))];
 
         // 1. Fetch Projects (Base data + Native Tags count/percentages)
+        
+        const [tagsCols] = await queryPool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags'");
+        const tagsSet = new Set(tagsCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        let tagsColsAgg = '';
+        setoresDinamicos.forEach(s => {
+            const colExecutar = `${s.toLowerCase()}totalexecutar`;
+            const colExecutado = `${s.toLowerCase()}totalexecutado`;
+            
+            if (tagsSet.has(colExecutar)) {
+                tagsColsAgg += `, COALESCE(SUM(CAST(NULLIF(t.${s}TotalExecutar,'') AS DECIMAL(10,2))), 0) AS tag${s}TotalExecutar`;
+            } else {
+                tagsColsAgg += `, 0 AS tag${s}TotalExecutar`;
+            }
+            if (tagsSet.has(colExecutado)) {
+                tagsColsAgg += `, COALESCE(SUM(CAST(NULLIF(t.${s}TotalExecutado,'') AS DECIMAL(10,2))), 0) AS tag${s}TotalExecutado`;
+            } else {
+                tagsColsAgg += `, 0 AS tag${s}TotalExecutado`;
+            }
+        });
+
         const [projetos] = await queryPool.execute(`
             SELECT
                 p.*,
@@ -4907,6 +4927,7 @@ const queryPool = req.tenantDbPool || pool;
                 TRIM(p.Finalizado) as Finalizado, 
                 COUNT(t.IdTag) AS QtdeTags,
                 COALESCE(SUM(CAST(NULLIF(t.qtdetotal,'') AS DECIMAL(10,2))), 0) AS qtdetotalpecas
+                ${tagsColsAgg}
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE ${where}
@@ -4931,69 +4952,26 @@ const queryPool = req.tenantDbPool || pool;
         const safeOsiCol = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `NULL`;
         const safeOsiFlag = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `'0'`;
 
+        let osStatsColsAgg = '';
+        setoresDinamicos.forEach(s => {
+            osStatsColsAgg += `
+                , COALESCE(SUM(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS Total${s}
+                , COALESCE(SUM(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' THEN CAST(NULLIF(${safeOsiCol(`${s}TotalExecutado`)},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS Exec${s}
+                , DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol(`PlanejadoInicio${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicio${s}
+                , DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol(`PlanejadoFinal${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinal${s}
+                , DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol(`RealizadoInicio${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicio${s}
+                , DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol(`RealizadoFinal${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinal${s}
+                , MAX(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' OR ${safeOsiFlag(`txt${s}`)} = 'S' THEN 1 ELSE 0 END) as flag${s}
+            `;
+        });
+
         // 2. Fetch OS / OSI Aggregations for all fetched projects
         const [osStatsRows] = await queryPool.execute(`
             SELECT 
                 os.IdProjeto,
                 COUNT(DISTINCT os.IdOrdemServico) AS QtdeOS,
-                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdePecasTags,
-                
-                /* Corte */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorte,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('CorteTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
-                MAX(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' OR ${safeOsiFlag('txtCorte')} = 'S' THEN 1 ELSE 0 END) as flagCorte,
-
-                /* Dobra */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalDobra,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('DobraTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
-                MAX(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' OR ${safeOsiFlag('txtDobra')} = 'S' THEN 1 ELSE 0 END) as flagDobra,
-
-                /* Solda */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalSolda,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('SoldaTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
-                MAX(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' OR ${safeOsiFlag('txtSolda')} = 'S' THEN 1 ELSE 0 END) as flagSolda,
-
-                /* Pintura */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPintura,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('PinturaTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
-                MAX(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' OR ${safeOsiFlag('txtPintura')} = 'S' THEN 1 ELSE 0 END) as flagPintura,
-
-                /* Montagem */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalMontagem,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('MontagemTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
-                MAX(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' OR ${safeOsiFlag('TxtMontagem')} = 'S' THEN 1 ELSE 0 END) as flagMontagem,
-
-                /* Corte a Laser */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalCorteaLaser,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
-                MAX(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' OR ${safeOsiFlag('txtCorteaLaser')} = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
-
-                /* Punsionadeira */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalPunsionadeira,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecPunsionadeira,
-                MIN(${safeOsiCol('PlanejadoInicioPUNSIONADEIRA')}) as PlanejadoInicioPunsionadeira, MAX(${safeOsiCol('PlanejadoFinalPUNSIONADEIRA')}) as PlanejadoFinalPunsionadeira,
-                MIN(${safeOsiCol('RealizadoInicioPUNSIONADEIRA')}) as RealizadoInicioPunsionadeira, MAX(${safeOsiCol('RealizadoFinalPUNSIONADEIRA')}) as RealizadoFinalPunsionadeira,
-                MAX(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' OR ${safeOsiFlag('txtPUNSIONADEIRA')} = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
-
-                /* Galvanizar */
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS TotalGalvanizar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutado')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS ExecGalvanizar,
-                MIN(${safeOsiCol('PlanejadoInicioGALVANIZAR')}) as PlanejadoInicioGalvanizar, MAX(${safeOsiCol('PlanejadoFinalGALVANIZAR')}) as PlanejadoFinalGalvanizar,
-                MIN(${safeOsiCol('RealizadoInicioGALVANIZAR')}) as RealizadoInicioGalvanizar, MAX(${safeOsiCol('RealizadoFinalGALVANIZAR')}) as RealizadoFinalGalvanizar,
-                MAX(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' OR ${safeOsiFlag('txtGALVANIZAR')} = 'S' THEN 1 ELSE 0 END) as flagGalvanizar
-
+                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdePecasTags
+                ${osStatsColsAgg}
             FROM (
                 SELECT IdOrdemServico, IdProjeto, IdTag, QtdeTotalItens
                 FROM ordemservico
@@ -5006,194 +4984,59 @@ const queryPool = req.tenantDbPool || pool;
             GROUP BY os.IdProjeto
         `);
 
+        let mpStatsColsAgg = '';
+        setoresDinamicos.forEach(s => {
+            mpStatsColsAgg += `
+                , COALESCE(SUM(CASE WHEN REPLACE(pf.processofabricacao, ' ', '') LIKE '%${s}%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotal${s}
+                , COALESCE(SUM(CASE WHEN REPLACE(pf.processofabricacao, ' ', '') LIKE '%${s}%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExec${s}
+            `;
+        });
         
         const [mpStatsRows] = await queryPool.execute(`
             SELECT 
-                os.IdProjeto,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorte,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorte,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorte,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorte,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorte,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorte,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalDobra,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecDobra,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioDobra,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalDobra,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioDobra,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalDobra,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalSolda,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecSolda,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioSolda,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalSolda,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioSolda,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalSolda,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPintura,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPintura,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPintura,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPintura,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPintura,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPintura,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalMontagem,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecMontagem,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioMontagem,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioMontagem,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalMontagem,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorteaLaser,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorteaLaser,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorteaLaser,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorteaLaser,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorteaLaser,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPunsionadeira,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPunsionadeira,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPunsionadeira,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPunsionadeira,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPunsionadeira,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPunsionadeira,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalGalvanizar,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecGalvanizar,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioGalvanizar,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGalvanizar,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGalvanizar,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGalvanizar
-            FROM (
+                os.IdProjeto
+                ${mpStatsColsAgg}
+            FROM material_processo mp
+            INNER JOIN (
                 SELECT IdOrdemServico, IdProjeto
                 FROM ordemservico
                 WHERE IdProjeto IN (${inClause})
                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
                   AND IdTag IS NOT NULL
-            ) os
-            INNER JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
-            LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+            ) os ON os.IdOrdemServico = mp.IdOrdemServico
+            INNER JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.idProcesso
             GROUP BY os.IdProjeto
-        `);
-        
-        const mpStatsMapProjeto = {};
-        for (const row of mpStatsRows) {
-            mpStatsMapProjeto[row.IdProjeto] = row;
-        }
+        `).catch(e => [[]]); // safe fallback if material_processo table doesn't exist
 
-        const osStatsMap = {};
-        for (const row of osStatsRows) {
-            osStatsMap[row.IdProjeto] = row;
-        }
+        // 3. Merge data
+        projetos.forEach(p => {
+            const osStat = osStatsRows.find(o => o.IdProjeto === p.IdProjeto) || {};
+            const mpStat = mpStatsRows.find(m => m.IdProjeto === p.IdProjeto) || {};
 
-        // 3. Fetch RNC stats
-        const [rncRows] = await queryPool.execute(`
-            SELECT 
-                r.IdProjeto,
-                COUNT(CASE WHEN r.Estatus = 'PENDENCIA' THEN 1 END) AS TotalRnc,
-                COUNT(*) AS qtdernc,
-                COUNT(CASE WHEN r.Estatus = 'PENDENCIA' OR r.Estatus IS NULL OR r.Estatus = '' THEN 1 END) AS qtderncPendente,
-                COUNT(CASE WHEN r.Estatus LIKE '%FIN%' OR r.Estatus = 'FINALIZADA' THEN 1 END) AS qtderncFinalizada
-            FROM ordemservicoitempendencia r
-            WHERE r.IdProjeto IN (${inClause})
-              AND (r.D_E_L_E_T_E IS NULL OR r.D_E_L_E_T_E <> '*')
-            GROUP BY r.IdProjeto
-        `);
+            p.QtdeOS = osStat.QtdeOS || 0;
+            p.QtdePecasTags = osStat.QtdePecasTags || 0;
 
-        const rncMap = {};
-        for (const row of rncRows) {
-            rncMap[row.IdProjeto] = row;
-        }
-
-        console.log(`[Visão Geral Produção] Projetos found: ${projetos.length}. OS/Item Aggregations executed.`);
-
-        /* Compute percentages in JS to avoid division-by-zero in SQL */
-        const pctNormal = (a, b) => (b > 0 ? Math.round((a / b) * 100) : 0);
-        const pctSetor = (exec, sumQtde) => {
-            return sumQtde > 0 ? Math.min(100, Math.round((exec / sumQtde) * 100)) : 0;
-        };
-
-        // 4. Merge all
-        const enriched = projetos.map(p => {
-            const osS = osStatsMap[p.IdProjeto] || {};
-            const mpS = mpStatsMapProjeto[p.IdProjeto] || {};
-            const rncS = rncMap[p.IdProjeto] || {};
-            
-            const merged = {
-                ...p,
-                QtdeOS: osS.QtdeOS || 0,
-                QtdePecasTags: osS.QtdePecasTags || 0,
+            setoresDinamicos.forEach(s => {
+                p[`Total${s}`] = Number(p[`tag${s}TotalExecutar`]) || Number(p[`${s}TotalExecutar`]) || Number(mpStat[`mpTotal${s}`]) || Number(osStat[`Total${s}`]) || 0;
+                p[`Exec${s}`] = Number(p[`tag${s}TotalExecutado`]) || Number(p[`${s}TotalExecutado`]) || Number(mpStat[`mpExec${s}`]) || Number(osStat[`Exec${s}`]) || 0;
                 
-                TotalRnc: rncS.TotalRnc || 0,
-                qtdernc: rncS.qtdernc || 0,
-                qtderncPendente: rncS.qtderncPendente || 0,
-                qtderncFinalizada: rncS.qtderncFinalizada || 0,
-
-                TotalCorte: p.CorteTotalExecutar ?? mpS.mpTotalCorte ?? osS.TotalCorte ?? 0, ExecCorte: p.CorteTotalExecutado ?? mpS.mpExecCorte ?? osS.ExecCorte ?? 0,
-                PlanejadoInicioCorte: p.PlanejadoInicioCorte || mpS.mpPlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: p.PlanejadoFinalCorte || mpS.mpPlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: p.RealizadoInicioCorte || mpS.mpRealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: p.RealizadoFinalCorte || mpS.mpRealizadoFinalCorte || osS.RealizadoFinalCorte || null,
-                flagCorte: osS.flagCorte || 0,
-
-                TotalDobra: p.DobraTotalExecutar ?? mpS.mpTotalDobra ?? osS.TotalDobra ?? 0, ExecDobra: p.DobraTotalExecutado ?? mpS.mpExecDobra ?? osS.ExecDobra ?? 0,
-                PlanejadoInicioDobra: p.PlanejadoInicioDobra || mpS.mpPlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: p.PlanejadoFinalDobra || mpS.mpPlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: p.RealizadoInicioDobra || mpS.mpRealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: p.RealizadoFinalDobra || mpS.mpRealizadoFinalDobra || osS.RealizadoFinalDobra || null,
-                flagDobra: osS.flagDobra || 0,
-
-                TotalSolda: p.SoldaTotalExecutar ?? mpS.mpTotalSolda ?? osS.TotalSolda ?? 0, ExecSolda: p.SoldaTotalExecutado ?? mpS.mpExecSolda ?? osS.ExecSolda ?? 0,
-                PlanejadoInicioSolda: p.PlanejadoInicioSolda || mpS.mpPlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: p.PlanejadoFinalSolda || mpS.mpPlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: p.RealizadoInicioSolda || mpS.mpRealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: p.RealizadoFinalSolda || mpS.mpRealizadoFinalSolda || osS.RealizadoFinalSolda || null,
-                flagSolda: osS.flagSolda || 0,
-
-                TotalPintura: p.PinturaTotalExecutar ?? mpS.mpTotalPintura ?? osS.TotalPintura ?? 0, ExecPintura: p.PinturaTotalExecutado ?? mpS.mpExecPintura ?? osS.ExecPintura ?? 0,
-                PlanejadoInicioPintura: p.PlanejadoInicioPintura || mpS.mpPlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: p.PlanejadoFinalPintura || mpS.mpPlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: p.RealizadoInicioPintura || mpS.mpRealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: p.RealizadoFinalPintura || mpS.mpRealizadoFinalPintura || osS.RealizadoFinalPintura || null,
-                flagPintura: osS.flagPintura || 0,
-
-                TotalMontagem: p.MontagemTotalExecutar ?? mpS.mpTotalMontagem ?? osS.TotalMontagem ?? 0, ExecMontagem: p.MontagemTotalExecutado ?? mpS.mpExecMontagem ?? osS.ExecMontagem ?? 0,
-                PlanejadoInicioMontagem: p.PlanejadoInicioMontagem || mpS.mpPlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: p.PlanejadoFinalMontagem || mpS.mpPlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: p.RealizadoInicioMontagem || mpS.mpRealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: p.RealizadoFinalMontagem || mpS.mpRealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
-                flagMontagem: osS.flagMontagem || 0,
-
-                TotalCorteaLaser: p.CorteaLaserTotalExecutar ?? mpS.mpTotalCorteaLaser ?? osS.TotalCorteaLaser ?? 0, ExecCorteaLaser: p.CorteaLaserTotalExecutado ?? mpS.mpExecCorteaLaser ?? osS.ExecCorteaLaser ?? 0,
-                PlanejadoInicioCorteaLaser: p.PlanejadoInicioCorteaLaser || mpS.mpPlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: p.PlanejadoFinalCorteaLaser || mpS.mpPlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: p.RealizadoInicioCorteaLaser || mpS.mpRealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: p.RealizadoFinalCorteaLaser || mpS.mpRealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
-                flagCorteaLaser: osS.flagCorteaLaser || 0,
-
-                TotalPunsionadeira: p.PunsionadeiraTotalExecutar ?? mpS.mpTotalPunsionadeira ?? osS.TotalPunsionadeira ?? 0, ExecPunsionadeira: p.PunsionadeiraTotalExecutado ?? mpS.mpExecPunsionadeira ?? osS.ExecPunsionadeira ?? 0,
-                PlanejadoInicioPunsionadeira: p.PlanejadoInicioPunsionadeira || mpS.mpPlanejadoInicioPunsionadeira || osS.PlanejadoInicioPunsionadeira || null, PlanejadoFinalPunsionadeira: p.PlanejadoFinalPunsionadeira || mpS.mpPlanejadoFinalPunsionadeira || osS.PlanejadoFinalPunsionadeira || null,
-                RealizadoInicioPunsionadeira: p.RealizadoInicioPunsionadeira || mpS.mpRealizadoInicioPunsionadeira || osS.RealizadoInicioPunsionadeira || null, RealizadoFinalPunsionadeira: p.RealizadoFinalPunsionadeira || mpS.mpRealizadoFinalPunsionadeira || osS.RealizadoFinalPunsionadeira || null,
-                flagPunsionadeira: osS.flagPunsionadeira || 0,
-
-                TotalGalvanizar: p.GalvanizarTotalExecutar ?? mpS.mpTotalGalvanizar ?? osS.TotalGalvanizar ?? 0, ExecGalvanizar: p.GalvanizarTotalExecutado ?? mpS.mpExecGalvanizar ?? osS.ExecGalvanizar ?? 0,
-                PlanejadoInicioGalvanizar: p.PlanejadoInicioGalvanizar || mpS.mpPlanejadoInicioGalvanizar || osS.PlanejadoInicioGalvanizar || null, PlanejadoFinalGalvanizar: p.PlanejadoFinalGalvanizar || mpS.mpPlanejadoFinalGalvanizar || osS.PlanejadoFinalGalvanizar || null,
-                RealizadoInicioGalvanizar: p.RealizadoInicioGalvanizar || mpS.mpRealizadoInicioGalvanizar || osS.RealizadoInicioGalvanizar || null, RealizadoFinalGalvanizar: p.RealizadoFinalGalvanizar || mpS.mpRealizadoFinalGalvanizar || osS.RealizadoFinalGalvanizar || null,
-                flagGalvanizar: osS.flagGalvanizar || 0,
-            };
-
-            merged.PercentualTags = pctNormal(Number(merged.QtdeTagsExecutadas), Number(merged.QtdeTags));
-            merged.PercentualPecas = pctNormal(Number(merged.QtdePecasExecutadas), Number(merged.QtdePecasTags));
-            merged.PctCorte = pctSetor(Number(merged.ExecCorte), Number(merged.TotalCorte));
-            merged.PctDobra = pctSetor(Number(merged.ExecDobra), Number(merged.TotalDobra));
-            merged.PctSolda = pctSetor(Number(merged.ExecSolda), Number(merged.TotalSolda));
-            merged.PctPintura = pctSetor(Number(merged.ExecPintura), Number(merged.TotalPintura));
-            merged.PctMontagem = pctSetor(Number(merged.ExecMontagem), Number(merged.TotalMontagem));
-            merged.PctCorteaLaser = pctSetor(Number(merged.ExecCorteaLaser), Number(merged.TotalCorteaLaser));
-            merged.PctPunsionadeira = pctSetor(Number(merged.ExecPunsionadeira), Number(merged.TotalPunsionadeira));
-            merged.PctGalvanizar = pctSetor(Number(merged.ExecGalvanizar), Number(merged.TotalGalvanizar));
-
-            return merged;
+                p[`PlanejadoInicio${s}`] = p[`PlanejadoInicio${s}`] || mpStat[`mpPlanejadoInicio${s}`] || osStat[`PlanejadoInicio${s}`] || null;
+                p[`PlanejadoFinal${s}`] = p[`PlanejadoFinal${s}`] || mpStat[`mpPlanejadoFinal${s}`] || osStat[`PlanejadoFinal${s}`] || null;
+                
+                p[`RealizadoInicio${s}`] = p[`RealizadoInicio${s}`] || mpStat[`mpRealizadoInicio${s}`] || osStat[`RealizadoInicio${s}`] || null;
+                p[`RealizadoFinal${s}`] = p[`RealizadoFinal${s}`] || mpStat[`mpRealizadoFinal${s}`] || osStat[`RealizadoFinal${s}`] || null;
+                
+                p[`flag${s}`] = osStat[`flag${s}`] || 0;
+                p[`Pct${s}`] = ((p[`Exec${s}`] / (p[`Total${s}`] || 1)) * 100).toFixed(0);
+            });
         });
 
-
-
-
-        res.json({ success: true, data: enriched });
+        // Return Data
+        res.json({ success: true, data: projetos, setoresDinamicos });
 
     } catch (error) {
-        console.error('Error fetching visao-geral projetos:', error);
-        res.status(500).json({ success: false, message: 'Erro ao buscar projetos: ' + error.message });
+        console.error('Error fetching projetos:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar projetos.' });
     }
 });
 
@@ -5201,9 +5044,10 @@ const queryPool = req.tenantDbPool || pool;
 app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
-        const tenantDb = req.tenantDb || 'default';
 
-        // Build column list defensively for dynamic columns in 'tags' table
+        const [recursos] = await queryPool.execute("SELECT processofabricacao FROM processofabricacao WHERE (Fabrica = 'SIM' OR Fabrica = 'sim') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')");
+        const setoresDinamicos = [...new Set(recursos.map(r => r.processofabricacao.trim().replace(/\s+/g, '')))];
+
         const [tagsCols] = await req.tenantDbPool.execute(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tags'"
         );
@@ -5211,27 +5055,30 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
         
         const safeTagCol = (colName) => tagsSet.has(colName.toLowerCase()) ? colName : `NULL AS ${colName}`;
 
+        let safeDynamicSelects = '';
+        setoresDinamicos.forEach(s => {
+            safeDynamicSelects += `, ${safeTagCol(`txt${s.toUpperCase()}`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`PlanejadoInicio${s}`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`PlanejadoFinal${s}`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`RealizadoInicio${s}`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`RealizadoFinal${s}`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`${s}TotalExecutar`)}`;
+            safeDynamicSelects += `, ${safeTagCol(`${s}TotalExecutado`)}`;
+        });
+
         const [tagsRaw] = await req.tenantDbPool.execute(`
             SELECT
                 IdTag, Tag, DescTag, DataEntrada, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag, ValorTag, 
                 ${safeTagCol('StatusTag')},
                 QtdeOSExecutadas, QtdePecasOS, QtdePecasExecutadas, PercentualPecas, PercentualOS,
                 qtdetotal, Finalizado, qtdernc, PesoTotal, ProjetistaPlanejado, PlanejadoInicioEngenharia, PlanejadoFinalEngenharia,
-                ${safeTagCol('txtCORTE')}, ${safeTagCol('txtDOBRA')}, ${safeTagCol('txtPINTURA')}, ${safeTagCol('txtPUNSIONADEIRA')}, ${safeTagCol('txtCorteaLaser')}, ${safeTagCol('txtGALVANIZAR')},
-                ${safeTagCol('PlanejadoInicioCorte')}, ${safeTagCol('PlanejadoFinalCorte')},
-                ${safeTagCol('PlanejadoInicioDobra')}, ${safeTagCol('PlanejadoFinalDobra')},
-                ${safeTagCol('PlanejadoInicioSolda')}, ${safeTagCol('PlanejadoFinalSolda')},
-                ${safeTagCol('PlanejadoInicioPintura')}, ${safeTagCol('PlanejadoFinalPintura')},
-                ${safeTagCol('PlanejadoInicioMontagem')}, ${safeTagCol('PlanejadoFinalMontagem')},
-                ${safeTagCol('PlanejadoInicioPUNSIONADEIRA')}, ${safeTagCol('PlanejadoFinalPUNSIONADEIRA')},
-                ${safeTagCol('PlanejadoInicioCorteaLaser')}, ${safeTagCol('PlanejadoFinalCorteaLaser')},
-                ${safeTagCol('PlanejadoInicioGALVANIZAR')}, ${safeTagCol('PlanejadoFinalGALVANIZAR')},
                 ${safeTagCol('Observacao')},
                 ${safeTagCol('PlanejadoInicioMedicao')},   ${safeTagCol('PlanejadoFinalMedicao')},   ${safeTagCol('RealizadoInicioMedicao')},   ${safeTagCol('RealizadoFinalMedicao')},
                 ${safeTagCol('PlanejadoInicioIsometrico')}, ${safeTagCol('PlanejadoFinalIsometrico')}, ${safeTagCol('RealizadoInicioIsometrico')}, ${safeTagCol('RealizadoFinalIsometrico')},
                 ${safeTagCol('PlanejadoInicioAprovacao')},  ${safeTagCol('PlanejadoFinalAprovacao')},  ${safeTagCol('RealizadoInicioAprovacao')},  ${safeTagCol('RealizadoFinalAprovacao')},
                 ${safeTagCol('PlanejadoInicioAcabamento')}, ${safeTagCol('PlanejadoFinalAcabamento')}, ${safeTagCol('RealizadoInicioAcabamento')}, ${safeTagCol('RealizadoFinalAcabamento')},
                 ${safeTagCol('PlanejadoInicioExpedicao')},  ${safeTagCol('PlanejadoFinalExpedicao')},  ${safeTagCol('RealizadoInicioExpedicao')},  ${safeTagCol('realizadoFinalExpedicao')}
+                ${safeDynamicSelects}
             FROM tags
             WHERE IdProjeto = ?
               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
@@ -5247,8 +5094,7 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
         const tagIds = tagsRaw.map(t => t.IdTag);
         const inClause = tagIds.join(',');
 
-                // Build column list defensively for ordemservicoitem
-        const [osiCols] = await req.tenantDbPool.execute(
+        const [osiCols] = await queryPool.execute(
             "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ordemservicoitem'"
         );
         const osiSet = new Set(osiCols.map(c => c.COLUMN_NAME.toLowerCase()));
@@ -5256,150 +5102,51 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
         const safeOsiCol = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `NULL`;
         const safeOsiFlag = (colName) => osiSet.has(colName.toLowerCase()) ? `osi.${colName}` : `'0'`;
 
-        const [osStatsRows] = await req.tenantDbPool.execute(`
+        let osStatsColsAgg = '';
+        setoresDinamicos.forEach(s => {
+            osStatsColsAgg += `
+                , COALESCE(SUM(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtde${s}
+                , COALESCE(SUM(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' THEN CAST(NULLIF(${safeOsiCol(`${s}TotalExecutado`)},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS Exec${s}
+                , DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol(`PlanejadoInicio${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicio${s}
+                , DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol(`PlanejadoFinal${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinal${s}
+                , DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol(`RealizadoInicio${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicio${s}
+                , DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol(`RealizadoFinal${s}`)}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinal${s}
+                , MAX(CASE WHEN ${safeOsiFlag(`txt${s}`)} = '1' OR ${safeOsiFlag(`txt${s}`)} = 'S' THEN 1 ELSE 0 END) as flag${s}
+            `;
+        });
+
+        const [osStatsRows] = await queryPool.execute(`
             SELECT 
                 os.IdTag,
                 COUNT(DISTINCT os.IdOrdemServico) AS QtdeOS,
-                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdeTotalPecas,
-
-                /* flags */
-                MAX(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' OR ${safeOsiFlag('txtCorte')} = 'S' THEN 1 ELSE 0 END) as flagCorte,
-                MAX(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' OR ${safeOsiFlag('txtDobra')} = 'S' THEN 1 ELSE 0 END) as flagDobra,
-                MAX(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' OR ${safeOsiFlag('txtSolda')} = 'S' THEN 1 ELSE 0 END) as flagSolda,
-                MAX(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' OR ${safeOsiFlag('txtPintura')} = 'S' THEN 1 ELSE 0 END) as flagPintura,
-                MAX(CASE WHEN ${safeOsiFlag('txtMontagem')} = '1' OR ${safeOsiFlag('txtMontagem')} = 'S' THEN 1 ELSE 0 END) as flagMontagem,
-                MAX(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' OR ${safeOsiFlag('txtCorteaLaser')} = 'S' THEN 1 ELSE 0 END) as flagCorteaLaser,
-                MAX(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' OR ${safeOsiFlag('txtPUNSIONADEIRA')} = 'S' THEN 1 ELSE 0 END) as flagPunsionadeira,
-                MAX(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' OR ${safeOsiFlag('txtGALVANIZAR')} = 'S' THEN 1 ELSE 0 END) as flagGalvanizar,
-
-                /* Corte */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorte,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorte, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorte')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorte,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS CorteTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorte')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorte,
-
-                /* Dobra */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalDobra,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioDobra, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalDobra')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalDobra,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('DobraTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('DobraTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS DobraTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtDobra')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeDobra,
-
-                /* Solda */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalSolda,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioSolda, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalSolda')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalSolda,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('SoldaTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('SoldaTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS SoldaTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtSolda')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeSolda,
-
-                /* Pintura */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPintura,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPintura, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPintura')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPintura,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PinturaTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PinturaTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS PinturaTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPintura')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePintura,
-
-                /* Montagem */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioMontagem, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalMontagem')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalMontagem,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('MontagemTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('MontagemTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS MontagemTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('TxtMontagem')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeMontagem,
-
-                /* Corte a Laser */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioCorteaLaser, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalCorteaLaser')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalCorteaLaser,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('CorteaLaserTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS CorteaLaserTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtCorteaLaser')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeCorteaLaser,
-
-                /* Punsionadeira */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalPUNSIONADEIRA,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioPUNSIONADEIRA, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalPUNSIONADEIRA')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalPUNSIONADEIRA,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutado')},'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('PUNSIONADEIRATotalExecutar')},'') AS DECIMAL(10,2))), 0) AS PUNSIONADEIRATotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtPUNSIONADEIRA')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdePunsionadeira,
-
-                /* Galvanizar */
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoInicioGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('PlanejadoFinalGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as PlanejadoFinalGALVANIZAR,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoInicioGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoInicioGALVANIZAR, DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(${safeOsiCol('RealizadoFinalGALVANIZAR')}, ''), '%d/%m/%Y')), '%d/%m/%Y') as RealizadoFinalGALVANIZAR,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutado')},'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutado,
-                COALESCE(SUM(CAST(NULLIF(${safeOsiCol('GALVANIZARTotalExecutar')},'') AS DECIMAL(10,2))), 0) AS GALVANIZARTotalExecutar,
-                COALESCE(SUM(CASE WHEN ${safeOsiFlag('txtGALVANIZAR')} = '1' THEN CAST(NULLIF(${safeOsiCol('QtdeTotal')},'') AS DECIMAL(10,2)) ELSE 0 END), 0) AS SumQtdeGalvanizar
-
-            FROM ordemservico os
-            LEFT JOIN ordemservicoitem osi ON CAST(os.IdOrdemServico AS CHAR CHARACTER SET utf8) COLLATE utf8_general_ci = ${safeOsiCol('IdOrdemServico')} AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
-            WHERE os.IdTag IN (${inClause})
-              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
+                COALESCE(SUM(os.QtdeTotalItens), 0) AS QtdeTotalPecas
+                ${osStatsColsAgg}
+            FROM (
+                SELECT IdOrdemServico, IdTag, QtdeTotalItens
+                FROM ordemservico
+                WHERE IdTag IN (${inClause})
+                  AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E = ' ')
+            ) os
+            LEFT JOIN ordemservicoitem osi ON CAST(os.IdOrdemServico AS CHAR CHARACTER SET utf8) COLLATE utf8_general_ci = osi.IdOrdemServico AND (${safeOsiCol('D_E_L_E_T_E')} IS NULL OR ${safeOsiCol('D_E_L_E_T_E')} = '')
             GROUP BY os.IdTag
         `);
-
         const osStatsMap = {};
         for (const row of osStatsRows) {
             osStatsMap[row.IdTag] = row;
         }
 
-        
-        
-        const [mpStatsRows] = await req.tenantDbPool.execute(`
+        let mpStatsColsAgg = '';
+        setoresDinamicos.forEach(s => {
+            mpStatsColsAgg += `
+                , COALESCE(SUM(CASE WHEN REPLACE(pf.processofabricacao, ' ', '') LIKE '%${s}%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotal${s}
+                , COALESCE(SUM(CASE WHEN REPLACE(pf.processofabricacao, ' ', '') LIKE '%${s}%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExec${s}
+            `;
+        });
+
+        const [mpStatsRows] = await queryPool.execute(`
             SELECT 
-                os.IdTag,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorte,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorte,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorte,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorte,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorte,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Corte%' AND pf.processofabricacao NOT LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorte,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalDobra,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecDobra,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioDobra,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalDobra,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioDobra,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Dobra%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalDobra,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalSolda,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecSolda,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioSolda,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalSolda,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioSolda,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Solda%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalSolda,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPintura,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPintura,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPintura,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPintura,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPintura,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Pintura%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPintura,
-                
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalMontagem,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecMontagem,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioMontagem,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalMontagem,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioMontagem,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Montagem%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalMontagem,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalCorteaLaser,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecCorteaLaser,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioCorteaLaser,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalCorteaLaser,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioCorteaLaser,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%Laser%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalCorteaLaser,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalPunsionadeira,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecPunsionadeira,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioPUNSIONADEIRA,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalPUNSIONADEIRA,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioPUNSIONADEIRA,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%PUNSIONADEIRA%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalPUNSIONADEIRA,
-
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutar ELSE 0 END), 0) AS mpTotalGalvanizar,
-                COALESCE(SUM(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.TotalExecutado ELSE 0 END), 0) AS mpExecGalvanizar,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoInicio ELSE NULL END), '%d/%m/%Y') as mpPlanejadoInicioGALVANIZAR,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.PlanejadoFinal ELSE NULL END), '%d/%m/%Y') as mpPlanejadoFinalGALVANIZAR,
-                DATE_FORMAT(MIN(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoInicio ELSE NULL END), '%d/%m/%Y') as mpRealizadoInicioGALVANIZAR,
-                DATE_FORMAT(MAX(CASE WHEN pf.processofabricacao LIKE '%GALVANIZAR%' THEN mp.RealizadoFinal ELSE NULL END), '%d/%m/%Y') as mpRealizadoFinalGALVANIZAR
+                os.IdTag
+                ${mpStatsColsAgg}
             FROM (
                 SELECT IdOrdemServico, IdTag
                 FROM ordemservico
@@ -5409,8 +5156,9 @@ app.get('/api/acompanhamento/projeto/:projetoId/tags', tenantMiddleware, async (
             INNER JOIN material_processo mp ON mp.IdOrdemServico = os.IdOrdemServico
             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
             GROUP BY os.IdTag
-        `);
-const mpStatsMap = {};
+        `).catch(e => [[]]);
+
+        const mpStatsMap = {};
         for (const row of mpStatsRows) {
             mpStatsMap[row.IdTag] = row;
         }
@@ -5418,78 +5166,50 @@ const mpStatsMap = {};
         const rows = tagsRaw.map(t => {
             const osS = osStatsMap[t.IdTag] || {};
             const mpS = mpStatsMap[t.IdTag] || {};
-            return {
+            
+            const mergedTag = {
                 ...t,
                 QtdeOS: osS.QtdeOS || 0,
-                QtdeTotalPecas: osS.QtdeTotalPecas || 0,
-                
-                flagCorte: osS.flagCorte || 0,
-                flagDobra: osS.flagDobra || 0,
-                flagSolda: osS.flagSolda || 0,
-                flagPintura: osS.flagPintura || 0,
-                flagMontagem: osS.flagMontagem || 0,
-                flagCorteaLaser: osS.flagCorteaLaser || 0,
-                flagPunsionadeira: osS.flagPunsionadeira || 0,
-                flagGalvanizar: osS.flagGalvanizar || 0,
-                
-                txtCORTE: t.txtCORTE,
-                txtDOBRA: t.txtDOBRA,
-                txtPINTURA: t.txtPINTURA,
-                txtPUNSIONADEIRA: t.txtPUNSIONADEIRA,
-                txtCorteaLaser: t.txtCorteaLaser,
-                txtGALVANIZAR: t.txtGALVANIZAR,
-
-                PlanejadoInicioCorte: mpS.mpPlanejadoInicioCorte || t.PlanejadoInicioCorte || osS.PlanejadoInicioCorte || null, PlanejadoFinalCorte: mpS.mpPlanejadoFinalCorte || t.PlanejadoFinalCorte || osS.PlanejadoFinalCorte || null,
-                RealizadoInicioCorte: mpS.mpRealizadoInicioCorte || t.RealizadoInicioCorte || osS.RealizadoInicioCorte || null, RealizadoFinalCorte: mpS.mpRealizadoFinalCorte || t.RealizadoFinalCorte || osS.RealizadoFinalCorte || null,
-                CorteTotalExecutado: mpS.mpExecCorte ?? t.CorteTotalExecutado ?? osS.CorteTotalExecutado ?? 0, CorteTotalExecutar: mpS.mpTotalCorte ?? t.CorteTotalExecutar ?? osS.CorteTotalExecutar ?? 0, SumQtdeCorte: osS.SumQtdeCorte || 0,
-
-                PlanejadoInicioDobra: mpS.mpPlanejadoInicioDobra || t.PlanejadoInicioDobra || osS.PlanejadoInicioDobra || null, PlanejadoFinalDobra: mpS.mpPlanejadoFinalDobra || t.PlanejadoFinalDobra || osS.PlanejadoFinalDobra || null,
-                RealizadoInicioDobra: mpS.mpRealizadoInicioDobra || t.RealizadoInicioDobra || osS.RealizadoInicioDobra || null, RealizadoFinalDobra: mpS.mpRealizadoFinalDobra || t.RealizadoFinalDobra || osS.RealizadoFinalDobra || null,
-                DobraTotalExecutado: mpS.mpExecDobra ?? t.DobraTotalExecutado ?? osS.DobraTotalExecutado ?? 0, DobraTotalExecutar: mpS.mpTotalDobra ?? t.DobraTotalExecutar ?? osS.DobraTotalExecutar ?? 0, SumQtdeDobra: osS.SumQtdeDobra || 0,
-
-                PlanejadoInicioSolda: mpS.mpPlanejadoInicioSolda || t.PlanejadoInicioSolda || osS.PlanejadoInicioSolda || null, PlanejadoFinalSolda: mpS.mpPlanejadoFinalSolda || t.PlanejadoFinalSolda || osS.PlanejadoFinalSolda || null,
-                RealizadoInicioSolda: mpS.mpRealizadoInicioSolda || t.RealizadoInicioSolda || osS.RealizadoInicioSolda || null, RealizadoFinalSolda: mpS.mpRealizadoFinalSolda || t.RealizadoFinalSolda || osS.RealizadoFinalSolda || null,
-                SoldaTotalExecutado: mpS.mpExecSolda ?? t.SoldaTotalExecutado ?? osS.SoldaTotalExecutado ?? 0, SoldaTotalExecutar: mpS.mpTotalSolda ?? t.SoldaTotalExecutar ?? osS.SoldaTotalExecutar ?? 0, SumQtdeSolda: osS.SumQtdeSolda || 0,
-
-                PlanejadoInicioPintura: mpS.mpPlanejadoInicioPintura || t.PlanejadoInicioPintura || osS.PlanejadoInicioPintura || null, PlanejadoFinalPintura: mpS.mpPlanejadoFinalPintura || t.PlanejadoFinalPintura || osS.PlanejadoFinalPintura || null,
-                RealizadoInicioPintura: mpS.mpRealizadoInicioPintura || t.RealizadoInicioPintura || osS.RealizadoInicioPintura || null, RealizadoFinalPintura: mpS.mpRealizadoFinalPintura || t.RealizadoFinalPintura || osS.RealizadoFinalPintura || null,
-                PinturaTotalExecutado: mpS.mpExecPintura ?? t.PinturaTotalExecutado ?? osS.PinturaTotalExecutado ?? 0, PinturaTotalExecutar: mpS.mpTotalPintura ?? t.PinturaTotalExecutar ?? osS.PinturaTotalExecutar ?? 0, SumQtdePintura: osS.SumQtdePintura || 0,
-
-                PlanejadoInicioMontagem: mpS.mpPlanejadoInicioMontagem || t.PlanejadoInicioMontagem || osS.PlanejadoInicioMontagem || null, PlanejadoFinalMontagem: mpS.mpPlanejadoFinalMontagem || t.PlanejadoFinalMontagem || osS.PlanejadoFinalMontagem || null,
-                RealizadoInicioMontagem: mpS.mpRealizadoInicioMontagem || t.RealizadoInicioMontagem || osS.RealizadoInicioMontagem || null, RealizadoFinalMontagem: mpS.mpRealizadoFinalMontagem || t.RealizadoFinalMontagem || osS.RealizadoFinalMontagem || null,
-                MontagemTotalExecutado: mpS.mpExecMontagem ?? t.MontagemTotalExecutado ?? osS.MontagemTotalExecutado ?? 0, MontagemTotalExecutar: mpS.mpTotalMontagem ?? t.MontagemTotalExecutar ?? osS.MontagemTotalExecutar ?? 0, SumQtdeMontagem: osS.SumQtdeMontagem || 0,
-
-                PlanejadoInicioCorteaLaser: mpS.mpPlanejadoInicioCorteaLaser || t.PlanejadoInicioCorteaLaser || osS.PlanejadoInicioCorteaLaser || null, PlanejadoFinalCorteaLaser: mpS.mpPlanejadoFinalCorteaLaser || t.PlanejadoFinalCorteaLaser || osS.PlanejadoFinalCorteaLaser || null,
-                RealizadoInicioCorteaLaser: mpS.mpRealizadoInicioCorteaLaser || t.RealizadoInicioCorteaLaser || osS.RealizadoInicioCorteaLaser || null, RealizadoFinalCorteaLaser: mpS.mpRealizadoFinalCorteaLaser || t.RealizadoFinalCorteaLaser || osS.RealizadoFinalCorteaLaser || null,
-                CorteaLaserTotalExecutado: mpS.mpExecCorteaLaser ?? t.CorteaLaserTotalExecutado ?? osS.CorteaLaserTotalExecutado ?? 0, CorteaLaserTotalExecutar: mpS.mpTotalCorteaLaser ?? t.CorteaLaserTotalExecutar ?? osS.CorteaLaserTotalExecutar ?? 0, SumQtdeCorteaLaser: osS.SumQtdeCorteaLaser || 0,
-
-                PlanejadoInicioPUNSIONADEIRA: mpS.mpPlanejadoInicioPUNSIONADEIRA || t.PlanejadoInicioPUNSIONADEIRA || osS.PlanejadoInicioPUNSIONADEIRA || null, PlanejadoFinalPUNSIONADEIRA: mpS.mpPlanejadoFinalPUNSIONADEIRA || t.PlanejadoFinalPUNSIONADEIRA || osS.PlanejadoFinalPUNSIONADEIRA || null,
-                RealizadoInicioPUNSIONADEIRA: mpS.mpRealizadoInicioPUNSIONADEIRA || t.RealizadoInicioPUNSIONADEIRA || osS.RealizadoInicioPUNSIONADEIRA || null, RealizadoFinalPUNSIONADEIRA: mpS.mpRealizadoFinalPUNSIONADEIRA || t.RealizadoFinalPUNSIONADEIRA || osS.RealizadoFinalPUNSIONADEIRA || null,
-                PUNSIONADEIRATotalExecutado: mpS.mpExecPunsionadeira ?? osS.PUNSIONADEIRATotalExecutado ?? 0, PUNSIONADEIRATotalExecutar: mpS.mpTotalPunsionadeira ?? osS.PUNSIONADEIRATotalExecutar ?? 0, SumQtdePunsionadeira: osS.SumQtdePunsionadeira || 0,
-
-                PlanejadoInicioGALVANIZAR: mpS.mpPlanejadoInicioGALVANIZAR || t.PlanejadoInicioGALVANIZAR || osS.PlanejadoInicioGALVANIZAR || null, PlanejadoFinalGALVANIZAR: mpS.mpPlanejadoFinalGALVANIZAR || t.PlanejadoFinalGALVANIZAR || osS.PlanejadoFinalGALVANIZAR || null,
-                RealizadoInicioGALVANIZAR: mpS.mpRealizadoInicioGALVANIZAR || t.RealizadoInicioGALVANIZAR || osS.RealizadoInicioGALVANIZAR || null, RealizadoFinalGALVANIZAR: mpS.mpRealizadoFinalGALVANIZAR || t.RealizadoFinalGALVANIZAR || osS.RealizadoFinalGALVANIZAR || null,
-                GALVANIZARTotalExecutado: mpS.mpExecGalvanizar ?? osS.GALVANIZARTotalExecutado ?? 0, GALVANIZARTotalExecutar: mpS.mpTotalGalvanizar ?? osS.GALVANIZARTotalExecutar ?? 0, SumQtdeGalvanizar: osS.SumQtdeGalvanizar || 0,
-
-                CortePercentual: (Number(osS.SumQtdeCorte) > 0 ? Math.round((Number(osS.CorteTotalExecutado) || 0) / Number(osS.SumQtdeCorte) * 100) : 0).toString(),
-                DobraPercentual: (Number(osS.SumQtdeDobra) > 0 ? Math.round((Number(osS.DobraTotalExecutado) || 0) / Number(osS.SumQtdeDobra) * 100) : 0).toString(),
-                SoldaPercentual: (Number(osS.SumQtdeSolda) > 0 ? Math.round((Number(osS.SoldaTotalExecutado) || 0) / Number(osS.SumQtdeSolda) * 100) : 0).toString(),
-                PinturaPercentual: (Number(osS.SumQtdePintura) > 0 ? Math.round((Number(osS.PinturaTotalExecutado) || 0) / Number(osS.SumQtdePintura) * 100) : 0).toString(),
-                MontagemPercentual: (Number(osS.SumQtdeMontagem) > 0 ? Math.round((Number(osS.MontagemTotalExecutado) || 0) / Number(osS.SumQtdeMontagem) * 100) : 0).toString(),
-                CorteaLaserPercentual: (Number(osS.SumQtdeCorteaLaser) > 0 ? Math.round((Number(osS.CorteaLaserTotalExecutado) || 0) / Number(osS.SumQtdeCorteaLaser) * 100) : 0).toString(),
-                PUNSIONADEIRAPercentual: (Number(osS.SumQtdePunsionadeira) > 0 ? Math.round((Number(osS.PUNSIONADEIRATotalExecutado) || 0) / Number(osS.SumQtdePunsionadeira) * 100) : 0).toString(),
-                GALVANIZARPercentual: (Number(osS.SumQtdeGalvanizar) > 0 ? Math.round((Number(osS.GALVANIZARTotalExecutado) || 0) / Number(osS.SumQtdeGalvanizar) * 100) : 0).toString(),
+                QtdeTotalPecas: osS.QtdeTotalPecas || 0
             };
+
+            setoresDinamicos.forEach(s => {
+                const tagTotal = Number(t[`${s}TotalExecutar`]) || 0;
+                const tagExec = Number(t[`${s}TotalExecutado`]) || 0;
+                const mpTotal = Number(mpS[`mpTotal${s}`]) || 0;
+                const mpExec = Number(mpS[`mpExec${s}`]) || 0;
+                
+                // Note: osS actually returned Exec{s} and SumQtde{s} (not Total{s})
+                const osTotal = Number(osS[`SumQtde${s}`]) || 0;
+                const osExec = Number(osS[`Exec${s}`]) || 0;
+
+                mergedTag[`${s}TotalExecutar`] = tagTotal || mpTotal || osTotal || 0;
+                mergedTag[`${s}TotalExecutado`] = tagExec || mpExec || osExec || 0;
+                mergedTag[`flag${s}`] = osS[`flag${s}`] || 0;
+                mergedTag[`txt${s}`] = t[`txt${s.toUpperCase()}`] || '0';
+
+                // We calculate percent here
+                mergedTag[`${s}Percentual`] = (mergedTag[`${s}TotalExecutar`] > 0 
+                    ? Math.round((mergedTag[`${s}TotalExecutado`] / mergedTag[`${s}TotalExecutar`]) * 100) 
+                    : 0).toString();
+
+                mergedTag[`PlanejadoInicio${s}`] = t[`PlanejadoInicio${s}`] || null;
+                mergedTag[`PlanejadoFinal${s}`] = t[`PlanejadoFinal${s}`] || null;
+                mergedTag[`RealizadoInicio${s}`] = t[`RealizadoInicio${s}`] || null;
+                mergedTag[`RealizadoFinal${s}`] = t[`RealizadoFinal${s}`] || null;
+            });
+
+            return mergedTag;
         });
 
-
-        console.log(`[Tags] [${tenantDb}] Projeto ${req.params.projetoId}: ${rows.length} tags found`);
         res.json({ success: true, data: rows });
     } catch (error) {
-        console.error(`[Tags] Error fetching tags for projeto ${req.params.projetoId} (tenant: ${req.tenantDb || 'default'}):`, error.message);
-        res.status(500).json({ success: false, message: 'Erro ao buscar tags: ' + error.message });
+        console.error('Error fetching tags for projeto:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar tags do projeto: ' + error.message });
     }
 });
+
+
 
 // ─── GET recursos (material_processo) agregados por tag do projeto ───────────
 app.get('/api/acompanhamento/projeto/:projetoId/recursos', tenantMiddleware, async (req, res) => {
@@ -5793,12 +5513,8 @@ app.get('/api/visao-geral/tags-globais', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await pool.executeOnDefault(`
             SELECT 
-                t.IdTag, t.IdProjeto, t.Tag, t.DescTag, DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y') AS DataPrevisao,
-                t.PlanejadoInicioCorte, t.PlanejadoFinalCorte, t.RealizadoInicioCorte, t.RealizadoFinalCorte, t.CorteTotalExecutar, t.CorteTotalExecutado, t.CortePercentual,
-                t.PlanejadoInicioDobra, t.PlanejadoFinalDobra, t.RealizadoInicioDobra, t.RealizadoFinalDobra, t.DobraTotalExecutar, t.DobraTotalExecutado, t.DobraPercentual,
-                t.PlanejadoInicioSolda, t.PlanejadoFinalSolda, t.RealizadoInicioSolda, t.RealizadoFinalSolda, t.SoldaTotalExecutar, t.SoldaTotalExecutado, t.SoldaPercentual,
-                t.PlanejadoInicioPintura, t.PlanejadoFinalPintura, t.RealizadoInicioPintura, t.RealizadoFinalPintura, t.PinturaTotalExecutar, t.PinturaTotalExecutado, t.PinturaPercentual,
-                t.PlanejadoInicioMontagem, t.PlanejadoFinalMontagem, t.RealizadoInicioMontagem, t.RealizadoFinalMontagem, t.MontagemTotalExecutar, t.MontagemTotalExecutado, t.MontagemPercentual,
+                t.*,
+                DATE_FORMAT(t.DataPrevisao, '%d/%m/%Y') AS DataPrevisao,
                 p.Projeto as Projeto,
                 p.DescProjeto as ProjetoDescricao,
                 p.Finalizado as ProjetoFinalizado
@@ -7638,7 +7354,7 @@ app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) =>
     try {
         const projetoId = req.query.projetoId;
         if (!projetoId) return res.json({ success: true, data: [] });
-        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND IdProjeto = ? ORDER BY Tag", [projetoId]);
+        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR TRIM(D_E_L_E_T_E) = '') AND (Finalizado IS NULL OR (TRIM(Finalizado) <> 'C' AND TRIM(Finalizado) <> 'S')) AND IdProjeto = ? ORDER BY Tag", [projetoId]);
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
@@ -9362,6 +9078,32 @@ app.put('/api/visao-geral/tag/:id/propagar-datas-os', tenantMiddleware, async (r
 app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req, res) => {
     try {
         const queryPool = req.tenantDbPool || pool;
+
+        const [recursos] = await queryPool.execute("SELECT processofabricacao FROM processofabricacao WHERE (Fabrica = 'SIM' OR Fabrica = 'sim') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')");
+        const setoresDinamicos = [...new Set(recursos.map(r => r.processofabricacao.trim().replace(/\s+/g, '')))];
+        
+        let dynamicSelects = '';
+        setoresDinamicos.forEach(s => {
+            dynamicSelects += `, os.${s}TotalExecutar, os.${s}TotalExecutado, os.PlanejadoInicio${s}, os.PlanejadoFinal${s}, os.RealizadoInicio${s}, os.RealizadoFinal${s}, os.txt${s}`;
+        });
+
+        // Some OS columns might not exist if they weren't fully created. We should query information_schema for ordemservico columns
+        const [osCols] = await queryPool.execute("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ordemservico'");
+        const osSet = new Set(osCols.map(c => c.COLUMN_NAME.toLowerCase()));
+        
+        const safeOsCol = (colName) => osSet.has(colName.toLowerCase()) ? `os.${colName}` : `NULL AS ${colName}`;
+
+        let safeDynamicSelects = '';
+        setoresDinamicos.forEach(s => {
+            safeDynamicSelects += `, ${safeOsCol(`${s}TotalExecutar`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`${s}TotalExecutado`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`PlanejadoInicio${s}`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`PlanejadoFinal${s}`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`RealizadoInicio${s}`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`RealizadoFinal${s}`)}`;
+            safeDynamicSelects += `, ${safeOsCol(`txt${s}`)}`;
+        });
+
         const [rows] = await req.tenantDbPool.execute(`
             SELECT 
                 os.IdOrdemServico, os.IdTag, os.IdProjeto, os.Descricao, os.OrdemServicoFinalizado, os.Liberado_Engenharia, 
@@ -9374,20 +9116,8 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req,
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') AND TRIM(COALESCE(osi.OrdemServicoItemFinalizado, '')) IN ('C','S') THEN COALESCE(NULLIF(osi.QtdeTotal, 0), NULLIF(osi.qtde, 0), 1) ELSE 0 END), 0) AS QtdePecasExecutadas,
 
                 COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.Peso, 0), (COALESCE(osi.PesoUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS PesoTotal,
-                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.AreaPintura, 0), (COALESCE(osi.AreaPinturaUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS AreaPinturaTotal,
-
-                os.CorteTotalExecutar, os.CorteTotalExecutado,
-                os.DobraTotalExecutar, os.DobraTotalExecutado,
-                os.SoldaTotalExecutar, os.SoldaTotalExecutado,
-                os.PinturaTotalExecutar, os.PinturaTotalExecutado,
-                os.MontagemTotalExecutar, os.MontagemTotalExecutado,
-                os.CorteaLaserTotalExecutar, os.CorteaLaserTotalExecutado,
-                os.PlanejadoInicioCorte, os.PlanejadoFinalCorte,
-                os.PlanejadoInicioPUNSIONADEIRA, os.PlanejadoFinalPUNSIONADEIRA,
-                os.PlanejadoInicioGALVANIZAR, os.PlanejadoFinalGALVANIZAR,
-                
-                os.PunsionadeiraTotalExecutar, os.PunsionadeiraTotalExecutado,
-                os.GalvanizarTotalExecutar, os.GalvanizarTotalExecutado
+                COALESCE(SUM(CASE WHEN (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '') THEN COALESCE(NULLIF(osi.AreaPintura, 0), (COALESCE(osi.AreaPinturaUnitario,0) * COALESCE(NULLIF(osi.QtdeTotal, 0), 1))) ELSE 0 END), 0) AS AreaPinturaTotal
+                ${safeDynamicSelects}
             FROM ordemservico os
             LEFT JOIN ordemservicoitem osi ON osi.IdOrdemServico = os.IdOrdemServico AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '')
             WHERE os.IdTag = ? AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E = ' ')
@@ -9400,6 +9130,8 @@ app.get('/api/visao-geral/tag/:id/ordens-servico', tenantMiddleware, async (req,
         res.status(500).json({ success: false, message: 'Erro ao listar ordens de servico da tag' });
     }
 });
+
+
 
 app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
     console.log(`[DEBUG] Hit /api/ordemservico/:id/itens for id ${req.params.id}`);
@@ -10016,6 +9748,12 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             
             if (matRows.length === 0) continue;
             const mat = matRows[0];
+
+            const [existRows] = await conn.execute(
+                `SELECT IdOrdemServicoItem FROM ordemservicoitem WHERE IdOrdemServico = ? AND CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [osId, codmatfabricante]
+            );
+            if (existRows.length > 0) continue;
             
             const qtdeTotalNum = Number(qtde) || 1;
             const fatorNum = Math.max(1, parseInt(String(fator), 10) || 1);
@@ -13624,84 +13362,174 @@ const ensureProcessoFieldsAndRetry = async (pool, query, params) => {
 
 
 // Helper to lazily create columns for new generic resources
-const ensureDynamicResourceColumns = async (pool, resourceName) => {
+const ensureDynamicResourceColumns = async (pool, resourceName, fabricaFlag) => {
     if (!resourceName) return;
-    const cleanResource = resourceName.trim().replace(/\s+/g, '');
-    if (!cleanResource) return;
-    
-    try {
-        const [rows] = await pool.execute(`SHOW COLUMNS FROM ordemservicoitem`);
-        const existingCols = rows.map(c => c.Field.toLowerCase());
-        
-        const columnsToAdd = [
-            { name: `txt${cleanResource}`, type: 'VARCHAR(255) NULL' },
-            { name: `${cleanResource}TotalExecutado`, type: 'VARCHAR(255) NULL' },
-            { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
-        ];
-        
-        for (const col of columnsToAdd) {
-            if (!existingCols.includes(col.name.toLowerCase())) {
-                try {
-                    await pool.execute(`ALTER TABLE ordemservicoitem ADD COLUMN \`${col.name}\` ${col.type}`);
-                    console.log(`Column ${col.name} added to ordemservicoitem`);
-                } catch (err) {
-                    console.error(`Error adding ${col.name}:`, err.message);
-                }
-            }
-        }
-        
-        const [osCols] = await pool.execute(`SHOW COLUMNS FROM ordemservico`);
-        const existingOsCols = osCols.map(c => c.Field.toLowerCase());
-        
-        const osColumnsToAdd = [
-            { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-            { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
-        ];
-        
-        for (const col of osColumnsToAdd) {
-            if (!existingOsCols.includes(col.name.toLowerCase())) {
-                try {
-                    await pool.execute(`ALTER TABLE ordemservico ADD COLUMN \`${col.name}\` ${col.type}`);
-                    console.log(`Column ${col.name} added to ordemservico`);
-                } catch (err) {
-                    console.error(`Error adding ${col.name} to ordemservico:`, err.message);
-                }
-            }
-        }
+    const rawClean = resourceName.trim().replace(/\s+/g, '');
+    if (!rawClean) return;
 
-        // --- TAGS TABLE ---
+    if (fabricaFlag === undefined) {
         try {
-            const [tagsCols] = await pool.execute(`SHOW COLUMNS FROM tags`);
-            const existingTagsCols = tagsCols.map(c => c.Field.toLowerCase());
-            
-            const tagsColumnsToAdd = [
+            const [rows] = await pool.execute('SELECT Fabrica FROM processofabricacao WHERE processofabricacao = ?', [resourceName.trim()]);
+            if (rows.length > 0) fabricaFlag = rows[0].Fabrica;
+        } catch(e) {}
+    }
+    
+    const isEngStage = (fabricaFlag === 'NÃO' || fabricaFlag === 'NAO' || fabricaFlag === 'NÂO');
+
+    if (isEngStage) {
+        const cleanBase = resourceName.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '');
+        const cleanCamel = cleanBase.charAt(0).toUpperCase() + cleanBase.slice(1);
+        const cleanUpper = cleanBase.toUpperCase();
+        
+        try {
+            // --- PROJETOS TABLE ---
+            try {
+                const [projCols] = await pool.execute(`SHOW COLUMNS FROM projetos`);
+                const existingProjCols = projCols.map(c => c.Field.toLowerCase());
+                const projColumnsToAdd = [
+                    { name: `PlanejadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `PlanejadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `UsuarioPlanejadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioPlanejadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}MinProd`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TempoSetup`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TempoPadrao`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TotalTempo`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}Sequencia`, type: 'VARCHAR(255) NULL' },
+                    { name: `txt${cleanUpper}`, type: 'VARCHAR(255) NULL' }
+                ];
+                for (const col of projColumnsToAdd) {
+                    if (!existingProjCols.includes(col.name.toLowerCase())) {
+                        await pool.execute(`ALTER TABLE projetos ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                    }
+                }
+            } catch (e) { console.error('Error in projetos DDL:', e.message); }
+
+            // --- TAGS TABLE ---
+            try {
+                const [tagsCols] = await pool.execute(`SHOW COLUMNS FROM tags`);
+                const existingTagsCols = tagsCols.map(c => c.Field.toLowerCase());
+                const tagsColumnsToAdd = [
+                    { name: `PlanejadoInicio${cleanCamel}`, type: 'DATETIME NULL' },
+                    { name: `PlanejadoFinal${cleanCamel}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoInicio${cleanCamel}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoFinal${cleanCamel}`, type: 'DATETIME NULL' },
+                    { name: `UsuarioPlanejadoInicio${cleanCamel}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioPlanejadoFinal${cleanCamel}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoInicio${cleanCamel}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoFinal${cleanCamel}`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanCamel}`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}MinProd`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TempoSetup`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TempoPadrao`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TotalTempo`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}Sequencia`, type: 'VARCHAR(255) NULL' },
+                    { name: `txt${cleanUpper}`, type: 'VARCHAR(255) NULL' }
+                ];
+                for (const col of tagsColumnsToAdd) {
+                    if (!existingTagsCols.includes(col.name.toLowerCase())) {
+                        await pool.execute(`ALTER TABLE tags ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                    }
+                }
+            } catch (e) { console.error('Error in tags DDL:', e.message); }
+
+            // --- ORDEMSERVICO TABLE ---
+            try {
+                const [osCols] = await pool.execute(`SHOW COLUMNS FROM ordemservico`);
+                const existingOsCols = osCols.map(c => c.Field.toLowerCase());
+                const osColumnsToAdd = [
+                    { name: `PlanejadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `PlanejadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `UsuarioPlanejadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioPlanejadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TotalExecutado`, type: 'VARCHAR(255) NULL' },
+                    { name: `txt${cleanUpper}`, type: 'VARCHAR(255) NULL' }
+                ];
+                for (const col of osColumnsToAdd) {
+                    if (!existingOsCols.includes(col.name.toLowerCase())) {
+                        await pool.execute(`ALTER TABLE ordemservico ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                    }
+                }
+            } catch (e) { console.error('Error in ordemservico DDL:', e.message); }
+
+            // --- ORDEMSERVICOITEM TABLE ---
+            try {
+                const [osiCols] = await pool.execute(`SHOW COLUMNS FROM ordemservicoitem`);
+                const existingOsiCols = osiCols.map(c => c.Field.toLowerCase());
+                const osiColumnsToAdd = [
+                    { name: `PlanejadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `PlanejadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoInicio${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `RealizadoFinal${cleanUpper}`, type: 'DATETIME NULL' },
+                    { name: `UsuarioPlanejadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioPlanejadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoInicio${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `UsuarioRealizadoFinal${cleanUpper}`, type: 'VARCHAR(255) NULL' },
+                    { name: `${cleanUpper}TotalExecutado`, type: 'VARCHAR(255) NULL' },
+                    { name: `txt${cleanUpper}`, type: 'VARCHAR(255) NULL' }
+                ];
+                for (const col of osiColumnsToAdd) {
+                    if (!existingOsiCols.includes(col.name.toLowerCase())) {
+                        await pool.execute(`ALTER TABLE ordemservicoitem ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                    }
+                }
+            } catch (e) { console.error('Error in ordemservicoitem DDL:', e.message); }
+
+        } catch (e) {
+            console.error('ensureDynamicResourceColumns failed for Eng Stage:', e);
+        }
+    } else {
+        // --- EXISTING LOGIC FOR FABRICA = SIM ---
+        const cleanResource = rawClean;
+        try {
+            const [rows] = await pool.execute(`SHOW COLUMNS FROM ordemservicoitem`);
+            const existingCols = rows.map(c => c.Field.toLowerCase());
+            const columnsToAdd = [
+                { name: `txt${cleanResource}`, type: 'VARCHAR(255) NULL' },
+                { name: `${cleanResource}TotalExecutado`, type: 'VARCHAR(255) NULL' },
                 { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
                 { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
                 { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
                 { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
             ];
+            for (const col of columnsToAdd) {
+                if (!existingCols.includes(col.name.toLowerCase())) {
+                    await pool.execute(`ALTER TABLE ordemservicoitem ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                }
+            }
             
-            for (const col of tagsColumnsToAdd) {
+            const [osCols] = await pool.execute(`SHOW COLUMNS FROM ordemservico`);
+            const existingOsCols = osCols.map(c => c.Field.toLowerCase());
+            const osColumnsToAdd = [
+                { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
+            ];
+            for (const col of osColumnsToAdd) {
+                if (!existingOsCols.includes(col.name.toLowerCase())) {
+                    await pool.execute(`ALTER TABLE ordemservico ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
+                }
+            }
+
+            const [tagsCols] = await pool.execute(`SHOW COLUMNS FROM tags`);
+            const existingTagsCols = tagsCols.map(c => c.Field.toLowerCase());
+            for (const col of osColumnsToAdd) {
                 if (!existingTagsCols.includes(col.name.toLowerCase())) {
-                    try {
-                        await pool.execute(`ALTER TABLE tags ADD COLUMN \`${col.name}\` ${col.type}`);
-                        console.log(`Column ${col.name} added to tags`);
-                    } catch (err) {
-                        console.error(`Error adding ${col.name} to tags:`, err.message);
-                    }
+                    await pool.execute(`ALTER TABLE tags ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
                 }
             }
         } catch (e) {
-            console.error('ensureDynamicResourceColumns failed for tags:', e);
+            console.error('ensureDynamicResourceColumns failed:', e);
         }
-
-    } catch (e) {
-        console.error('ensureDynamicResourceColumns failed:', e);
     }
 };
 
@@ -18132,6 +17960,18 @@ app.listen(PORT, '0.0.0.0', async () => {
     try {
         const connection = await pool.getConnection();
         console.log('Connected to MySQL database');
+        
+        // Auto-fix DB schemas for dynamic resources on startup
+        try {
+            const [recursos] = await connection.execute("SELECT processofabricacao FROM processofabricacao WHERE (Fabrica = 'NÃO' OR Fabrica = 'NAO' OR Fabrica = 'NÂO') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')");
+            for(let r of recursos) {
+                console.log('Ensuring schema columns exist for dynamic resource:', r.processofabricacao);
+                await ensureDynamicResourceColumns(pool, r.processofabricacao, 'NÃO').catch(e => console.error(e));
+            }
+        } catch(e) {
+            console.error('Error auto-fixing dynamic schemas:', e);
+        }
+
         connection.release();
     } catch (err) {
         console.error('Failed to connect to database on startup:', err.message);
@@ -18184,45 +18024,49 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
             params.push(dataFinalInicio, dataFinalFim);
         }
 
-        // Para os filtros de Data de Planejamento e Data de Realizado, 
-        // procuraremos nas tags. Usaremos INNER JOIN ou EXISTS.
-        if (dataPlanejamentoInicio && dataPlanejamentoFim) {
+        // Puxa os setores dinâmicos
+        const [recursos] = await connection.execute("SELECT processofabricacao FROM processofabricacao WHERE (Fabrica = 'NÃO' OR Fabrica = 'NAO' OR Fabrica = 'NÂO') AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')");
+        const setoresBase = recursos.map(r => {
+            const clean = r.processofabricacao.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, '');
+            return clean.charAt(0).toUpperCase() + clean.slice(1);
+        });
+        const setoresDinamicos = [...new Set(setoresBase)];
+
+        // Filtros de Datas Planejamento / Realizado dinâmicos
+        if (dataPlanejamentoInicio && dataPlanejamentoFim && setoresDinamicos.length > 0) {
+            const planConds = setoresDinamicos.map(s => `STR_TO_DATE(t2.PlanejadoInicio${s}, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)`).join(' OR ');
             whereClause += ` AND EXISTS (
                 SELECT 1 FROM tags t2 
                 WHERE t2.IdProjeto = p.IdProjeto 
                 AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
-                AND (
-                    STR_TO_DATE(t2.PlanejadoInicioMedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.PlanejadoInicioIsometrico, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.PlanejadoInicioEngenharia, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.PlanejadoInicioAprovacao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.PlanejadoInicioAcabamento, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.PlanejadoInicioExpedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                )
+                AND ( ${planConds} )
             )`;
-            for(let i=0; i<6; i++) {
+            for(let i=0; i<setoresDinamicos.length; i++) {
                 params.push(dataPlanejamentoInicio, dataPlanejamentoFim);
             }
         }
 
-        if (dataRealizadoInicio && dataRealizadoFim) {
+        if (dataRealizadoInicio && dataRealizadoFim && setoresDinamicos.length > 0) {
+            const realConds = setoresDinamicos.map(s => `STR_TO_DATE(t2.RealizadoFinal${s}, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)`).join(' OR ');
             whereClause += ` AND EXISTS (
                 SELECT 1 FROM tags t2 
                 WHERE t2.IdProjeto = p.IdProjeto 
                 AND (t2.D_E_L_E_T_E IS NULL OR t2.D_E_L_E_T_E = '')
-                AND (
-                    STR_TO_DATE(t2.RealizadoFinalMedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.RealizadoFinalIsometrico, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.RealizadoFinalEngenharia, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.RealizadoFinalAprovacao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.RealizadoFinalAcabamento, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                    OR STR_TO_DATE(t2.realizadoFinalExpedicao, '%d/%m/%Y') BETWEEN DATE(?) AND DATE(?)
-                )
+                AND ( ${realConds} )
             )`;
-            for(let i=0; i<6; i++) {
+            for(let i=0; i<setoresDinamicos.length; i++) {
                 params.push(dataRealizadoInicio, dataRealizadoFim);
             }
         }
+
+        const dynamicSelects = setoresDinamicos.map(s => `
+                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinal${s} IS NULL OR TRIM(t.RealizadoFinal${s}) = '') THEN 1 ELSE 0 END) as Falta${s},
+                SUM(CASE WHEN t.RealizadoFinal${s} IS NOT NULL AND TRIM(t.RealizadoFinal${s}) != '' THEN 1 ELSE 0 END) as Ok${s},
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicio${s}),''), '%d/%m/%Y')), '%d/%m/%Y') as Plan${s},
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinal${s}),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinal${s},
+                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.RealizadoInicio${s}),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealInicio${s},
+                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinal${s}),''),  '%d/%m/%Y')), '%d/%m/%Y') as Real${s}
+        `).join(', ');
 
         const query = `
             SELECT 
@@ -18236,42 +18080,8 @@ app.get('/api/acompanhamento-etapas', tenantMiddleware, async (req, res) => {
                 p.StatusProj as StatusProj,
                 p.liberado as liberado,
                 p.Finalizado as Finalizado,
-                COUNT(t.IdTag) as TotalTags,
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalMedicao IS NULL OR TRIM(t.RealizadoFinalMedicao) = '') THEN 1 ELSE 0 END) as FaltaMedicao,
-                SUM(CASE WHEN t.RealizadoFinalMedicao IS NOT NULL AND TRIM(t.RealizadoFinalMedicao) != '' THEN 1 ELSE 0 END) as OkMedicao,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioMedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanMedicao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalMedicao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalMedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealMedicao,
-                
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalIsometrico IS NULL OR TRIM(t.RealizadoFinalIsometrico) = '') THEN 1 ELSE 0 END) as FaltaIsometrico,
-                SUM(CASE WHEN t.RealizadoFinalIsometrico IS NOT NULL AND TRIM(t.RealizadoFinalIsometrico) != '' THEN 1 ELSE 0 END) as OkIsometrico,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioIsometrico),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanIsometrico,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalIsometrico,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalIsometrico),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealIsometrico,
-                
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalEngenharia IS NULL OR TRIM(t.RealizadoFinalEngenharia) = '') THEN 1 ELSE 0 END) as FaltaEngenharia,
-                SUM(CASE WHEN t.RealizadoFinalEngenharia IS NOT NULL AND TRIM(t.RealizadoFinalEngenharia) != '' THEN 1 ELSE 0 END) as OkEngenharia,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioEngenharia),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanEngenharia,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalEngenharia,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalEngenharia),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealEngenharia,
-                
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAprovacao IS NULL OR TRIM(t.RealizadoFinalAprovacao) = '') THEN 1 ELSE 0 END) as FaltaAprovacao,
-                SUM(CASE WHEN t.RealizadoFinalAprovacao IS NOT NULL AND TRIM(t.RealizadoFinalAprovacao) != '' THEN 1 ELSE 0 END) as OkAprovacao,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAprovacao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAprovacao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAprovacao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAprovacao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAprovacao,
-                
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.RealizadoFinalAcabamento IS NULL OR TRIM(t.RealizadoFinalAcabamento) = '') THEN 1 ELSE 0 END) as FaltaAcabamento,
-                SUM(CASE WHEN t.RealizadoFinalAcabamento IS NOT NULL AND TRIM(t.RealizadoFinalAcabamento) != '' THEN 1 ELSE 0 END) as OkAcabamento,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioAcabamento),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanAcabamento,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalAcabamento,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.RealizadoFinalAcabamento),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealAcabamento,
-                
-                SUM(CASE WHEN t.IdTag IS NOT NULL AND (t.realizadoFinalExpedicao IS NULL OR TRIM(t.realizadoFinalExpedicao) = '') THEN 1 ELSE 0 END) as FaltaExpedicao,
-                SUM(CASE WHEN t.realizadoFinalExpedicao IS NOT NULL AND TRIM(t.realizadoFinalExpedicao) != '' THEN 1 ELSE 0 END) as OkExpedicao,
-                DATE_FORMAT(MIN(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoInicioExpedicao),''), '%d/%m/%Y')), '%d/%m/%Y') as PlanExpedicao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.PlanejadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as PlanFinalExpedicao,
-                DATE_FORMAT(MAX(STR_TO_DATE(NULLIF(TRIM(t.realizadoFinalExpedicao),''),  '%d/%m/%Y')), '%d/%m/%Y') as RealExpedicao
+                COUNT(t.IdTag) as TotalTags
+                ${dynamicSelects ? ',' + dynamicSelects : ''}
             FROM projetos p
             LEFT JOIN tags t ON t.IdProjeto = p.IdProjeto AND (t.D_E_L_E_T_E IS NULL OR t.D_E_L_E_T_E = '')
             WHERE ${whereClause}
@@ -18302,29 +18112,13 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
         const data = payload || req.body; // retro-compatibility
         const usuarioLogado = usuario || 'Sistema';
 
-        // Setores e seus campos de Realizado (exigem PlanejadoInicio preenchido na tag)
-        const SETORES_REALIZADO = [
-            { setor: 'Medicao',     planField: 'PlanejadoInicioMedicao',     realFields: ['RealizadoInicioMedicao', 'RealizadoFinalMedicao'] },
-            { setor: 'Isometrico',  planField: 'PlanejadoInicioIsometrico',   realFields: ['RealizadoInicioIsometrico', 'RealizadoFinalIsometrico'] },
-            { setor: 'Engenharia',  planField: 'PlanejadoInicioEngenharia',   realFields: ['RealizadoInicioEngenharia', 'RealizadoFinalEngenharia'] },
-            { setor: 'Aprovacao',   planField: 'PlanejadoInicioAprovacao',    realFields: ['RealizadoInicioAprovacao', 'RealizadoFinalAprovacao'] },
-            { setor: 'Acabamento',  planField: 'PlanejadoInicioAcabamento',   realFields: ['RealizadoInicioAcabamento', 'RealizadoFinalAcabamento'] },
-            { setor: 'Expedicao',   planField: 'PlanejadoInicioExpedicao',    realFields: ['RealizadoInicioExpedicao', 'realizadoFinalExpedicao'] },
-        ];
-
-        const camposPermitidos = [
-            'PlanejadoInicioMedicao', 'PlanejadoFinalMedicao', 'RealizadoInicioMedicao', 'RealizadoFinalMedicao',
-            'PlanejadoInicioIsometrico', 'PlanejadoFinalIsometrico', 'RealizadoInicioIsometrico', 'RealizadoFinalIsometrico',
-            'PlanejadoInicioEngenharia', 'PlanejadoFinalEngenharia', 'RealizadoInicioEngenharia', 'RealizadoFinalEngenharia',
-            'PlanejadoInicioAprovacao', 'PlanejadoFinalAprovacao', 'RealizadoInicioAprovacao', 'RealizadoFinalAprovacao',
-            'PlanejadoInicioAcabamento', 'PlanejadoFinalAcabamento', 'RealizadoInicioAcabamento', 'RealizadoFinalAcabamento',
-            'PlanejadoInicioExpedicao', 'PlanejadoFinalExpedicao', 'RealizadoInicioExpedicao', 'realizadoFinalExpedicao'
-        ];
+        // Prefixos válidos para colunas de etapa de projeto
+        const allowedPrefixes = ['PlanejadoInicio', 'PlanejadoFinal', 'RealizadoInicio', 'RealizadoFinal', 'realizadoFinal'];
 
         // Normaliza datas ISO → BR no payload
         const normalizedData = {};
         Object.keys(data).forEach(key => {
-            if (camposPermitidos.includes(key)) {
+            if (allowedPrefixes.some(p => key.startsWith(p))) {
                 let val = data[key];
                 if (val && val.includes('-') && val.split('-').length === 3 && val.split('-')[0].length === 4) {
                     const parts = val.split('-');
@@ -18345,10 +18139,9 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
             tagFilter += ` AND IdTag IN (${tagIds.map(() => '?').join(',')})`;
             tagParams.push(...tagIds);
         }
-        const [tagsRows] = await connection.execute(
-            `SELECT IdTag, ${SETORES_REALIZADO.map(s => `\`${s.planField}\``).join(', ')} FROM tags WHERE ${tagFilter}`,
-            tagParams
-        );
+        
+        // Seleciona todos os campos para validar bloqueios dinâmicos de Realizado
+        const [tagsRows] = await connection.execute(`SELECT * FROM tags WHERE ${tagFilter}`, tagParams);
 
         // Para cada tag, aplica o update respeitando a regra: Realizado só se PlanejadoInicio existir
         let totalAffected = 0;
@@ -18359,17 +18152,22 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
             const params = [];
 
             Object.keys(normalizedData).forEach(key => {
-                // Verifica se ? campo de Realizado
-                const setorConf = SETORES_REALIZADO.find(s => s.realFields.includes(key));
-                if (setorConf) {
-                    // Tag já tem PlanejadoInicio? ou payload está enviando o PlanejadoInicio deste setor?
-                    const tagJaTemPlan = !!(tag[setorConf.planField] && tag[setorConf.planField].trim());
-                    const payloadTemPlan = !!(normalizedData[setorConf.planField]);
+                let planField = null;
+                let isRealizado = false;
+                
+                if (key.startsWith('RealizadoInicio')) { isRealizado = true; planField = key.replace('RealizadoInicio', 'PlanejadoInicio'); }
+                else if (key.startsWith('RealizadoFinal')) { isRealizado = true; planField = key.replace('RealizadoFinal', 'PlanejadoInicio'); }
+                else if (key.startsWith('realizadoFinal')) { isRealizado = true; planField = key.replace('realizadoFinal', 'PlanejadoInicio'); }
+
+                if (isRealizado && planField) {
+                    const tagJaTemPlan = !!(tag[planField] && tag[planField].trim());
+                    const payloadTemPlan = !!(normalizedData[planField]);
                     if (!tagJaTemPlan && !payloadTemPlan) {
                         totalBloqueados++;
                         return; // Bloqueia este campo para esta tag
                     }
                 }
+                
                 updates.push(`\`${key}\` = ?`);
                 params.push(normalizedData[key]);
                 const capKey = key.charAt(0).toUpperCase() + key.slice(1);
@@ -18388,6 +18186,105 @@ app.put('/api/acompanhamento-etapas/projeto/:id/bulk-update', tenantMiddleware, 
         }
 
         const result = { affectedRows: totalAffected };
+
+        // -- CASCATA PARA ORDEM DE SERVICO e ORDEM DE SERVICO ITEM --
+        if (totalAffected > 0 && Array.isArray(tagIds) && tagIds.length > 0) {
+            try {
+                const mapCols = {
+                    'PlanejadoInicioMedicao': ['PlanejadoInicioMEDICAO'],
+                    'PlanejadoFinalMedicao': ['PlanejadoFinalMEDICAO'],
+                    'RealizadoInicioMedicao': ['RealizadoInicioMEDICAO'],
+                    'RealizadoFinalMedicao': ['RealizadoFinalMEDICAO'],
+                    
+                    'PlanejadoInicioIsometrico': ['PlanejadoInicioISOMETRICO'],
+                    'PlanejadoFinalIsometrico': ['PlanejadoFinalISOMETRICO'],
+                    'RealizadoInicioIsometrico': ['RealizadoInicioISOMETRICO'],
+                    'RealizadoFinalIsometrico': ['RealizadoFinalISOMETRICO'],
+                    
+                    'PlanejadoInicioEngenharia': ['PlanejadoInicioENGENHARIA'],
+                    'PlanejadoFinalEngenharia': ['PlanejadoFinalENGENHARIA'],
+                    'RealizadoInicioEngenharia': ['RealizadoInicioENGENHARIA'],
+                    'RealizadoFinalEngenharia': ['RealizadoFinalENGENHARIA'],
+                    
+                    'PlanejadoInicioAprovacao': ['PlanejadoInicioAPROVACAO'],
+                    'PlanejadoFinalAprovacao': ['PlanejadoFinalAPROVACAO'],
+                    'RealizadoInicioAprovacao': ['RealizadoInicioAPROVACAO'],
+                    'RealizadoFinalAprovacao': ['RealizadoFinalAPROVACAO'],
+                    
+                    'PlanejadoInicioAcabamento': ['PlanejadoInicioACABAMENTO'],
+                    'PlanejadoFinalAcabamento': ['PlanejadoFinalACABAMENTO'],
+                    'RealizadoInicioAcabamento': ['RealizadoInicioACABAMENTO'],
+                    'RealizadoFinalAcabamento': ['RealizadoFinalACABAMENTO'],
+                    
+                    'PlanejadoInicioExpedicao': ['PlanejadoInicioEXPEDIÇÃO'],
+                    'PlanejadoFinalExpedicao': ['PlanejadoFinalEXPEDIÇÃO'],
+                    'RealizadoInicioExpedicao': ['RealizadoInicioExpedicao', 'RealizadoInicioEXPEDIÇÃO'],
+                    'realizadoFinalExpedicao': ['RealizadofinalExpedicao', 'RealizadoFinalEXPEDIÇÃO']
+                };
+
+                const usrCols = {
+                    'RealizadoInicioExpedicao': ['UsuarioRealizadoInicioExpedicao', 'UsuarioRealizadoInicioEXPEDIÇÃO'],
+                    'realizadoFinalExpedicao': ['UsuarioRealizadoFinalExpedicao', 'UsuarioRealizadoFinalEXPEDIÇÃO']
+                };
+
+                const osUpdates = [];
+                const osParams = [];
+                
+                Object.keys(normalizedData).forEach(key => {
+                    const v = normalizedData[key];
+                    let targetCols = mapCols[key];
+                    
+                    // Fallback dinâmico para novos setores
+                    if (!targetCols || targetCols.length === 0) {
+                        let prefix = '';
+                        let suffix = '';
+                        if (key.startsWith('PlanejadoInicio')) { prefix = 'PlanejadoInicio'; suffix = key.replace('PlanejadoInicio', ''); }
+                        else if (key.startsWith('PlanejadoFinal')) { prefix = 'PlanejadoFinal'; suffix = key.replace('PlanejadoFinal', ''); }
+                        else if (key.startsWith('RealizadoInicio')) { prefix = 'RealizadoInicio'; suffix = key.replace('RealizadoInicio', ''); }
+                        else if (key.startsWith('RealizadoFinal')) { prefix = 'RealizadoFinal'; suffix = key.replace('RealizadoFinal', ''); }
+                        else if (key.startsWith('realizadoFinal')) { prefix = 'RealizadoFinal'; suffix = key.replace('realizadoFinal', ''); }
+                        
+                        if (prefix && suffix) {
+                             targetCols = [`${prefix}${suffix.toUpperCase()}`];
+                        } else {
+                             targetCols = [];
+                        }
+                    }
+
+                    targetCols.forEach(col => {
+                        osUpdates.push(`\`${col}\` = ?`);
+                        osParams.push(v);
+                        if (v) {
+                            let uCol = null;
+                            if (usrCols[key]) {
+                                const idx = targetCols.indexOf(col);
+                                if (usrCols[key][idx]) uCol = usrCols[key][idx];
+                            } else {
+                                uCol = `Usuario${col.charAt(0).toUpperCase() + col.slice(1)}`;
+                            }
+                            if (uCol) {
+                                osUpdates.push(`\`${uCol}\` = ?`);
+                                osParams.push(usuarioLogado);
+                            }
+                        }
+                    });
+                });
+
+                if (osUpdates.length > 0) {
+                    const inClause = tagIds.map(() => '?').join(',');
+                    
+                    // Atualiza ordemservicoitem
+                    const queryOsi = `UPDATE ordemservicoitem SET ${osUpdates.join(', ')} WHERE IdTag IN (${inClause})`;
+                    await connection.execute(queryOsi, [...osParams, ...tagIds]).catch(e => console.error('Cascata OSI erro:', e));
+                    
+                    // Atualiza ordemservico
+                    const queryOs = `UPDATE ordemservico SET ${osUpdates.join(', ')} WHERE IdTag IN (${inClause})`;
+                    await connection.execute(queryOs, [...osParams, ...tagIds]).catch(e => console.error('Cascata OS erro:', e));
+                }
+            } catch (e) {
+                console.error('Erro na cascata para OS/OSItem:', e);
+            }
+        }
 
         // -- RECALCULAR MIN/MAX DAS DATAS NO PROJETO --
         try {
