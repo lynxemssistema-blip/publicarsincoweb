@@ -1497,7 +1497,13 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
 {/* SETORES DINAMICOS CHECKBOXES */}
 <div className="flex flex-wrap items-center gap-2 px-5 pt-2 pb-1 border-b border-slate-100">
     <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Colunas Produção:</span>
-    <label className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 transition-colors">
+    <label 
+        className={`flex items-center gap-1.5 cursor-pointer font-semibold text-xs px-3 py-1.5 rounded-full transition-all border ${
+            setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0
+            ? 'bg-[#03624C] text-white border-[#03624C] shadow-sm'
+            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+        }`}
+    >
         <input 
             type="checkbox" 
             checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
@@ -1505,24 +1511,34 @@ const saveObservacao = useCallback(async (idProjeto: number, value: string) => {
                 if (e.target.checked) setSetoresVisiveis([...setoresDinamicos]);
                 else setSetoresVisiveis([]);
             }}
-            className="w-3 h-3 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
+            className="sr-only"
         />
-        <span className="text-[10px] font-bold text-emerald-700">TODOS</span>
+        <span>TODOS</span>
     </label>
-    {setoresDinamicos.map(s => (
-        <label key={s} className="flex items-center gap-1.5 cursor-pointer bg-slate-50 hover:bg-slate-100 px-2 py-1 rounded border border-slate-200 transition-colors">
-            <input 
-                type="checkbox" 
-                checked={setoresVisiveis.includes(s)}
-                onChange={(e) => {
-                    if (e.target.checked) setSetoresVisiveis([...setoresVisiveis, s]);
-                    else setSetoresVisiveis(setoresVisiveis.filter(x => x !== s));
-                }}
-                className="w-3 h-3 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500"
-            />
-            <span className="text-[10px] font-bold text-slate-700">{s}</span>
-        </label>
-    ))}
+    {setoresDinamicos.map(s => {
+        const isChecked = setoresVisiveis.includes(s);
+        return (
+            <label 
+                key={s} 
+                className={`flex items-center gap-1.5 cursor-pointer font-medium text-xs px-3 py-1.5 rounded-full transition-all border ${
+                    isChecked 
+                    ? 'bg-[#e6f4f1] text-[#03624C] border-[#03624C] shadow-sm' 
+                    : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+            >
+                <input 
+                    type="checkbox" 
+                    checked={isChecked}
+                    onChange={(e) => {
+                        if (e.target.checked) setSetoresVisiveis([...setoresVisiveis, s]);
+                        else setSetoresVisiveis(setoresVisiveis.filter(x => x !== s));
+                    }}
+                    className="sr-only"
+                />
+                <span>{s}</span>
+            </label>
+        );
+    })}
 </div>
 
  <div className="px-5 py-2 flex items-center gap-2 flex-wrap">

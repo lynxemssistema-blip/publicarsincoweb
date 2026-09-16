@@ -577,8 +577,14 @@ export default function AcompanhamentoEtapas() {
  <div className="px-6 py-2 border-b border-gray-300 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
  <div className="font-bold text-gray-800 text-xs flex flex-col gap-2">
  <div>Acompanhamento Etapas</div>
- <div className="flex flex-wrap gap-4 items-center">
- <label className="flex items-center gap-1 cursor-pointer font-normal text-xs font-semibold text-[#03624C]">
+ <div className="flex flex-wrap gap-2 items-center">
+ <label 
+ className={`flex items-center gap-1.5 cursor-pointer font-semibold text-xs px-3 py-1.5 rounded-full transition-all border ${
+ setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0
+ ? 'bg-[#03624C] text-white border-[#03624C] shadow-sm'
+ : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+ }`}
+ >
  <input 
  type="checkbox" 
  checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
@@ -589,15 +595,24 @@ export default function AcompanhamentoEtapas() {
  setSetoresVisiveis([]);
  }
  }}
- className="rounded border-gray-300 text-[#03624C] focus:ring-[#03624C] w-3 h-3"
+ className="sr-only"
  />
  <span>TODOS</span>
  </label>
- {setoresDinamicos.map(s => (
- <label key={s.sulfixo} className="flex items-center gap-1 cursor-pointer font-normal text-xs">
+ {setoresDinamicos.map(s => {
+ const isChecked = setoresVisiveis.includes(s.sulfixo);
+ return (
+ <label 
+ key={s.sulfixo} 
+ className={`flex items-center gap-1.5 cursor-pointer font-medium text-xs px-3 py-1.5 rounded-full transition-all border ${
+ isChecked 
+ ? 'bg-[#e6f4f1] text-[#03624C] border-[#03624C] shadow-sm' 
+ : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+ }`}
+ >
  <input 
  type="checkbox" 
- checked={setoresVisiveis.includes(s.sulfixo)}
+ checked={isChecked}
  onChange={(e) => {
  if (e.target.checked) {
  setSetoresVisiveis(prev => [...prev, s.sulfixo]);
@@ -605,11 +620,12 @@ export default function AcompanhamentoEtapas() {
  setSetoresVisiveis(prev => prev.filter(v => v !== s.sulfixo));
  }
  }}
- className="rounded border-gray-300 text-[#03624C] focus:ring-[#03624C] w-3 h-3"
+ className="sr-only"
  />
  <span>{s.titulo}</span>
  </label>
- ))}
+ );
+ })}
  </div>
  </div>
  <div className="flex items-center gap-2">
@@ -650,7 +666,7 @@ export default function AcompanhamentoEtapas() {
  <tr className="text-[10px] uppercase text-white border-b border-[#1b6351]">
  {setoresDinamicos.filter(s => setoresVisiveis.includes(s.sulfixo)).map(s => (
  <React.Fragment key={s.sulfixo}>
- <th className="p-1.5 text-center border-r border-[#1b6351] bg-[#0f4a3b] font-bold min-w-[70px]">Falta</th>
+ <th className="p-1.5 text-center border-r border-[#1b6351] bg-[#0f4a3b] font-bold min-w-[70px]">Falta (Tag)</th>
  <th className="p-1.5 text-center border-r-2 border-[#1b6351] bg-[#145d4b] font-bold min-w-[70px]">Ok</th>
  </React.Fragment>
  ))}
