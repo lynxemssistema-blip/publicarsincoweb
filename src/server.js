@@ -4114,27 +4114,299 @@ app.get('/api/material', tenantMiddleware, async (req, res) => {
             ensureColumn(db, 'material', 'ImagemProduto', 'LONGTEXT NULL'),
             ensureColumn(db, 'material', 'acabamento', 'VARCHAR(150) NULL'),
             ensureColumn(db, 'material', 'D_E_L_E_T_E', 'VARCHAR(1) NULL'),
+            ensureColumn(db, 'material', 'PecaManufat', 'VARCHAR(1) NULL'),
+            ensureColumn(db, 'material', 'EnderecoArquivo', 'VARCHAR(500) NULL'),
+            ensureColumn(db, 'material', 'TxtTipoDesenho', 'VARCHAR(100) NULL'),
         ]);
 
-        const [rows] = await req.tenantDbPool.execute(`
+        const { tipo } = req.query;
+        let whereTipo = '';
+        if (tipo === 'manufaturada') {
+            whereTipo = " AND m.PecaManufat = 'S'";
+        } else if (tipo === 'insumo') {
+            whereTipo = " AND (m.PecaManufat IS NULL OR m.PecaManufat <> 'S')";
+        }
+
+        const [rows] = await db.execute(`
             SELECT 
                 m.IdMaterial, m.CodMatFabricante, m.DescResumo, m.DescDetal, m.NumeroRP,
                 m.FamiliaMat, f.DescFamilia,
                 m.CodigoJuridicoMat, pj.RazaoSocial as Fornecedor,
                 m.Peso, m.Unidade, m.Altura, m.Largura, m.Profundidade,
                 m.Valor, m.PercICMS, m.vICMS, m.PercIPI, m.vIPI, m.vLiquido,
-                m.acabamento, m.DtCad, m.ImagemProduto
+                m.acabamento, m.DtCad, m.ImagemProduto,
+                m.PecaManufat, m.EnderecoArquivo, m.TxtTipoDesenho
             FROM material m
             LEFT JOIN familia f ON m.FamiliaMat = f.IdFamilia
             LEFT JOIN pessoajuridica pj ON m.CodigoJuridicoMat = pj.IdPessoa
-            WHERE m.D_E_L_E_T_E IS NULL OR m.D_E_L_E_T_E = ''
+            WHERE (m.D_E_L_E_T_E IS NULL OR m.D_E_L_E_T_E = '') ${whereTipo}
             ORDER BY m.IdMaterial DESC
-            LIMIT 200
+            LIMIT 500
         `);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching material list:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar materiais' });
+    }
+});
+
+// ESTRUTURA COMPLETA DO PRODUTO (BOM Multinível Recursiva & Roteiro de Processos)
+app.get('/api/material/:id/estrutura-completa', tenantMiddleware, async (req, res) => {
+    try {
+        const db = req.tenantDbPool || pool;
+        const rootId = parseInt(req.params.id, 10);
+        if (!rootId) {
+            return res.status(400).json({ success: false, message: 'ID do material inválido.' });
+        }
+
+        // 1. Busca dados cadastrais do material raiz
+        const [rootRows] = await db.execute(`
+            SELECT 
+                m.IdMaterial, m.CodMatFabricante, m.DescResumo, m.DescDetal, 
+                m.Unidade, m.Peso, m.PecaManufat, m.EnderecoArquivo, m.TxtTipoDesenho,
+                f.DescFamilia
+            FROM material m
+            LEFT JOIN familia f ON m.FamiliaMat = f.IdFamilia
+            WHERE m.IdMaterial = ? AND (m.D_E_L_E_T_E IS NULL OR m.D_E_L_E_T_E = '')
+            LIMIT 1
+        `, [rootId]);
+
+        if (rootRows.length === 0) {
+            return res.status(404).json({ success: false, message: 'Material não encontrado.' });
+        }
+
+        const rootMaterial = rootRows[0];
+
+        // Helper para carregar processos e recursos fabris de um item
+        const getProcessos = async (codMatFabricante, idMaterial) => {
+            try {
+                const [procRows] = await db.execute(`
+                    SELECT 
+                        mp.IdMaterialProcesso,
+                        COALESCE(mp.SequenciaExecucao, 10) AS Seq,
+                        COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso,
+                        COALESCE(pf.ProcessoFabricacao, CONCAT('Recurso #', mp.IdProcesso)) AS Recurso,
+                        COALESCE(mp.TempoEstimadoMin, pf.Setup, 0) AS TempoSetup,
+                        COALESCE(mp.TempoPadraoMin, pf.TempoPadrao, 0) AS TempoPadrao,
+                        mp.Observacao
+                    FROM material_processo mp
+                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+                    WHERE (mp.codmatFabricante = ? OR (mp.IdMaterial = ? AND mp.IdMaterial > 0))
+                      AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
+                    ORDER BY mp.SequenciaExecucao ASC
+                `, [codMatFabricante || '', idMaterial || 0]);
+
+                return procRows.map(p => ({
+                    IdMaterialProcesso: p.IdMaterialProcesso,
+                    Seq: Number(p.Seq) || 10,
+                    NomeProcesso: p.NomeProcesso || '-',
+                    Recurso: p.Recurso || '-',
+                    TempoSetup: parseFloat(p.TempoSetup) || 0,
+                    TempoPadrao: parseFloat(p.TempoPadrao) || 0,
+                    Observacao: p.Observacao || ''
+                }));
+            } catch (err) {
+                console.warn(`[EstruturaCompleta] Falha ao buscar processos para ${codMatFabricante}:`, err.message);
+                return [];
+            }
+        };
+
+        // 2. Busca recursiva da árvore de componentes (BOM)
+        let maxNivel = 0;
+
+        const getBomRecursive = async (parentId, parentCod, qtdeAcumulada = 1, nivel = 1, pathIds = []) => {
+            if (pathIds.includes(parentId) || nivel > 25) {
+                // Previne ciclos infinitos A -> B -> A ou profundidade excessiva
+                return [];
+            }
+            const currentPath = [...pathIds, parentId];
+
+            const [childrenRows] = await db.execute(`
+                SELECT 
+                    mp.IdMontaPeca,
+                    mp.IdMaterial,
+                    mp.IdMaterialPeca,
+                    mp.CodMatFabricante,
+                    COALESCE(m.DescDetal, m.DescResumo, mp.CodMatFabricante) AS DescResumo,
+                    COALESCE(mp.QtdeUnitaria, CAST(NULLIF(mp.PecaQtde, '') AS DECIMAL(18,4)), 1) AS QtdeUnitaria,
+                    m.Unidade,
+                    COALESCE(m.Peso, 0) AS Peso,
+                    COALESCE(m.PecaManufat, 'N') AS PecaManufat,
+                    m.EnderecoArquivo,
+                    m.TxtTipoDesenho,
+                    (SELECT COUNT(1) FROM montapeca sub 
+                     WHERE sub.IdMaterialPeca = mp.IdMaterial 
+                       AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                FROM montapeca mp
+                LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
+                WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
+                  AND (mp.IdMaterialPeca = ? OR (mp.CodMatFabricantePeca = ? AND (mp.IdMaterialPeca IS NULL OR mp.IdMaterialPeca = 0)))
+                ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC
+            `, [parentId, parentCod || '']);
+
+            const result = [];
+
+            for (const child of childrenRows) {
+                if (nivel > maxNivel) maxNivel = nivel;
+                const qtdUnit = parseFloat(child.QtdeUnitaria) || 1;
+                const qtdAcum = qtdeAcumulada * qtdUnit;
+                const pesoUnit = parseFloat(child.Peso) || 0;
+                const pesoTot = pesoUnit * qtdAcum;
+                const hasChildSub = Number(child.NumChildren) > 0;
+                const isManufat = child.PecaManufat === 'S' || hasChildSub;
+
+                let childProcessos = [];
+                if (isManufat) {
+                    childProcessos = await getProcessos(child.CodMatFabricante, child.IdMaterial);
+                }
+
+                const node = {
+                    IdMontaPeca: child.IdMontaPeca,
+                    IdMaterial: child.IdMaterial,
+                    IdMaterialPai: parentId,
+                    Nivel: nivel,
+                    CodMatFabricante: child.CodMatFabricante || '-',
+                    DescResumo: child.DescResumo || '-',
+                    QtdeUnitaria: qtdUnit,
+                    QtdeAcumulada: qtdAcum,
+                    Unidade: child.Unidade || 'UN',
+                    Peso: pesoUnit,
+                    PesoTotal: pesoTot,
+                    PecaManufat: isManufat ? 'S' : 'N',
+                    EnderecoArquivo: child.EnderecoArquivo || '',
+                    TxtTipoDesenho: child.TxtTipoDesenho || '',
+                    hasChildren: hasChildSub,
+                    processos: childProcessos,
+                    children: []
+                };
+
+                // Subárvore recursiva
+                if (node.hasChildren && child.IdMaterial && !currentPath.includes(child.IdMaterial)) {
+                    node.children = await getBomRecursive(child.IdMaterial, child.CodMatFabricante, qtdAcum, nivel + 1, currentPath);
+                }
+
+                result.push(node);
+            }
+
+            return result;
+        };
+
+        // Processos do nó raiz se for manufaturado
+        let rootProcessos = [];
+        if (rootMaterial.PecaManufat === 'S') {
+            rootProcessos = await getProcessos(rootMaterial.CodMatFabricante, rootMaterial.IdMaterial);
+        }
+
+        const bomChildren = await getBomRecursive(rootMaterial.IdMaterial, rootMaterial.CodMatFabricante, 1, 1, []);
+
+        // Flatten para exibição tabulada e cálculos
+        const flatBom = [];
+        let pesoTotalCalculado = parseFloat(rootMaterial.Peso) || 0;
+
+        const flatten = (items) => {
+            for (const item of items) {
+                flatBom.push({
+                    IdMontaPeca: item.IdMontaPeca,
+                    IdMaterial: item.IdMaterial,
+                    IdMaterialPai: item.IdMaterialPai,
+                    Nivel: item.Nivel,
+                    CodMatFabricante: item.CodMatFabricante,
+                    DescResumo: item.DescResumo,
+                    QtdeUnitaria: item.QtdeUnitaria,
+                    QtdeAcumulada: item.QtdeAcumulada,
+                    Unidade: item.Unidade,
+                    Peso: item.Peso,
+                    PesoTotal: item.PesoTotal,
+                    PecaManufat: item.PecaManufat,
+                    EnderecoArquivo: item.EnderecoArquivo,
+                    TxtTipoDesenho: item.TxtTipoDesenho,
+                    hasChildren: item.hasChildren,
+                    processosCount: item.processos ? item.processos.length : 0,
+                    processos: item.processos || []
+                });
+                pesoTotalCalculado += (item.PesoTotal || 0);
+                if (item.children && item.children.length > 0) {
+                    flatten(item.children);
+                }
+            }
+        };
+
+        const rootNode = {
+            Nivel: 0,
+            IdMaterial: rootMaterial.IdMaterial,
+            CodMatFabricante: rootMaterial.CodMatFabricante,
+            DescResumo: rootMaterial.DescResumo || rootMaterial.DescDetal || '-',
+            QtdeUnitaria: 1,
+            QtdeAcumulada: 1,
+            Unidade: rootMaterial.Unidade || 'UN',
+            Peso: parseFloat(rootMaterial.Peso) || 0,
+            PesoTotal: parseFloat(rootMaterial.Peso) || 0,
+            PecaManufat: rootMaterial.PecaManufat || 'S',
+            EnderecoArquivo: rootMaterial.EnderecoArquivo || '',
+            TxtTipoDesenho: rootMaterial.TxtTipoDesenho || '',
+            hasChildren: bomChildren.length > 0,
+            processosCount: rootProcessos.length,
+            processos: rootProcessos || []
+        };
+
+        flatten(bomChildren);
+
+        // Agrupa os roteiros de fabricação de todas as peças manufaturadas encontradas
+        const roteiroProcessos = [];
+        if (rootProcessos.length > 0 || rootMaterial.PecaManufat === 'S') {
+            const totSetup = rootProcessos.reduce((acc, p) => acc + (p.TempoSetup || 0), 0);
+            const totPadrao = rootProcessos.reduce((acc, p) => acc + (p.TempoPadrao || 0), 0);
+            roteiroProcessos.push({
+                IdMaterial: rootMaterial.IdMaterial,
+                CodMatFabricante: rootMaterial.CodMatFabricante,
+                DescResumo: rootMaterial.DescResumo || rootMaterial.DescDetal || '-',
+                Nivel: 0,
+                processos: rootProcessos,
+                tempoTotalSetup: totSetup,
+                tempoTotalPadrao: totPadrao,
+                tempoTotalGeral: totSetup + totPadrao
+            });
+        }
+
+        const collectManufatProcessos = (items) => {
+            for (const item of items) {
+                if (item.PecaManufat === 'S' && item.processos && item.processos.length > 0) {
+                    const totSetup = item.processos.reduce((acc, p) => acc + (p.TempoSetup || 0), 0);
+                    const totPadrao = item.processos.reduce((acc, p) => acc + (p.TempoPadrao || 0), 0);
+                    roteiroProcessos.push({
+                        IdMaterial: item.IdMaterial,
+                        CodMatFabricante: item.CodMatFabricante,
+                        DescResumo: item.DescResumo,
+                        Nivel: item.Nivel,
+                        processos: item.processos,
+                        tempoTotalSetup: totSetup,
+                        tempoTotalPadrao: totPadrao,
+                        tempoTotalGeral: totSetup + totPadrao
+                    });
+                }
+                if (item.children && item.children.length > 0) {
+                    collectManufatProcessos(item.children);
+                }
+            }
+        };
+        collectManufatProcessos(bomChildren);
+
+        res.json({
+            success: true,
+            data: {
+                material: rootMaterial,
+                totalNiveis: maxNivel,
+                pesoTotal: pesoTotalCalculado,
+                totalItens: flatBom.length,
+                root: rootNode,
+                tree: bomChildren,
+                flatBom: [rootNode, ...flatBom],
+                roteiroProcessos
+            }
+        });
+    } catch (error) {
+        console.error('[EstruturaCompleta] Erro:', error);
+        res.status(500).json({ success: false, message: 'Erro ao carregar estrutura do produto: ' + error.message });
     }
 });
 
@@ -9695,15 +9967,16 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             return res.status(400).json({ success: false, message: 'Nenhum material selecionado.' });
         }
 
-        conn = await pool.getConnection();
+        conn = await (req.tenantDbPool || pool).getConnection();
         await conn.beginTransaction();
 
-        const [osRows] = await conn.execute(`SELECT IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag, IdEmpresa, DescEmpresa, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
+        const [osRows] = await conn.execute(`SELECT IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag, IdEmpresa, DescEmpresa, Liberado_Engenharia, Fator FROM ordemservico WHERE IdOrdemServico = ?`, [osId]);
         if (osRows.length === 0) throw new Error('OS não encontrada');
         if (osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM') {
             throw new Error('OS já liberada, não pode incluir materiais');
         }
         const osData = osRows[0];
+        const fatorOS = Math.max(1, parseFloat(osData.Fator) || 1);
 
         // Helper para checar e criar colunas dinamicamente
         async function ensureColumns(tableName, columnsToEnsure) {
@@ -9720,6 +9993,14 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             }
         }
 
+        await ensureColumns('ordemservicoitem', [
+            { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'TempoPadrao', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'TotalTempo', type: 'DECIMAL(10,2) DEFAULT 0' },
+            { name: 'qtde', type: 'DECIMAL(10,2) DEFAULT 1' },
+            { name: 'Fator', type: 'INT DEFAULT 1' }
+        ]);
+
         const sectorsList = ['Corte', 'Dobra', 'Solda', 'Pintura', 'Montagem', 'CorteaLaser', 'Punsionadeira', 'Galvanizar', 'Engenharia'];
 
         function getSectorKey(procName) {
@@ -9734,6 +10015,136 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             if (norm.includes('PINTURA')) return 'Pintura';
             if (norm.includes('MONTAGEM')) return 'Montagem';
             return null;
+        }
+
+        // Função recursiva para explodir todos os níveis da árvore do produto (BOM multinível)
+        // aplicando o Fator K da OS e inicializando as cotas de apontamento de produção (TotalExecutar = QtdeTotal)
+        async function explodeFilhosRecursive(parentMatId, parentCod, parentQtdeBase, parentPathIds = []) {
+            if (parentPathIds.includes(parentMatId) || parentPathIds.length > 25) return;
+            const currentPath = [...parentPathIds, parentMatId];
+
+            const [filhosRows] = await conn.execute(`
+                SELECT 
+                    mp.IdMontaPeca,
+                    mp.IdMaterial AS ChildIdMaterial,
+                    mp.CodMatFabricante AS ChildCodMat,
+                    COALESCE(mp.QtdeUnitaria, CAST(NULLIF(mp.PecaQtde, '') AS DECIMAL(18,4)), 1) AS QtdeUnitaria,
+                    m.IdMaterial,
+                    m.CodMatFabricante,
+                    m.DescResumo,
+                    m.DescDetal,
+                    m.Unidade,
+                    m.Peso,
+                    m.AreaPintura,
+                    m.Espessura,
+                    m.Altura,
+                    m.Largura,
+                    m.MaterialSW,
+                    m.EnderecoArquivo,
+                    m.ProdutoPrincipal,
+                    COALESCE(m.PecaManufat, 'N') AS PecaManufat
+                FROM montapeca mp
+                LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
+                WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
+                  AND (mp.IdMaterialPeca = ? OR (mp.CodMatFabricantePeca = ? AND (mp.IdMaterialPeca IS NULL OR mp.IdMaterialPeca = 0)))
+                ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC
+            `, [parentMatId, parentCod || '']);
+
+            for (const filho of filhosRows) {
+                const childCod = filho.ChildCodMat || filho.CodMatFabricante;
+                if (!childCod) continue;
+
+                const childUnitQty = parseFloat(filho.QtdeUnitaria) || 1;
+                const childBaseQty = parentQtdeBase * childUnitQty;
+                const childQtdeTotal = childBaseQty * fatorOS;
+                const childPesoUnit = parseFloat(filho.Peso) || 0;
+                const childAreaUnit = parseFloat(filho.AreaPintura) || 0;
+                const childPesoTotal = childPesoUnit * childQtdeTotal;
+                const childAreaTotal = childAreaUnit * childQtdeTotal;
+
+                // Checa se o item filho já foi inserido nesta OS
+                const [existFilho] = await conn.execute(
+                    `SELECT IdOrdemServicoItem, QtdeTotal, qtde, Peso, AreaPintura 
+                     FROM ordemservicoitem 
+                     WHERE IdOrdemServico = ? AND CodMatFabricante = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                    [osId, childCod]
+                );
+
+                let childItemId;
+                if (existFilho.length > 0) {
+                    childItemId = existFilho[0].IdOrdemServicoItem;
+                    const newQtdeTotal = (parseFloat(existFilho[0].QtdeTotal) || 0) + childQtdeTotal;
+                    const newQtde = (parseFloat(existFilho[0].qtde) || 0) + childBaseQty;
+                    const newPeso = (parseFloat(existFilho[0].Peso) || 0) + childPesoTotal;
+                    const newArea = (parseFloat(existFilho[0].AreaPintura) || 0) + childAreaTotal;
+
+                    await conn.execute(
+                        `UPDATE ordemservicoitem 
+                         SET QtdeTotal = ?, qtde = ?, Peso = ?, AreaPintura = ?, Fator = ?
+                         WHERE IdOrdemServicoItem = ?`,
+                        [newQtdeTotal, newQtde, newPeso, newArea, fatorOS, childItemId]
+                    );
+                } else {
+                    const childCols = [
+                        'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
+                        'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
+                        'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
+                        'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
+                        'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator'
+                    ];
+                    const childVals = [
+                        osId, childCod, filho.DescResumo, filho.DescDetal, childQtdeTotal, childBaseQty,
+                        '', childPesoTotal, childAreaTotal, filho.Espessura, filho.Altura, filho.Largura,
+                        filho.Unidade || 'UN', filho.MaterialSW, filho.EnderecoArquivo, 'N',
+                        osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null,
+                        osData.Projeto || osContext?.Projeto || null, osData.Tag || osContext?.Tag || null,
+                        osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null,
+                        osData.DescEmpresa || osContext?.DescEmpresa || null,
+                        'Sistema', 'Sistema', new Date(), 'N', fatorOS
+                    ];
+
+                    const [insRes] = await conn.execute(
+                        `INSERT INTO ordemservicoitem (${childCols.map(c => `\`${c}\``).join(', ')})
+                         VALUES (${childCols.map(() => '?').join(', ')})`,
+                        childVals
+                    );
+                    childItemId = insRes.insertId;
+                    adicionados++;
+                }
+
+                // Busca processos fabris do filho (material_processo template ou padrão)
+                const childMatId = filho.IdMaterial || filho.ChildIdMaterial;
+                if (childMatId) {
+                    const [childProcs] = await conn.execute(`
+                        SELECT mp.*, pf.ProcessoFabricacao
+                        FROM material_processo mp
+                        LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+                        WHERE (mp.IdMaterial = ? OR mp.codmatFabricante = ?)
+                          AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
+                        ORDER BY mp.SequenciaExecucao ASC
+                    `, [childMatId, childCod]);
+
+                    if (childProcs.length > 0) {
+                        for (const proc of childProcs) {
+                            // Cota de Referência para o Apontamento de Produção calculada exclusivamente em material_processo
+                            await conn.execute(`
+                                INSERT INTO material_processo (
+                                    IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao,
+                                    TempoEstimadoMin, TempoPadraoMin, TotalExecutar, Ativo,
+                                    UsuarioCriacao, DataCriacao, IdOrdemServico, IdProjeto, IdTag
+                                ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)
+                            `, [
+                                childMatId, childCod, proc.IdProcesso, proc.SequenciaExecucao,
+                                proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, childQtdeTotal,
+                                osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
+                            ]);
+                        }
+                    }
+
+                    // Recursão para o próximo nível (sub-componentes)
+                    await explodeFilhosRecursive(childMatId, childCod, childBaseQty, currentPath);
+                }
+            }
         }
 
         let adicionados = 0;
@@ -9755,96 +10166,121 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             );
             if (existRows.length > 0) continue;
             
-            const qtdeTotalNum = Number(qtde) || 1;
-            const fatorNum = Math.max(1, parseInt(String(fator), 10) || 1);
+            const baseQtde = Number(qtde) || 1;
+            const fatorNum = item.fator ? Math.max(1, parseInt(String(fator), 10) || 1) : fatorOS;
+            const qtdeTotalNum = baseQtde * fatorNum;
             const pesoUnit = Number(mat.Peso) || 0;
             const areaUnit = Number(mat.AreaPintura) || 0;
 
+            let itemSumSetup = 0;
+            let itemSumPadrao = 0;
+            let itemSumTotal = 0;
 
-        let itemSumSetup = 0;
-        let itemSumPadrao = 0;
-        let itemSumTotal = 0;
+            if (recursoTempos && typeof recursoTempos === 'object') {
+                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                    if (!recVal) continue;
+                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                    const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+                    const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup;
 
-        if (recursoTempos && typeof recursoTempos === 'object') {
-            for (const [secKey, recVal] of Object.entries(recursoTempos)) {
-                if (!recVal) continue;
-                const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
-                const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
-                const rTotalTempo = (rPadrao * qtdeTotalNum) + rSetup;
-
-                itemSumSetup += rSetup;
-                itemSumPadrao += rPadrao;
-                itemSumTotal += rTotalTempo;
-            }
-        }
-
-        const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
-        const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
-        const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup));
-
-        await ensureColumns('ordemservicoitem', [
-            { name: 'TempoSetup', type: 'DECIMAL(10,2) DEFAULT 0' },
-            { name: 'TempoPadrao', type: 'DECIMAL(10,2) DEFAULT 0' },
-            { name: 'TotalTempo', type: 'DECIMAL(10,2) DEFAULT 0' },
-            { name: 'qtde', type: 'DECIMAL(10,2) DEFAULT 1' },
-            { name: 'Fator', type: 'INT DEFAULT 1' }
-        ]);
-
-        const cols = [
-            'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
-            'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
-            'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
-            'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
-            'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
-            'TempoSetup', 'TempoPadrao', 'TotalTempo'
-        ];
-
-        const vals = [
-            osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum, qtdeTotalNum,
-            acabamento, (pesoUnit * qtdeTotalNum), (areaUnit * qtdeTotalNum), mat.Espessura, mat.Altura, mat.Largura,
-            mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
-            osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null, osData.Projeto || osContext?.Projeto || null,
-            osData.Tag || osContext?.Tag || null, osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null, osData.DescEmpresa || osContext?.DescEmpresa || null,
-            'Sistema', 'Sistema', new Date(), 'N', fatorNum,
-            itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
-        ];
-
-        const sqlInsert = `
-            INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
-            VALUES (${cols.map(()=>'?').join(', ')})
-        `;
-
-        const [insertRes] = await conn.execute(sqlInsert, vals);
-
-        if (recursoTempos && typeof recursoTempos === 'object') {
-            let seq = 1;
-            for (const [secKey, recVal] of Object.entries(recursoTempos)) {
-                if (!recVal) continue;
-                const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
-                const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
-
-                const [procIds] = await conn.execute(`SELECT IdProcessoFabricacao FROM processofabricacao WHERE REPLACE(processofabricacao, ' ', '') = ? LIMIT 1`, [secKey]);
-                if (procIds.length > 0) {
-                    const idProcesso = procIds[0].IdProcessoFabricacao;
-                    await conn.execute(
-                        `INSERT INTO material_processo (
-                            IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, 
-                            TempoEstimadoMin, TempoPadraoMin, TotalExecutar, Ativo, 
-                            UsuarioCriacao, DataCriacao, IdOrdemServico, IdProjeto, IdTag
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)`,
-                        [
-                            mat.IdMaterial, codmatfabricante, idProcesso, seq,
-                            rSetup, rPadrao, qtdeTotalNum,
-                            osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
-                        ]
-                    );
-                    seq++;
+                    itemSumSetup += rSetup;
+                    itemSumPadrao += rPadrao;
+                    itemSumTotal += rTotalTempo;
                 }
             }
-        }
 
-            
+            const itemGlobalSetup = Number(tempoSetup) || itemSumSetup;
+            const itemGlobalPadrao = Number(tempoPadrao) || itemSumPadrao;
+            const itemGlobalTotal = Number(totalTempo) || (itemSumTotal > 0 ? itemSumTotal : ((itemGlobalPadrao * qtdeTotalNum) + itemGlobalSetup));
+
+            const cols = [
+                'IdOrdemServico', 'CodMatFabricante', 'DescResumo', 'DescDetal', 'QtdeTotal', 'qtde',
+                'Acabamento', 'Peso', 'AreaPintura', 'Espessura', 'Altura', 'Largura',
+                'Unidade', 'MaterialSW', 'EnderecoArquivo', 'ProdutoPrincipal',
+                'IdProjeto', 'IdTag', 'Projeto', 'Tag', 'DescTag', 'IdEmpresa', 'DescEmpresa',
+                'UsuarioCriacao', 'CriadoPor', 'DataCriacao', 'Liberado_Engenharia', 'Fator',
+                'TempoSetup', 'TempoPadrao', 'TotalTempo'
+            ];
+
+            const vals = [
+                osId, codmatfabricante, mat.DescResumo, mat.DescDetal, qtdeTotalNum, baseQtde,
+                acabamento, (pesoUnit * qtdeTotalNum), (areaUnit * qtdeTotalNum), mat.Espessura, mat.Altura, mat.Largura,
+                mat.Unidade, mat.MaterialSW, mat.EnderecoArquivo, mat.ProdutoPrincipal,
+                osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null, osData.Projeto || osContext?.Projeto || null,
+                osData.Tag || osContext?.Tag || null, osData.DescTag || osContext?.DescTag || null, osData.IdEmpresa || osContext?.IdEmpresa || null, osData.DescEmpresa || osContext?.DescEmpresa || null,
+                'Sistema', 'Sistema', new Date(), 'N', fatorNum,
+                itemGlobalSetup, itemGlobalPadrao, itemGlobalTotal
+            ];
+
+            const sqlInsert = `
+                INSERT INTO ordemservicoitem (${cols.map(c => `\`${c}\``).join(', ')})
+                VALUES (${cols.map(()=>'?').join(', ')})
+            `;
+
+            const [insertRes] = await conn.execute(sqlInsert, vals);
+            const parentItemId = insertRes.insertId;
+
+            // Insere processos em material_processo com TotalExecutar (apenas em material_processo)
+            if (recursoTempos && typeof recursoTempos === 'object') {
+                let seq = 1;
+                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
+                    if (!recVal) continue;
+                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                    const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+
+                    const [procIds] = await conn.execute(`SELECT IdProcessoFabricacao, ProcessoFabricacao FROM processofabricacao WHERE REPLACE(processofabricacao, ' ', '') = ? LIMIT 1`, [secKey]);
+                    if (procIds.length > 0) {
+                        const idProcesso = procIds[0].IdProcessoFabricacao;
+                        await conn.execute(
+                            `INSERT INTO material_processo (
+                                IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao, 
+                                TempoEstimadoMin, TempoPadraoMin, TotalExecutar, Ativo, 
+                                UsuarioCriacao, DataCriacao, IdOrdemServico, IdProjeto, IdTag
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)`,
+                            [
+                                mat.IdMaterial, codmatfabricante, idProcesso, seq,
+                                rSetup, rPadrao, qtdeTotalNum,
+                                osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
+                            ]
+                        );
+                        seq++;
+                    }
+                }
+            } else {
+                // Caso recursoTempos não seja fornecido diretamente, busca template de processos do pai
+                const [parentProcs] = await conn.execute(`
+                    SELECT mp.*, pf.ProcessoFabricacao
+                    FROM material_processo mp
+                    LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+                    WHERE (mp.IdMaterial = ? OR mp.codmatFabricante = ?)
+                      AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
+                    ORDER BY mp.SequenciaExecucao ASC
+                `, [mat.IdMaterial, codmatfabricante]);
+
+                for (const proc of parentProcs) {
+                    await conn.execute(`
+                        INSERT INTO material_processo (
+                            IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao,
+                            TempoEstimadoMin, TempoPadraoMin, TotalExecutar, Ativo,
+                            UsuarioCriacao, DataCriacao, IdOrdemServico, IdProjeto, IdTag
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)
+                    `, [
+                        mat.IdMaterial, codmatfabricante, proc.IdProcesso, proc.SequenciaExecucao,
+                        proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, qtdeTotalNum,
+                        osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
+                    ]);
+                }
+            }
+
             adicionados++;
+
+            // ═══════════════════════════════════════════════════════════════════
+            // EXPLOSÃO RECURSIVA MULTINÍVEL DA ESTRUTURA DO PRODUTO (montapeca)
+            // Insere todos os componentes e subconjuntos em todos os seus níveis,
+            // multiplicando a quantidade acumulada pelo Fator K da OS,
+            // e definindo TotalExecutar = QtdeTotal como cota para apontamento.
+            // ═══════════════════════════════════════════════════════════════════
+            await explodeFilhosRecursive(mat.IdMaterial, codmatfabricante, baseQtde, []);
         }
 
         await recalcularQuantidadesTotais(osId, conn);
@@ -17954,6 +18390,8 @@ app.put('/api/projetos/:id/datas-planejamento', async (req, res) => {
 });
 // Rota de relatórios de OS adicionada dinamicamente
 app.use('/api/ordemservico', tenantMiddleware, require('./routes/relatorioOs'));
+// Rota de relatórios de Estrutura de Material (Excel e PDF)
+app.use('/api/material', tenantMiddleware, require('./routes/relatorioMaterial'));
 
 app.listen(PORT, '0.0.0.0', async () => {
     console.log(`Server running on port ${PORT} and listening on all interfaces(0.0.0.0)`);

@@ -1614,6 +1614,33 @@ function OrdemServicoContent() {
         }
     };
 
+    const handleExportarRelatorio = async (os: OrdemServico, tipo: 'pdf' | 'excel') => {
+        try {
+            addToast({ type: 'info', title: 'Exportação', message: `Gerando relatório em ${tipo.toUpperCase()}...` });
+            const token = localStorage.getItem('sinco_token');
+            const res = await fetch(`${API_BASE}/ordemservico/${os.IdOrdemServico}/relatorio/${tipo}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                addToast({ type: 'error', title: 'Erro', message: `Falha ao gerar ${tipo.toUpperCase()}: ` + text });
+                return;
+            }
+            const blob = await res.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `OS_${os.IdOrdemServico}_BOM.${tipo === 'pdf' ? 'pdf' : 'xlsx'}`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch(err: any) {
+            console.error(err);
+            addToast({ type: 'error', title: 'Erro', message: `Erro ao baixar relatório: ${err.message}` });
+        }
+    };
+
     const handleExcluirOS = async (os: OrdemServico) => {
         if (os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') {
             addToast({ type: 'error', title: 'Erro', message: 'Ordem de serviço finalizada não pode ser excluída.' });
@@ -2190,6 +2217,24 @@ function OrdemServicoContent() {
                             )}
 
                             <button 
+                                onClick={() => handleExportarRelatorio(os, 'pdf')}
+                                disabled={liberandoOS === os.IdOrdemServico}
+                                className="p-2.5 bg-red-50 text-red-600 border border-red-200 rounded-lg hover:bg-red-100 transition-colors shadow-sm disabled:opacity-50"
+                                title="Exportar Ordem de Produção em PDF (BOM)"
+                            >
+                                <FileText size={15} />
+                            </button>
+
+                            <button 
+                                onClick={() => handleExportarRelatorio(os, 'excel')}
+                                disabled={liberandoOS === os.IdOrdemServico}
+                                className="p-2.5 bg-green-50 text-green-600 border border-green-200 rounded-lg hover:bg-green-100 transition-colors shadow-sm disabled:opacity-50"
+                                title="Exportar Ordem de Produção em Excel (BOM)"
+                            >
+                                <FileSpreadsheet size={15} />
+                            </button>
+
+                            <button 
                                 onClick={() => handleAlterarFator(os)}
                                 disabled={liberandoOS === os.IdOrdemServico}
                                 className="p-2.5 border rounded-lg shadow-sm transition-colors bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 disabled:opacity-50"
@@ -2315,8 +2360,8 @@ function OrdemServicoContent() {
 
                             {/* Info Panel Content */}
                             {!collapsedOsInfo.has(os.IdOrdemServico) && (
-                                <div className="px-6 py-4 border-b border-gray-100">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                                <div className="px-4 py-3 border-b border-gray-100">
+                                <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-3 gap-3 mb-3">
                                     {/* Info cards... */}
                                     <div className="bg-white rounded-lg p-3 border border-gray-100">
                                         <div className="flex items-center gap-2 text-xs font-semibold text-primary mb-2">
@@ -2412,7 +2457,7 @@ function OrdemServicoContent() {
                                     <Settings2 size={14} />
                                     Cronograma por Setor
                                 </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 2xl:grid-cols-9 gap-2">
                                     <SetorDatas nome="Engenharia" planejadoInicio={(os as any).PlanejadoInicioENGENHARIA} planejadoFim={(os as any).PlanejadoFinalENGENHARIA} realizadoInicio={(os as any).RealizadoInicioENGENHARIA} realizadoFim={(os as any).RealizadoFinalENGENHARIA} />
                                     {setoresParaRender.map(s => (
                                         <SetorDatas
@@ -3029,7 +3074,7 @@ function OrdemServicoContent() {
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-3.5">
             {error && (
                 <motion.div
                     initial={{ opacity: 0, y: -10 }}

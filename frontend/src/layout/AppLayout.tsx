@@ -366,14 +366,14 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                     className="p-3 md:p-4 w-full flex-1 flex flex-col min-h-0 max-w-full relative overflow-y-auto overflow-x-hidden"
                 >
                     {/* Header Desktop (Breadcrumb/Title) */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3 shrink-0">
-                        <div className="flex items-start gap-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-2.5 md:mb-3 gap-2.5 shrink-0">
+                        <div className="flex items-start gap-2.5">
                             <button 
                                 onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                                className="hidden md:flex p-2.5 bg-card border border-border hover:shadow-sm hover:border-primary/50 rounded-md text-foreground/80 hover:text-primary transition-all active:scale-95"
+                                className="hidden md:flex p-2 bg-card border border-border hover:shadow-sm hover:border-primary/50 rounded-md text-foreground/80 hover:text-primary transition-all active:scale-95"
                                 title={isSidebarCollapsed ? "Expandir Menu" : "Recolher Menu"}
                             >
-                                <Menu size={20} strokeWidth={2} />
+                                <Menu size={18} strokeWidth={2} />
                             </button>
                             <div>
                                 <div
@@ -382,11 +382,11 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                                     onMouseLeave={() => setShowPageTooltip(false)}
                                 >
                                     <div className="flex items-center gap-2">
-                                        <h1 id="main-page-title" className="text-xl md:text-2xl font-bold text-foreground tracking-tight leading-tight">
+                                        <h1 id="main-page-title" className="text-lg md:text-xl font-bold text-foreground tracking-tight leading-tight">
                                             {activeLabel}
                                         </h1>
                                         <Info
-                                            size={15}
+                                            size={14}
                                             className="text-muted-foreground/40 group-hover/title:text-primary/60 transition-colors mt-0.5 shrink-0"
                                         />
                                     </div>
@@ -428,14 +428,20 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                             </div>
                         </div>
                         <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden">
-                            
-                            
+                            <button
+                                onClick={() => setIsSidebarCollapsed(prev => !prev)}
+                                className="hidden md:flex p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md border border-border/60 transition-colors text-xs items-center gap-1.5"
+                                title={isSidebarCollapsed ? "Expandir Barra Lateral" : "Recolher Barra Lateral para Máxima Área"}
+                            >
+                                {isSidebarCollapsed ? <Maximize size={14} /> : <Minimize size={14} />}
+                                <span className="text-[11px] font-medium">{isSidebarCollapsed ? 'Expandir' : 'Modo Amplo'}</span>
+                            </button>
                             <DatabaseSwitcher />
                         </div>
                     </div>
 
-                    {/* Dashboard/Page Content Slot */}
-                    <div className={cn("flex-1 flex flex-col min-h-0 relative transition-all duration-300", isAppMaximized ? "w-full" : "w-full max-w-7xl mx-auto")}>
+                    {/* Dashboard/Page Content Slot - 100% Fluido sem amarras max-w-7xl */}
+                    <div className="flex-1 flex flex-col min-h-0 relative transition-all duration-300 w-full max-w-full">
                         {children}
                     </div>
                 </div>

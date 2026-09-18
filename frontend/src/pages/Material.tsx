@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
  Plus, Search, Edit2, Trash2, X, Package, Save, Filter,
- Loader2, RefreshCw, Camera, Image as ImageIcon, Link as LinkIcon, Globe, FileText, Download
+ Loader2, RefreshCw, Camera, Image as ImageIcon, Link as LinkIcon, Globe, FileText, Download,
+ Factory, Layers
 } from 'lucide-react';
+import { EstruturaProdutoModal } from '../components/EstruturaProdutoModal';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -12,6 +14,8 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
  CodMatFabricante: string;
  DescResumo?: string;
  DescDetal?: string;
+ PecaManufat?: string;
+ TxtTipoDesenho?: string;
  NumeroRP?: string;
  FamiliaMat?: number;
  DescFamilia?: string;
@@ -103,6 +107,9 @@ export default function MaterialPage() {
  const [searchDesc, setSearchDesc] = useState('');
  const [searchFamilia, setSearchFamilia] = useState('');
  const [searchFornecedor, setSearchFornecedor] = useState('');
+ const [tipoFilter, setTipoFilter] = useState<'todos' | 'manufaturada' | 'insumo'>('todos');
+ const [estruturaModalOpen, setEstruturaModalOpen] = useState(false);
+ const [selectedMaterialEstrutura, setSelectedMaterialEstrutura] = useState<{ id: number; cod: string } | null>(null);
  const [showForm, setShowForm] = useState(false);
  // const [showMontaPecaModal, setShowMontaPecaModal] = useState(false);
  const [loading, setLoading] = useState(true);
@@ -167,13 +174,21 @@ export default function MaterialPage() {
  fetchOptions();
  }, []);
 
+ const countTotal = materiais.length;
+ const countManufaturadas = materiais.filter(m => m.PecaManufat === 'S').length;
+ const countInsumos = materiais.filter(m => m.PecaManufat !== 'S').length;
+
  const filteredMateriais = materiais.filter(m => {
      const matchCodigo = !searchCodigo || m.CodMatFabricante?.toLowerCase().includes(searchCodigo.toLowerCase());
      const matchDesc = !searchDesc || 
          (m.DescResumo?.toLowerCase().includes(searchDesc.toLowerCase()) || m.DescDetal?.toLowerCase().includes(searchDesc.toLowerCase()));
      const matchFamilia = !searchFamilia || m.DescFamilia?.toLowerCase().includes(searchFamilia.toLowerCase());
      const matchFornecedor = !searchFornecedor || m.Fornecedor?.toLowerCase().includes(searchFornecedor.toLowerCase());
-     return matchCodigo && matchDesc && matchFamilia && matchFornecedor;
+     const matchTipo =
+         tipoFilter === 'todos' ? true :
+         tipoFilter === 'manufaturada' ? m.PecaManufat === 'S' :
+         m.PecaManufat !== 'S';
+     return matchCodigo && matchDesc && matchFamilia && matchFornecedor && matchTipo;
  });
 
  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -245,7 +260,11 @@ export default function MaterialPage() {
  };
 
  
-  const handleOpenPDF = async (idMaterial: number) => {
+  const handleOpenPDF = async (idMaterial: number, enderecoArquivo?: string) => {
+    if (enderecoArquivo && enderecoArquivo.trim()) {
+      window.open(`${API_BASE}/pdf?path=${encodeURIComponent(enderecoArquivo.trim())}`, '_blank');
+      return;
+    }
     try {
       const res = await fetch(`${API_BASE}/materiais/${idMaterial}/arquivos`, {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` }
@@ -262,6 +281,11 @@ export default function MaterialPage() {
       console.error('Error opening PDF:', error);
       alert('Erro ao buscar o arquivo.');
     }
+  };
+
+  const handleOpenEstrutura = (id: number, cod: string) => {
+    setSelectedMaterialEstrutura({ id, cod });
+    setEstruturaModalOpen(true);
   };
 
   const handleEdit = async (id: number) => {
@@ -893,6 +917,64 @@ export default function MaterialPage() {
  )}
  </AnimatePresence>
 
+ {/* Barra de Filtros Rápidos por Tipo de Item */}
+ <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 bg-slate-50 border border-gray-200 rounded-md shadow-xs mb-3">
+   <div className="flex items-center gap-2 flex-wrap">
+     <span className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mr-1">Filtrar por Tipo:</span>
+     
+     <button
+       type="button"
+       onClick={() => setTipoFilter('todos')}
+       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+         tipoFilter === 'todos'
+           ? 'bg-[#32423D] text-white shadow-sm'
+           : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
+       }`}
+     >
+       <span>Todos</span>
+       <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${tipoFilter === 'todos' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+         {countTotal}
+       </span>
+     </button>
+
+     <button
+       type="button"
+       onClick={() => setTipoFilter('manufaturada')}
+       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+         tipoFilter === 'manufaturada'
+           ? 'bg-emerald-600 text-white shadow-sm'
+           : 'bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-300'
+       }`}
+     >
+       <Factory size={13} className={tipoFilter === 'manufaturada' ? 'text-white' : 'text-emerald-600'} />
+       <span>🏭 Peças Manufaturadas</span>
+       <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${tipoFilter === 'manufaturada' ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
+         {countManufaturadas}
+       </span>
+     </button>
+
+     <button
+       type="button"
+       onClick={() => setTipoFilter('insumo')}
+       className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+         tipoFilter === 'insumo'
+           ? 'bg-slate-700 text-white shadow-sm'
+           : 'bg-white text-slate-700 hover:bg-slate-100 border border-gray-200'
+       }`}
+     >
+       <Package size={13} className={tipoFilter === 'insumo' ? 'text-white' : 'text-slate-500'} />
+       <span>📦 Insumos Comprados</span>
+       <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${tipoFilter === 'insumo' ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-600'}`}>
+         {countInsumos}
+       </span>
+     </button>
+   </div>
+
+   <div className="text-xs text-gray-500">
+     Exibindo <span className="font-bold text-gray-900 font-mono">{filteredMateriais.length}</span> itens
+   </div>
+ </div>
+
  {/* Data Table */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 overflow-hidden flex-1 flex flex-col min-h-0">
  {loading ? (
@@ -903,15 +985,16 @@ export default function MaterialPage() {
  ) : (
  <div className="overflow-auto flex-1">
  <table className="w-full">
- <thead className="bg-[#567469] text-white bg-[#567469] text-white">
- <tr className=" border-b border-white/20">
+ <thead className="bg-[#567469] text-white">
+ <tr className="border-b border-white/20">
  
- <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-16">Img</th>
- <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Código</th>
+ <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-12">Img</th>
+ <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-40">Código</th>
+ <th className="px-2 py-1.5 text-center text-[10px] font-semibold text-white uppercase tracking-wider w-36">Classificação</th>
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Descrição</th>
- <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Família</th>
- <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Fornecedor</th>
- <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-white uppercase tracking-wider w-24">Ações</th>
+ <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-36">Família</th>
+ <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-40">Fornecedor</th>
+ <th className="px-2 py-1.5 text-right text-[10px] font-semibold text-white uppercase tracking-wider w-32">Ações</th>
  </tr>
  </thead>
  <tbody className="divide-y divide-gray-100">
@@ -936,8 +1019,8 @@ export default function MaterialPage() {
  key={material.IdMaterial}
  initial={{ opacity: 0, y: 10 }}
  animate={{ opacity: 1, y: 0 }}
- transition={{ delay: idx * 0.02 }}
- className="hover:bg-gray-50/50 transition-colors"
+ transition={{ delay: idx * 0.01 }}
+ className="hover:bg-gray-50/70 transition-colors"
  >
  
  <td className="px-2 py-1.5">
@@ -953,12 +1036,25 @@ export default function MaterialPage() {
  )}
  </div>
  </td>
- <td className="px-2 py-1.5">
- <span className="text-[11px] font-medium text-gray-900 truncate max-w-[150px]">
+ <td className="px-2 py-1.5 font-mono">
+ <span className="text-[11px] font-bold text-gray-900 truncate block max-w-[150px]" title={material.CodMatFabricante}>
  {material.CodMatFabricante || '-'}
  </span>
  </td>
- <td className="px-2 py-1.5 text-[11px] text-gray-600 truncate max-w-[200px]">
+ <td className="px-2 py-1.5 text-center">
+ {material.PecaManufat === 'S' ? (
+   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" title="Produto/peça fabricado internamente">
+     <Factory size={11} className="text-emerald-600" />
+     Peça Manufaturada
+   </span>
+ ) : (
+   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Matéria-prima / insumo comprado externamente">
+     <Package size={11} className="text-slate-400" />
+     Insumo / Comprado
+   </span>
+ )}
+ </td>
+ <td className="px-2 py-1.5 text-[11px] text-gray-600 truncate max-w-[240px]" title={material.DescResumo || material.DescDetal}>
  {material.DescResumo || material.DescDetal?.substring(0, 50) || '-'}
  </td>
  <td className="px-2 py-1.5 text-[11px] text-gray-600">
@@ -969,23 +1065,36 @@ export default function MaterialPage() {
  </td>
  <td className="px-2 py-1.5">
  <div className="flex items-center justify-end gap-1">
+   {/* Botão Estrutura do Produto & Recursos */}
+   <button
+     onClick={() => material.IdMaterial && handleOpenEstrutura(material.IdMaterial, material.CodMatFabricante)}
+     className={`p-1.5 rounded-lg transition-all ${
+       material.PecaManufat === 'S'
+         ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 ring-1 ring-emerald-300 shadow-2xs'
+         : 'text-slate-600 bg-slate-50 hover:bg-slate-100'
+     }`}
+     title="Ver Estrutura do Produto & Recursos (BOM Multinível)"
+   >
+     <Layers size={14} className={material.PecaManufat === 'S' ? 'text-emerald-600' : 'text-slate-500'} />
+   </button>
+
  <button
  onClick={() => material.IdMaterial && handleEdit(material.IdMaterial)}
- className="p-2 rounded-lg text-[#32423D] bg-[#E0E800]/20 hover:bg-[#E0E800]/40 transition-colors"
+ className="p-1.5 rounded-lg text-[#32423D] bg-[#E0E800]/20 hover:bg-[#E0E800]/40 transition-colors"
  title="Editar"
  >
  <Edit2 size={14} />
    </button>
    <button
-   onClick={() => material.IdMaterial && handleOpenPDF(material.IdMaterial)}
-   className="p-2 rounded-lg text-blue-500 bg-blue-50 hover:bg-blue-100 transition-colors"
-   title="Abrir PDF"
+   onClick={() => material.IdMaterial && handleOpenPDF(material.IdMaterial, material.EnderecoArquivo)}
+   className="p-1.5 rounded-lg text-blue-500 bg-blue-50 hover:bg-blue-100 transition-colors"
+   title="Abrir Desenho / PDF"
    >
    <FileText size={14} />
    </button>
  <button
  onClick={() => material.IdMaterial && handleDelete(material.IdMaterial)}
- className="p-2 rounded-lg text-red-500 bg-red-50 hover:bg-red-100 transition-colors"
+ className="p-1.5 rounded-lg text-red-500 bg-red-50 hover:bg-red-100 transition-colors"
  title="Excluir"
  >
  <Trash2 size={14} />
@@ -1002,13 +1111,24 @@ export default function MaterialPage() {
 
  {/* Table Footer */}
  {!loading && (
- <div className="px-2 py-0.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+ <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
  <p className="text-xs text-gray-500">
- Mostrando <span className="font-medium">{filteredMateriais.length}</span> de <span className="font-medium">{materiais.length}</span> materiais
+ Mostrando <span className="font-bold text-gray-800 font-mono">{filteredMateriais.length}</span> de <span className="font-bold text-gray-800 font-mono">{materiais.length}</span> materiais
  </p>
  </div>
  )}
  </div>
+
+ {/* Modal de Estrutura Completa do Produto */}
+ <EstruturaProdutoModal
+   isOpen={estruturaModalOpen}
+   onClose={() => {
+     setEstruturaModalOpen(false);
+     setSelectedMaterialEstrutura(null);
+   }}
+   idMaterial={selectedMaterialEstrutura?.id || null}
+   codMatFabricante={selectedMaterialEstrutura?.cod || ''}
+ />
  </div>
  );
 }

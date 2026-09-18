@@ -145,14 +145,14 @@ export default function MontaPecaManufaturadaModal({ isOpen, onClose, usuario = 
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
  exit={{ opacity: 0 }}
- className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-4"
+ className="fixed inset-0 bg-slate-900/60 z-[9999] flex items-center justify-center p-2 sm:p-4"
  onClick={(e) => e.target === e.currentTarget && onClose()}
  >
  <motion.div
  initial={{ opacity: 0, scale: 0.95, y: 20 }}
  animate={{ opacity: 1, scale: 1, y: 0 }}
  exit={{ opacity: 0, scale: 0.95, y: 20 }}
- className="bg-gray-50 rounded-md shadow-2xl w-full max-w-7xl h-[90vh] flex flex-col overflow-hidden"
+ className="bg-gray-50 rounded-md shadow-2xl w-full max-w-[98vw] 2xl:max-w-[1920px] h-[95vh] flex flex-col overflow-hidden"
  >
  {/* Header */}
  <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200 shrink-0">

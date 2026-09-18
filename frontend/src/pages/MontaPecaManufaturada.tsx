@@ -529,11 +529,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                </span>
                {isPeca && <span className="ml-1 text-[8px] text-emerald-600 font-bold uppercase bg-emerald-100 px-1 py-0.5 rounded">Peça</span>}
             </td>
-            <td className="p-1 px-1.5 text-[10px] font-mono font-bold text-[#32423D] truncate max-w-[90px]" title={c.CodMatFabricante}>
+            <td className="p-1 px-1.5 text-[10px] font-mono font-bold text-[#32423D] truncate min-w-[100px]" title={c.CodMatFabricante}>
               {level > 0 && <span className="text-blue-400 font-bold mr-0.5">↳</span>}
               <span className={level > 0 ? 'text-blue-700' : ''}>{c.CodMatFabricante}</span>
             </td>
-            <td className={`p-1 px-1.5 text-[9.5px] truncate max-w-[100px] ${level > 0 ? 'text-blue-600' : 'text-gray-600'}`} title={c.DescDetal}>
+            <td className={`p-1 px-1.5 text-[9.5px] truncate min-w-[140px] ${level > 0 ? 'text-blue-600' : 'text-gray-600'}`} title={c.DescDetal}>
               {c.DescDetal}
             </td>
             <td className="p-1 px-1.5 text-center" onClick={e => e.stopPropagation()}>
@@ -577,17 +577,17 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const cellCls = "p-1.5 px-2 text-[10px] truncate";
 
   return (
-    <div className="h-screen flex flex-col min-h-0 bg-gray-100 font-sans">
-      <div className="flex-1 flex min-h-0 divide-x divide-gray-200">
+    <div className="w-full h-full flex-1 flex flex-col min-h-0 bg-slate-100 font-sans">
+      <div className="flex-1 flex flex-col xl:flex-row min-h-0 divide-y xl:divide-y-0 xl:divide-x divide-gray-200 w-full">
         
         {/* =========================================
             GRID 1: PESQUISA, DETALHES E COMPOSIÇÃO 
             ========================================= */}
-        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-1 max-w-[40%]">
+        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[1.25] min-w-0 w-full xl:min-w-[420px] 2xl:min-w-[480px]">
           
           {/* TOPO: PESQUISA */}
           <div className="bg-gradient-to-r from-emerald-50 to-emerald-100/30 border-b border-emerald-100 shrink-0">
-            <div className="px-3 py-2 border-b border-emerald-100/50 flex justify-between items-center">
+            <div className="px-3 py-1.5 border-b border-emerald-100/50 flex justify-between items-center">
               <span className="text-[10px] font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
                 <Search size={13} /> 1. Pesquisa de Material
               </span>
@@ -598,14 +598,14 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                 <input value={fCod1} onChange={e=>setFCod1(e.target.value)} placeholder="Código..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
                 {fCod1 && <button onClick={()=>setFCod1('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar Código"><X size={12}/></button>}
               </div>
-              <div className="relative flex-1">
+              <div className="relative flex-[1.5]">
                 <input value={fDesc1} onChange={e=>setFDesc1(e.target.value)} placeholder="Descrição..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
                 {fDesc1 && <button onClick={()=>setFDesc1('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar Descrição"><X size={12}/></button>}
               </div>
-              <button onClick={clearTotal1} className="shrink-0 px-2 py-1 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 shadow-sm text-[10px] font-bold" title="Limpar Tudo (Filtro e Seleção)">Limpar</button>
+              <button onClick={clearTotal1} className="shrink-0 px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 shadow-sm text-[10px] font-bold" title="Limpar Tudo (Filtro e Seleção)">Limpar</button>
             </div>
           </div>
-          <div className={`overflow-auto bg-gray-50/50 border-b border-gray-200 shadow-inner ${selMat1 ? 'h-40 shrink-0' : 'flex-1'}`}>
+          <div className={`overflow-auto bg-gray-50/50 border-b border-gray-200 shadow-inner ${selMat1 ? 'h-36 shrink-0' : 'flex-1'}`}>
             {loading1 ? (
               <div className="flex justify-center p-4"><Loader2 className="animate-spin text-emerald-500" size={18}/></div>
             ) : materiais1.length === 0 ? (
@@ -616,14 +616,14 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   <tr>
                     <th className={`${colsCls} w-[160px]`}>Código</th>
                     <th className={colsCls}>Descrição</th>
-                    <th className={`${colsCls} text-center`}>Peça Manuf.</th>
+                    <th className={`${colsCls} text-center w-20`}>Peça Manuf.</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {(selMat1 ? [selMat1] : materiais1).map(m => (
                     <tr key={m.IdMaterial} onClick={() => selectMat1(m)}
                       className={`cursor-pointer transition-all ${selMat1?.IdMaterial === m.IdMaterial ? 'bg-emerald-100/70 border-l-[3px] border-emerald-500 shadow-sm' : 'hover:bg-gray-100 border-l-[3px] border-transparent'}`}>
-                      <td className={`${cellCls} font-bold text-[#32423D] max-w-[80px] flex items-center gap-1`} title={m.CodMatFabricante}>
+                      <td className={`${cellCls} font-bold text-[#32423D] min-w-[100px] flex items-center gap-1`} title={m.CodMatFabricante}>
                         {m.EnderecoArquivo && (
                           <button onClick={(e) => { e.stopPropagation(); abrirPdf(m.EnderecoArquivo!); }} className="p-0.5 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 rounded border border-red-100 shadow-sm transition-colors" title="Abrir PDF">
                             <FileText size={10}/>
@@ -631,8 +631,8 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         )}
                         <span className="truncate">{m.CodMatFabricante}</span>
                       </td>
-                      <td className={`${cellCls} text-gray-600 max-w-[130px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
-                      <td className={`${cellCls} text-center font-bold text-gray-700`}>
+                      <td className={`${cellCls} text-gray-600`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
+                      <td className={`${cellCls} text-center font-bold text-gray-700 w-20`}>
                         {m.PecaManufat === 'S' ? 'S' : '-'}
                       </td>
                     </tr>
@@ -645,32 +645,30 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
           {/* CENTRO E BASE: SÓ EXIBE SE HOUVER ITEM SELECIONADO */}
           {selMat1 && (
             <>
-              {/* DETALHES DO ITEM SELECIONADO */}
-              <div className="bg-[#32423D]/[0.02] border-b border-gray-200 p-3 shrink-0 relative shadow-sm">
-                 <div className="text-[9.5px] font-bold text-[#32423D] uppercase tracking-wider mb-2 flex items-center justify-between border-b border-gray-200 pb-1">
-                   <span className="flex items-center gap-1.5"><Package size={12} className="text-emerald-600"/> {selMat1.CodMatFabricante}</span>
-                 </div>
-                 <div className="grid grid-cols-4 gap-x-2 gap-y-2.5">
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Espessura</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Espessura)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Área Pint.</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.AreaPintura)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Peso</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Peso)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Unidade</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Unidade)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Altura</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Altura)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Largura</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Largura)}</div></div>
-                   <div><div className="text-[8px] text-gray-400 uppercase font-bold tracking-wide">Qtde</div><div className="text-[10px] font-bold text-gray-800">{fmt(selMat1.Qtde)}</div></div>
+              {/* DETALHES DO ITEM SELECIONADO: RIBBON INDUSTRIAL DENSE */}
+              <div className="bg-slate-50 border-b border-gray-200 px-3 py-2 shrink-0 relative shadow-xs">
+                 <div className="text-[9.5px] font-bold text-[#32423D] uppercase tracking-wider mb-1.5 flex items-center justify-between border-b border-gray-200/80 pb-1">
+                   <span className="flex items-center gap-1.5"><Package size={12} className="text-emerald-600"/> <span className="font-mono text-emerald-950 font-bold">{selMat1.CodMatFabricante}</span></span>
                    {selMat1.EnderecoArquivo && (
-                      <div className="col-span-1 flex items-end">
-                        <button onClick={()=>abrirPdf(selMat1.EnderecoArquivo!)} className="w-full flex items-center justify-center gap-1 px-1 py-0.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-[9px] font-bold shadow-sm transition-colors" title="Abrir PDF">
-                          <FileText size={10}/> PDF
-                        </button>
-                      </div>
+                      <button onClick={()=>abrirPdf(selMat1.EnderecoArquivo!)} className="flex items-center gap-1 px-2 py-0.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded text-[9px] font-bold shadow-xs transition-colors" title="Abrir Desenho Técnico PDF">
+                        <FileText size={11}/> PDF Desenho
+                      </button>
                    )}
+                 </div>
+                 <div className="grid grid-cols-4 sm:grid-cols-4 lg:grid-cols-7 xl:grid-cols-7 2xl:grid-cols-7 gap-2">
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Espessura</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.Espessura)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Área Pint.</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.AreaPintura)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Peso</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.Peso)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Unidade</div><div className="text-[10px] font-bold text-gray-800 truncate">{fmt(selMat1.Unidade)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Altura</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.Altura)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Largura</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.Largura)}</div></div>
+                   <div className="bg-white p-1 rounded border border-gray-100"><div className="text-[7.5px] text-gray-400 uppercase font-bold tracking-wide">Qtde</div><div className="text-[10px] font-mono font-bold text-gray-800 truncate">{fmt(selMat1.Qtde)}</div></div>
                  </div>
               </div>
 
               {/* BASE: COMPOSIÇÃO */}
               <div className="flex-1 flex flex-col min-h-0 bg-white relative">
-                <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200 shrink-0 flex justify-between items-center z-10 shadow-sm">
+                <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200 shrink-0 flex justify-between items-center z-10 shadow-xs">
                   <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Wrench size={12} /> Composição do Material
                   </span>
@@ -685,13 +683,13 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                     </div>
                   ) : (
                     <table className="w-full text-left">
-                  <thead className="bg-white sticky top-0 z-10 shadow-sm border-b border-gray-200">
+                  <thead className="bg-white sticky top-0 z-10 shadow-xs border-b border-gray-200">
                     <tr>
-                      <th className="p-1 px-1.5 w-12"></th>
-                      <th className={`${colsCls} text-center`}>NV</th>
-                      <th className={`${colsCls} w-[130px]`}>Código</th>
-                      <th className={colsCls}>Descrição</th>
-                      <th className={`${colsCls} text-center`}>QTD</th>
+                      <th className="p-1 px-1.5 w-10"></th>
+                      <th className={`${colsCls} text-center w-12`}>NV</th>
+                      <th className={`${colsCls} min-w-[120px]`}>Código</th>
+                      <th className={`${colsCls} min-w-[160px]`}>Descrição</th>
+                      <th className={`${colsCls} text-center w-20`}>QTD</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -708,55 +706,57 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         {/* =========================================
             GRID 2: PROCESSOS E RECURSOS
             ========================================= */}
-        <div className={`flex flex-col min-h-0 bg-white shadow-sm flex-1 max-w-[30%]`}>
-          <div className="px-3 py-2 bg-gradient-to-r from-teal-50 to-teal-100/30 border-b border-teal-100 shrink-0 flex justify-between items-center">
+        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[360px] 2xl:min-w-[420px]">
+          <div className="px-3 py-1.5 bg-gradient-to-r from-teal-50 to-teal-100/30 border-b border-teal-100 shrink-0 flex justify-between items-center">
             <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
               <Clock size={13} /> 2. Processos de Fabricação
             </span>
             <div className="flex gap-2 items-center">
-              {selMat1 && <button onClick={()=>fetchProcs(selMat1.CodMatFabricante)} className="p-0.5 text-teal-500 hover:text-teal-700 bg-white rounded shadow-sm border border-teal-200" title="Atualizar"><RefreshCw size={11}/></button>}
+              {selMat1 && <button onClick={()=>fetchProcs(selMat1.CodMatFabricante)} className="p-0.5 text-teal-500 hover:text-teal-700 bg-white rounded shadow-xs border border-teal-200" title="Atualizar"><RefreshCw size={11}/></button>}
               
             </div>
           </div>
           
           {/* TOPO: FORMULÁRIO DE ADIÇÃO DE PROCESSO */}
-          <div className="p-3 bg-teal-50/20 border-b border-gray-200 shrink-0">
+          <div className="p-2 bg-teal-50/20 border-b border-gray-200 shrink-0">
              {!selMat1 ? (
-               <div className="text-[10px] text-gray-400 text-center italic">Selecione um material no Grid 1 para gerenciar processos</div>
+               <div className="text-[10px] text-gray-400 text-center italic py-1">Selecione um material no Grid 1 para gerenciar processos</div>
              ) : (
-               <div className="flex flex-col gap-2">
-                 <div className="flex gap-2 items-end flex-wrap">
-                   <div className="flex flex-col flex-1 min-w-[130px]">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Recurso <span className="text-red-500">*</span></span>
+               <div className="flex flex-col gap-1.5">
+                 <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-7 gap-2 items-end">
+                   <div className="col-span-2 sm:col-span-3 xl:col-span-2 flex flex-col">
+                     <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Recurso <span className="text-red-500">*</span></span>
                      <select value={selId} onChange={e => {
                          const val = e.target.value ? Number(e.target.value) : '';
                          setSelId(val);
                        }}
-                       className="px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500 bg-white">
+                       className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500 bg-white">
                        <option value="">- Selecione -</option>
                        {tipos.map(t=>(<option key={t.IdProcessoFabricacao} value={t.IdProcessoFabricacao}>{t.ProcessoFabricacao}</option>))}
                       </select>
                    </div>
-                                      <div className="flex flex-col items-center shrink-0">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Seq.</span>
-                     <input type="number" min="1" step="1" value={seq} onChange={e=>setSeq(e.target.value)} placeholder={String(nextSeq())} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                   <div className="flex flex-col">
+                     <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5 text-center">Seq.</span>
+                     <input type="number" min="1" step="1" value={seq} onChange={e=>setSeq(e.target.value)} placeholder={String(nextSeq())} className="w-full px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
                    </div>
-                    <div className="flex flex-col items-center shrink-0">
-                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Setup {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
-                     <input type="number" min="0" step="0.01" value={estMin} onChange={e=>setEstMin(e.target.value)} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                   <div className="flex flex-col">
+                     <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5 text-center">Setup {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
+                     <input type="number" min="0" step="0.01" value={estMin} onChange={e=>setEstMin(e.target.value)} className="w-full px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
                    </div>
-                    <div className="flex flex-col items-center shrink-0">
-                      <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Padrão {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
-                     <input type="number" min="0" step="0.01" value={padMin} onChange={e=>setPadMin(e.target.value)} className="w-14 px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                   <div className="flex flex-col">
+                     <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5 text-center">Padrão {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
+                     <input type="number" min="0" step="0.01" value={padMin} onChange={e=>setPadMin(e.target.value)} className="w-full px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
                    </div>
 
-                   <div className="flex flex-col flex-1 min-w-[120px]">
-                     <span className="text-[8.5px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Observação</span>
-                     <input value={ob} onChange={e=>setOb(e.target.value.toUpperCase())} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-teal-500"/>
+                   <div className="col-span-2 sm:col-span-2 xl:col-span-1 flex flex-col">
+                     <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Observação</span>
+                     <input value={ob} onChange={e=>setOb(e.target.value.toUpperCase())} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
                    </div>
-                   <button onClick={handleAddProc} disabled={!selId} className="flex items-center gap-1 h-6 px-3 bg-teal-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-teal-700 disabled:opacity-40 transition-colors">
-                     <Plus size={12}/> Adicionar
-                   </button>
+                   <div className="col-span-2 sm:col-span-1 xl:col-span-1 flex items-end">
+                     <button onClick={handleAddProc} disabled={!selId} className="w-full flex items-center justify-center gap-1 h-[27px] px-2 bg-teal-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-teal-700 disabled:opacity-40 transition-colors">
+                       <Plus size={12}/> Adicionar
+                     </button>
+                   </div>
                  </div>
                </div>
              )}
@@ -774,15 +774,15 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
               <div className="p-4 text-center text-[10px] text-gray-400">Nenhum processo cadastrado para este material</div>
             ) : (
               <table className="w-full text-left">
-                <thead className="bg-white sticky top-0 shadow-sm z-10 border-b border-gray-200">
+                <thead className="bg-white sticky top-0 shadow-xs z-10 border-b border-gray-200">
                   <tr>
                     <th className="p-1.5 px-2 text-[9px] font-bold text-gray-500 uppercase tracking-wide w-10 text-center">Seq</th>
                     <th className={colsCls}>
                       <div className="flex flex-col gap-1">
                         <span>Recurso</span>
                         <div className="relative"><input type="text" placeholder="Filtro..." value={procTableFiltro} onChange={e => setProcTableFiltro(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-teal-500 bg-white" />{procTableFiltro && <button onClick={()=>setProcTableFiltro('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th>
-                    <th className={`${colsCls} text-center`}>Setup</th>
-                    <th className={`${colsCls} text-center`}>Padrão</th>
+                    <th className={`${colsCls} text-center w-14`}>Setup</th>
+                    <th className={`${colsCls} text-center w-14`}>Padrão</th>
                     <th className={colsCls}>Obs.</th>
                     <th className="p-1.5 px-2 w-14"></th>
                   </tr>
@@ -813,18 +813,18 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         {editSq === s.seq ? (
                           <input type="number" min="1" value={inlineSeq} onChange={e=>setInlineSeq(e.target.value)} className="w-10 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
                         ) : (
-                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-100 text-teal-800 text-[8.5px] font-bold border border-teal-200 shadow-sm">{s.seq}</span>
+                          <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-teal-100 text-teal-800 text-[8.5px] font-bold border border-teal-200 shadow-xs">{s.seq}</span>
                         )}
                       </td>
                       <td className={`${cellCls} font-semibold text-[#32423D]`}>{s.nome}</td>
-                      <td className="p-1.5 px-2 text-center">
+                      <td className="p-1.5 px-2 text-center w-14">
                         {editSq === s.seq ? (
                           <input type="number" min="0" step="0.01" value={inlineEst} onChange={e=>setInlineEst(e.target.value)} className="w-12 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
                         ) : (
                           <span className="text-[10px] text-gray-600 font-bold">{fmtMin(s.estMin)}</span>
                         )}
                       </td>
-                      <td className="p-1.5 px-2 text-center">
+                      <td className="p-1.5 px-2 text-center w-14">
                         {editSq === s.seq ? (
                           <input type="number" min="0" step="0.01" value={inlinePad} onChange={e=>setInlinePad(e.target.value)} className="w-12 px-1 py-0.5 text-[10px] font-mono border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white text-center shadow-inner" />
                         ) : (
@@ -835,16 +835,16 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         {editSq === s.seq ? (
                           <input value={inlineOb} onChange={e=>setInlineOb(e.target.value.toUpperCase())} className="w-full px-1.5 py-0.5 text-[10px] border border-amber-300 rounded focus:outline-none focus:border-amber-500 bg-white shadow-inner" />
                         ) : (
-                          <span className="text-[10px] text-gray-500 truncate max-w-[140px] block" title={s.obs||''}>{s.obs||'-'}</span>
+                          <span className="text-[10px] text-gray-500 min-w-[120px] truncate block" title={s.obs||''}>{s.obs||'-'}</span>
                         )}
                       </td>
-                      <td className="p-1.5 px-1 text-right whitespace-nowrap">
+                      <td className="p-1.5 px-1 text-right whitespace-nowrap w-14">
                         {editSq === s.seq ? (
-                           <button onClick={saveInlineEdit} className="p-0.5 text-emerald-600 hover:text-emerald-700 bg-emerald-50 rounded border border-emerald-200 mr-1 shadow-sm" title="Confirmar alteração"><Check size={11}/></button>
+                           <button onClick={saveInlineEdit} className="p-0.5 text-emerald-600 hover:text-emerald-700 bg-emerald-50 rounded border border-emerald-200 mr-1 shadow-xs" title="Confirmar alteração"><Check size={11}/></button>
                         ) : (
-                           <button onClick={()=>startInlineEdit(s)} className="p-0.5 text-blue-500 hover:text-blue-700 bg-blue-50 rounded border border-blue-200 mr-1 shadow-sm" title="Editar diretamente na linha"><Edit2 size={11}/></button>
+                           <button onClick={()=>startInlineEdit(s)} className="p-0.5 text-blue-500 hover:text-blue-700 bg-blue-50 rounded border border-blue-200 mr-1 shadow-xs" title="Editar diretamente na linha"><Edit2 size={11}/></button>
                         )}
-                        <button onClick={()=>delProc(s.seq)} disabled={editSq === s.seq} className="p-0.5 text-red-400 hover:text-red-600 bg-red-50 rounded border border-red-200 shadow-sm disabled:opacity-30" title="Excluir"><Trash2 size={11}/></button>
+                        <button onClick={()=>delProc(s.seq)} disabled={editSq === s.seq} className="p-0.5 text-red-400 hover:text-red-600 bg-red-50 rounded border border-red-200 shadow-xs disabled:opacity-30" title="Excluir"><Trash2 size={11}/></button>
                       </td>
                     </tr>
                     );
@@ -858,83 +858,81 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         {/* =========================================
             GRID 3: INCLUSÃO DE NOVOS MATERIAIS
             ========================================= */}
-        
-          <div className="flex flex-col min-h-0 bg-white shadow-sm flex-1 max-w-[30%] border-l border-indigo-100 animate-in slide-in-from-right-10 duration-200">
-            <div className="px-3 py-2 bg-gradient-to-r from-indigo-50 to-indigo-100/40 border-b border-indigo-100 shrink-0 flex justify-between items-center">
-              <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
-                <PlusCircle size={13} /> 3. Incluir Materiais
-              </span>
-              
-            </div>
+        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[360px] 2xl:min-w-[420px] border-l border-indigo-100 animate-in slide-in-from-right-10 duration-200">
+          <div className="px-3 py-1.5 bg-gradient-to-r from-indigo-50 to-indigo-100/40 border-b border-indigo-100 shrink-0 flex justify-between items-center">
+            <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
+              <PlusCircle size={13} /> 3. Incluir Materiais
+            </span>
+          </div>
 
-            <div className="p-2 border-b border-gray-100 shrink-0 flex flex-col gap-2 bg-gray-50/30">
-              <div className="flex gap-2">
-                <div className="relative w-[30%]">
-                  <input value={fCod3} onChange={e=>setFCod3(e.target.value)} disabled={!selMat1} placeholder="Cód..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"/>
-                  {fCod3 && <button onClick={()=>setFCod3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar"><X size={12}/></button>}
-                </div>
-                <div className="relative w-[40%]">
-                  <input value={fDesc3} onChange={e=>setFDesc3(e.target.value)} disabled={!selMat1} placeholder="Descrição..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded shadow-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"/>
-                  {fDesc3 && <button onClick={()=>setFDesc3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar"><X size={12}/></button>}
-                </div>
-                <button onClick={handleSaveComp3} disabled={!selMat1 || selecionados3.size === 0 || saving3}
-                  className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-sm hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
-                  {saving3 ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Adicionar ({selecionados3.size})
-                </button>
+          <div className="p-2 border-b border-gray-100 shrink-0 flex flex-col gap-2 bg-gray-50/30">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input value={fCod3} onChange={e=>setFCod3(e.target.value)} disabled={!selMat1} placeholder="Cód..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"/>
+                {fCod3 && <button onClick={()=>setFCod3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-xs" title="Limpar"><X size={12}/></button>}
               </div>
-            </div>
-
-            <div className="flex-1 overflow-auto bg-gray-50/20">
-              {loading3 ? (
-                <div className="flex justify-center p-6"><Loader2 className="animate-spin text-indigo-500" size={18}/></div>
-              ) : materiais3Filtrados.length === 0 ? (
-                <div className="p-6 text-center text-[10px] text-gray-400">Nenhum material novo disponível para adição</div>
-              ) : (
-                <table className="w-full text-left">
-                  <thead className="bg-white sticky top-0 z-10 shadow-sm border-b border-gray-200">
-                    <tr>
-                      <th className="p-1 px-2 w-8 text-center">
-                        <div className="w-3 h-3 border border-gray-300 rounded-sm mx-auto bg-gray-50" title="Selecione individualmente"></div>
-                      </th>
-                      <th className={colsCls}>
-                        <div className="flex flex-col gap-1">
-                          <span>Código</span>
-                          <div className="relative"><input type="text" placeholder="Filtro Cód..." value={filtroCod3} onChange={e=>setFiltroCod3(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-indigo-500 bg-white" />{filtroCod3 && <button onClick={()=>setFiltroCod3('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th><th className={colsCls}>
-                        <div className="flex flex-col gap-1">
-                          <span>Descrição</span>
-                          <div className="relative"><input type="text" placeholder="Filtro Desc..." value={filtroDesc3} onChange={e=>setFiltroDesc3(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-indigo-500 bg-white" />{filtroDesc3 && <button onClick={()=>setFiltroDesc3('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th><th className={`${colsCls} text-center w-16`}>Qtde</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {materiais3Filtrados.map(m => (
-                      <tr key={m.IdMaterial} onClick={() => toggleSel3(m.IdMaterial)}
-                        className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-[3px] border-indigo-500' : 'hover:bg-gray-50 border-l-[3px] border-transparent'}`}>
-                        <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
-                          <input type="checkbox" checked={selecionados3.has(m.IdMaterial)} onChange={() => toggleSel3(m.IdMaterial)} className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"/>
-                        </td>
-                        <td className={`${cellCls} font-bold text-[#32423D] max-w-[80px]`} title={m.CodMatFabricante}>{m.CodMatFabricante}</td>
-                        <td className={`${cellCls} text-gray-600 max-w-[120px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
-                        <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
-                          {selecionados3.has(m.IdMaterial) ? (
-                            <input type="number" min="0.01" step="0.01" 
-                              value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
-                              }}
-                              className="w-12 px-1 py-0.5 text-[10px] font-bold text-center border-2 border-indigo-200 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-inner"
-                            />
-                          ) : (
-                            <span className="text-gray-300">-</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
+              <div className="relative flex-[1.5]">
+                <input value={fDesc3} onChange={e=>setFDesc3(e.target.value)} disabled={!selMat1} placeholder="Descrição..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"/>
+                {fDesc3 && <button onClick={()=>setFDesc3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-xs" title="Limpar"><X size={12}/></button>}
+              </div>
+              <button onClick={handleSaveComp3} disabled={!selMat1 || selecionados3.size === 0 || saving3}
+                className="shrink-0 flex items-center justify-center gap-1 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                {saving3 ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Adicionar ({selecionados3.size})
+              </button>
             </div>
           </div>
+
+          <div className="flex-1 overflow-auto bg-gray-50/20">
+            {loading3 ? (
+              <div className="flex justify-center p-6"><Loader2 className="animate-spin text-indigo-500" size={18}/></div>
+            ) : materiais3Filtrados.length === 0 ? (
+              <div className="p-6 text-center text-[10px] text-gray-400">Nenhum material novo disponível para adição</div>
+            ) : (
+              <table className="w-full text-left">
+                <thead className="bg-white sticky top-0 z-10 shadow-xs border-b border-gray-200">
+                  <tr>
+                    <th className="p-1 px-2 w-8 text-center">
+                      <div className="w-3 h-3 border border-gray-300 rounded-sm mx-auto bg-gray-50" title="Selecione individualmente"></div>
+                    </th>
+                    <th className={colsCls}>
+                      <div className="flex flex-col gap-1">
+                        <span>Código</span>
+                        <div className="relative"><input type="text" placeholder="Filtro Cód..." value={filtroCod3} onChange={e=>setFiltroCod3(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-indigo-500 bg-white" />{filtroCod3 && <button onClick={()=>setFiltroCod3('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th><th className={colsCls}>
+                      <div className="flex flex-col gap-1">
+                        <span>Descrição</span>
+                        <div className="relative"><input type="text" placeholder="Filtro Desc..." value={filtroDesc3} onChange={e=>setFiltroDesc3(e.target.value)} className="w-full px-1 pr-4 py-0.5 text-[9px] font-normal border border-gray-200 rounded focus:outline-none focus:border-indigo-500 bg-white" />{filtroDesc3 && <button onClick={()=>setFiltroDesc3('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={10} /></button>}</div></div></th><th className={`${colsCls} text-center w-16`}>Qtde</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {materiais3Filtrados.map(m => (
+                    <tr key={m.IdMaterial} onClick={() => toggleSel3(m.IdMaterial)}
+                      className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-[3px] border-indigo-500' : 'hover:bg-gray-50 border-l-[3px] border-transparent'}`}>
+                      <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
+                        <input type="checkbox" checked={selecionados3.has(m.IdMaterial)} onChange={() => toggleSel3(m.IdMaterial)} className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"/>
+                      </td>
+                      <td className={`${cellCls} font-bold text-[#32423D] min-w-[90px]`} title={m.CodMatFabricante}>{m.CodMatFabricante}</td>
+                      <td className={`${cellCls} text-gray-600 min-w-[130px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
+                      <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
+                        {selecionados3.has(m.IdMaterial) ? (
+                          <input type="number" min="0.01" step="0.01" 
+                            value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
+                            onChange={(e) => {
+                              const val = e.target.value === '' ? 0 : Number(e.target.value);
+                              setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
+                            }}
+                            className="w-12 px-1 py-0.5 text-[10px] font-bold text-center border-2 border-indigo-200 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-inner"
+                          />
+                        ) : (
+                          <span className="text-gray-300">-</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
 
       </div>
     </div>
