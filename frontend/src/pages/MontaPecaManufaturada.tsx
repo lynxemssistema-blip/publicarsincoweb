@@ -72,7 +72,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const [inlinePad, setInlinePad] = useState('');
 
   // Grid 3: Inclusão de Novos Itens
-    const [materiais3, setMateriais3] = useState<MatRow[]>([]);
+  const [materiais3, setMateriais3] = useState<MatRow[]>([]);
   const [loading3, setLoading3] = useState(false);
   const [fCod3, setFCod3] = useState('');
   const [fDesc3, setFDesc3] = useState('');
@@ -81,6 +81,12 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const [selecionados3, setSelecionados3] = useState<Set<number>>(new Set());
   const [quantidades3, setQuantidades3] = useState<Record<number, number>>({});
   const [saving3, setSaving3] = useState(false);
+  const [showModalInclusao, setShowModalInclusao] = useState(false);
+
+  // Peças Manufaturadas em Grid 3 / Modal Inclusão (montapeca)
+  const [pecasMontaPeca, setPecasMontaPeca] = useState<Record<number, any[]>>({});
+  const [loadingPecaComp, setLoadingPecaComp] = useState<Record<number, boolean>>({});
+  const [expandedPecas3, setExpandedPecas3] = useState<Set<number>>(new Set());
 
   const fmt = (v:any) => v != null ? String(v) : '-';
   const fmtMin=(v:number|null)=>v==null?'-':v;
@@ -143,13 +149,15 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     setSelMat1(null);
     setComp2([]);
     setStaging([]);
-
+    setShowModalInclusao(false);
   };
 
-  const fetchComp2 = useCallback(async (idMat: number) => {
+  const fetchComp2 = useCallback(async (idMat: number, codMat?: string) => {
     setLoading2(true);
     try {
-      const r = await fetch(`${API}/composicao/${idMat}`, { headers: authHdr() });
+      let url = `${API}/composicao/${idMat}`;
+      if (codMat) url += `?codMatFabricante=${encodeURIComponent(codMat)}`;
+      const r = await fetch(url, { headers: authHdr() });
       const j = await r.json();
       if (j.success) {
         setComp2(j.data);
@@ -209,15 +217,13 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   }, [osId, osContext]);
 
   const selectMat1 = async (m: MatRow) => {
-    if (selMat1 && selMat1.IdMaterial === m.IdMaterial) return;
-    setSelMat1(null);
+    setSelMat1(m);
     try {
       const r = await fetch(`/api/material/${m.IdMaterial}`, { headers: authHdr() });
       const j = await r.json();
-      if (j.success) setSelMat1(j.data);
-      else setSelMat1(m);
+      if (j.success && j.data) setSelMat1(j.data);
     } catch { 
-      setSelMat1(m); 
+      // mantém m
     }
     
     setExpandedItems(new Set());
@@ -228,11 +234,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
     clearForm();
 
-    fetchComp2(m.IdMaterial);
+    fetchComp2(m.IdMaterial, m.CodMatFabricante);
     fetchProcs(m.CodMatFabricante);
   };
 
-  const fetchSubComp = async (idMontaPeca: number, idMaterial: number) => {
+  const fetchSubComp = async (idMontaPeca: number, idMaterial: number, codMat?: string) => {
     if (expandedItems.has(idMontaPeca)) {
       setExpandedItems(prev => { const n = new Set(prev); n.delete(idMontaPeca); return n; });
       return;
@@ -243,7 +249,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
     setLoadingSub(prev => ({ ...prev, [idMontaPeca]: true }));
     try {
-      const r = await fetch(`${API}/composicao/${idMaterial}`, { headers: authHdr() });
+      let url = `${API}/composicao/${idMaterial}`;
+      if (codMat) url += `?codMatFabricante=${encodeURIComponent(codMat)}`;
+      const r = await fetch(url, { headers: authHdr() });
       const j = await r.json();
       if (j.success) {
         setSubComps(prev => ({ ...prev, [idMontaPeca]: j.data }));
@@ -263,7 +271,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
       });
       const j = await r.json();
       if (j.success) {
-        if (selMat1) fetchComp2(selMat1.IdMaterial);
+        if (selMat1) fetchComp2(selMat1.IdMaterial, selMat1.CodMatFabricante);
       } else {
         showAlert(j.message || 'Erro ao remover item', 'error');
       }
@@ -419,16 +427,58 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     return true;
   });
 
-  const toggleSel3 = (id: number) => {
-    setSelecionados3(prev => { 
-      const n = new Set(prev); 
-      if (n.has(id)) {
-        n.delete(id);
-      } else {
-        n.add(id);
+  const fetchPecaMontaPeca = useCallback(async (idMat: number, codMat?: string) => {
+    setLoadingPecaComp(prev => ({ ...prev, [idMat]: true }));
+    try {
+      let url = `${API}/composicao/${idMat}`;
+      if (codMat) url += `?codMatFabricante=${encodeURIComponent(codMat)}`;
+      const r = await fetch(url, { headers: authHdr() });
+      const j = await r.json();
+      if (j.success) {
+        setPecasMontaPeca(prev => ({ ...prev, [idMat]: j.data || [] }));
       }
-      return n; 
+    } catch (e) {
+      console.error('Erro ao carregar montapeca da peça', e);
+    } finally {
+      setLoadingPecaComp(prev => ({ ...prev, [idMat]: false }));
+    }
+  }, []);
+
+  const toggleExpandPeca3 = (idMat: number, codMat?: string) => {
+    setExpandedPecas3(prev => {
+      const n = new Set(prev);
+      if (n.has(idMat)) {
+        n.delete(idMat);
+      } else {
+        n.add(idMat);
+        fetchPecaMontaPeca(idMat, codMat);
+      }
+      return n;
     });
+  };
+
+  const toggleSel3 = (id: number, mat?: MatRow) => {
+    const isSelected = selecionados3.has(id);
+    const targetMat = mat || materiais3.find(m => m.IdMaterial === id);
+
+    if (isSelected) {
+      setSelecionados3(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+    } else {
+      setSelecionados3(prev => {
+        const n = new Set(prev);
+        n.add(id);
+        return n;
+      });
+      setQuantidades3(q => ({ ...q, [id]: q[id] !== undefined ? q[id] : 1 }));
+      if (targetMat?.PecaManufat === 'S') {
+        setExpandedPecas3(p => new Set(p).add(id));
+        fetchPecaMontaPeca(id, targetMat.CodMatFabricante);
+      }
+    }
   };
 
   const handleSaveComp3 = async () => {
@@ -453,8 +503,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
       
       const j = await r.json();
       if (j.success) {
-        alert(`Composição atualizada!`);
-        fetchComp2(selMat1.IdMaterial);
+        fetchComp2(selMat1.IdMaterial, selMat1.CodMatFabricante);
         setSelecionados3(new Set());
         setQuantidades3({});
       } else { 
@@ -509,7 +558,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
             <td className="p-1 px-1 text-center whitespace-nowrap">
               <div className="flex items-center" style={{ marginLeft: `${level * 12}px` }}>
                 {isPeca ? (
-                  <button onClick={() => fetchSubComp(c.IdMontaPeca, c.IdMaterial)} className="p-0.5 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-blue-200 mr-0.5" title={isExpanded ? "Recolher composição" : "Expandir composição"}>
+                  <button onClick={() => fetchSubComp(c.IdMontaPeca, c.IdMaterial, c.CodMatFabricante)} className="p-0.5 text-blue-500 hover:text-blue-700 bg-white rounded shadow-sm border border-blue-200 mr-0.5" title={isExpanded ? "Recolher composição" : "Expandir composição"}>
                     {isExpanded ? <ChevronDown size={11}/> : <ChevronRight size={11}/>}
                   </button>
                 ) : <div className="w-[18px] mr-0.5 inline-block"></div>}
@@ -537,25 +586,36 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
               {c.DescDetal}
             </td>
             <td className="p-1 px-1.5 text-center" onClick={e => e.stopPropagation()}>
-              <input 
-                type="number" 
-                min="0.01" 
-                step="0.01"
-                className="w-16 px-1 py-0.5 text-[10px] font-bold text-center border border-gray-200 rounded bg-white hover:border-indigo-400 focus:outline-none focus:border-indigo-500"
-                defaultValue={c.PecaQtde || 1}
-                onFocus={(e) => e.target.select()}
-                onBlur={(e) => {
-                  const val = Number(e.target.value);
-                  if (val > 0 && val !== (c.PecaQtde || 1)) {
-                    handleUpdateQtdeComp(c.IdMaterialPeca, c.IdMaterial, val);
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                     e.currentTarget.blur();
-                  }
-                }}
-              />
+              {level === 0 ? (
+                <input 
+                  type="number" 
+                  min="0.01" 
+                  step="0.01"
+                  className="w-16 px-1 py-0.5 text-[10px] font-bold text-center border border-gray-200 rounded bg-white hover:border-indigo-400 focus:outline-none focus:border-indigo-500 shadow-2xs"
+                  defaultValue={c.PecaQtde || 1}
+                  key={`qtde-${c.IdMontaPeca}-${c.PecaQtde}`}
+                  title="Editar quantidade (Nível 1)"
+                  onFocus={(e) => e.target.select()}
+                  onBlur={(e) => {
+                    const val = Number(e.target.value);
+                    if (val > 0 && val !== (c.PecaQtde || 1)) {
+                      handleUpdateQtdeComp(c.IdMaterialPeca, c.IdMaterial, val);
+                    }
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                       e.currentTarget.blur();
+                    }
+                  }}
+                />
+              ) : (
+                <span 
+                  className="inline-block w-16 px-1 py-0.5 text-[10px] font-semibold text-gray-500 text-center bg-gray-50 rounded border border-gray-200/60"
+                  title="Quantidade fixa (definida na sub-peça)"
+                >
+                  {c.PecaQtde || 1}
+                </span>
+              )}
             </td>
           </tr>
           
@@ -672,7 +732,18 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
                     <Wrench size={12} /> Composição do Material
                   </span>
-                  <span className="text-[8.5px] font-bold text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{comp2.length} itens raízes</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[8.5px] font-bold text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{comp2.length} itens raízes</span>
+                    {selMat1 && (
+                      <button 
+                        onClick={() => setShowModalInclusao(true)} 
+                        className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
+                        title="Acessar tela de inclusão de materiais"
+                      >
+                        <PlusCircle size={11} /> Incluir Material
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="flex-1 overflow-auto">
                   {loading2 ? (
@@ -706,12 +777,21 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         {/* =========================================
             GRID 2: PROCESSOS E RECURSOS
             ========================================= */}
-        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[360px] 2xl:min-w-[420px]">
+        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[340px] 2xl:min-w-[400px]">
           <div className="px-3 py-1.5 bg-gradient-to-r from-teal-50 to-teal-100/30 border-b border-teal-100 shrink-0 flex justify-between items-center">
             <span className="text-[10px] font-bold text-teal-800 uppercase tracking-wider flex items-center gap-1.5">
               <Clock size={13} /> 2. Processos de Fabricação
             </span>
             <div className="flex gap-2 items-center">
+              {selMat1 && (
+                <button 
+                  onClick={() => setShowModalInclusao(true)} 
+                  className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
+                  title="Acessar tela de inclusão de materiais"
+                >
+                  <PlusCircle size={11} /> Incluir Material
+                </button>
+              )}
               {selMat1 && <button onClick={()=>fetchProcs(selMat1.CodMatFabricante)} className="p-0.5 text-teal-500 hover:text-teal-700 bg-white rounded shadow-xs border border-teal-200" title="Atualizar"><RefreshCw size={11}/></button>}
               
             </div>
@@ -747,7 +827,6 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                      <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5 text-center">Padrão {!['NÃO', 'NAO', 'N', 'NÂO'].includes(String(tipos.find(t => t.IdProcessoFabricacao == selId)?.Fabrica || tipos.find(t => t.IdProcessoFabricacao == selId)?.fabrica || '').toUpperCase().trim()) && <span className="text-red-500">*</span>}</span>
                      <input type="number" min="0" step="0.01" value={padMin} onChange={e=>setPadMin(e.target.value)} className="w-full px-1 py-1 text-center text-[10px] font-mono border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
                    </div>
-
                    <div className="col-span-2 sm:col-span-2 xl:col-span-1 flex flex-col">
                      <span className="text-[8px] text-gray-500 uppercase font-bold tracking-wide mb-0.5">Observação</span>
                      <input value={ob} onChange={e=>setOb(e.target.value.toUpperCase())} placeholder="..." className="w-full px-2 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-teal-500"/>
@@ -856,13 +935,27 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         </div>
 
         {/* =========================================
-            GRID 3: INCLUSÃO DE NOVOS MATERIAIS
+            GRID 3: INCLUSÃO DE MATERIAIS
             ========================================= */}
-        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[360px] 2xl:min-w-[420px] border-l border-indigo-100 animate-in slide-in-from-right-10 duration-200">
+        <div className="flex flex-col min-h-0 bg-white shadow-sm flex-[0.95] min-w-0 w-full xl:min-w-[340px] 2xl:min-w-[400px] border-l border-indigo-100">
           <div className="px-3 py-1.5 bg-gradient-to-r from-indigo-50 to-indigo-100/40 border-b border-indigo-100 shrink-0 flex justify-between items-center">
             <span className="text-[10px] font-bold text-indigo-800 uppercase tracking-wider flex items-center gap-1.5">
-              <PlusCircle size={13} /> 3. Incluir Materiais
+              <PlusCircle size={13} /> 3. Incluir Material
             </span>
+            <button 
+              onClick={() => {
+                if (!selMat1) {
+                  alert('Selecione primeiro um material no Grid 1 para incluir materiais.');
+                  return;
+                }
+                setShowModalInclusao(true);
+              }}
+              disabled={!selMat1}
+              className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
+              title="Acessar tela de inclusão de materiais"
+            >
+              <PlusCircle size={11} /> Incluir Material
+            </button>
           </div>
 
           <div className="p-2 border-b border-gray-100 shrink-0 flex flex-col gap-2 bg-gray-50/30">
@@ -876,7 +969,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                 {fDesc3 && <button onClick={()=>setFDesc3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-xs" title="Limpar"><X size={12}/></button>}
               </div>
               <button onClick={handleSaveComp3} disabled={!selMat1 || selecionados3.size === 0 || saving3}
-                className="shrink-0 flex items-center justify-center gap-1 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                className="shrink-0 flex items-center justify-center gap-1 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer">
                 {saving3 ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Adicionar ({selecionados3.size})
               </button>
             </div>
@@ -904,30 +997,110 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {materiais3Filtrados.map(m => (
-                    <tr key={m.IdMaterial} onClick={() => toggleSel3(m.IdMaterial)}
-                      className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-[3px] border-indigo-500' : 'hover:bg-gray-50 border-l-[3px] border-transparent'}`}>
-                      <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
-                        <input type="checkbox" checked={selecionados3.has(m.IdMaterial)} onChange={() => toggleSel3(m.IdMaterial)} className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"/>
-                      </td>
-                      <td className={`${cellCls} font-bold text-[#32423D] min-w-[90px]`} title={m.CodMatFabricante}>{m.CodMatFabricante}</td>
-                      <td className={`${cellCls} text-gray-600 min-w-[130px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
-                      <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
-                        {selecionados3.has(m.IdMaterial) ? (
-                          <input type="number" min="0.01" step="0.01" 
-                            value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
-                            onChange={(e) => {
-                              const val = e.target.value === '' ? 0 : Number(e.target.value);
-                              setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
-                            }}
-                            className="w-12 px-1 py-0.5 text-[10px] font-bold text-center border-2 border-indigo-200 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-inner"
-                          />
-                        ) : (
-                          <span className="text-gray-300">-</span>
+                  {materiais3Filtrados.map(m => {
+                    const isPeca = m.PecaManufat === 'S';
+                    const isExpandedPeca = isPeca && (expandedPecas3.has(m.IdMaterial) || selecionados3.has(m.IdMaterial));
+                    const subItens = pecasMontaPeca[m.IdMaterial];
+                    const isLoadingPeca = loadingPecaComp[m.IdMaterial] || (isExpandedPeca && subItens === undefined);
+
+                    if (isExpandedPeca && subItens === undefined && !loadingPecaComp[m.IdMaterial]) {
+                      fetchPecaMontaPeca(m.IdMaterial, m.CodMatFabricante);
+                    }
+
+                    return (
+                      <React.Fragment key={m.IdMaterial}>
+                        <tr onClick={() => toggleSel3(m.IdMaterial, m)}
+                          className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-[3px] border-indigo-500' : 'hover:bg-gray-50 border-l-[3px] border-transparent'}`}>
+                          <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
+                            <input type="checkbox" checked={selecionados3.has(m.IdMaterial)} onChange={() => toggleSel3(m.IdMaterial, m)} className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"/>
+                          </td>
+                          <td className={`${cellCls} font-bold text-[#32423D] min-w-[90px] flex items-center gap-1`} title={m.CodMatFabricante}>
+                            {isPeca && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleExpandPeca3(m.IdMaterial, m.CodMatFabricante); }}
+                                className="p-0.5 text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors"
+                                title={isExpandedPeca ? "Ocultar componentes (montapeca)" : "Ver componentes (montapeca)"}
+                              >
+                                {isExpandedPeca ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                              </button>
+                            )}
+                            <span className="truncate">{m.CodMatFabricante}</span>
+                            {isPeca && (
+                              <span className="text-[7.5px] bg-emerald-100 text-emerald-800 font-extrabold px-1 py-0.2 rounded uppercase shrink-0">
+                                Peça
+                              </span>
+                            )}
+                          </td>
+                          <td className={`${cellCls} text-gray-600 min-w-[130px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
+                          <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
+                            {selecionados3.has(m.IdMaterial) ? (
+                              <input type="number" min="0.01" step="0.01" 
+                                value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                  setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
+                                }}
+                                className="w-12 px-1 py-0.5 text-[10px] font-bold text-center border-2 border-indigo-200 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-inner"
+                              />
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </td>
+                        </tr>
+
+                        {/* Exibição dos itens de montapeca da peça manufaturada selecionada/expandida */}
+                        {isExpandedPeca && (
+                          <tr className="bg-amber-50/40 border-b border-amber-200/50">
+                            <td colSpan={4} className="p-1.5 pl-6" onClick={e=>e.stopPropagation()}>
+                              <div className="bg-white rounded border border-amber-200 p-2 shadow-2xs">
+                                <div className="flex items-center justify-between border-b border-amber-100 pb-1 mb-1">
+                                  <span className="text-[8.5px] font-extrabold text-amber-900 uppercase tracking-wide flex items-center gap-1">
+                                    <Wrench size={10} className="text-amber-600" />
+                                    Componentes da Peça ({m.CodMatFabricante})
+                                  </span>
+                                  <span className="text-[8px] font-bold text-amber-700 bg-amber-100 px-1 py-0.2 rounded">
+                                    {(subItens || []).length} item(ns)
+                                  </span>
+                                </div>
+                                {isLoadingPeca ? (
+                                  <div className="flex items-center gap-1 py-1 text-[8.5px] text-gray-500">
+                                    <Loader2 size={11} className="animate-spin text-amber-600" /> Carregando montapeca...
+                                  </div>
+                                ) : !subItens || subItens.length === 0 ? (
+                                  <div className="text-[8.5px] text-gray-400 italic py-0.5">
+                                    Nenhum componente cadastrado em montapeca.
+                                  </div>
+                                ) : (
+                                  <table className="w-full text-left text-[8.5px]">
+                                    <thead>
+                                      <tr className="text-gray-400 border-b border-gray-100">
+                                        <th className="py-0.5 font-bold">Código</th>
+                                        <th className="py-0.5 font-bold">Descrição</th>
+                                        <th className="py-0.5 font-bold text-center w-12">Qtd</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-50">
+                                      {subItens.map((sub: any) => (
+                                        <tr key={sub.IdMontaPeca}>
+                                          <td className="py-0.5 font-mono font-bold text-slate-800 flex items-center gap-0.5">
+                                            {sub.PecaManufat === 'S' && <span className="text-[7px] bg-emerald-100 text-emerald-800 px-0.5 rounded font-bold">P</span>}
+                                            <span className="truncate">{sub.CodMatFabricante}</span>
+                                          </td>
+                                          <td className="py-0.5 text-gray-600 truncate max-w-[140px]" title={sub.DescDetal}>{sub.DescDetal}</td>
+                                          <td className="py-0.5 text-center font-bold text-slate-800">{sub.PecaQtde || sub.QtdeUnitaria || 1}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-                    </tr>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -935,6 +1108,232 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         </div>
 
       </div>
+
+      {/* MODAL DE INCLUSÃO DE MATERIAIS */}
+      {showModalInclusao && (
+        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-3 md:p-6 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col overflow-hidden border border-slate-300">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3 bg-[#32423D] text-white shrink-0 shadow-md">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-[#E0E800]/20 flex items-center justify-center text-[#E0E800]">
+                  <PlusCircle size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm md:text-base font-bold flex items-center gap-2">
+                    Inclusão de Materiais
+                    {selMat1 && (
+                      <span className="text-xs bg-[#E0E800] text-black font-extrabold px-2 py-0.5 rounded">
+                        {selMat1.CodMatFabricante}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-[11px] text-gray-300">
+                    Selecione insumos ou sub-peças para compor este material. Ao fechar, retornará à tela de recursos.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowModalInclusao(false)}
+                className="px-3 py-1.5 bg-white/10 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                title="Fechar janela e voltar para os Recursos"
+              >
+                <X size={15} /> Fechar e Voltar para Recursos
+              </button>
+            </div>
+
+            {/* Modal Search Bar */}
+            <div className="p-3 bg-gray-50 border-b border-gray-200 shrink-0 flex items-center gap-2">
+              <div className="relative flex-1">
+                <input 
+                  value={fCod3} 
+                  onChange={e => setFCod3(e.target.value)} 
+                  placeholder="Pesquisar por código..." 
+                  className="w-full px-2.5 pr-7 py-1.5 text-xs border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+                />
+                {fCod3 && <button onClick={()=>setFCod3('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={13}/></button>}
+              </div>
+              <div className="relative flex-[1.5]">
+                <input 
+                  value={fDesc3} 
+                  onChange={e => setFDesc3(e.target.value)} 
+                  placeholder="Pesquisar por descrição..." 
+                  className="w-full px-2.5 pr-7 py-1.5 text-xs border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
+                />
+                {fDesc3 && <button onClick={()=>setFDesc3('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={13}/></button>}
+              </div>
+              <button 
+                onClick={async () => {
+                  await handleSaveComp3();
+                  setShowModalInclusao(false);
+                }} 
+                disabled={!selMat1 || selecionados3.size === 0 || saving3}
+                className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              >
+                {saving3 ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} 
+                Adicionar ({selecionados3.size})
+              </button>
+            </div>
+
+            {/* Modal Materials List */}
+            <div className="flex-1 overflow-auto bg-gray-50/20">
+              {loading3 ? (
+                <div className="flex justify-center p-10"><Loader2 className="animate-spin text-indigo-500" size={24}/></div>
+              ) : materiais3Filtrados.length === 0 ? (
+                <div className="p-10 text-center text-xs text-gray-400">Nenhum material novo disponível para adição</div>
+              ) : (
+                <table className="w-full text-left">
+                  <thead className="bg-white sticky top-0 z-10 shadow-xs border-b border-gray-200">
+                    <tr>
+                      <th className="p-2 px-3 w-10 text-center">
+                        <div className="w-3.5 h-3.5 border border-gray-300 rounded-sm mx-auto bg-gray-50" title="Selecione individualmente"></div>
+                      </th>
+                      <th className={`${colsCls} w-44`}>Código</th>
+                      <th className={colsCls}>Descrição</th>
+                      <th className={`${colsCls} text-center w-24`}>Qtde</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                  {materiais3Filtrados.map(m => {
+                    const isPeca = m.PecaManufat === 'S';
+                    const isExpandedPeca = isPeca && (expandedPecas3.has(m.IdMaterial) || selecionados3.has(m.IdMaterial));
+                    const subItens = pecasMontaPeca[m.IdMaterial];
+                    const isLoadingPeca = loadingPecaComp[m.IdMaterial] || (isExpandedPeca && subItens === undefined);
+
+                    if (isExpandedPeca && subItens === undefined && !loadingPecaComp[m.IdMaterial]) {
+                      fetchPecaMontaPeca(m.IdMaterial, m.CodMatFabricante);
+                    }
+
+                    return (
+                      <React.Fragment key={m.IdMaterial}>
+                        <tr 
+                          onClick={() => toggleSel3(m.IdMaterial, m)}
+                          className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-4 border-indigo-500' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}
+                        >
+                          <td className="p-2 px-3 text-center" onClick={e=>e.stopPropagation()}>
+                            <input 
+                              type="checkbox" 
+                              checked={selecionados3.has(m.IdMaterial)} 
+                              onChange={() => toggleSel3(m.IdMaterial, m)} 
+                              className="accent-indigo-600 w-4 h-4 cursor-pointer"
+                            />
+                          </td>
+                          <td className={`${cellCls} font-mono font-bold text-[#32423D] flex items-center gap-1.5`} title={m.CodMatFabricante}>
+                            {isPeca && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleExpandPeca3(m.IdMaterial, m.CodMatFabricante); }}
+                                className="p-1 text-amber-700 hover:text-amber-900 bg-amber-100/70 hover:bg-amber-200 rounded border border-amber-300 shadow-2xs transition-colors"
+                                title={isExpandedPeca ? "Ocultar componentes desta peça" : "Ver componentes desta peça (montapeca)"}
+                              >
+                                {isExpandedPeca ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+                              </button>
+                            )}
+                            <span>{m.CodMatFabricante}</span>
+                            {isPeca && (
+                              <span className="text-[8px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded uppercase shrink-0 border border-emerald-200">
+                                Peça Manuf.
+                              </span>
+                            )}
+                          </td>
+                          <td className={`${cellCls} text-gray-600`} title={m.DescResumo || m.DescDetal}>
+                            {m.DescResumo || m.DescDetal || '-'}
+                          </td>
+                          <td className="p-2 px-3 text-center" onClick={e=>e.stopPropagation()}>
+                            {selecionados3.has(m.IdMaterial) ? (
+                              <input 
+                                type="number" 
+                                min="0.01" 
+                                step="0.01" 
+                                value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
+                                onChange={(e) => {
+                                  const val = e.target.value === '' ? 0 : Number(e.target.value);
+                                  setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
+                                }}
+                                className="w-16 px-1.5 py-1 text-xs font-bold text-center border-2 border-indigo-300 rounded focus:outline-none focus:border-indigo-500 bg-white shadow-inner"
+                              />
+                            ) : (
+                              <span className="text-gray-300">-</span>
+                            )}
+                          </td>
+                        </tr>
+
+                        {/* EXIBIÇÃO DE ITENS MONTAPECA NO MODAL */}
+                        {isExpandedPeca && (
+                          <tr className="bg-amber-50/50 border-b border-amber-200/80">
+                            <td colSpan={4} className="p-3 pl-10" onClick={e=>e.stopPropagation()}>
+                              <div className="bg-white rounded-lg border border-amber-200 p-3 shadow-xs">
+                                <div className="flex items-center justify-between border-b border-amber-100 pb-2 mb-2">
+                                  <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
+                                    <Wrench size={13} className="text-amber-600" />
+                                    Itens que fazem parte desta Peça Manufaturada ({m.CodMatFabricante})
+                                  </span>
+                                  <span className="text-[9.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
+                                    {(subItens || []).length} componente(s) cadastrado(s) em montapeca
+                                  </span>
+                                </div>
+                                {isLoadingPeca ? (
+                                  <div className="flex items-center gap-2 py-3 text-xs text-gray-500 justify-center">
+                                    <Loader2 size={14} className="animate-spin text-amber-600" /> Carregando componentes de montapeca...
+                                  </div>
+                                ) : !subItens || subItens.length === 0 ? (
+                                  <div className="text-xs text-gray-400 italic py-2 text-center">
+                                    Esta peça não possui componentes cadastrados na tabela montapeca.
+                                  </div>
+                                ) : (
+                                  <div className="max-h-52 overflow-auto">
+                                    <table className="w-full text-left text-xs">
+                                      <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
+                                        <tr>
+                                          <th className="py-1.5 px-2.5 font-bold w-14 text-center">Nível</th>
+                                          <th className="py-1.5 px-2.5 font-bold min-w-[140px]">Código</th>
+                                          <th className="py-1.5 px-2.5 font-bold">Descrição</th>
+                                          <th className="py-1.5 px-2.5 font-bold text-center w-20">Qtd</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="divide-y divide-gray-100">
+                                        {subItens.map((sub: any, sIdx: number) => (
+                                          <tr key={sub.IdMontaPeca || sIdx} className="hover:bg-amber-50/50">
+                                            <td className="py-1.5 px-2.5 text-center">
+                                              <span className="text-[9.5px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded">1</span>
+                                            </td>
+                                            <td className="py-1.5 px-2.5 font-mono font-bold text-slate-800 flex items-center gap-1.5">
+                                              {sub.PecaManufat === 'S' && <span className="text-[8px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded uppercase">Peça</span>}
+                                              <span>{sub.CodMatFabricante}</span>
+                                            </td>
+                                            <td className="py-1.5 px-2.5 text-slate-600 truncate max-w-[280px]" title={sub.DescDetal}>{sub.DescDetal || '-'}</td>
+                                            <td className="py-1.5 px-2.5 text-center font-bold text-slate-800">{sub.PecaQtde || sub.QtdeUnitaria || 1}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
+              <span>{selecionados3.size} item(ns) selecionado(s)</span>
+              <button
+                onClick={() => setShowModalInclusao(false)}
+                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors cursor-pointer"
+              >
+                Voltar para Recursos
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

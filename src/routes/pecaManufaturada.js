@@ -64,6 +64,7 @@ router.get('/pecas', async (req, res) => {
 router.get('/composicao/:idMaterialPeca', async (req, res) => {
     try {
         const { idMaterialPeca } = req.params;
+        const { codMatFabricante } = req.query;
         const sql = `SELECT
                         mp.IdMontaPeca,
                         mp.IdMaterial,
@@ -76,13 +77,17 @@ router.get('/composicao/:idMaterialPeca', async (req, res) => {
                         mp.Ordem,
                         m.EnderecoArquivo,
                         m.PecaManufat,
-                        (SELECT COUNT(1) FROM montapeca sub WHERE sub.IdMaterialPeca = mp.IdMaterial AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                        (SELECT COUNT(1) FROM montapeca sub WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
                      FROM montapeca mp
                      LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
                      WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
-                       AND mp.IdMaterialPeca = ?
+                       AND (
+                         mp.IdMaterialPeca = ?
+                         OR mp.CodMatFabricantePeca = ?
+                         OR mp.CodMatFabricantePeca = (SELECT CodMatFabricante FROM material WHERE IdMaterial = ? LIMIT 1)
+                       )
                      ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
-        const [rows] = await db(req).execute(sql, [idMaterialPeca]);
+        const [rows] = await db(req).execute(sql, [idMaterialPeca, codMatFabricante || idMaterialPeca, idMaterialPeca]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[PecaManufaturada] GET /composicao:', error.message);
@@ -290,8 +295,8 @@ router.put('/composicao-qtde', async (req, res) => {
         const tenantPool = db(req);
         
         await tenantPool.execute(
-            `UPDATE montapeca SET PecaQtde = ? WHERE IdMaterialPeca = ? AND IdMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-            [qtde, idMaterialPai, idMaterialFilho]
+            `UPDATE montapeca SET PecaQtde = ?, QtdeUnitaria = ? WHERE IdMaterialPeca = ? AND IdMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [qtde, qtde, idMaterialPai, idMaterialFilho]
         );
         res.json({ success: true, message: 'Quantidade atualizada com sucesso.' });
     } catch (error) {
