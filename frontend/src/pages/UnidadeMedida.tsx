@@ -23,6 +23,15 @@ interface Props {
   onCloseModal?: () => void;
 }
 
+const getAuthHeaders = () => {
+  let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+  if (token === 'null' || token === 'undefined') token = null;
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
+
 export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Props = {}) {
  const [unidades, setUnidades] = useState<UnidadeMedida[]>([]);
  const [formData, setFormData] = useState<UnidadeMedida>(emptyForm);
@@ -42,7 +51,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  setLoading(true);
  setError(null);
  try {
- const res = await fetch(`${API_BASE}/medida`);
+ const res = await fetch(`${API_BASE}/medida`, { headers: getAuthHeaders() });
  const json = await res.json();
  if (json.success) {
  setUnidades(json.data);
@@ -92,7 +101,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
 
  const res = await fetch(url, {
  method,
- headers: { 'Content-Type': 'application/json' },
+ headers: getAuthHeaders(),
  body: JSON.stringify(formData),
  });
 
@@ -103,7 +112,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  } else {
  setError(json.message || 'Erro ao salvar');
  }
- } catch {
+ } catch (err) {
  setError('Erro ao salvar. Verifique a conexão.');
  console.error('Save error:', err);
  } finally {
@@ -113,14 +122,14 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
 
  const handleEdit = async (id: number) => {
  try {
- const res = await fetch(`${API_BASE}/medida/${id}`);
+ const res = await fetch(`${API_BASE}/medida/${id}`, { headers: getAuthHeaders() });
  const json = await res.json();
  if (json.success) {
  setFormData(json.data);
  setIsEditing(true);
  setShowForm(true);
  }
- } catch {
+ } catch (err) {
  console.error('Fetch error:', err);
  }
  };
@@ -131,7 +140,7 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  try {
  const res = await fetch(`${API_BASE}/medida/${id}`, {
  method: 'DELETE',
- headers: { 'Content-Type': 'application/json' },
+ headers: getAuthHeaders(),
  body: JSON.stringify({ usuario: 'Edson' }),
  });
  const json = await res.json();

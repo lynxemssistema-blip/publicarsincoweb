@@ -494,6 +494,7 @@ export default function CriarOrdemServicoPage({
         }}
         projetoId={formData.IdProjeto}
         projetoNome={formData.Projeto}
+        dataPrevisaoProjeto={formData.DataPrevisao || ''}
         API_BASE={API_BASE}
       />
     </div>

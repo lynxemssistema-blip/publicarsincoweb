@@ -56,6 +56,10 @@ interface OrdemServico {
     PercentualItens?: string | number;
     QtdeTotalPecas?: string;
     QtdePecasExecutadas?: string;
+    QtdeTag?: string | number;
+    TagQtdeLiberada?: string | number;
+    SaldoTag?: string | number;
+    QtdePecasOS?: string | number;
     [key: string]: any;
     QtdePecasExecutadasCalc?: number;
     QtdeTotalPecasCalc?: number;
@@ -358,6 +362,7 @@ function OrdemServicoContent() {
     const [expandedOrdens, setExpandedOrdens] = useState<Set<number>>(new Set());
     const [collapsedOsInfo, setCollapsedOsInfo] = useState<Set<number>>(new Set());
     const [selectedOSId, setSelectedOSId] = useState<number | null>(null);
+    const [selectedOSData, setSelectedOSData] = useState<OrdemServico | null>(null);
     const [ordensItens, setOrdensItens] = useState<Record<number, OrdemServicoItem[]>>({});
     const [materiaisProcesso, setMateriaisProcesso] = useState<Record<number, Record<string, any>>>({});
     const [expandedItemProcessos, setExpandedItemProcessos] = useState<Set<number>>(new Set());
@@ -568,6 +573,38 @@ function OrdemServicoContent() {
             return `${day}/${month}/${year}`;
         } catch {
             return dateStr;
+        }
+    };
+
+    const isDateBeforeToday = (dateStr?: string): boolean => {
+        if (!dateStr || dateStr === '-') return false;
+        try {
+            let year = 0, month = 0, day = 0;
+            const brMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            if (brMatch) {
+                day = parseInt(brMatch[1], 10);
+                month = parseInt(brMatch[2], 10);
+                year = parseInt(brMatch[3], 10);
+            } else {
+                const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (isoMatch) {
+                    year = parseInt(isoMatch[1], 10);
+                    month = parseInt(isoMatch[2], 10);
+                    day = parseInt(isoMatch[3], 10);
+                } else {
+                    const parsed = new Date(dateStr);
+                    if (isNaN(parsed.getTime())) return false;
+                    year = parsed.getFullYear();
+                    month = parsed.getMonth() + 1;
+                    day = parsed.getDate();
+                }
+            }
+            const targetDate = new Date(year, month - 1, day);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            return targetDate.getTime() < today.getTime();
+        } catch {
+            return false;
         }
     };
 
@@ -1270,6 +1307,7 @@ function OrdemServicoContent() {
             const res = await authFetch(`${API_BASE}/ordemservico/${osId}?t=${Date.now()}`);
             const json = await res.json();
             if (json.success && json.data) {
+                setSelectedOSData(json.data);
                 setOrdens(prev => {
                     const idx = prev.findIndex(o => o.IdOrdemServico === osId);
                     if (idx >= 0) {
@@ -1277,7 +1315,7 @@ function OrdemServicoContent() {
                         next[idx] = { ...next[idx], ...json.data };
                         return next;
                     } else {
-                        return [json.data, ...prev];
+                        return prev;
                     }
                 });
             }
@@ -1377,12 +1415,17 @@ function OrdemServicoContent() {
         level: number = 1,
         parentKey: string = 'root',
         index: number = 0,
-        rootCodMat: string = ''
+        rootCodMat: string = '',
+        parentTotalQty: number = 1
     ) => {
         const nodeKey = `${rootCodMat}::${parentKey}-${node.CodMatFabricante}-${index}`;
         const hasChildren = Boolean(node.children && node.children.length > 0);
         const isCollapsed = collapsedNodes.has(nodeKey);
         const isNodeManufat = node.PecaManufat === 'S' || node.PecaManufat === 'SIM' || hasChildren || Number(node.NumChildren) > 0;
+
+        // Cálculo da quantidade a ser produzida neste nível: (unitário do nível × quantidade total a produzir do nível pai)
+        const unitQty = Number(node.PecaQtde || node.QtdeUnitaria) || 1;
+        const qtdProduzir = Math.round(unitQty * parentTotalQty * 1000) / 1000;
 
         return (
             <div key={nodeKey} className="relative">
@@ -1448,7 +1491,7 @@ function OrdemServicoContent() {
                         {node.DescDetal || node.DescResumo || '-'}
                     </span>
 
-                    {/* Informações técnicas: Material, Espessura, Quantidade */}
+                    {/* Informações técnicas: Material, Espessura, Quantidades */}
                     <div className="flex items-center gap-2 text-[11px] shrink-0 font-medium">
                         {node.MaterialSW && (
                             <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200" title="Material">
@@ -1460,27 +1503,29 @@ function OrdemServicoContent() {
                                 Esp: {node.Espessura}
                             </span>
                         )}
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200" title="Quantidade no conjunto">
-                            Qtde: {node.PecaQtde || 1} {node.Unidade || 'UN'}
+                        <span className="px-1.5 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200" title="Quantidade unitária no conjunto">
+                            Un: {node.PecaQtde || 1} {node.Unidade || 'UN'}
                         </span>
-                        {node.QtdeUnitaria != null && Number(node.QtdeUnitaria) !== Number(node.PecaQtde) && (
-                            <span className="px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-200" title="Quantidade Unitária">
-                                Un: {node.QtdeUnitaria}
-                            </span>
-                        )}
+                        <span 
+                            className="px-2 py-0.5 bg-emerald-50 text-emerald-800 font-bold rounded border border-emerald-300 shadow-xs inline-flex items-center gap-1" 
+                            title={`Quantidade total a produzir no nível: ${unitQty} un × ${parentTotalQty} (do conjunto pai) = ${qtdProduzir}`}
+                        >
+                            <span className="text-[10px] text-emerald-600 font-normal">A Produzir:</span>
+                            {qtdProduzir} {node.Unidade || 'UN'}
+                        </span>
                         {node.Peso ? (
-                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded border border-amber-200" title="Peso">
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded border border-amber-200" title="Peso unitário">
                                 {Number(node.Peso).toFixed(2)} kg
                             </span>
                         ) : null}
                     </div>
                 </div>
 
-                {/* Renderização recursiva dos filhos */}
+                {/* Renderização recursiva dos filhos com propagação da quantidade a produzir */}
                 {hasChildren && !isCollapsed && (
                     <div className="relative pl-3 border-l-2 border-purple-200 ml-4 my-0.5">
                         {node.children!.map((child, cIdx) => 
-                            renderArvoreNode(child, level + 1, nodeKey, cIdx, rootCodMat)
+                            renderArvoreNode(child, level + 1, nodeKey, cIdx, rootCodMat, qtdProduzir)
                         )}
                     </div>
                 )}
@@ -1490,11 +1535,23 @@ function OrdemServicoContent() {
 
     const toggleOS = useCallback(async (osId: number) => {
         setSelectedOSId(osId);
+        const existing = ordens.find(o => o.IdOrdemServico === osId);
+        if (existing) setSelectedOSData(existing);
         setSelectedItemIds(new Set()); // reset selection when changing OS
         // Always fetch fresh – garante que novos itens adicionados sejam exibidos imediatamente
         refreshSingleOS(osId);
         fetchItens(osId);
-    }, [fetchItens, refreshSingleOS]);
+    }, [ordens, fetchItens, refreshSingleOS]);
+
+    const activeOSDetail = (selectedOSData && selectedOSData.IdOrdemServico === selectedOSId)
+        ? selectedOSData
+        : (selectedOSId ? ordens.find(o => o.IdOrdemServico === selectedOSId) || null : null);
+
+    const handleVoltarParaLista = useCallback(() => {
+        setSelectedOSId(null);
+        setSelectedOSData(null);
+        fetchOrdens(pagination?.page || 1);
+    }, [fetchOrdens, pagination?.page]);
 
     const loadMore = useCallback(() => {
         if (pagination?.hasMore && !loadingMore) {
@@ -1628,7 +1685,31 @@ function OrdemServicoContent() {
             const json = await res.json();
             if (json.success) {
                 addToast({ type: 'success', title: 'Sucesso', message: `Ordem de Serviço ${os.IdOrdemServico} liberada! (${tipoLiberacao})` });
-                setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? { ...o, Liberado_Engenharia: 'S', OrdemServicoFinalizado: 'C', Fator: Number(fator) } : o));
+
+                const nowIso = new Date().toISOString();
+                const updatedOsFields: Partial<OrdemServico> = {
+                    Liberado_Engenharia: 'S',
+                    Data_Liberacao_Engenharia: nowIso,
+                    TipoLiberacaoOrdemServico: tipoLiberacao.toLowerCase() === 'total' ? 'Total' : 'Parcial',
+                    Fator: Number(fator)
+                };
+
+                // Atualiza o detalhe aberto para exibir imediatamente Status: Liberada (NÃO Finalizada)
+                setSelectedOSData(prev => prev && prev.IdOrdemServico === os.IdOrdemServico ? { ...prev, ...updatedOsFields } : { ...os, ...updatedOsFields });
+
+                // Se o filtro ativo for 'NAO_LIBERADAS', remove a OS liberada da lista atual
+                if (filtroLiberado === 'NAO_LIBERADAS') {
+                    setOrdens(prev => prev.filter(o => o.IdOrdemServico !== os.IdOrdemServico));
+                } else {
+                    setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? { ...o, ...updatedOsFields } : o));
+                }
+
+                // Sincroniza dados com o backend (dados completos da OS e itens)
+                await refreshSingleOS(os.IdOrdemServico);
+                await fetchItens(os.IdOrdemServico);
+
+                // Atualiza a leitura das OSs da lista conforme os filtros ativos
+                fetchOrdens(pagination.page || 1);
             } else {
                 Swal.fire({ icon: 'error', title: 'Atenção', text: json.message || 'Falha ao liberar Ordem de Serviço.' });
             }
@@ -1750,15 +1831,21 @@ function OrdemServicoContent() {
             });
             const json = await res.json();
             if (json.success) {
-                // 1. Atualizar imediatamente o estado da OS em memória para refletir a alteração no detalhe
-                setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? {
-                    ...o,
+                const resetData: Partial<OrdemServico> = {
                     Liberado_Engenharia: '',
                     Data_Liberacao_Engenharia: undefined,
                     Data_Liberacao_EngenhariaBR: '-',
                     TipoLiberacaoOrdemServico: '',
                     OrdemServicoFinalizado: '',
                     temApontamento: false
+                };
+
+                setSelectedOSData(prev => prev && prev.IdOrdemServico === os.IdOrdemServico ? { ...prev, ...resetData } : prev);
+
+                // 1. Atualizar imediatamente o estado da OS em memória para refletir a alteração no detalhe
+                setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? {
+                    ...o,
+                    ...resetData
                 } : o));
 
                 // 2. Atualizar os itens da OS em memória para desbloquear ações
@@ -1896,10 +1983,12 @@ function OrdemServicoContent() {
             });
             const json = await res.json();
             if (json.success) {
-                addToast({ type: 'success', title: 'Fator Alterado', message: 'Multplicador, pesos e áreas atualizados com sucesso.' });
+                addToast({ type: 'success', title: 'Fator Alterado', message: 'Fator e quantidades recalculadas com sucesso em todos os níveis.' });
                 // Atualiza OS localmente para refletir o novo fator
                 setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? { ...o, Fator: fatorNum } : o));
+                await fetchItens(os.IdOrdemServico);
                 await refreshSingleOS(os.IdOrdemServico);
+                await fetchOrdens(pagination.page || 1);
             } else {
                 addToast({ type: 'error', title: 'Erro', message: json.message || 'Falha ao alterar fator.' });
             }
@@ -2510,7 +2599,7 @@ function OrdemServicoContent() {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden mt-4">
                 {/* Voltar and Actions Bar */}
                 <div className="px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-gray-100 bg-gray-50 gap-4">
-                    <button onClick={() => setSelectedOSId(null)} className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium text-white bg-primary border border-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm">
+                    <button onClick={handleVoltarParaLista} className="inline-flex items-center gap-2 px-2 py-1 text-xs font-medium text-white bg-primary border border-primary rounded-lg hover:bg-primary/90 transition-colors shadow-sm">
                         <ArrowLeft size={14} />
                         Voltar para Lista
                     </button>
@@ -2738,9 +2827,16 @@ function OrdemServicoContent() {
                                                 <span className="text-gray-400">Data Criação:</span>
                                                 <span className="text-gray-600 font-medium">{formatDateBR(os.DataCriacao)}</span>
                                             </div>
-                                            <div className="flex justify-between">
+                                            <div className="flex justify-between items-center">
                                                 <span className="text-gray-400">Data Previsão:</span>
-                                                <span className="text-gray-600 font-medium">{formatDateBR(os.DataPrevisao)}</span>
+                                                {isDateBeforeToday(os.DataPrevisao) ? (
+                                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded shadow-2xs" title="Previsão Vencida (menor que a data atual)">
+                                                        <AlertTriangle size={11} className="text-red-500" />
+                                                        {formatDateBR(os.DataPrevisao)}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-600 font-medium">{formatDateBR(os.DataPrevisao)}</span>
+                                                )}
                                             </div>
                                             <div className="flex flex-col mt-2 pt-2 border-t border-gray-50">
                                                 <div className="flex justify-between gap-2">
@@ -2749,7 +2845,14 @@ function OrdemServicoContent() {
                                                 </div>
                                                 <div className="flex justify-between gap-2">
                                                     <span className="text-gray-400 whitespace-nowrap">Tag:</span>
-                                                    <span className="text-gray-700 font-medium text-right truncate" title={`${os.IdTag || '-'} - ${os.DescTag || os.Tag || '-'}`}>{os.IdTag || '-'} - {os.DescTag || os.Tag || '-'}</span>
+                                                    <span className="text-gray-700 font-medium text-right" title={`${os.IdTag || '-'} - ${os.DescTag || os.Tag || '-'}`}>
+                                                        <span>{os.IdTag || '-'} - {os.DescTag || os.Tag || '-'}</span>
+                                                        {os.QtdeTag != null && os.QtdeTag !== '' && (
+                                                            <span className="text-gray-500 font-normal ml-1.5">
+                                                                (Qtde: {os.QtdeTag} • Fabricada: {os.TagQtdeLiberada != null && os.TagQtdeLiberada !== '' ? os.TagQtdeLiberada : (os.QtdeLiberada ?? 0)} • Saldo: {os.SaldoTag != null && os.SaldoTag !== '' ? os.SaldoTag : Math.max(0, Number(os.QtdeTag) - Number(os.TagQtdeLiberada ?? os.QtdeLiberada ?? 0))})
+                                                            </span>
+                                                        )}
+                                                    </span>
                                                 </div>
                                             </div>
                                         </div>
@@ -2919,14 +3022,17 @@ function OrdemServicoContent() {
                             ) : (
                                 <div className="px-2 py-1">
                                     <div className="flex items-center justify-between mb-2 pl-2">
-                                        <span className="text-xs font-semibold text-primary">
-                                            Itens da OS ({itens.length})
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs font-semibold text-primary inline-flex items-center gap-1.5">
+                                                <span>Itens da OS #{os.IdOrdemServico}</span>
+                                                <span className="text-gray-500 font-medium">({itens.length} {itens.length === 1 ? 'item' : 'itens'})</span>
+                                            </span>
                                             {selectedItemIds.size > 0 && (
                                                 <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">
                                                     {selectedItemIds.size} selecionado(s)
                                                 </span>
                                             )}
-                                        </span>
+                                        </div>
                                         {selectedItemIds.size > 0 && os.Liberado_Engenharia !== 'S' && os.Liberado_Engenharia !== 'SIM' && (
                                             <button
                                                 onClick={() => handleDeleteSelected(os.IdOrdemServico)}
@@ -2940,7 +3046,7 @@ function OrdemServicoContent() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 pl-6 py-1 text-[10px] font-medium text-gray-400 uppercase">
-                                            <div className="flex gap-1 shrink-0" style={{ width: '23.5rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '21.25rem' }}>
                                                 <span className="w-8 text-center" title="PDF do Item">PDF</span>
                                                 <span className="w-8 text-center">DXF</span>
                                                 <span className="w-8 text-center">3D</span>
@@ -2949,7 +3055,6 @@ function OrdemServicoContent() {
                                                 <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Recursos"><Layers size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Árvore da Peça Manufaturada"><GitFork size={12} className="inline" /></span>
-                                                <span className="w-8 text-center" title="Pendências"><ShieldAlert size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Excluir"><Trash2 size={12} className="inline" /></span>
                                             </div>
                                             <span className="w-32 shrink-0">Código Desenho</span>
@@ -2991,7 +3096,7 @@ function OrdemServicoContent() {
                                                                 : 'hover:bg-gray-50'
                                                 } ${!osLiberada ? 'cursor-pointer' : ''}`}
                                               >
-                                                <div className="flex gap-1 shrink-0" style={{ width: '23.5rem' }}>
+                                                <div className="flex gap-1 shrink-0" style={{ width: '21.25rem' }}>
                                                     {item.EnderecoArquivo ? (
                                                         <button
                                                             onClick={(e) => handleOpenFile(e, item.EnderecoArquivo || '', 'pdf')}
@@ -3166,14 +3271,7 @@ function OrdemServicoContent() {
                                                         </div>
                                                     )}
 
-                                                    {/* Botão Gerar Pendência (RNC) - movido do final da linha */}
-                                                    <button
-                                                        onClick={(e) => handleGerarRnc(e, item, os.IdOrdemServico)}
-                                                        className="w-8 shrink-0 h-8 rounded flex items-center justify-center bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors"
-                                                        title="Gerar Pendência (RNC)"
-                                                    >
-                                                        <ShieldAlert size={14} />
-                                                    </button>
+
 
                                                     {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') && !(item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') ? (
                                                         <button
@@ -3229,11 +3327,6 @@ function OrdemServicoContent() {
                                                     <span className="text-xs text-gray-700 truncate font-medium" title={item.DescDetal || item.DescResumo}>
                                                         {item.DescResumo || '-'}
                                                     </span>
-                                                    {isPecaManufat && (
-                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 shrink-0 shadow-xs" title="Peça Manufaturada com composição de múltiplos níveis">
-                                                            <Box size={10} /> Peça Manufaturada
-                                                        </span>
-                                                    )}
                                                 </div>
 
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? (
@@ -3335,8 +3428,11 @@ function OrdemServicoContent() {
                                                                   <span className="font-bold text-xs uppercase tracking-wider">
                                                                       Estrutura e Árvore de Componentes (BOM)
                                                                   </span>
-                                                                  <span className="bg-purple-900/80 text-white px-2 py-0.5 rounded text-xs font-mono font-bold border border-purple-400">
+                                                                  <span className="bg-purple-900/80 text-white px-2 py-0.5 rounded text-xs font-mono font-bold border border-purple-400" title="Código da Peça Manufaturada">
                                                                       {item.CodMatFabricante}
+                                                                  </span>
+                                                                  <span className="bg-white/20 text-white px-2 py-0.5 rounded text-xs font-bold font-mono" title="Ordem de Serviço">
+                                                                      OS {os.IdOrdemServico}
                                                                   </span>
                                                                   <span className="text-xs text-purple-100 font-medium truncate max-w-xs hidden sm:inline" title={item.DescDetal || item.DescResumo}>
                                                                       - {item.DescResumo || item.DescDetal}
@@ -3397,9 +3493,10 @@ function OrdemServicoContent() {
                                                                               Peças manufaturadas destacadas em Roxo
                                                                           </span>
                                                                       </div>
-                                                                      {arvoreData[item.CodMatFabricante || ''].map((node, nIdx) =>
-                                                                          renderArvoreNode(node, 1, 'root', nIdx, item.CodMatFabricante || '')
-                                                                      )}
+                                                                      {arvoreData[item.CodMatFabricante || ''].map((node, nIdx) => {
+                                                                          const parentQty = Number(item.QtdeTotal) || (Number(item.qtde || 1) * Number(os.Fator || 1));
+                                                                          return renderArvoreNode(node, 1, 'root', nIdx, item.CodMatFabricante || '', parentQty);
+                                                                      })}
                                                                   </div>
                                                               )}
                                                           </div>
@@ -3448,7 +3545,11 @@ function OrdemServicoContent() {
                         </div>
                         <div className="text-xs text-gray-500 truncate flex items-center gap-2">
                             <span className="truncate">{os.Projeto} • {os.DescTag || 'Sem descrição'}</span>
-                            
+                            {os.QtdeTag != null && (
+                                <span className="inline-flex items-center gap-1 text-[10px] text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded font-medium border border-slate-200 shrink-0">
+                                    Tag: <b>{os.QtdeTag}</b> | Fab: <b>{os.TagQtdeLiberada ?? os.QtdeLiberada ?? 0}</b> | Saldo: <b className="text-amber-800">{os.SaldoTag ?? (Math.max(0, Number(os.QtdeTag) - Number(os.TagQtdeLiberada ?? os.QtdeLiberada ?? 0)))}</b>
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -3456,10 +3557,17 @@ function OrdemServicoContent() {
                     {/* Data de Previsão */}
                     <div className="hidden sm:flex flex-col items-center justify-center w-24 shrink-0 min-w-0" title="Data de Previsão">
                         {os.DataPrevisao ? (
-                            <span className="flex items-center gap-1 text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded font-bold border border-orange-100 shadow-sm">
-                                <Calendar size={10} />
-                                {formatDateBR(os.DataPrevisao)}
-                            </span>
+                            isDateBeforeToday(os.DataPrevisao) ? (
+                                <span className="flex items-center gap-1 text-[10px] text-red-700 bg-red-50 px-1.5 py-0.5 rounded font-bold border border-red-200 shadow-sm" title="Previsão Vencida (menor que a data atual)">
+                                    <AlertTriangle size={10} className="text-red-600" />
+                                    {formatDateBR(os.DataPrevisao)}
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-1 text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded font-bold border border-orange-100 shadow-sm" title="Data de Previsão">
+                                    <Calendar size={10} />
+                                    {formatDateBR(os.DataPrevisao)}
+                                </span>
+                            )
                         ) : (
                             <span className="text-xs text-gray-400 font-medium">-</span>
                         )}
@@ -3903,22 +4011,22 @@ function OrdemServicoContent() {
                                 }} 
                                 initialProjetoId={
                                     selectedOSId 
-                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdProjeto 
+                                        ? (activeOSDetail?.IdProjeto || ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdProjeto) 
                                         : (ordens.length > 0 ? ordens[0]?.IdProjeto : undefined)
                                 }
                                 initialProjetoName={
                                     selectedOSId 
-                                        ? (ordens.find(o => o.IdOrdemServico === selectedOSId)?.Projeto || ordens.find(o => o.IdOrdemServico === selectedOSId)?.CodProjeto)
+                                        ? (activeOSDetail?.Projeto || activeOSDetail?.CodProjeto || ordens.find(o => o.IdOrdemServico === selectedOSId)?.Projeto || ordens.find(o => o.IdOrdemServico === selectedOSId)?.CodProjeto)
                                         : (projetoFilter || (ordens.length > 0 ? (ordens[0]?.Projeto || ordens[0]?.CodProjeto) : undefined))
                                 }
                                 initialTagId={
                                     selectedOSId 
-                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdTag 
+                                        ? (activeOSDetail?.IdTag || ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdTag) 
                                         : (ordens.length > 0 ? ordens[0]?.IdTag : undefined)
                                 }
                                 initialTagName={
                                     selectedOSId 
-                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.Tag 
+                                        ? (activeOSDetail?.Tag || ordens.find(o => o.IdOrdemServico === selectedOSId)?.Tag) 
                                         : (tagFilter || (ordens.length > 0 ? ordens[0]?.Tag : undefined))
                                 }
                             />
@@ -3928,7 +4036,7 @@ function OrdemServicoContent() {
             </AnimatePresence>
 
             {/* Main Content */}
-            {searchMode === 'os' && selectedOSId && ordens.find(o => o.IdOrdemServico === selectedOSId) ? renderOSDetail(ordens.find(o => o.IdOrdemServico === selectedOSId)!) : searchMode === 'os' && (
+            {searchMode === 'os' && selectedOSId && activeOSDetail ? renderOSDetail(activeOSDetail) : searchMode === 'os' && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-100">
                     {loading ? (
                         <div className="p-12 flex flex-col items-center justify-center gap-3 text-gray-400">

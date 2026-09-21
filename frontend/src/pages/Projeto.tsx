@@ -1992,6 +1992,7 @@ export default function ProjetoPage() {
     }}
     projetoId={selectedProjetoForTag?.IdProjeto || ''}
     projetoNome={selectedProjetoForTag?.Projeto || ''}
+    dataPrevisaoProjeto={selectedProjetoForTag?.DataPrevisao || ''}
     tagToEdit={isEditingTag ? tagFormData : null}
     API_BASE={API_BASE}
   />

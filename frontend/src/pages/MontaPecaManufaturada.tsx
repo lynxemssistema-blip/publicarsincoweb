@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Search, Loader2, Trash2, Save, Package, PlusCircle, ChevronLeft, Wrench, ChevronRight, ChevronDown, X, Edit2, Clock, Check, Plus, RefreshCw, FileText } from 'lucide-react';
+import { Search, Loader2, Trash2, Save, Package, PlusCircle, ChevronLeft, Wrench, ChevronRight, ChevronDown, X, Edit2, Clock, Check, Plus, RefreshCw, FileText, GitFork, CheckCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import ModalCadastrarMaterial from '../components/ModalCadastrarMaterial';
 
@@ -44,10 +44,22 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
   // Grid 1 (Base): Composição da Peça Selecionada
   const [comp2, setComp2] = useState<any[]>([]);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [loading2, setLoading2] = useState(false);
   const [expandedItems, setExpandedItems] = useState<Set<number>>(new Set());
   const [subComps, setSubComps] = useState<Record<number, any[]>>({});
   const [loadingSub, setLoadingSub] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   // Grid 2: Processos e Recursos
   const [tipos, setTipos] = useState<any[]>([]);
@@ -80,8 +92,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const [filtroCod3, setFiltroCod3] = useState('');
   const [filtroDesc3, setFiltroDesc3] = useState('');
   const [selecionados3, setSelecionados3] = useState<Set<number>>(new Set());
-  const [quantidades3, setQuantidades3] = useState<Record<number, number>>({});
+  const [quantidades3, setQuantidades3] = useState<Record<number, number | string>>({});
   const [saving3, setSaving3] = useState(false);
+  const [salvandoEstrutura, setSalvandoEstrutura] = useState(false);
   const [showModalCadastroMaterial, setShowModalCadastroMaterial] = useState(false);
   const [recentCreatedCodes, setRecentCreatedCodes] = useState<string[]>([]);
 
@@ -146,6 +159,12 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   }, [fCod1, fDesc1, fetchMateriais1]);
 
   const clearTotal1 = () => {
+    if (hasUnsavedChanges) {
+      if (!window.confirm('Existem alterações não salvas na estrutura. Deseja descartar as alterações?')) {
+        return;
+      }
+    }
+    setHasUnsavedChanges(false);
     setFCod1('');
     setFDesc1('');
     setSelMat1(null);
@@ -163,6 +182,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
       const j = await r.json();
       if (j.success) {
         setComp2(j.data);
+        setHasUnsavedChanges(false);
       }
     } finally {
       setLoading2(false);
@@ -219,11 +239,20 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   }, [osId, osContext]);
 
   const selectMat1 = async (m: MatRow) => {
+    if (hasUnsavedChanges && selMat1 && selMat1.IdMaterial !== m.IdMaterial) {
+      if (!window.confirm('Existem alterações não salvas na estrutura deste item. Deseja descartar as alterações e selecionar outro item?')) {
+        return;
+      }
+    }
+    setHasUnsavedChanges(false);
     setSelMat1(m);
     try {
       const r = await fetch(`/api/material/${m.IdMaterial}`, { headers: authHdr() });
       const j = await r.json();
-      if (j.success && j.data) setSelMat1(j.data);
+      if (j.success && j.data) {
+        setSelMat1(j.data);
+        setMateriais1(prev => prev.map(item => item.IdMaterial === m.IdMaterial ? { ...item, ...(j.data || {}) } : item));
+      }
     } catch { 
       // mantém m
     }
@@ -231,6 +260,8 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     setExpandedItems(new Set());
     setSubComps({});
     setSelecionados3(new Set());
+    setExpandedPecas3(new Set());
+    setPecasMontaPeca({});
     setQuantidades3({});
     setEditSq(null);
 
@@ -263,24 +294,10 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     }
   };
 
-  const removeComp = async (idMontaPeca: number) => {
-    if (!confirm('Excluir item da composição?')) return;
-    try {
-      const r = await fetch(`${API}/composicao/${idMontaPeca}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json', ...authHdr() },
-        body: JSON.stringify({ usuario: uCriacao, idMatriz })
-      });
-      const j = await r.json();
-      if (j.success) {
-        if (selMat1) fetchComp2(selMat1.IdMaterial, selMat1.CodMatFabricante);
-      } else {
-        showAlert(j.message || 'Erro ao remover item', 'error');
-      }
-    } catch (e) {
-      console.error(e);
-      showAlert('Erro de comunicação ao excluir item.', 'error');
-    }
+  const removeComp = (idMontaPeca: number) => {
+    if (!window.confirm('Remover item da composição? (As alterações só serão gravadas no banco ao clicar em "Salvar Estrutura")')) return;
+    setComp2(prev => prev.filter(c => c.IdMontaPeca !== idMontaPeca));
+    setHasUnsavedChanges(true);
   };
 
   const clearForm = () => { setSelId(''); setProcSearch(''); setSeq(''); setOb(''); setEstMin(''); setPadMin(''); };
@@ -469,13 +486,24 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
         n.delete(id);
         return n;
       });
+      // Se era peça manufaturada, limpa o grid/expansão dos componentes
+      setExpandedPecas3(prev => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+      setPecasMontaPeca(prev => {
+        const n = { ...prev };
+        delete n[id];
+        return n;
+      });
     } else {
       setSelecionados3(prev => {
         const n = new Set(prev);
         n.add(id);
         return n;
       });
-      setQuantidades3(q => ({ ...q, [id]: q[id] !== undefined ? q[id] : 1 }));
+      setQuantidades3(q => ({ ...q, [id]: (q[id] !== undefined && q[id] !== '') ? q[id] : 1 }));
       if (targetMat?.PecaManufat === 'S') {
         setExpandedPecas3(p => new Set(p).add(id));
         fetchPecaMontaPeca(id, targetMat.CodMatFabricante);
@@ -483,68 +511,138 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     }
   };
 
-  const handleSaveComp3 = async () => {
+  const handleSaveComp3 = () => {
     if (!selMat1 || selecionados3.size === 0) return;
-    setSaving3(true);
-    try {
-      const matsSel = materiais3Filtrados.filter(m => selecionados3.has(m.IdMaterial)).map(m => ({
-        ...m, 
-        PecaQtde: quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1
-      }));
-      
-      const r = await fetch(`${API}/composicao-lote`, {
-        method: 'POST', 
-        headers: { ...authHdr(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          dezenho: { IdMaterial: selMat1.IdMaterial, CodMatFabricante: selMat1.CodMatFabricante }, 
-          materiais: matsSel, 
-          usuario: uCriacao, 
-          idMatriz 
-        })
+    
+    const novosItens: any[] = [];
+    for (const m of materiais3Filtrados) {
+      if (!selecionados3.has(m.IdMaterial)) continue;
+      if (comp2.some(c => c.IdMaterial === m.IdMaterial)) continue;
+
+      const qNum = Number(quantidades3[m.IdMaterial]);
+      const qtde = (qNum && qNum > 0) ? qNum : 1;
+
+      novosItens.push({
+        IdMontaPeca: -Date.now() - Math.floor(Math.random() * 10000) - novosItens.length,
+        IdMaterial: m.IdMaterial,
+        IdMaterialPeca: selMat1.IdMaterial,
+        CodMatFabricante: m.CodMatFabricante,
+        CodMatFabricantePeca: selMat1.CodMatFabricante,
+        DescDetal: m.DescDetal || m.DescResumo || m.CodMatFabricante,
+        PecaQtde: qtde,
+        QtdeUnitaria: qtde,
+        Ordem: comp2.length + novosItens.length + 1,
+        EnderecoArquivo: m.EnderecoArquivo || '',
+        PecaManufat: m.PecaManufat || '',
+        NumChildren: (m as any).NumChildren || 0,
+        _isNew: true
       });
-      
-      const j = await r.json();
-      if (j.success) {
-        fetchComp2(selMat1.IdMaterial, selMat1.CodMatFabricante);
-        setSelecionados3(new Set());
-        setQuantidades3({});
-      } else { 
-        alert('Erro: ' + j.message); 
+    }
+
+    if (novosItens.length > 0) {
+      setComp2(prev => [...prev, ...novosItens]);
+      setHasUnsavedChanges(true);
+    }
+
+    setSelecionados3(new Set());
+    setExpandedPecas3(new Set());
+    setPecasMontaPeca({});
+    setQuantidades3({});
+  };
+
+  const handleSalvarEstrutura = async () => {
+    if (!selMat1) {
+      alert('Selecione um material no Grid 1 primeiro.');
+      return;
+    }
+
+    let itensFinais = [...comp2];
+
+    // Se houver itens selecionados no Grid 3 que o usuário ainda não adicionou, inclui-os automaticamente
+    if (selecionados3.size > 0) {
+      for (const m of materiais3Filtrados) {
+        if (!selecionados3.has(m.IdMaterial)) continue;
+        if (itensFinais.some(c => c.IdMaterial === m.IdMaterial)) continue;
+
+        const qNum = Number(quantidades3[m.IdMaterial]);
+        const qtde = (qNum && qNum > 0) ? qNum : 1;
+
+        itensFinais.push({
+          IdMontaPeca: -Date.now() - Math.floor(Math.random() * 10000) - itensFinais.length,
+          IdMaterial: m.IdMaterial,
+          IdMaterialPeca: selMat1.IdMaterial,
+          CodMatFabricante: m.CodMatFabricante,
+          CodMatFabricantePeca: selMat1.CodMatFabricante,
+          DescDetal: m.DescDetal || m.DescResumo || m.CodMatFabricante,
+          PecaQtde: qtde,
+          QtdeUnitaria: qtde,
+          Ordem: itensFinais.length + 1,
+          EnderecoArquivo: m.EnderecoArquivo || '',
+          PecaManufat: m.PecaManufat || '',
+          NumChildren: (m as any).NumChildren || 0
+        });
       }
-    } catch (e) {
-      alert('Erro ao salvar');
+    }
+
+    if (itensFinais.length === 0) {
+      if (!window.confirm('A composição está vazia. Salvar a estrutura sem nenhum componente removerá o status de Peça Manufaturada. Deseja continuar?')) {
+        return;
+      }
+    }
+
+    setSalvandoEstrutura(true);
+    try {
+      const payload = {
+        idMaterial: selMat1.IdMaterial,
+        codMatFabricante: selMat1.CodMatFabricante,
+        itens: itensFinais.map((c, idx) => ({
+          IdMaterial: c.IdMaterial,
+          CodMatFabricante: c.CodMatFabricante,
+          PecaQtde: Number(c.PecaQtde) || 1,
+          QtdeUnitaria: Number(c.QtdeUnitaria || c.PecaQtde) || 1,
+          FamiliaMat: c.FamiliaMat || 0,
+          Peso: c.Peso || 0,
+          Valor: c.Valor || 0,
+          Ordem: idx + 1
+        })),
+        usuario: uCriacao,
+        idMatriz
+      };
+
+      const r = await fetch(`${API}/salvar-estrutura`, {
+        method: 'POST',
+        headers: { ...authHdr(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const j = await r.json();
+
+      if (j.success) {
+        setHasUnsavedChanges(false);
+        setSelecionados3(new Set());
+        setExpandedPecas3(new Set());
+        setPecasMontaPeca({});
+        setQuantidades3({});
+
+        const novoStatus = j.PecaManufat !== undefined ? j.PecaManufat : (itensFinais.length > 0 ? 'S' : '');
+        setSelMat1(prev => prev ? { ...prev, PecaManufat: novoStatus } : prev);
+        setMateriais1(prev => prev.map(m => m.IdMaterial === selMat1.IdMaterial ? { ...m, PecaManufat: novoStatus } : m));
+
+        await fetchComp2(selMat1.IdMaterial, selMat1.CodMatFabricante);
+        alert(`Sucesso: ${j.message}`);
+      } else {
+        alert(j.message || 'Erro ao salvar estrutura.');
+      }
+    } catch (e: any) {
+      console.error('Erro ao salvar estrutura:', e);
+      alert('Erro de conexão ao salvar estrutura.');
     } finally {
-      setSaving3(false);
+      setSalvandoEstrutura(false);
     }
   };
 
-  const handleUpdateQtdeComp = async (idMaterialPai: number, idFilho: number, newQtde: number) => {
-    try {
-      const r = await fetch(`${API}/composicao-qtde`, {
-        method: 'PUT',
-        headers: { ...authHdr(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idMaterialPai, idMaterialFilho: idFilho, qtde: newQtde })
-      });
-      const j = await r.json();
-      if (j.success) {
-        if (selMat1 && idMaterialPai === selMat1.IdMaterial) {
-           setComp2(prev => prev.map(m => m.IdMaterial === idFilho ? { ...m, PecaQtde: newQtde } : m));
-        } else {
-           setSubComps(prev => {
-              const updated = { ...prev };
-              for (const key in updated) {
-                 updated[key] = updated[key].map(m => (m.IdMaterial === idFilho && m.IdMaterialPeca === idMaterialPai) ? { ...m, PecaQtde: newQtde } : m);
-              }
-              return updated;
-           });
-        }
-      } else {
-        alert('Erro ao atualizar quantidade: ' + j.message);
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Erro de conexão ao atualizar quantidade');
-    }
+  const handleUpdateQtdeComp = (idMontaPeca: number, newQtde: number) => {
+    setComp2(prev => prev.map(m => m.IdMontaPeca === idMontaPeca ? { ...m, PecaQtde: newQtde, QtdeUnitaria: newQtde } : m));
+    setHasUnsavedChanges(true);
   };
 
   const renderRecursiveRows = (items: any[], level: number = 0) => {
@@ -578,11 +676,29 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${level === 0 ? 'bg-gray-100 text-gray-600' : level === 1 ? 'bg-blue-100 text-blue-600' : 'bg-indigo-100 text-indigo-600'}`}>
                  {level + 1}
                </span>
-               {isPeca && <span className="ml-1 text-[8px] text-emerald-600 font-bold uppercase bg-emerald-100 px-1 py-0.5 rounded">Peça</span>}
             </td>
-            <td className="p-1 px-1.5 text-[10px] font-mono font-bold text-[#32423D] truncate min-w-[100px]" title={c.CodMatFabricante}>
+            <td className="p-1 px-1.5 text-[10px] font-mono font-bold truncate min-w-[100px]" title={c.CodMatFabricante}>
               {level > 0 && <span className="text-blue-400 font-bold mr-0.5">↳</span>}
-              <span className={level > 0 ? 'text-blue-700' : ''}>{c.CodMatFabricante}</span>
+              {isPeca ? (
+                <button
+                  type="button"
+                  onClick={() => fetchSubComp(c.IdMontaPeca, c.IdMaterial, c.CodMatFabricante)}
+                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9.5px] font-bold shadow-2xs transition-all cursor-pointer ${
+                    isExpanded
+                      ? 'bg-purple-700 text-white border-purple-800 ring-1 ring-purple-300'
+                      : 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-900 border-purple-300 hover:from-purple-200 hover:to-indigo-200'
+                  }`}
+                  title={`Peça Manufaturada: ${c.CodMatFabricante}. Clique para ${isExpanded ? 'recolher' : 'expandir'} sub-composição.`}
+                >
+                  <GitFork size={10} className={isExpanded ? 'text-purple-200' : 'text-purple-600'} />
+                  <span>{c.CodMatFabricante}</span>
+                  <span className={`text-[8px] px-0.5 py-0 rounded font-bold ${isExpanded ? 'bg-purple-800 text-white' : 'bg-white/80 text-purple-700'}`}>
+                    {isExpanded ? '▲' : '▼'}
+                  </span>
+                </button>
+              ) : (
+                <span className={level > 0 ? 'text-blue-700' : 'text-[#32423D]'}>{c.CodMatFabricante}</span>
+              )}
             </td>
             <td className={`p-1 px-1.5 text-[9.5px] truncate min-w-[140px] ${level > 0 ? 'text-blue-600' : 'text-gray-600'}`} title={c.DescDetal}>
               {c.DescDetal}
@@ -601,7 +717,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   onBlur={(e) => {
                     const val = Number(e.target.value);
                     if (val > 0 && val !== (c.PecaQtde || 1)) {
-                      handleUpdateQtdeComp(c.IdMaterialPeca, c.IdMaterial, val);
+                      handleUpdateQtdeComp(c.IdMontaPeca, val);
                     }
                   }}
                   onKeyDown={(e) => {
@@ -695,7 +811,13 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                       </td>
                       <td className={`${cellCls} text-gray-600`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
                       <td className={`${cellCls} text-center font-bold text-gray-700 w-20`}>
-                        {m.PecaManufat === 'S' ? 'S' : '-'}
+                        {m.PecaManufat === 'S' ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold rounded bg-purple-100 text-purple-800 border border-purple-300 shadow-2xs" title="Peça Manufaturada">
+                            <GitFork size={10} className="text-purple-600" /> S
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 font-bold">-</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -745,6 +867,24 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                         <PlusCircle size={11} /> Incluir Material
                       </button>
                     )}
+                    {selMat1 && (
+                      <button
+                        onClick={handleSalvarEstrutura}
+                        disabled={salvandoEstrutura || (comp2.length === 0 && selecionados3.size === 0 && !hasUnsavedChanges)}
+                        className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                          hasUnsavedChanges 
+                            ? 'bg-emerald-600 hover:bg-emerald-700 text-white ring-2 ring-emerald-400 ring-offset-1' 
+                            : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                        }`}
+                        title="Salvar e gravar a montagem da estrutura deste material no banco de dados"
+                      >
+                        {salvandoEstrutura ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                        Salvar Estrutura
+                        {hasUnsavedChanges && (
+                          <span className="w-2 h-2 rounded-full bg-amber-300 inline-block ml-0.5 animate-pulse" title="Alterações não salvas"></span>
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex-1 overflow-auto">
@@ -771,6 +911,34 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                 </table>
               )}
             </div>
+
+            {/* BARRA INFERIOR DE FINALIZAR / SALVAR ESTRUTURA */}
+            {selMat1 && (comp2.length > 0 || hasUnsavedChanges) && (
+              <div className="px-3 py-1.5 bg-gray-50 border-t border-gray-200 shrink-0 flex justify-between items-center z-10">
+                <span className="text-[9.5px] text-gray-500 font-medium flex items-center gap-2">
+                  Estrutura: <b className="text-gray-800 font-bold">{comp2.length}</b> componente(s) vinculado(s)
+                  {hasUnsavedChanges && (
+                    <span className="text-[8px] bg-amber-100 text-amber-800 border border-amber-300 font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                      Alterações não salvas
+                    </span>
+                  )}
+                </span>
+                <button
+                  onClick={handleSalvarEstrutura}
+                  disabled={salvandoEstrutura}
+                  className={`flex items-center gap-1.5 px-3 py-1 text-white rounded-lg text-[10.5px] font-bold shadow-sm transition-all cursor-pointer disabled:opacity-50 ${
+                    hasUnsavedChanges
+                      ? 'bg-emerald-600 hover:bg-emerald-700 ring-2 ring-emerald-400 ring-offset-1'
+                      : 'bg-emerald-600 hover:bg-emerald-700'
+                  }`}
+                  title="Salvar e finalizar a montagem da estrutura deste material no banco de dados"
+                >
+                  {salvandoEstrutura ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle size={12} />}
+                  Finalizar / Salvar Estrutura
+                </button>
+              </div>
+            )}
           </div>
           </>
           )}
@@ -963,9 +1131,10 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                 <input value={fDesc3} onChange={e=>setFDesc3(e.target.value)} disabled={!selMat1} placeholder="Descrição..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"/>
                 {fDesc3 && <button onClick={()=>setFDesc3('')} disabled={!selMat1} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-xs" title="Limpar"><X size={12}/></button>}
               </div>
-              <button onClick={handleSaveComp3} disabled={!selMat1 || selecionados3.size === 0 || saving3}
-                className="shrink-0 flex items-center justify-center gap-1 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer">
-                {saving3 ? <Loader2 size={12} className="animate-spin"/> : <Save size={12}/>} Adicionar ({selecionados3.size})
+              <button onClick={handleSaveComp3} disabled={!selMat1 || selecionados3.size === 0}
+                className="shrink-0 flex items-center justify-center gap-1 px-3 py-1 bg-indigo-600 text-white text-[10px] font-bold rounded shadow-xs hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                title="Adicionar itens selecionados à composição em tela (grave no banco clicando em 'Salvar Estrutura')">
+                <Plus size={12}/> Adicionar ({selecionados3.size})
               </button>
             </div>
           </div>
@@ -1010,25 +1179,32 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                             <input type="checkbox" checked={selecionados3.has(m.IdMaterial)} onChange={() => toggleSel3(m.IdMaterial, m)} className="accent-indigo-600 w-3.5 h-3.5 cursor-pointer"/>
                           </td>
                           <td className={`${cellCls} font-bold text-[#32423D] min-w-[90px] flex items-center gap-1`} title={m.CodMatFabricante}>
-                            {isPeca && (
+                            {isPeca ? (
                               <button
                                 type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleExpandPeca3(m.IdMaterial, m.CodMatFabricante); }}
-                                className="p-0.5 text-amber-600 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 rounded border border-amber-200 transition-colors"
-                                title={isExpandedPeca ? "Ocultar componentes (montapeca)" : "Ver componentes (montapeca)"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleExpandPeca3(m.IdMaterial, m.CodMatFabricante);
+                                }}
+                                className={`text-[10px] font-bold px-1.5 py-0.5 rounded truncate flex items-center gap-1 shadow-2xs transition-all border ${
+                                  isExpandedPeca
+                                    ? 'bg-purple-700 text-white border-purple-800 ring-1 ring-purple-300'
+                                    : 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-900 border-purple-300 hover:from-purple-200 hover:to-indigo-200 cursor-pointer'
+                                }`}
+                                title={`Peça Manufaturada: ${m.CodMatFabricante}. Clique para ${isExpandedPeca ? 'ocultar' : 'exibir'} componentes.`}
                               >
-                                {isExpandedPeca ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
+                                <GitFork size={11} className={isExpandedPeca ? 'text-purple-200' : 'text-purple-600'} />
+                                <span className="truncate font-mono">{m.CodMatFabricante}</span>
+                                <span className={`text-[8px] px-1 py-0.2 rounded font-bold shrink-0 ${isExpandedPeca ? 'bg-purple-800 text-white' : 'bg-white/80 text-purple-700'}`}>
+                                  {isExpandedPeca ? '▲' : '▼'}
+                                </span>
                               </button>
+                            ) : (
+                              <span className="truncate font-mono">{m.CodMatFabricante}</span>
                             )}
-                            <span className="truncate">{m.CodMatFabricante}</span>
                             {recentCreatedCodes.includes(m.CodMatFabricante) && (
                               <span className="text-[7.5px] bg-emerald-100 text-emerald-800 font-extrabold px-1 py-0.2 rounded uppercase shrink-0 border border-emerald-300" title="Cadastrado nesta sessão">
                                 Novo
-                              </span>
-                            )}
-                            {isPeca && (
-                              <span className="text-[7.5px] bg-emerald-100 text-emerald-800 font-extrabold px-1 py-0.2 rounded uppercase shrink-0">
-                                Peça
                               </span>
                             )}
                           </td>
@@ -1036,10 +1212,17 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                           <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
                             {selecionados3.has(m.IdMaterial) ? (
                               <input type="number" min="0.01" step="0.01" 
+                                placeholder="1"
                                 value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
                                 onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                  setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
+                                  const raw = e.target.value;
+                                  setQuantidades3(q => ({...q, [m.IdMaterial]: raw === '' ? '' : Number(raw)}));
+                                }}
+                                onBlur={(e) => {
+                                  const raw = e.target.value;
+                                  if (raw === '' || Number(raw) <= 0) {
+                                    setQuantidades3(q => ({...q, [m.IdMaterial]: 1}));
+                                  }
                                 }}
                                 className="w-12 px-1 py-0.5 text-[10px] font-bold text-center border-2 border-indigo-200 rounded focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white shadow-inner"
                               />
@@ -1084,8 +1267,14 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                                       {subItens.map((sub: any) => (
                                         <tr key={sub.IdMontaPeca}>
                                           <td className="py-0.5 font-mono font-bold text-slate-800 flex items-center gap-0.5">
-                                            {sub.PecaManufat === 'S' && <span className="text-[7px] bg-emerald-100 text-emerald-800 px-0.5 rounded font-bold">P</span>}
-                                            <span className="truncate">{sub.CodMatFabricante}</span>
+                                            {sub.PecaManufat === 'S' ? (
+                                              <span className="inline-flex items-center gap-1 px-1 py-0.2 rounded bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-900 border border-purple-300 text-[8px] font-mono font-bold">
+                                                <GitFork size={9} className="text-purple-600" />
+                                                <span className="truncate">{sub.CodMatFabricante}</span>
+                                              </span>
+                                            ) : (
+                                              <span className="truncate">{sub.CodMatFabricante}</span>
+                                            )}
                                           </td>
                                           <td className="py-0.5 text-gray-600 truncate max-w-[140px]" title={sub.DescDetal}>{sub.DescDetal}</td>
                                           <td className="py-0.5 text-center font-bold text-slate-800">{sub.PecaQtde || sub.QtdeUnitaria || 1}</td>

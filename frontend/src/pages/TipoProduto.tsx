@@ -25,138 +25,160 @@ const emptyForm: TipoProduto = {
 
 interface Props {
   isModal?: boolean;
-  onCloseModal?: () => void;
+  onCloseModal?: (createdItem?: { TipoProduto: string; Unidade?: string }) => void;
 }
 
+const getAuthHeaders = () => {
+  let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+  if (token === 'null' || token === 'undefined') token = null;
+  return {
+    'Content-Type': 'application/json',
+    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+  };
+};
+
 export default function TipoProdutoPage({ isModal = false, onCloseModal }: Props = {}) {
- const [items, setItems] = useState<TipoProduto[]>([]);
- const [formData, setFormData] = useState<TipoProduto>(emptyForm);
- const [isEditing, setIsEditing] = useState(false);
- const [showForm, setShowForm] = useState(isModal);
+  const [items, setItems] = useState<TipoProduto[]>([]);
+  const [formData, setFormData] = useState<TipoProduto>(emptyForm);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showForm, setShowForm] = useState(isModal);
   const [showUnidadeModal, setShowUnidadeModal] = useState(false);
- const [searchTerm, setSearchTerm] = useState('');
- const [loading, setLoading] = useState(true);
- const [saving, setSaving] = useState(false);
- const [error, setError] = useState<string | null>(null);
- const [medidaOptions, setMedidaOptions] = useState<Option[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [medidaOptions, setMedidaOptions] = useState<Option[]>([]);
 
- const fetchOptions = async () => {
- try {
- const res = await fetch(`${API_BASE}/medida/options`);
- const json = await res.json();
- if (json.success) setMedidaOptions(json.data);
- } catch {
- console.error('Error fetching options:', err);
- }
- };
+  const fetchOptions = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/medida/options`, { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (json.success) setMedidaOptions(json.data);
+    } catch (err) {
+      console.error('Error fetching options:', err);
+    }
+  };
 
- const fetchData = async () => {
- setLoading(true);
- setError(null);
- try {
- const res = await fetch(`${API_BASE}/tipoproduto`);
- const json = await res.json();
- if (json.success) {
- setItems(json.data);
- } else {
- setError(json.message || 'Erro ao carregar dados');
- }
- } catch {
- setError('Erro de conexão com o servidor.');
- } finally {
- setLoading(false);
- }
- };
+  const fetchData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`${API_BASE}/tipoproduto`, { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (json.success) {
+        setItems(json.data);
+      } else {
+        setError(json.message || 'Erro ao carregar dados');
+      }
+    } catch {
+      setError('Erro de conexão com o servidor.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
- useEffect(() => {
- fetchData();
- fetchOptions();
- }, []);
+  useEffect(() => {
+    fetchData();
+    fetchOptions();
+  }, []);
 
- const inputBaseClass = "w-full px-2 py-1 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-[#E0E800]/50 focus:border-[#E0E800] transition-all";
- const inputRequired = `${inputBaseClass} border-gray-300 bg-amber-50/30`;
- const inputOptional = `${inputBaseClass} border-gray-200`;
- const selectClass = `${inputOptional} appearance-none bg-white`;
+  const inputBaseClass = "w-full px-2 py-1 rounded-lg border text-xs focus:outline-none focus:ring-2 focus:ring-[#E0E800]/50 focus:border-[#E0E800] transition-all";
+  const inputRequired = `${inputBaseClass} border-gray-300 bg-amber-50/30`;
+  const inputOptional = `${inputBaseClass} border-gray-200`;
+  const selectClass = `${inputOptional} appearance-none bg-white`;
 
- const filteredItems = items.filter(item =>
- item.TipoProduto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
- item.Descricao?.toLowerCase().includes(searchTerm.toLowerCase())
- );
+  const filteredItems = items.filter(item =>
+    item.TipoProduto?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    item.Descricao?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
- const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
- const name = e.target.name;
-    const value = name.toLowerCase().includes('desc') ? e.target.value.toUpperCase() : e.target.value;
- setFormData(prev => ({ ...prev, [name]: value }));
- };
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const name = e.target.name;
+    let value = e.target.value;
+    if (name === 'TipoProduto' || name === 'Descricao' || name.toLowerCase().includes('desc')) {
+      value = value.toUpperCase();
+    }
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
- const handleSubmit = async (e: React.FormEvent) => {
- e.preventDefault();
- setSaving(true);
- setError(null);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
 
- try {
- const url = isEditing ? `${API_BASE}/tipoproduto/${formData.IdTipoProduto}` : `${API_BASE}/tipoproduto`;
- const method = isEditing ? 'PUT' : 'POST';
+    try {
+      const url = isEditing ? `${API_BASE}/tipoproduto/${formData.IdTipoProduto}` : `${API_BASE}/tipoproduto`;
+      const method = isEditing ? 'PUT' : 'POST';
 
- const res = await fetch(url, {
- method,
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify(formData),
- });
+      const payload = {
+        ...formData,
+        TipoProduto: (formData.TipoProduto || '').trim().toUpperCase(),
+        Descricao: (formData.Descricao || '').trim().toUpperCase()
+      };
 
- const json = await res.json();
- if (json.success) {
- await fetchData();
- resetForm();
- } else {
- setError(json.message || 'Erro ao salvar');
- }
- } catch {
- setError('Erro ao salvar. Verifique a conexão.');
- } finally {
- setSaving(false);
- }
- };
+      const res = await fetch(url, {
+        method,
+        headers: getAuthHeaders(),
+        body: JSON.stringify(payload),
+      });
 
- const handleEdit = async (id: number) => {
- try {
- const res = await fetch(`${API_BASE}/tipoproduto/${id}`);
- const json = await res.json();
- if (json.success) {
- setFormData(json.data);
- setIsEditing(true);
- setShowForm(true);
- }
- } catch {
- console.error('Fetch error:', err);
- }
- };
+      const json = await res.json();
+      if (json.success) {
+        await fetchData();
+        const createdItem = {
+          TipoProduto: payload.TipoProduto,
+          Unidade: payload.Unidade || ''
+        };
+        resetForm(createdItem);
+      } else {
+        setError(json.message || 'Erro ao salvar');
+      }
+    } catch {
+      setError('Erro ao salvar. Verifique a conexão.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
- const handleDelete = async (id: number) => {
- if (!confirm('Deseja realmente excluir este tipo de produto?')) return;
+  const handleEdit = async (id: number) => {
+    try {
+      const res = await fetch(`${API_BASE}/tipoproduto/${id}`, { headers: getAuthHeaders() });
+      const json = await res.json();
+      if (json.success) {
+        setFormData(json.data);
+        setIsEditing(true);
+        setShowForm(true);
+      }
+    } catch (err) {
+      console.error('Fetch error:', err);
+    }
+  };
 
- try {
- const res = await fetch(`${API_BASE}/tipoproduto/${id}`, {
- method: 'DELETE',
- headers: { 'Content-Type': 'application/json' },
- body: JSON.stringify({ usuario: 'Edson' }),
- });
- const json = await res.json();
- if (json.success) {
- await fetchData();
- } else {
- setError(json.message || 'Erro ao excluir');
- }
- } catch {
- setError('Erro ao excluir. Verifique a conexão.');
- }
- };
+  const handleDelete = async (id: number) => {
+    if (!confirm('Deseja realmente excluir este tipo de produto?')) return;
 
-  const resetForm = () => {
+    try {
+      const res = await fetch(`${API_BASE}/tipoproduto/${id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ usuario: 'Edson' }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        await fetchData();
+      } else {
+        setError(json.message || 'Erro ao excluir');
+      }
+    } catch {
+      setError('Erro ao excluir. Verifique a conexão.');
+    }
+  };
+
+  const resetForm = (createdItem?: { TipoProduto: string; Unidade?: string }) => {
     setFormData(emptyForm);
     setIsEditing(false);
     setShowForm(false);
-    if (isModal && onCloseModal) onCloseModal();
+    if (isModal && onCloseModal) onCloseModal(createdItem);
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'new') window.close();
   };
@@ -207,7 +229,8 @@ export default function TipoProdutoPage({ isModal = false, onCloseModal }: Props
                     value={formData.TipoProduto || ''}
                     onChange={handleInputChange}
                     placeholder="Ex: PARAFUSO"
-                    className={inputRequired}
+                    className={`${inputRequired} uppercase`}
+                    style={{ textTransform: 'uppercase' }}
                     maxLength={50}
                     required
                   />
@@ -243,7 +266,8 @@ export default function TipoProdutoPage({ isModal = false, onCloseModal }: Props
                   value={formData.Descricao || ''}
                   onChange={handleInputChange}
                   placeholder="Ex: PARAFUSO SEXTAVADO"
-                  className={inputOptional}
+                  className={`${inputOptional} uppercase`}
+                  style={{ textTransform: 'uppercase' }}
                   maxLength={100}
                 />
               </div>

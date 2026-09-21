@@ -7376,15 +7376,15 @@ app.delete('/api/tag/:id', tenantMiddleware, async (req, res) => {
 // --- CRUD: TipoProduto ---
 
 // OPTIONS for dropdown
-app.get('/api/tipoproduto/options', tenantMiddleware, async (req, res) => {
+app.get(['/api/tipoproduto/options', '/api/utils/opcoes-tipo-produto'], tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(
-            "SELECT IdTipoProduto as id, TipoProduto as label FROM tipoproduto WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoProduto"
+            "SELECT IdTipoProduto as id, TipoProduto as label, Unidade FROM tipoproduto WHERE D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' ORDER BY TipoProduto"
         );
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tipoproduto options:', error);
-        res.status(500).json({ success: false, message: 'Erro ao carregar op??es' });
+        res.status(500).json({ success: false, message: 'Erro ao carregar opções' });
     }
 });
 
@@ -7427,16 +7427,25 @@ app.post('/api/tipoproduto', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto é obrigatório' });
     }
 
     try {
         const now = getCurrentDateTimeBR();
+        const tipoUpper = TipoProduto.trim().toUpperCase();
+        const descUpper = Descricao ? Descricao.trim().toUpperCase() : null;
+
         const [result] = await req.tenantDbPool.execute(
             'INSERT INTO tipoproduto (TipoProduto, Unidade, Descricao, DataCriacao, CriadoPor) VALUES (?, ?, ?, ?, ?)',
-            [TipoProduto.trim(), Unidade || null, Descricao || null, now, getCtxNomeCompleto()]
+            [tipoUpper, Unidade || null, descUpper, now, getCtxNomeCompleto()]
         );
-        res.json({ success: true, message: 'Tipo cadastrado com sucesso', id: result.insertId });
+        res.json({ 
+            success: true, 
+            message: 'Tipo cadastrado com sucesso', 
+            id: result.insertId,
+            TipoProduto: tipoUpper,
+            Unidade: Unidade || null
+        });
     } catch (error) {
         console.error('Error creating tipoproduto:', error);
         res.status(500).json({ success: false, message: 'Erro ao cadastrar: ' + error.message });
@@ -7448,15 +7457,23 @@ app.put('/api/tipoproduto/:id', tenantMiddleware, async (req, res) => {
     const { TipoProduto, Unidade, Descricao } = req.body;
 
     if (!TipoProduto) {
-        return res.status(400).json({ success: false, message: 'Tipo Produto ? obrigatório' });
+        return res.status(400).json({ success: false, message: 'Tipo Produto é obrigatório' });
     }
 
     try {
+        const tipoUpper = TipoProduto.trim().toUpperCase();
+        const descUpper = Descricao ? Descricao.trim().toUpperCase() : null;
+
         await req.tenantDbPool.execute(
             'UPDATE tipoproduto SET TipoProduto = ?, Unidade = ?, Descricao = ? WHERE IdTipoProduto = ?',
-            [TipoProduto.trim(), Unidade || null, Descricao || null, req.params.id]
+            [tipoUpper, Unidade || null, descUpper, req.params.id]
         );
-        res.json({ success: true, message: 'Tipo atualizado com sucesso' });
+        res.json({ 
+            success: true, 
+            message: 'Tipo atualizado com sucesso',
+            TipoProduto: tipoUpper,
+            Unidade: Unidade || null
+        });
     } catch (error) {
         console.error('Error updating tipoproduto:', error);
         res.status(500).json({ success: false, message: 'Erro ao atualizar: ' + error.message });
@@ -7927,6 +7944,31 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
                     os.temApontamento = false;
                 }
             }
+
+            // Buscar dados das tags associadas (QtdeTag, QtdeLiberada, SaldoTag)
+            try {
+                const tagIds = [...new Set(rows.map(r => r.IdTag).filter(Boolean))];
+                if (tagIds.length > 0) {
+                    const placeholders = tagIds.map(() => '?').join(',');
+                    const [tagRows] = await req.tenantDbPool.execute(
+                        `SELECT IdTag, QtdeTag, QtdeLiberada as TagQtdeLiberada, SaldoTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag IN (${placeholders})`,
+                        tagIds
+                    );
+                    const tagMap = new Map(tagRows.map(t => [t.IdTag, t]));
+                    for (const os of rows) {
+                        const t = tagMap.get(os.IdTag);
+                        if (t) {
+                            os.QtdeTag = t.QtdeTag;
+                            os.TagQtdeLiberada = t.TagQtdeLiberada;
+                            os.SaldoTag = t.SaldoTag;
+                            os.QtdePecasOS = t.QtdePecasOS;
+                            os.QtdePecasExecutadas = t.QtdePecasExecutadas;
+                        }
+                    }
+                }
+            } catch (tagErr) {
+                console.error('Error batch fetching tag data for OS list:', tagErr);
+            }
         }
 
         res.json({
@@ -7977,6 +8019,24 @@ app.get('/api/ordemservico/:id', tenantMiddleware, async (req, res) => {
                     : 0;
                 os.QtdeTotalPecasCalc = stats.pTotal;
                 os.QtdePecasExecutadasCalc = stats.pExec;
+            }
+
+            if (os.IdTag) {
+                try {
+                    const [tagRows] = await req.tenantDbPool.execute(
+                        `SELECT QtdeTag, QtdeLiberada as TagQtdeLiberada, SaldoTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag = ? LIMIT 1`,
+                        [os.IdTag]
+                    );
+                    if (tagRows.length > 0) {
+                        os.QtdeTag = tagRows[0].QtdeTag;
+                        os.TagQtdeLiberada = tagRows[0].TagQtdeLiberada;
+                        os.SaldoTag = tagRows[0].SaldoTag;
+                        os.QtdePecasOS = tagRows[0].QtdePecasOS;
+                        os.QtdePecasExecutadas = tagRows[0].QtdePecasExecutadas;
+                    }
+                } catch (tagErr) {
+                    console.error(`Error fetching tag data for OS ${os.IdOrdemServico}:`, tagErr);
+                }
             }
 
             res.json({ success: true, data: os });
@@ -8730,55 +8790,141 @@ app.post('/api/ordemservico/atualizar-arquivos', tenantMiddleware, async (req, r
 });
 
 // ---------------------------------------------------------
-// NOVA ROTA: Alterar Fator Multiplicador (Icone 4)
+// FUNÇÃO CENTRAL: Alterar Fator Multiplicador da OS e Recalcular Níveis Abaixo
+// Recalcula:
+// 1. Itens da OS (ordemservicoitem): QtdeTotal = qtdeUnit * fator, Peso, AreaPintura, Tempos
+// 2. Cotas dos 9 setores de produção: primeiro setor ativo recebe QtdeTotal; demais recebem 0
+// 3. Processos fabris (material_processo): TotalExecutar = novaQtde
+// 4. Totais em cascata (recalcularQuantidadesTotais): OS -> Tag -> Projeto
 // ---------------------------------------------------------
-app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) => {
-    let connection;
+async function executarAlterarFatorOS(connection, IdOrdemServico, novoFator) {
+    const fator = parseFloat(novoFator);
+    if (isNaN(fator) || fator <= 0) {
+        throw new Error('Fator inválido. Deve ser um número maior que zero.');
+    }
+
+    const [osRows] = await connection.query(
+        'SELECT IdOrdemServico, Fator, IdTag, IdProjeto, EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != \'*\')',
+        [IdOrdemServico]
+    );
+    if (osRows.length === 0) {
+        throw new Error('Ordem de Serviço não encontrada.');
+    }
+    const os = osRows[0];
+    if (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') {
+        throw new Error('Ordem de Serviço já Liberada para Produção, não pode mais ser modificada!');
+    }
+    const fatorAnterior = parseFloat(os.Fator) || 1;
+
+    // Busca itens da OS com todos os campos necessários
+    const [itemRows] = await connection.query(
+        `SELECT IdOrdemServicoItem, CodMatFabricante, QtdeTotal, qtde, AreaPintura, AreaPinturaUnitario, Peso, PesoUnitario,
+                TempoPadrao, TempoSetup,
+                txtCorte, CorteTempoPadrao, CorteTempoSetup,
+                txtDobra, DobraTempoPadrao, DobraTempoSetup,
+                txtSolda, SoldaTempoPadrao, SoldaTempoSetup,
+                txtPintura, PinturaTempoPadrao, PinturaTempoSetup,
+                TxtMontagem, MontagemTempoPadrao, MontagemTempoSetup,
+                txtCorteaLaser, CorteaLaserTempoPadrao, CorteaLaserTempoSetup,
+                txtPUNSIONADEIRA, PunsionadeiraTempoPadrao, PunsionadeiraTempoSetup,
+                txtGALVANIZAR, GalvanizarTempoPadrao, GalvanizarTempoSetup,
+                txtENGENHARIA, EngenhariaTempoPadrao, EngenhariaTempoSetup
+         FROM ordemservicoitem
+         WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+        [IdOrdemServico]
+    );
+
+    // Mapeamento dos 9 setores de produção em ordem de prioridade
+    const setorOrdem = [
+        { flag: 'txtCorte',          campoExecutar: 'CorteTotalExecutar',         padrao: 'CorteTempoPadrao',         setup: 'CorteTempoSetup',         totalPadrao: 'CorteTotalPadrao',         totalTempo: 'CorteTotalTempo',         dias: 'CorteDiasProducao' },
+        { flag: 'txtDobra',          campoExecutar: 'DobraTotalExecutar',         padrao: 'DobraTempoPadrao',         setup: 'DobraTempoSetup',         totalPadrao: 'DobraTotalPadrao',         totalTempo: 'DobraTotalTempo',         dias: 'DobraDiasProducao' },
+        { flag: 'txtSolda',          campoExecutar: 'SoldaTotalExecutar',         padrao: 'SoldaTempoPadrao',         setup: 'SoldaTempoSetup',         totalPadrao: 'SoldaTotalPadrao',         totalTempo: 'SoldaTotalTempo',         dias: 'SoldaDiasProducao' },
+        { flag: 'txtPintura',        campoExecutar: 'PinturaTotalExecutar',       padrao: 'PinturaTempoPadrao',       setup: 'PinturaTempoSetup',       totalPadrao: 'PinturaTotalPadrao',       totalTempo: 'PinturaTotalTempo',       dias: 'PinturaDiasProducao' },
+        { flag: 'TxtMontagem',       campoExecutar: 'MontagemTotalExecutar',      padrao: 'MontagemTempoPadrao',      setup: 'MontagemTempoSetup',      totalPadrao: 'MontagemTotalPadrao',      totalTempo: 'MontagemTotalTempo',      dias: 'MontagemDiasProducao' },
+        { flag: 'txtCorteaLaser',    campoExecutar: 'CorteaLaserTotalExecutar',   padrao: 'CorteaLaserTempoPadrao',   setup: 'CorteaLaserTempoSetup',   totalPadrao: 'CorteaLaserTotalPadrao',   totalTempo: 'CorteaLaserTotalTempo',   dias: 'CorteaLaserDiasProducao' },
+        { flag: 'txtPUNSIONADEIRA',  campoExecutar: 'PUNSIONADEIRATotalExecutar', padrao: 'PunsionadeiraTempoPadrao', setup: 'PunsionadeiraTempoSetup', totalPadrao: 'PunsionadeiraTotalPadrao', totalTempo: 'PunsionadeiraTotalTempo', dias: 'PunsionadeiraDiasProducao' },
+        { flag: 'txtGALVANIZAR',     campoExecutar: 'GALVANIZARTotalExecutar',    padrao: 'GalvanizarTempoPadrao',    setup: 'GalvanizarTempoSetup',    totalPadrao: 'GalvanizarTotalPadrao',    totalTempo: 'GalvanizarTotalTempo',    dias: 'GalvanizarDiasProducao' },
+        { flag: 'txtENGENHARIA',     campoExecutar: 'ENGENHARIATotalExecutar',    padrao: 'EngenhariaTempoPadrao',    setup: 'EngenhariaTempoSetup',    totalPadrao: 'EngenhariaTotalPadrao',    totalTempo: 'EngenhariaTotalTempo',    dias: 'EngenhariaDiasProducao' }
+    ];
+
+    await connection.beginTransaction();
     try {
-        connection = await pool.getConnection();
-        const { IdOrdemServico, FatorMultiplicador } = req.body;
-
-        const fator = parseFloat(FatorMultiplicador);
-        if (isNaN(fator) || fator <= 0) {
-            return res.status(400).json({ success: false, message: 'Fator inválido' });
-        }
-
-        const [osRows] = await connection.query('SELECT IdTag, EnderecoOrdemServico, Liberado_Engenharia FROM ordemservico WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        if (osRows.length === 0) return res.status(404).json({ success: false, message: 'OS não encontrada.' });
-        
-        const os = osRows[0];
-        if (os.Liberado_Engenharia === 'S') {
-            return res.status(400).json({ success: false, message: 'Ordem de Serviço já Liberada para Produà§ão, não pode mais ser modificada!' });
-        }
-
-        // Verifica ITENS
-        const [itemRows] = await connection.query('SELECT IdOrdemServicoItem, Qtde, AreaPintura, Peso FROM ordemservicoitem WHERE IdOrdemServico = ?', [IdOrdemServico]);
-        // Permite alterar fator mesmo sem itens
-        /* if (itemRows.length === 0) {
-            return res.status(400).json({ success: false, message: 'Não há itens a serem alterados!' });
-        } */
+        let somaTotal = 0;
 
         for (const item of itemRows) {
-            let qtdeNum = parseFloat(item.Qtde) || 0;
-            if (qtdeNum === 0) qtdeNum = 1; // avoid division by zero if Data was bad
+            const qtdeBaseRaw = parseFloat(item.qtde) || 0;
+            const qtdeTotalRaw = parseFloat(item.QtdeTotal) || 0;
 
-            const areaUnit = (parseFloat(item.AreaPintura) || 0) / qtdeNum;
-            const pesoUnit = (parseFloat(item.Peso) || 0) / qtdeNum;
+            // Base unitária garantida
+            const qtdeUnit = qtdeBaseRaw > 0 ? qtdeBaseRaw : (fatorAnterior > 0 ? qtdeTotalRaw / fatorAnterior : qtdeTotalRaw);
+            const novaQtde = Math.round(qtdeUnit * fator * 1000) / 1000;
+            somaTotal += novaQtde;
 
-            const newQtdeTotal = qtdeNum * fator;
-            const newArea = areaUnit * fator;
-            const newPeso = pesoUnit * fator;
+            // Peso e Área unitários e totais
+            const pesoUnit = parseFloat(item.PesoUnitario) > 0 
+                ? parseFloat(item.PesoUnitario) 
+                : (fatorAnterior > 0 ? (parseFloat(item.Peso) || 0) / fatorAnterior : (parseFloat(item.Peso) || 0));
+            const areaUnit = parseFloat(item.AreaPinturaUnitario) > 0 
+                ? parseFloat(item.AreaPinturaUnitario) 
+                : (fatorAnterior > 0 ? (parseFloat(item.AreaPintura) || 0) / fatorAnterior : (parseFloat(item.AreaPintura) || 0));
 
-            await connection.query(`
-                UPDATE ordemservicoitem 
-                SET QtdeTotal = ?, AreaPintura = ?, Peso = ?, Fator = ?
-                WHERE IdOrdemServicoItem = ?
-            `, [newQtdeTotal, newArea, newPeso, fator, item.IdOrdemServicoItem]);
+            const novoPeso = Math.round(pesoUnit * fator * 1000) / 1000;
+            const novaArea = Math.round(areaUnit * fator * 1000) / 1000;
+
+            // Recalcula tempos do item
+            const tempoPadrao = parseFloat(item.TempoPadrao) || 0;
+            const tempoSetup = parseFloat(item.TempoSetup) || 0;
+            const totalPadrao = Math.round(tempoPadrao * novaQtde * 100) / 100;
+            const totalTempo = totalPadrao + tempoSetup;
+
+            // Identifica o primeiro setor ativo do item
+            const primeiroSetor = setorOrdem.find(s => String(item[s.flag]).trim() === '1');
+
+            // Constrói campos de atualização para os 9 setores
+            const setSetoresList = [];
+            for (const s of setorOrdem) {
+                const isPrimeiro = primeiroSetor && s.campoExecutar === primeiroSetor.campoExecutar;
+                const cotaExecutar = isPrimeiro ? novaQtde : 0;
+                setSetoresList.push(`\`${s.campoExecutar}\` = ${cotaExecutar}`);
+
+                const sPadrao = parseFloat(item[s.padrao]) || 0;
+                const sSetup = parseFloat(item[s.setup]) || 0;
+                const sTotalPadrao = Math.round(sPadrao * novaQtde * 100) / 100;
+                const sTotalTempo = sTotalPadrao + sSetup;
+                const sDias = sTotalTempo > 0 ? Math.ceil(sTotalTempo / 480) : 0;
+
+                setSetoresList.push(`\`${s.totalPadrao}\` = ${sTotalPadrao}`);
+                setSetoresList.push(`\`${s.totalTempo}\` = ${sTotalTempo}`);
+                setSetoresList.push(`\`${s.dias}\` = ${sDias}`);
+            }
+
+            const setCamposSql = setSetoresList.join(', ');
+
+            await connection.query(
+                `UPDATE ordemservicoitem
+                 SET QtdeTotal = ?, qtde = ?, AreaPintura = ?, Peso = ?, Fator = ?,
+                     TotalTempo = ?, ${setCamposSql}
+                 WHERE IdOrdemServicoItem = ?`,
+                [novaQtde, qtdeUnit, novaArea, novoPeso, fator, totalTempo, item.IdOrdemServicoItem]
+            );
+
+            // Atualiza material_processo para este item nesta OS
+            if (item.CodMatFabricante) {
+                await connection.query(
+                    `UPDATE material_processo 
+                     SET TotalExecutar = ? 
+                     WHERE IdOrdemServico = ? AND codmatFabricante = ?`,
+                    [novaQtde, IdOrdemServico, item.CodMatFabricante]
+                ).catch(e => {
+                    console.warn(`[alterar-fator] Aviso ao atualizar material_processo: ${e.message}`);
+                });
+            }
         }
 
-        // UPDATE OS Fator
+        // Atualiza Fator na OS
         await connection.query('UPDATE ordemservico SET Fator = ? WHERE IdOrdemServico = ?', [fator, IdOrdemServico]);
 
+        // Limpeza de cache de diretórios
         const diretorio = os.EnderecoOrdemServico;
         if (diretorio) {
             const pastasLimpar = ['PDF', 'DXF', 'DFT', 'LXDS'];
@@ -8790,9 +8936,43 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
             }
         }
 
-        res.json({ success: true, message: 'Fator alterado com sucesso! Saldo dos Itens e Pastas atualizados.' });
+        await connection.commit();
+        console.log(`[alterar-fator] OS ${IdOrdemServico}: Fator ${fatorAnterior} -> ${fator}, ${itemRows.length} itens recalculados, somaTotal=${somaTotal}`);
+    } catch (txErr) {
+        await connection.rollback();
+        throw txErr;
+    }
+
+    // Recalcula totais agregados em cascata: OS -> Tag -> Projeto
+    await recalcularQuantidadesTotais(IdOrdemServico, connection);
+
+    return {
+        fatorAnterior,
+        novoFator: fator,
+        totalItens: itemRows.length
+    };
+}
+
+// ---------------------------------------------------------
+// ROTA: Alterar Fator Multiplicador (Icone 4)
+// ---------------------------------------------------------
+app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) => {
+    let connection;
+    try {
+        connection = await (req.tenantDbPool || pool).getConnection();
+        const { IdOrdemServico, FatorMultiplicador, NovoFator } = req.body;
+        const fatorAlvo = FatorMultiplicador !== undefined ? FatorMultiplicador : NovoFator;
+
+        const resultado = await executarAlterarFatorOS(connection, IdOrdemServico, fatorAlvo);
+
+        res.json({
+            success: true,
+            message: `Fator alterado de ${resultado.fatorAnterior} para ${resultado.novoFator} com sucesso! Quantidades e cotas recalculadas em todos os níveis abaixo da OS.`,
+            FatorAnterior: resultado.fatorAnterior,
+            NovoFator: resultado.novoFator
+        });
     } catch (e) {
-        console.error(e);
+        console.error('[alterar-fator] Erro:', e);
         res.status(500).json({ success: false, message: e.message });
     } finally {
         if (connection) connection.release();
@@ -8800,116 +8980,23 @@ app.post('/api/ordemservico/alterar-fator', tenantMiddleware, async (req, res) =
 });
 
 // ---------------------------------------------------------
-// ROTA: Alterar Fator com cascata completa OS → Tag → Projeto
-// Atualiza QtdeTotal de cada item = qtdeUnit × novoFator
-// Atualiza TotalExecutar do PRIMEIRO setor ativo de cada item = novoQtde
-// Zera TotalExecutar dos demais setores
-// recalcularQuantidadesTotais propaga somas para OS, Tag e Projeto
+// ROTA: Alterar Fator com cascata completa OS → Tag → Projeto (compatibilidade)
 // ---------------------------------------------------------
 app.post('/api/ordemservico/alterar-fator-cascata', tenantMiddleware, async (req, res) => {
     let connection;
     try {
-        connection = await pool.getConnection();
-        const { IdOrdemServico, NovoFator } = req.body;
+        connection = await (req.tenantDbPool || pool).getConnection();
+        const { IdOrdemServico, NovoFator, FatorMultiplicador } = req.body;
+        const fatorAlvo = NovoFator !== undefined ? NovoFator : FatorMultiplicador;
 
-        const novoFator = parseFloat(NovoFator);
-        if (isNaN(novoFator) || novoFator <= 0) {
-            return res.status(400).json({ success: false, message: 'Fator inválido. Deve ser um número maior que zero.' });
-        }
-
-        // Busca OS (fator anterior)
-        const [osRows] = await connection.query(
-            'SELECT IdOrdemServico, Fator, IdTag, IdProjeto FROM ordemservico WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E != \'*\')',
-            [IdOrdemServico]
-        );
-        if (osRows.length === 0) {
-            return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
-        }
-        const os = osRows[0];
-        const fatorAnterior = parseFloat(os.Fator) || 1;
-
-        // Busca itens ativos com todos os campos necessários
-        const [itemRows] = await connection.query(
-            `SELECT IdOrdemServicoItem, QtdeTotal, AreaPintura, Peso,
-                    txtCorte, txtDobra, txtSolda, txtPintura, TxtMontagem
-             FROM ordemservicoitem
-             WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-            [IdOrdemServico]
-        );
-        if (itemRows.length === 0) {
-            return res.status(400).json({ success: false, message: 'Nenhum item encontrado para esta Ordem de Serviço.' });
-        }
-
-        // Mapeamento de setores em ordem de prioridade
-        const setorOrdem = [
-            { flag: 'txtCorte',    campoExecutar: 'CorteTotalExecutar'    },
-            { flag: 'txtDobra',    campoExecutar: 'DobraTotalExecutar'    },
-            { flag: 'txtSolda',    campoExecutar: 'SoldaTotalExecutar'    },
-            { flag: 'txtPintura',  campoExecutar: 'PinturaTotalExecutar'  },
-            { flag: 'TxtMontagem', campoExecutar: 'MontagemTotalExecutar' },
-        ];
-
-        await connection.beginTransaction();
-        try {
-            let somaTotal = 0;
-
-            for (const item of itemRows) {
-                const qtdeAtual = parseFloat(item.QtdeTotal) || 0;
-                const areaAtual = parseFloat(item.AreaPintura) || 0;
-                const pesoAtual = parseFloat(item.Peso) || 0;
-
-                // Reverte para qtde unitária (sem fator anterior) e aplica novo fator
-                const qtdeUnit = fatorAnterior > 0 ? qtdeAtual / fatorAnterior : qtdeAtual;
-                const areaUnit = fatorAnterior > 0 ? areaAtual / fatorAnterior : areaAtual;
-                const pesoUnit = fatorAnterior > 0 ? pesoAtual / fatorAnterior : pesoAtual;
-
-                const novaQtde = Math.round(qtdeUnit * novoFator * 1000) / 1000;
-                const novaArea = Math.round(areaUnit * novoFator * 1000) / 1000;
-                const novoPeso = Math.round(pesoUnit * novoFator * 1000) / 1000;
-
-                somaTotal += novaQtde;
-
-                // Identifica o PRIMEIRO setor ativo do item
-                const primeiroSetor = setorOrdem.find(s => String(item[s.flag]).trim() === '1');
-
-                // Monta o SET dinâmico para TotalExecutar dos setores
-                // O primeiro setor ativo recebe novaQtde; os demais recebem 0
-                const setCampos = setorOrdem.map(s =>
-                    `\`${s.campoExecutar}\` = ${primeiroSetor && s.campoExecutar === primeiroSetor.campoExecutar ? novaQtde : 0}`
-                ).join(', ');
-
-                await connection.query(
-                    `UPDATE ordemservicoitem
-                     SET QtdeTotal = ?, AreaPintura = ?, Peso = ?, Fator = ?, ${setCampos}
-                     WHERE IdOrdemServicoItem = ?`,
-                    [novaQtde, novaArea, novoPeso, novoFator, item.IdOrdemServicoItem]
-                );
-            }
-
-            // Atualiza Fator na OS (QtdeTotalItens virá do recalcularQuantidadesTotais)
-            await connection.query(
-                'UPDATE ordemservico SET Fator = ? WHERE IdOrdemServico = ?',
-                [novoFator, IdOrdemServico]
-            );
-
-            await connection.commit();
-
-            console.log(`[alterar-fator-cascata] OS ${IdOrdemServico}: fator ${fatorAnterior}→${novoFator}, somaTotal=${somaTotal}, ${itemRows.length} itens atualizados`);
-        } catch (txErr) {
-            await connection.rollback();
-            throw txErr;
-        }
-
-        // Recalcula cascata completa: QtdeTotalItens, setores, percentuais → OS → Tag → Projeto
-        await recalcularQuantidadesTotais(IdOrdemServico, connection);
+        const resultado = await executarAlterarFatorOS(connection, IdOrdemServico, fatorAlvo);
 
         return res.json({
             success: true,
-            message: `Fator atualizado de ${fatorAnterior} para ${novoFator}. Quantidades recalculadas em cascata (OS → Tag → Projeto).`,
-            FatorAnterior: fatorAnterior,
-            NovoFator: novoFator
+            message: `Fator atualizado de ${resultado.fatorAnterior} para ${resultado.novoFator}. Quantidades recalculadas em todos os níveis abaixo da OS.`,
+            FatorAnterior: resultado.fatorAnterior,
+            NovoFator: resultado.novoFator
         });
-
     } catch (e) {
         console.error('[alterar-fator-cascata] Erro:', e);
         res.status(500).json({ success: false, message: e.message });

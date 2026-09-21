@@ -368,6 +368,137 @@ router.put('/composicao-qtde', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────────
+// POST /salvar-estrutura — Salva e finaliza a montagem da estrutura da peça manufaturada
+// Suporta salvamento atômico (recebe itens da composição montada em tela)
+// ────────────────────────────────────────────────────────────────────────────────
+router.post('/salvar-estrutura', async (req, res) => {
+    try {
+        const { idMaterial, codMatFabricante, itens, usuario } = req.body;
+        if (!idMaterial) {
+            return res.status(400).json({ success: false, message: 'IdMaterial é obrigatório.' });
+        }
+
+        const tenantPool = db(req);
+        const idMatriz = req.tenantUser?.tenantId || req.body.idMatriz || null;
+        const codPeca = codMatFabricante || '';
+
+        // Se o frontend enviou o array de itens da composição (modo atômico / staged)
+        if (Array.isArray(itens)) {
+            // Garante que colunas auxiliares existam na tabela montapeca (idempotente)
+            await Promise.allSettled([
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `IdMatriz` INT NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `CodMatFabricantePeca` VARCHAR(255) NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `Ordem` INT NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `QtdeUnitaria` DECIMAL(10,2) NULL')
+            ]);
+
+            // 1. Soft-delete de todos os itens anteriores vinculados a esta peça pai
+            await tenantPool.execute(
+                `UPDATE montapeca 
+                 SET D_E_L_E_T_E = '*', 
+                     UsuarioD_E_L_E_T_E = ?, 
+                     DataD_E_L_E_T_E = NOW(),
+                     IdMatriz = ?
+                 WHERE (IdMaterialPeca = ? OR (CodMatFabricantePeca = ? AND CodMatFabricantePeca <> ''))
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [usuario || 'Sistema', idMatriz, idMaterial, codPeca]
+            );
+
+            // 2. Se a lista estiver vazia (usuário removeu todos os componentes e salvou)
+            if (itens.length === 0) {
+                await tenantPool.execute(
+                    `UPDATE material SET PecaManufat = '' WHERE IdMaterial = ?`,
+                    [idMaterial]
+                );
+                return res.json({
+                    success: true,
+                    message: `Estrutura de ${codPeca || `ID ${idMaterial}`} atualizada (todos os componentes removidos).`,
+                    qtdItens: 0,
+                    PecaManufat: ''
+                });
+            }
+
+            // 3. Insere os componentes confirmados
+            let inseridos = 0;
+            for (let idx = 0; idx < itens.length; idx++) {
+                const mat = itens[idx];
+                const codFilho = mat.CodMatFabricante || '';
+                const qtde = (mat.PecaQtde !== undefined && mat.PecaQtde !== null && mat.PecaQtde !== '') ? Number(mat.PecaQtde) : 1;
+                const qtdeUnit = (mat.QtdeUnitaria !== undefined && mat.QtdeUnitaria !== null && mat.QtdeUnitaria !== '') ? Number(mat.QtdeUnitaria) : qtde;
+                const ordem = mat.Ordem || (idx + 1);
+
+                await tenantPool.execute(
+                    `INSERT INTO montapeca
+                     (TipoPeca, IdMaterial, PecaQtde, QtdeUnitaria, IdMaterialPeca, IdEmpresa, D_E_L_E_T_E,
+                      Peso, Valor, UsuarioD_E_L_E_T_E, DataD_E_L_E_T_E, CodMatFabricante,
+                      CodMatFabricantePeca, IdMatriz, UsuarioCriacao, DataCriacao, Ordem)
+                     VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, '', '', ?, ?, ?, ?, NOW(), ?)`,
+                    [
+                        mat.FamiliaMat || 0,
+                        mat.IdMaterial,
+                        qtde,
+                        qtdeUnit,
+                        idMaterial,
+                        mat.IdEmpresa || 0,
+                        mat.Peso || 0,
+                        mat.Valor || 0,
+                        codFilho,
+                        codPeca,
+                        idMatriz,
+                        usuario || 'Sistema',
+                        ordem
+                    ]
+                );
+                inseridos++;
+            }
+
+            // 4. Marca peça pai como Peça Manufaturada (PecaManufat = 'S')
+            await tenantPool.execute(
+                `UPDATE material SET PecaManufat = 'S' WHERE IdMaterial = ?`,
+                [idMaterial]
+            );
+
+            return res.json({
+                success: true,
+                message: `Estrutura de ${codPeca || `ID ${idMaterial}`} salva e finalizada com sucesso! (${inseridos} item(ns) na composição).`,
+                qtdItens: inseridos,
+                PecaManufat: 'S'
+            });
+        }
+
+        // Modo fallback legado (sem array itens): valida montapeca existente no banco
+        const [comp] = await tenantPool.execute(
+            `SELECT COUNT(*) as qtd FROM montapeca WHERE IdMaterialPeca = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [idMaterial]
+        );
+
+        const qtdItens = comp[0]?.qtd || 0;
+        if (qtdItens === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'A estrutura deve possuir pelo menos 1 item na composição para ser finalizada.'
+            });
+        }
+
+        // Garante que o material pai está marcado como Peça Manufaturada (PecaManufat = 'S')
+        await tenantPool.execute(
+            `UPDATE material SET PecaManufat = 'S' WHERE IdMaterial = ?`,
+            [idMaterial]
+        );
+
+        res.json({
+            success: true,
+            message: `Estrutura de ${codMatFabricante || `ID ${idMaterial}`} salva e finalizada com sucesso! (${qtdItens} item(ns) na composição).`,
+            qtdItens,
+            PecaManufat: 'S'
+        });
+    } catch (error) {
+        console.error('[PecaManufaturada] POST /salvar-estrutura:', error.message);
+        res.status(500).json({ success: false, message: 'Erro ao salvar estrutura: ' + error.message });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────────
 // GET /desenhos-criar — Desenhos disponíveis para criação (modo "Criar Peça Manufaturada")
 // Lista materiais com arquivo CAD cadastrado
 // ────────────────────────────────────────────────────────────────────────────────

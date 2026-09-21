@@ -24,11 +24,41 @@ interface NovaTagModalProps {
   onSuccess: () => void;
   projetoId: string | number;
   projetoNome: string;
+  dataPrevisaoProjeto?: string;
   tagToEdit?: Tag | null;
   API_BASE: string;
 }
 
-export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, projetoNome, tagToEdit, API_BASE }: NovaTagModalProps) {
+const normalizeToBRDate = (val?: string | null): string => {
+  if (!val) return '';
+  const trimmed = val.trim();
+  const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) return `${brMatch[1]}/${brMatch[2]}/${brMatch[3]}`;
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[3]}/${isoMatch[2]}/${isoMatch[1]}`;
+  return trimmed;
+};
+
+const parseToInputDate = (val?: string | null): string => {
+  if (!val) return '';
+  const trimmed = val.trim();
+  const brMatch = trimmed.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) return `${brMatch[3]}-${brMatch[2]}-${brMatch[1]}`;
+  const isoMatch = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  return '';
+};
+
+export default function NovaTagModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  projetoId,
+  projetoNome,
+  dataPrevisaoProjeto,
+  tagToEdit,
+  API_BASE
+}: NovaTagModalProps) {
   const { user } = useAuth();
   const { showAlert } = useToast();
   const isEditingTag = !!tagToEdit;
@@ -39,25 +69,73 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
 
   const [tagFormData, setTagFormData] = useState<Tag>(emptyTagForm);
   const [showTipoProdutoModal, setShowTipoProdutoModal] = useState(false);
-  const [tipoProdutoOptions, setTipoProdutoOptions] = useState<{id:string, label:string}[]>([]);
+  const [tipoProdutoOptions, setTipoProdutoOptions] = useState<{ id: string | number; label: string; Unidade?: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       if (tagToEdit) {
-        setTagFormData(tagToEdit);
+        setTagFormData({
+          ...tagToEdit,
+          DataPrevisao: normalizeToBRDate(tagToEdit.DataPrevisao || dataPrevisaoProjeto)
+        });
       } else {
-        setTagFormData(emptyTagForm);
+        const initialDate = normalizeToBRDate(dataPrevisaoProjeto);
+        setTagFormData({
+          ...emptyTagForm,
+          DataPrevisao: initialDate
+        });
+
+        // Se dataPrevisaoProjeto não veio nas props mas temos projetoId, busca do backend
+        if (!initialDate && projetoId) {
+          fetchProjetoDataPrevisao(projetoId);
+        }
       }
       fetchOptions();
     }
-  }, [isOpen, tagToEdit]);
+  }, [isOpen, tagToEdit, dataPrevisaoProjeto, projetoId]);
 
-  const fetchOptions = async () => {
+  const fetchProjetoDataPrevisao = async (projId: string | number) => {
     try {
-      const res = await fetch(`${API_BASE}/utils/opcoes-tipo-produto`);
+      let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+      if (token === 'null' || token === 'undefined') token = null;
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_BASE}/projeto/${projId}`, { headers });
       const json = await res.json();
-      if (json.success) setTipoProdutoOptions(json.data);
+      if (json.success && json.data) {
+        const pDate = normalizeToBRDate(json.data.DataPrevisao || json.data.PrazoEntrega || '');
+        if (pDate) {
+          setTagFormData(prev => ({
+            ...prev,
+            DataPrevisao: prev.DataPrevisao || pDate
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching project date:', err);
+    }
+  };
+
+  const fetchOptions = async (selectValue?: string) => {
+    try {
+      let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+      if (token === 'null' || token === 'undefined') token = null;
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_BASE}/tipoproduto/options`, { headers });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setTipoProdutoOptions(json.data);
+        if (selectValue) {
+          const matched = json.data.find((opt: any) => opt.label?.toUpperCase() === selectValue.toUpperCase());
+          setTagFormData(prev => ({
+            ...prev,
+            TipoProduto: matched ? matched.label : selectValue,
+            Medida: matched?.Unidade || prev.Medida || ''
+          }));
+        }
+      }
     } catch (err) {
       console.error('Error fetching type options:', err);
     }
@@ -67,6 +145,15 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
     let { name, value } = e.target;
     if (name === 'Tag' || name === 'DescTag' || name.toLowerCase().includes('desc')) {
       value = value.toUpperCase();
+    }
+    if (name === 'TipoProduto') {
+      const selected = tipoProdutoOptions.find(opt => opt.label === value);
+      setTagFormData(prev => ({
+        ...prev,
+        [name]: value,
+        Medida: selected?.Unidade || prev.Medida || ''
+      }));
+      return;
     }
     setTagFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -90,9 +177,15 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
       const url = isEditingTag ? `${API_BASE}/tag/${tagFormData.IdTag}` : `${API_BASE}/tag`;
       const method = isEditingTag ? 'PUT' : 'POST';
 
+      let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+      if (token === 'null' || token === 'undefined') token = null;
+
       const res = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify(payload),
       });
 
@@ -154,11 +247,7 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
                 <input
                   type="date"
                   name="DataPrevisao"
-                  value={(() => {
-                    const v = tagFormData.DataPrevisao || '';
-                    const m = v.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-                    return m ? `${m[3]}-${m[2]}-${m[1]}` : v;
-                  })()}
+                  value={parseToInputDate(tagFormData.DataPrevisao)}
                   onChange={e => {
                     const [y, m, d] = (e.target.value || '').split('-');
                     const br = y && m && d ? `${d}/${m}/${y}` : '';
@@ -232,9 +321,9 @@ export default function NovaTagModal({ isOpen, onClose, onSuccess, projetoId, pr
           <div className="fixed inset-0 z-[110]">
             <TipoProdutoPage
               isModal
-              onCloseModal={() => {
+              onCloseModal={(createdItem) => {
                 setShowTipoProdutoModal(false);
-                fetchOptions();
+                fetchOptions(createdItem?.TipoProduto);
               }}
             />
           </div>

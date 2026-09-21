@@ -64,6 +64,7 @@ router.get('/pecas', async (req, res) => {
 router.get('/composicao/:idMaterialPeca', async (req, res) => {
     try {
         const { idMaterialPeca } = req.params;
+        const { codMatFabricante } = req.query;
         const sql = `SELECT
                         mp.IdMontaPeca,
                         mp.IdMaterial,
@@ -76,17 +77,83 @@ router.get('/composicao/:idMaterialPeca', async (req, res) => {
                         mp.Ordem,
                         m.EnderecoArquivo,
                         m.PecaManufat,
-                        (SELECT COUNT(1) FROM montapeca sub WHERE sub.IdMaterialPeca = mp.IdMaterial AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                        (SELECT COUNT(1) FROM montapeca sub WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
                      FROM montapeca mp
                      LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
                      WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
-                       AND mp.IdMaterialPeca = ?
+                       AND (
+                         mp.IdMaterialPeca = ?
+                         OR mp.CodMatFabricantePeca = ?
+                         OR mp.CodMatFabricantePeca = (SELECT CodMatFabricante FROM material WHERE IdMaterial = ? LIMIT 1)
+                       )
                      ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
-        const [rows] = await db(req).execute(sql, [idMaterialPeca]);
+        const [rows] = await db(req).execute(sql, [idMaterialPeca, codMatFabricante || idMaterialPeca, idMaterialPeca]);
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[PecaManufaturada] GET /composicao:', error.message);
         res.status(500).json({ success: false, message: 'Erro ao buscar composição: ' + error.message });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────────
+// GET /arvore/:codMat — Retorna toda a árvore hierárquica (todos os níveis) da peça manufaturada
+// ────────────────────────────────────────────────────────────────────────────────
+router.get('/arvore/:codMat', async (req, res) => {
+    try {
+        const { codMat } = req.params;
+        const pool = db(req);
+        
+        async function buildTree(cod, idMat, visited = new Set(), depth = 0) {
+            if (depth > 12 || visited.has(cod)) return [];
+            visited.add(cod);
+            
+            const sql = `SELECT
+                            mp.IdMontaPeca,
+                            mp.IdMaterial,
+                            mp.IdMaterialPeca,
+                            mp.CodMatFabricante,
+                            mp.CodMatFabricantePeca,
+                            COALESCE(m.DescDetal, m.DescResumo, mp.CodMatFabricante) AS DescDetal,
+                            COALESCE(m.DescResumo, mp.CodMatFabricante) AS DescResumo,
+                            mp.PecaQtde,
+                            mp.QtdeUnitaria,
+                            mp.Ordem,
+                            m.EnderecoArquivo,
+                            COALESCE(m.PecaManufat, '') AS PecaManufat,
+                            m.MaterialSW,
+                            m.Espessura,
+                            m.Unidade,
+                            m.Peso,
+                            (SELECT COUNT(1) FROM montapeca sub 
+                             WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) 
+                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                         FROM montapeca mp
+                         LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
+                         WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
+                           AND (mp.CodMatFabricantePeca = ? OR (mp.IdMaterialPeca = ? AND ? > 0))
+                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
+            
+            const [rows] = await pool.execute(sql, [cod, idMat || 0, idMat || 0]);
+            
+            const result = [];
+            for (const row of rows) {
+                let children = [];
+                if (row.NumChildren > 0) {
+                    children = await buildTree(row.CodMatFabricante, row.IdMaterial, new Set(visited), depth + 1);
+                }
+                result.push({
+                    ...row,
+                    children
+                });
+            }
+            return result;
+        }
+
+        const tree = await buildTree(decodeURIComponent(codMat), 0);
+        res.json({ success: true, data: tree });
+    } catch (error) {
+        console.error('[PecaManufaturada] GET /arvore error:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar árvore da peça: ' + error.message });
     }
 });
 
@@ -290,13 +357,144 @@ router.put('/composicao-qtde', async (req, res) => {
         const tenantPool = db(req);
         
         await tenantPool.execute(
-            `UPDATE montapeca SET PecaQtde = ? WHERE IdMaterialPeca = ? AND IdMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
-            [qtde, idMaterialPai, idMaterialFilho]
+            `UPDATE montapeca SET PecaQtde = ?, QtdeUnitaria = ? WHERE IdMaterialPeca = ? AND IdMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [qtde, qtde, idMaterialPai, idMaterialFilho]
         );
         res.json({ success: true, message: 'Quantidade atualizada com sucesso.' });
     } catch (error) {
         console.error('[PecaManufaturada] PUT /composicao-qtde:', error.message);
         res.status(500).json({ success: false, message: 'Erro ao atualizar quantidade.' });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────────
+// POST /salvar-estrutura — Salva e finaliza a montagem da estrutura da peça manufaturada
+// Suporta salvamento atômico (recebe itens da composição montada em tela)
+// ────────────────────────────────────────────────────────────────────────────────
+router.post('/salvar-estrutura', async (req, res) => {
+    try {
+        const { idMaterial, codMatFabricante, itens, usuario } = req.body;
+        if (!idMaterial) {
+            return res.status(400).json({ success: false, message: 'IdMaterial é obrigatório.' });
+        }
+
+        const tenantPool = db(req);
+        const idMatriz = req.tenantUser?.tenantId || req.body.idMatriz || null;
+        const codPeca = codMatFabricante || '';
+
+        // Se o frontend enviou o array de itens da composição (modo atômico / staged)
+        if (Array.isArray(itens)) {
+            // Garante que colunas auxiliares existam na tabela montapeca (idempotente)
+            await Promise.allSettled([
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `IdMatriz` INT NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `CodMatFabricantePeca` VARCHAR(255) NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `Ordem` INT NULL'),
+                tenantPool.execute('ALTER TABLE `montapeca` ADD COLUMN `QtdeUnitaria` DECIMAL(10,2) NULL')
+            ]);
+
+            // 1. Soft-delete de todos os itens anteriores vinculados a esta peça pai
+            await tenantPool.execute(
+                `UPDATE montapeca 
+                 SET D_E_L_E_T_E = '*', 
+                     UsuarioD_E_L_E_T_E = ?, 
+                     DataD_E_L_E_T_E = NOW(),
+                     IdMatriz = ?
+                 WHERE (IdMaterialPeca = ? OR (CodMatFabricantePeca = ? AND CodMatFabricantePeca <> ''))
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [usuario || 'Sistema', idMatriz, idMaterial, codPeca]
+            );
+
+            // 2. Se a lista estiver vazia (usuário removeu todos os componentes e salvou)
+            if (itens.length === 0) {
+                await tenantPool.execute(
+                    `UPDATE material SET PecaManufat = '' WHERE IdMaterial = ?`,
+                    [idMaterial]
+                );
+                return res.json({
+                    success: true,
+                    message: `Estrutura de ${codPeca || `ID ${idMaterial}`} atualizada (todos os componentes removidos).`,
+                    qtdItens: 0,
+                    PecaManufat: ''
+                });
+            }
+
+            // 3. Insere os componentes confirmados
+            let inseridos = 0;
+            for (let idx = 0; idx < itens.length; idx++) {
+                const mat = itens[idx];
+                const codFilho = mat.CodMatFabricante || '';
+                const qtde = (mat.PecaQtde !== undefined && mat.PecaQtde !== null && mat.PecaQtde !== '') ? Number(mat.PecaQtde) : 1;
+                const qtdeUnit = (mat.QtdeUnitaria !== undefined && mat.QtdeUnitaria !== null && mat.QtdeUnitaria !== '') ? Number(mat.QtdeUnitaria) : qtde;
+                const ordem = mat.Ordem || (idx + 1);
+
+                await tenantPool.execute(
+                    `INSERT INTO montapeca
+                     (TipoPeca, IdMaterial, PecaQtde, QtdeUnitaria, IdMaterialPeca, IdEmpresa, D_E_L_E_T_E,
+                      Peso, Valor, UsuarioD_E_L_E_T_E, DataD_E_L_E_T_E, CodMatFabricante,
+                      CodMatFabricantePeca, IdMatriz, UsuarioCriacao, DataCriacao, Ordem)
+                     VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, '', '', ?, ?, ?, ?, NOW(), ?)`,
+                    [
+                        mat.FamiliaMat || 0,
+                        mat.IdMaterial,
+                        qtde,
+                        qtdeUnit,
+                        idMaterial,
+                        mat.IdEmpresa || 0,
+                        mat.Peso || 0,
+                        mat.Valor || 0,
+                        codFilho,
+                        codPeca,
+                        idMatriz,
+                        usuario || 'Sistema',
+                        ordem
+                    ]
+                );
+                inseridos++;
+            }
+
+            // 4. Marca peça pai como Peça Manufaturada (PecaManufat = 'S')
+            await tenantPool.execute(
+                `UPDATE material SET PecaManufat = 'S' WHERE IdMaterial = ?`,
+                [idMaterial]
+            );
+
+            return res.json({
+                success: true,
+                message: `Estrutura de ${codPeca || `ID ${idMaterial}`} salva e finalizada com sucesso! (${inseridos} item(ns) na composição).`,
+                qtdItens: inseridos,
+                PecaManufat: 'S'
+            });
+        }
+
+        // Modo fallback legado (sem array itens): valida montapeca existente no banco
+        const [comp] = await tenantPool.execute(
+            `SELECT COUNT(*) as qtd FROM montapeca WHERE IdMaterialPeca = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+            [idMaterial]
+        );
+
+        const qtdItens = comp[0]?.qtd || 0;
+        if (qtdItens === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'A estrutura deve possuir pelo menos 1 item na composição para ser finalizada.'
+            });
+        }
+
+        // Garante que o material pai está marcado como Peça Manufaturada (PecaManufat = 'S')
+        await tenantPool.execute(
+            `UPDATE material SET PecaManufat = 'S' WHERE IdMaterial = ?`,
+            [idMaterial]
+        );
+
+        res.json({
+            success: true,
+            message: `Estrutura de ${codMatFabricante || `ID ${idMaterial}`} salva e finalizada com sucesso! (${qtdItens} item(ns) na composição).`,
+            qtdItens,
+            PecaManufat: 'S'
+        });
+    } catch (error) {
+        console.error('[PecaManufaturada] POST /salvar-estrutura:', error.message);
+        res.status(500).json({ success: false, message: 'Erro ao salvar estrutura: ' + error.message });
     }
 });
 
