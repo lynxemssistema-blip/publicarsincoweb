@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search, Loader2, Trash2, Save, Package, PlusCircle, ChevronLeft, Wrench, ChevronRight, ChevronDown, X, Edit2, Clock, Check, Plus, RefreshCw, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import ModalCadastrarMaterial from '../components/ModalCadastrarMaterial';
 
 const API = '/api/peca-manufaturada';
 
@@ -81,7 +82,8 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
   const [selecionados3, setSelecionados3] = useState<Set<number>>(new Set());
   const [quantidades3, setQuantidades3] = useState<Record<number, number>>({});
   const [saving3, setSaving3] = useState(false);
-  const [showModalInclusao, setShowModalInclusao] = useState(false);
+  const [showModalCadastroMaterial, setShowModalCadastroMaterial] = useState(false);
+  const [recentCreatedCodes, setRecentCreatedCodes] = useState<string[]>([]);
 
   // Peças Manufaturadas em Grid 3 / Modal Inclusão (montapeca)
   const [pecasMontaPeca, setPecasMontaPeca] = useState<Record<number, any[]>>({});
@@ -149,7 +151,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     setSelMat1(null);
     setComp2([]);
     setStaging([]);
-    setShowModalInclusao(false);
+    setShowModalCadastroMaterial(false);
   };
 
   const fetchComp2 = useCallback(async (idMat: number, codMat?: string) => {
@@ -736,9 +738,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                     <span className="text-[8.5px] font-bold text-gray-600 bg-gray-200 px-1.5 py-0.5 rounded">{comp2.length} itens raízes</span>
                     {selMat1 && (
                       <button 
-                        onClick={() => setShowModalInclusao(true)} 
+                        onClick={() => setShowModalCadastroMaterial(true)} 
                         className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
-                        title="Acessar tela de inclusão de materiais"
+                        title="Cadastrar novo material na tabela material"
                       >
                         <PlusCircle size={11} /> Incluir Material
                       </button>
@@ -785,9 +787,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
             <div className="flex gap-2 items-center">
               {selMat1 && (
                 <button 
-                  onClick={() => setShowModalInclusao(true)} 
+                  onClick={() => setShowModalCadastroMaterial(true)} 
                   className="flex items-center gap-1 px-2 py-0.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
-                  title="Acessar tela de inclusão de materiais"
+                  title="Cadastrar novo material na tabela material"
                 >
                   <PlusCircle size={11} /> Incluir Material
                 </button>
@@ -943,16 +945,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
               <PlusCircle size={13} /> 3. Incluir Material
             </span>
             <button 
-              onClick={() => {
-                if (!selMat1) {
-                  alert('Selecione primeiro um material no Grid 1 para incluir materiais.');
-                  return;
-                }
-                setShowModalInclusao(true);
-              }}
-              disabled={!selMat1}
-              className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
-              title="Acessar tela de inclusão de materiais"
+              onClick={() => setShowModalCadastroMaterial(true)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[9.5px] font-bold shadow-xs transition-colors cursor-pointer"
+              title="Cadastrar novo material na tabela material"
             >
               <PlusCircle size={11} /> Incluir Material
             </button>
@@ -1026,6 +1021,11 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                               </button>
                             )}
                             <span className="truncate">{m.CodMatFabricante}</span>
+                            {recentCreatedCodes.includes(m.CodMatFabricante) && (
+                              <span className="text-[7.5px] bg-emerald-100 text-emerald-800 font-extrabold px-1 py-0.2 rounded uppercase shrink-0 border border-emerald-300" title="Cadastrado nesta sessão">
+                                Novo
+                              </span>
+                            )}
                             {isPeca && (
                               <span className="text-[7.5px] bg-emerald-100 text-emerald-800 font-extrabold px-1 py-0.2 rounded uppercase shrink-0">
                                 Peça
@@ -1109,231 +1109,38 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
       </div>
 
-      {/* MODAL DE INCLUSÃO DE MATERIAIS */}
-      {showModalInclusao && (
-        <div className="fixed inset-0 bg-black/60 z-[9999] flex items-center justify-center p-3 md:p-6 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[88vh] flex flex-col overflow-hidden border border-slate-300">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3 bg-[#32423D] text-white shrink-0 shadow-md">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-[#E0E800]/20 flex items-center justify-center text-[#E0E800]">
-                  <PlusCircle size={18} />
-                </div>
-                <div>
-                  <h3 className="text-sm md:text-base font-bold flex items-center gap-2">
-                    Inclusão de Materiais
-                    {selMat1 && (
-                      <span className="text-xs bg-[#E0E800] text-black font-extrabold px-2 py-0.5 rounded">
-                        {selMat1.CodMatFabricante}
-                      </span>
-                    )}
-                  </h3>
-                  <p className="text-[11px] text-gray-300">
-                    Selecione insumos ou sub-peças para compor este material. Ao fechar, retornará à tela de recursos.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowModalInclusao(false)}
-                className="px-3 py-1.5 bg-white/10 hover:bg-red-600 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-                title="Fechar janela e voltar para os Recursos"
-              >
-                <X size={15} /> Fechar e Voltar para Recursos
-              </button>
-            </div>
-
-            {/* Modal Search Bar */}
-            <div className="p-3 bg-gray-50 border-b border-gray-200 shrink-0 flex items-center gap-2">
-              <div className="relative flex-1">
-                <input 
-                  value={fCod3} 
-                  onChange={e => setFCod3(e.target.value)} 
-                  placeholder="Pesquisar por código..." 
-                  className="w-full px-2.5 pr-7 py-1.5 text-xs border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
-                />
-                {fCod3 && <button onClick={()=>setFCod3('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={13}/></button>}
-              </div>
-              <div className="relative flex-[1.5]">
-                <input 
-                  value={fDesc3} 
-                  onChange={e => setFDesc3(e.target.value)} 
-                  placeholder="Pesquisar por descrição..." 
-                  className="w-full px-2.5 pr-7 py-1.5 text-xs border border-gray-300 rounded shadow-xs focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 bg-white"
-                />
-                {fDesc3 && <button onClick={()=>setFDesc3('')} className="absolute right-1.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500" title="Limpar"><X size={13}/></button>}
-              </div>
-              <button 
-                onClick={async () => {
-                  await handleSaveComp3();
-                  setShowModalInclusao(false);
-                }} 
-                disabled={!selMat1 || selecionados3.size === 0 || saving3}
-                className="shrink-0 flex items-center justify-center gap-1.5 px-4 py-1.5 bg-indigo-600 text-white text-xs font-bold rounded-lg shadow-sm hover:bg-indigo-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                {saving3 ? <Loader2 size={14} className="animate-spin"/> : <Save size={14}/>} 
-                Adicionar ({selecionados3.size})
-              </button>
-            </div>
-
-            {/* Modal Materials List */}
-            <div className="flex-1 overflow-auto bg-gray-50/20">
-              {loading3 ? (
-                <div className="flex justify-center p-10"><Loader2 className="animate-spin text-indigo-500" size={24}/></div>
-              ) : materiais3Filtrados.length === 0 ? (
-                <div className="p-10 text-center text-xs text-gray-400">Nenhum material novo disponível para adição</div>
-              ) : (
-                <table className="w-full text-left">
-                  <thead className="bg-white sticky top-0 z-10 shadow-xs border-b border-gray-200">
-                    <tr>
-                      <th className="p-2 px-3 w-10 text-center">
-                        <div className="w-3.5 h-3.5 border border-gray-300 rounded-sm mx-auto bg-gray-50" title="Selecione individualmente"></div>
-                      </th>
-                      <th className={`${colsCls} w-44`}>Código</th>
-                      <th className={colsCls}>Descrição</th>
-                      <th className={`${colsCls} text-center w-24`}>Qtde</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                  {materiais3Filtrados.map(m => {
-                    const isPeca = m.PecaManufat === 'S';
-                    const isExpandedPeca = isPeca && (expandedPecas3.has(m.IdMaterial) || selecionados3.has(m.IdMaterial));
-                    const subItens = pecasMontaPeca[m.IdMaterial];
-                    const isLoadingPeca = loadingPecaComp[m.IdMaterial] || (isExpandedPeca && subItens === undefined);
-
-                    if (isExpandedPeca && subItens === undefined && !loadingPecaComp[m.IdMaterial]) {
-                      fetchPecaMontaPeca(m.IdMaterial, m.CodMatFabricante);
-                    }
-
-                    return (
-                      <React.Fragment key={m.IdMaterial}>
-                        <tr 
-                          onClick={() => toggleSel3(m.IdMaterial, m)}
-                          className={`cursor-pointer transition-colors ${selecionados3.has(m.IdMaterial) ? 'bg-indigo-50/80 border-l-4 border-indigo-500' : 'hover:bg-gray-50 border-l-4 border-transparent'}`}
-                        >
-                          <td className="p-2 px-3 text-center" onClick={e=>e.stopPropagation()}>
-                            <input 
-                              type="checkbox" 
-                              checked={selecionados3.has(m.IdMaterial)} 
-                              onChange={() => toggleSel3(m.IdMaterial, m)} 
-                              className="accent-indigo-600 w-4 h-4 cursor-pointer"
-                            />
-                          </td>
-                          <td className={`${cellCls} font-mono font-bold text-[#32423D] flex items-center gap-1.5`} title={m.CodMatFabricante}>
-                            {isPeca && (
-                              <button
-                                type="button"
-                                onClick={(e) => { e.stopPropagation(); toggleExpandPeca3(m.IdMaterial, m.CodMatFabricante); }}
-                                className="p-1 text-amber-700 hover:text-amber-900 bg-amber-100/70 hover:bg-amber-200 rounded border border-amber-300 shadow-2xs transition-colors"
-                                title={isExpandedPeca ? "Ocultar componentes desta peça" : "Ver componentes desta peça (montapeca)"}
-                              >
-                                {isExpandedPeca ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-                              </button>
-                            )}
-                            <span>{m.CodMatFabricante}</span>
-                            {isPeca && (
-                              <span className="text-[8px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded uppercase shrink-0 border border-emerald-200">
-                                Peça Manuf.
-                              </span>
-                            )}
-                          </td>
-                          <td className={`${cellCls} text-gray-600`} title={m.DescResumo || m.DescDetal}>
-                            {m.DescResumo || m.DescDetal || '-'}
-                          </td>
-                          <td className="p-2 px-3 text-center" onClick={e=>e.stopPropagation()}>
-                            {selecionados3.has(m.IdMaterial) ? (
-                              <input 
-                                type="number" 
-                                min="0.01" 
-                                step="0.01" 
-                                value={quantidades3[m.IdMaterial] !== undefined ? quantidades3[m.IdMaterial] : 1}
-                                onChange={(e) => {
-                                  const val = e.target.value === '' ? 0 : Number(e.target.value);
-                                  setQuantidades3(q => ({...q, [m.IdMaterial]: val}));
-                                }}
-                                className="w-16 px-1.5 py-1 text-xs font-bold text-center border-2 border-indigo-300 rounded focus:outline-none focus:border-indigo-500 bg-white shadow-inner"
-                              />
-                            ) : (
-                              <span className="text-gray-300">-</span>
-                            )}
-                          </td>
-                        </tr>
-
-                        {/* EXIBIÇÃO DE ITENS MONTAPECA NO MODAL */}
-                        {isExpandedPeca && (
-                          <tr className="bg-amber-50/50 border-b border-amber-200/80">
-                            <td colSpan={4} className="p-3 pl-10" onClick={e=>e.stopPropagation()}>
-                              <div className="bg-white rounded-lg border border-amber-200 p-3 shadow-xs">
-                                <div className="flex items-center justify-between border-b border-amber-100 pb-2 mb-2">
-                                  <span className="text-xs font-bold text-amber-900 uppercase tracking-wide flex items-center gap-1.5">
-                                    <Wrench size={13} className="text-amber-600" />
-                                    Itens que fazem parte desta Peça Manufaturada ({m.CodMatFabricante})
-                                  </span>
-                                  <span className="text-[9.5px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded">
-                                    {(subItens || []).length} componente(s) cadastrado(s) em montapeca
-                                  </span>
-                                </div>
-                                {isLoadingPeca ? (
-                                  <div className="flex items-center gap-2 py-3 text-xs text-gray-500 justify-center">
-                                    <Loader2 size={14} className="animate-spin text-amber-600" /> Carregando componentes de montapeca...
-                                  </div>
-                                ) : !subItens || subItens.length === 0 ? (
-                                  <div className="text-xs text-gray-400 italic py-2 text-center">
-                                    Esta peça não possui componentes cadastrados na tabela montapeca.
-                                  </div>
-                                ) : (
-                                  <div className="max-h-52 overflow-auto">
-                                    <table className="w-full text-left text-xs">
-                                      <thead className="bg-slate-50 text-slate-700 border-b border-slate-200">
-                                        <tr>
-                                          <th className="py-1.5 px-2.5 font-bold w-14 text-center">Nível</th>
-                                          <th className="py-1.5 px-2.5 font-bold min-w-[140px]">Código</th>
-                                          <th className="py-1.5 px-2.5 font-bold">Descrição</th>
-                                          <th className="py-1.5 px-2.5 font-bold text-center w-20">Qtd</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody className="divide-y divide-gray-100">
-                                        {subItens.map((sub: any, sIdx: number) => (
-                                          <tr key={sub.IdMontaPeca || sIdx} className="hover:bg-amber-50/50">
-                                            <td className="py-1.5 px-2.5 text-center">
-                                              <span className="text-[9.5px] font-bold text-amber-900 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded">1</span>
-                                            </td>
-                                            <td className="py-1.5 px-2.5 font-mono font-bold text-slate-800 flex items-center gap-1.5">
-                                              {sub.PecaManufat === 'S' && <span className="text-[8px] bg-emerald-100 text-emerald-800 font-extrabold px-1.5 py-0.5 rounded uppercase">Peça</span>}
-                                              <span>{sub.CodMatFabricante}</span>
-                                            </td>
-                                            <td className="py-1.5 px-2.5 text-slate-600 truncate max-w-[280px]" title={sub.DescDetal}>{sub.DescDetal || '-'}</td>
-                                            <td className="py-1.5 px-2.5 text-center font-bold text-slate-800">{sub.PecaQtde || sub.QtdeUnitaria || 1}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                  </tbody>
-                </table>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-3 bg-gray-50 border-t border-gray-200 flex justify-between items-center text-xs text-gray-500">
-              <span>{selecionados3.size} item(ns) selecionado(s)</span>
-              <button
-                onClick={() => setShowModalInclusao(false)}
-                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg font-bold transition-colors cursor-pointer"
-              >
-                Voltar para Recursos
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* MODAL DE CADASTRO DE NOVO MATERIAL NA TABELA MATERIAL */}
+      <ModalCadastrarMaterial
+        isOpen={showModalCadastroMaterial}
+        onClose={() => {
+          setShowModalCadastroMaterial(false);
+          if (selMat1) {
+            fetchMateriais3(fCod3, fDesc3);
+          }
+        }}
+        initialCode={fCod3}
+        onMaterialCreated={(novoMat) => {
+          const newRow: MatRow = {
+            IdMaterial: novoMat.IdMaterial,
+            CodMatFabricante: novoMat.CodMatFabricante,
+            DescResumo: novoMat.DescResumo,
+            Espessura: null,
+            MaterialSW: null,
+            EnderecoArquivo: null,
+            TxtTipoDesenho: null,
+            FamiliaMat: null,
+            IdEmpresa: null,
+            Peso: novoMat.Peso,
+            Valor: null,
+            PecaManufat: novoMat.PecaManufat || 'N',
+            Unidade: novoMat.Unidade || 'PC'
+          };
+          setMateriais3(prev => [newRow, ...prev.filter(m => m.IdMaterial !== novoMat.IdMaterial)]);
+          setRecentCreatedCodes(prev => [...prev, novoMat.CodMatFabricante]);
+          setSelecionados3(prev => new Set(prev).add(novoMat.IdMaterial));
+          setQuantidades3(q => ({ ...q, [novoMat.IdMaterial]: 1 }));
+        }}
+      />
     </div>
   );
 }

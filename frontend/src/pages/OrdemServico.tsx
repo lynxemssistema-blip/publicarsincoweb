@@ -10,7 +10,7 @@ import {
     Activity, Search, ChevronRight, ChevronDown, ChevronUp, ClipboardList, Eye,
     Loader2, RefreshCw, Box, CheckCircle, Clock, XCircle, User, Calendar, Settings2, FileText, FolderOpen,
     Filter, Layers, X, ArrowLeft, Trash2, Flag, RotateCcw, Hash, Copy, FileSpreadsheet, PenTool, AlertTriangle, Star,
-    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus, Plus
+    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus, Plus, GitFork
 } from 'lucide-react';
 import { ProgressBar } from '../components/ordem-servico/ProgressBar';
 import { SetorDatas } from '../components/ordem-servico/SetorDatas';
@@ -122,6 +122,9 @@ interface OrdemServicoItem {
     DobraPercentual?: number;
     SoldaPercentual?: number;
     PinturaPercentual?: number;
+    PecaManufat?: string;
+    IdMaterial?: number;
+    TotalFilhosMontaPeca?: number | string;
     [key: string]: any;
     Liberado_Engenharia?: string;
     MontagemPercentual?: number;
@@ -129,6 +132,27 @@ interface OrdemServicoItem {
     Projeto?: string;
     Tag?: string;
     DescTag?: string;
+}
+
+interface ArvorePecaNode {
+    IdMontaPeca?: number;
+    IdMaterial?: number;
+    IdMaterialPeca?: number;
+    CodMatFabricante: string;
+    CodMatFabricantePeca?: string;
+    DescDetal?: string;
+    DescResumo?: string;
+    PecaQtde?: number;
+    QtdeUnitaria?: number;
+    Ordem?: number;
+    EnderecoArquivo?: string;
+    PecaManufat?: string;
+    MaterialSW?: string;
+    Espessura?: string;
+    Unidade?: string;
+    Peso?: number;
+    NumChildren?: number;
+    children?: ArvorePecaNode[];
 }
 
 interface Pagination {
@@ -421,9 +445,18 @@ function OrdemServicoContent() {
     const [loadingCloneTags, setLoadingCloneTags] = useState(false);
     const [cloneTagsEmpty, setCloneTagsEmpty] = useState(false);
     const [filtroFinalizado, setFiltroFinalizado] = useState<'TODAS' | 'FINALIZADAS' | 'NAO_FINALIZADAS'>('NAO_FINALIZADAS');
-    const [filtroLiberado, setFiltroLiberado] = useState<'TODAS' | 'LIBERADAS' | 'NAO_LIBERADAS'>('LIBERADAS');
+    const [filtroLiberado, setFiltroLiberado] = useState<'TODAS' | 'LIBERADAS' | 'NAO_LIBERADAS'>('NAO_LIBERADAS');
     const [showFilterBar, setShowFilterBar] = useState<boolean>(() => localStorage.getItem('sincoweb_show_os_filters') !== 'false');
     const { addToast } = useToast();
+
+    // ============================================================
+    // Estados da Árvore de Peças Manufaturadas (BOM Multi-Nível)
+    // ============================================================
+    const [expandedItemArvore, setExpandedItemArvore] = useState<Set<number>>(new Set());
+    const [arvoreData, setArvoreData] = useState<Record<string, ArvorePecaNode[]>>({});
+    const [loadingArvore, setLoadingArvore] = useState<Record<string, boolean>>({});
+    const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
+    const [expandAllMap, setExpandAllMap] = useState<Record<string, boolean>>({});
 
     // ============================================================
     // Estados do Modal Gerar Pendência (RNC) - idêntico ao ApontamentoProducao
@@ -745,6 +778,11 @@ function OrdemServicoContent() {
 
     const handleSaveTempos = async () => {
         if (!tempoModalItem) return;
+        const parentOs = ordens.find(o => String(o.IdOrdemServico) === String(tempoModalItem.IdOrdemServico));
+        if (parentOs?.Liberado_Engenharia === 'S' || parentOs?.Liberado_Engenharia === 'SIM' || parentOs?.OrdemServicoFinalizado === 'C') {
+            addToast({ type: 'warning', title: 'Atenção', message: 'Ação bloqueada: Não é permitido salvar tempos/recursos em uma OS liberada ou finalizada!' });
+            return;
+        }
         setTempoSaving(true);
         try {
             const itemAny = tempoModalItem as any;
@@ -1227,12 +1265,236 @@ function OrdemServicoContent() {
         }
     }, [token, ordens]);
 
-        const toggleOS = useCallback(async (osId: number) => {
+    const refreshSingleOS = useCallback(async (osId: number) => {
+        try {
+            const res = await authFetch(`${API_BASE}/ordemservico/${osId}?t=${Date.now()}`);
+            const json = await res.json();
+            if (json.success && json.data) {
+                setOrdens(prev => {
+                    const idx = prev.findIndex(o => o.IdOrdemServico === osId);
+                    if (idx >= 0) {
+                        const next = [...prev];
+                        next[idx] = { ...next[idx], ...json.data };
+                        return next;
+                    } else {
+                        return [json.data, ...prev];
+                    }
+                });
+            }
+        } catch (e) {
+            console.error('Erro ao atualizar OS:', e);
+        }
+    }, []);
+
+    const fetchArvorePeca = useCallback(async (codMat: string) => {
+        if (!codMat) return;
+        setLoadingArvore(prev => ({ ...prev, [codMat]: true }));
+        try {
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const headers = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
+            const res = await authFetch(`${API_BASE}/peca-manufaturada/arvore/${encodeURIComponent(codMat)}`, { headers });
+            const json = await res.json();
+            if (json.success) {
+                setArvoreData(prev => ({ ...prev, [codMat]: json.data || [] }));
+            } else {
+                addToast({ type: 'error', title: 'Erro na árvore', message: json.message || 'Falha ao buscar árvore da peça.' });
+            }
+        } catch (err: any) {
+            console.error('Erro ao buscar árvore da peça:', err);
+            addToast({ type: 'error', title: 'Erro de Conexão', message: `Erro ao buscar árvore: ${err.message}` });
+        } finally {
+            setLoadingArvore(prev => ({ ...prev, [codMat]: false }));
+        }
+    }, [token]);
+
+    const toggleItemArvore = (item: OrdemServicoItem) => {
+        const id = item.IdOrdemServicoItem;
+        const codMat = item.CodMatFabricante || '';
+        setExpandedItemArvore(prev => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            } else {
+                next.add(id);
+                if (codMat && !arvoreData[codMat]) {
+                    fetchArvorePeca(codMat);
+                }
+            }
+            return next;
+        });
+    };
+
+    const toggleTreeNodeCollapse = (nodeKey: string) => {
+        setCollapsedNodes(prev => {
+            const next = new Set(prev);
+            if (next.has(nodeKey)) {
+                next.delete(nodeKey);
+            } else {
+                next.add(nodeKey);
+            }
+            return next;
+        });
+    };
+
+    const toggleExpandAllNodes = (codMat: string) => {
+        const currentlyExpanded = expandAllMap[codMat] ?? true;
+        const nextState = !currentlyExpanded;
+        setExpandAllMap(prev => ({ ...prev, [codMat]: nextState }));
+        
+        if (nextState) {
+            setCollapsedNodes(prev => {
+                const next = new Set(prev);
+                for (const key of prev) {
+                    if (key.startsWith(`${codMat}::`)) {
+                        next.delete(key);
+                    }
+                }
+                return next;
+            });
+        } else {
+            const nodes = arvoreData[codMat] || [];
+            const keysToCollapse = new Set<string>();
+            const collectKeys = (arr: ArvorePecaNode[], prefix: string) => {
+                arr.forEach((n, idx) => {
+                    const key = `${prefix}-${n.CodMatFabricante}-${idx}`;
+                    if (n.children && n.children.length > 0) {
+                        keysToCollapse.add(key);
+                        collectKeys(n.children, key);
+                    }
+                });
+            };
+            collectKeys(nodes, `${codMat}::root`);
+            setCollapsedNodes(prev => {
+                const next = new Set(prev);
+                keysToCollapse.forEach(k => next.add(k));
+                return next;
+            });
+        }
+    };
+
+    const renderArvoreNode = (
+        node: ArvorePecaNode,
+        level: number = 1,
+        parentKey: string = 'root',
+        index: number = 0,
+        rootCodMat: string = ''
+    ) => {
+        const nodeKey = `${rootCodMat}::${parentKey}-${node.CodMatFabricante}-${index}`;
+        const hasChildren = Boolean(node.children && node.children.length > 0);
+        const isCollapsed = collapsedNodes.has(nodeKey);
+        const isNodeManufat = node.PecaManufat === 'S' || node.PecaManufat === 'SIM' || hasChildren || Number(node.NumChildren) > 0;
+
+        return (
+            <div key={nodeKey} className="relative">
+                {/* Linha do item */}
+                <div 
+                    className={`flex items-center gap-2 py-1.5 px-2.5 rounded-lg text-xs transition-colors my-1 border ${
+                        isNodeManufat
+                            ? 'bg-purple-50/80 hover:bg-purple-100/80 border-purple-200 text-purple-950 shadow-xs'
+                            : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
+                    }`}
+                    style={{ marginLeft: `${(level - 1) * 24}px` }}
+                >
+                    {/* Indicador de Nível */}
+                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0 ${
+                        level === 1 ? 'bg-purple-700 text-white' :
+                        level === 2 ? 'bg-indigo-600 text-white' :
+                        level === 3 ? 'bg-blue-600 text-white' :
+                        'bg-slate-600 text-white'
+                    }`}>
+                        N{level}
+                    </span>
+
+                    {/* Botão Expandir / Recolher se tiver filhos */}
+                    {hasChildren ? (
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleTreeNodeCollapse(nodeKey);
+                            }}
+                            className="w-5 h-5 flex items-center justify-center rounded bg-purple-200 hover:bg-purple-300 text-purple-800 transition-colors shrink-0"
+                            title={isCollapsed ? 'Expandir este nível' : 'Recolher este nível'}
+                        >
+                            {isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                        </button>
+                    ) : (
+                        <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-300" />
+                        </div>
+                    )}
+
+                    {/* Código do Material Fabricante */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <span className={`font-mono font-bold px-2 py-0.5 rounded text-xs border ${
+                            isNodeManufat
+                                ? 'bg-purple-600 text-white border-purple-700 shadow-sm'
+                                : 'bg-slate-100 text-slate-700 border-slate-300'
+                        }`}>
+                            {node.CodMatFabricante}
+                        </span>
+                        
+                        {isNodeManufat && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-300">
+                                <Box size={10} />
+                                Peça Manufaturada
+                                {hasChildren && <span className="ml-0.5 font-bold">({node.children!.length} sub-itens)</span>}
+                            </span>
+                        )}
+                    </div>
+
+                    {/* Descrição */}
+                    <span className="flex-1 truncate font-medium text-xs text-slate-700" title={node.DescDetal || node.DescResumo}>
+                        {node.DescDetal || node.DescResumo || '-'}
+                    </span>
+
+                    {/* Informações técnicas: Material, Espessura, Quantidade */}
+                    <div className="flex items-center gap-2 text-[11px] shrink-0 font-medium">
+                        {node.MaterialSW && (
+                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200" title="Material">
+                                {node.MaterialSW}
+                            </span>
+                        )}
+                        {node.Espessura && (
+                            <span className="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded border border-gray-200" title="Espessura">
+                                Esp: {node.Espessura}
+                            </span>
+                        )}
+                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 font-bold rounded border border-blue-200" title="Quantidade no conjunto">
+                            Qtde: {node.PecaQtde || 1} {node.Unidade || 'UN'}
+                        </span>
+                        {node.QtdeUnitaria != null && Number(node.QtdeUnitaria) !== Number(node.PecaQtde) && (
+                            <span className="px-1.5 py-0.5 bg-slate-50 text-slate-600 rounded border border-slate-200" title="Quantidade Unitária">
+                                Un: {node.QtdeUnitaria}
+                            </span>
+                        )}
+                        {node.Peso ? (
+                            <span className="px-1.5 py-0.5 bg-amber-50 text-amber-800 rounded border border-amber-200" title="Peso">
+                                {Number(node.Peso).toFixed(2)} kg
+                            </span>
+                        ) : null}
+                    </div>
+                </div>
+
+                {/* Renderização recursiva dos filhos */}
+                {hasChildren && !isCollapsed && (
+                    <div className="relative pl-3 border-l-2 border-purple-200 ml-4 my-0.5">
+                        {node.children!.map((child, cIdx) => 
+                            renderArvoreNode(child, level + 1, nodeKey, cIdx, rootCodMat)
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const toggleOS = useCallback(async (osId: number) => {
         setSelectedOSId(osId);
         setSelectedItemIds(new Set()); // reset selection when changing OS
         // Always fetch fresh – garante que novos itens adicionados sejam exibidos imediatamente
+        refreshSingleOS(osId);
         fetchItens(osId);
-    }, [fetchItens]);
+    }, [fetchItens, refreshSingleOS]);
 
     const loadMore = useCallback(() => {
         if (pagination?.hasMore && !loadingMore) {
@@ -1276,15 +1538,15 @@ function OrdemServicoContent() {
     };
 
     const getStatusText = (os: OrdemServico) => {
-        if (os.OrdemServicoFinalizado === 'C') return 'Finalizado';
-        if (os.Liberado_Engenharia === 'S') return 'Em Andamento';
+        if (os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') return 'Finalizado';
+        if (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') return 'Liberada';
         return 'Aguard. Lib.';
     };
 
     const getStatusBadge = (os: OrdemServico) => {
-        if (os.OrdemServicoFinalizado === 'C') return 'bg-green-100 text-green-700';
-        if (os.Liberado_Engenharia === 'S') return 'bg-blue-100 text-blue-700';
-        return 'bg-yellow-100 text-yellow-700';
+        if (os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') return 'bg-green-100 text-green-700 border-green-300';
+        if (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') return 'bg-blue-100 text-blue-700 border-blue-300';
+        return 'bg-yellow-100 text-yellow-700 border-yellow-300';
     };
 
     const getProgressColor = (percent?: number) => {
@@ -1455,27 +1717,92 @@ function OrdemServicoContent() {
     };
 
     const handleCancelarLiberacao = async (os: OrdemServico) => {
-        if (!window.confirm(`Ao cancelar a liberação da Ordem de Serviço nº ${os.IdOrdemServico}\nCaso existam Planos de Corte vinculados aos itens desta OS e não haja execução, os respectivos itens serão automaticamente cancelados. Deseja prosseguir?`)) {
+        const confirmResult = await Swal.fire({
+            title: 'Cancelar Liberação da OS?',
+            html: `<div style="text-align: left; font-size: 0.9rem; color: #374151; line-height: 1.5;">` +
+                  `<p style="margin-bottom: 0.75rem;">Deseja realmente cancelar a liberação da <strong>Ordem de Serviço nº ${os.IdOrdemServico}</strong>?</p>` +
+                  `<div style="font-size: 0.8rem; color: #92400e; background-color: #fef3c7; padding: 0.6rem 0.75rem; border-radius: 0.5rem; border: 1px solid #fde68a;">` +
+                  `⚠️ <strong>Atenção:</strong> Caso existam Planos de Corte vinculados aos itens desta OS e não haja execução, os respectivos itens serão automaticamente cancelados.` +
+                  `</div>` +
+                  `</div>`,
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#DC2626',
+            cancelButtonColor: '#6B7280',
+            confirmButtonText: 'Sim, Cancelar Liberação',
+            cancelButtonText: 'Não, Voltar'
+        });
+
+        if (!confirmResult.isConfirmed) {
             return;
         }
 
         setLiberandoOS(os.IdOrdemServico);
         try {
-            const token = localStorage.getItem('sinco_token');
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
             const res = await authFetch(`${API_BASE}/ordemservico/cancelar-liberacao`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {})
+                },
                 body: JSON.stringify({ IdOrdemServico: os.IdOrdemServico })
             });
             const json = await res.json();
             if (json.success) {
-                addToast({ type: 'success', title: 'Sucesso', message: 'Liberação cancelada!' });
-                setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? { ...o, Liberado_Engenharia: '', OrdemServicoFinalizado: '' } : o));
+                // 1. Atualizar imediatamente o estado da OS em memória para refletir a alteração no detalhe
+                setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? {
+                    ...o,
+                    Liberado_Engenharia: '',
+                    Data_Liberacao_Engenharia: undefined,
+                    Data_Liberacao_EngenhariaBR: '-',
+                    TipoLiberacaoOrdemServico: '',
+                    OrdemServicoFinalizado: '',
+                    temApontamento: false
+                } : o));
+
+                // 2. Atualizar os itens da OS em memória para desbloquear ações
+                setOrdensItens(prev => {
+                    const currentItens = prev[os.IdOrdemServico] || [];
+                    return {
+                        ...prev,
+                        [os.IdOrdemServico]: currentItens.map(it => ({
+                            ...it,
+                            Liberado_Engenharia: '',
+                            Data_Liberacao_Engenharia: undefined,
+                            Data_Liberacao_EngenhariaBR: '-'
+                        }))
+                    };
+                });
+
+                // 3. Se o filtro estiver em "LIBERADAS", muda para "TODAS" para que a OS continue na lista e na visão detalhada
+                if (filtroLiberado === 'LIBERADAS') {
+                    setFiltroLiberado('TODAS');
+                } else {
+                    fetchOrdens(pagination.page || 1);
+                }
+
+                // 4. Refetch dos itens da OS e dados atualizados da OS
+                await fetchItens(os.IdOrdemServico);
+                await refreshSingleOS(os.IdOrdemServico);
+
+                // 5. Notificação discreta via toast (popup excluído conforme solicitação)
+                addToast({ type: 'success', title: 'Sucesso', message: `Liberação da OS ${os.IdOrdemServico} cancelada com sucesso!` });
             } else {
-                addToast({ type: 'error', title: 'Erro', message: json.message || 'Falha ao cancelar liberação.' });
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Não foi possível cancelar',
+                    text: json.message || 'Falha ao cancelar liberação da Ordem de Serviço.',
+                    confirmButtonColor: '#EF4444'
+                });
             }
         } catch (e: any) {
-            addToast({ type: 'error', title: 'Erro', message: 'Falha de comunicação com o servidor.' });
+            Swal.fire({
+                icon: 'error',
+                title: 'Erro de Conexão',
+                text: 'Falha de comunicação com o servidor ao cancelar liberação.',
+                confirmButtonColor: '#EF4444'
+            });
         } finally {
             setLiberandoOS(null);
         }
@@ -1536,6 +1863,10 @@ function OrdemServicoContent() {
     };
 
     const handleAlterarFator = async (os: OrdemServico) => {
+        if (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C') {
+            addToast({ type: 'warning', title: 'Atenção', message: 'Ação bloqueada: Não é permitido alterar o fator de uma OS liberada ou finalizada!' });
+            return;
+        }
         const items = ordensItens[os.IdOrdemServico];
         // Permite alterar o fator mesmo sem itens (solicitação do usuário)
         /* if (!items || items.length === 0) {
@@ -1568,6 +1899,7 @@ function OrdemServicoContent() {
                 addToast({ type: 'success', title: 'Fator Alterado', message: 'Multplicador, pesos e áreas atualizados com sucesso.' });
                 // Atualiza OS localmente para refletir o novo fator
                 setOrdens(prev => prev.map(o => o.IdOrdemServico === os.IdOrdemServico ? { ...o, Fator: fatorNum } : o));
+                await refreshSingleOS(os.IdOrdemServico);
             } else {
                 addToast({ type: 'error', title: 'Erro', message: json.message || 'Falha ao alterar fator.' });
             }
@@ -1579,6 +1911,12 @@ function OrdemServicoContent() {
     };
 
     const handleAlterarFatorItem = async (item: OrdemServicoItem, osId: number, novoFatorValor?: string) => {
+        const parentOs = ordens.find(o => o.IdOrdemServico === osId);
+        if (parentOs?.Liberado_Engenharia === 'S' || parentOs?.Liberado_Engenharia === 'SIM' || parentOs?.OrdemServicoFinalizado === 'C' || item.Liberado_Engenharia === 'S' || item.Liberado_Engenharia === 'SIM') {
+            addToast({ type: 'warning', title: 'Atenção', message: 'Ação bloqueada: Não é permitido alterar o fator em OS liberada ou finalizada!' });
+            return;
+        }
+
         const novoFator = novoFatorValor !== undefined ? novoFatorValor : window.prompt(`Informe o novo Fator para o item ${item.CodMatFabricante || ''}:`, item.Fator?.toString() || '1');
         if (!novoFator) return;
 
@@ -1603,6 +1941,7 @@ function OrdemServicoContent() {
             if (json.success) {
                 addToast({ type: 'success', title: 'Fator do Item Alterado', message: 'Fator, pesos e áreas atualizados com sucesso.' });
                 await fetchItens(osId);
+                await refreshSingleOS(osId);
                 await fetchOrdens(1);
             } else {
                 addToast({ type: 'error', title: 'Erro', message: json.message || 'Falha ao alterar fator do item.' });
@@ -1644,6 +1983,10 @@ function OrdemServicoContent() {
     const handleExcluirOS = async (os: OrdemServico) => {
         if (os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') {
             addToast({ type: 'error', title: 'Erro', message: 'Ordem de serviço finalizada não pode ser excluída.' });
+            return;
+        }
+        if (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') {
+            addToast({ type: 'error', title: 'Erro', message: 'Ordem de serviço liberada não pode ser excluída. Cancele a liberação primeiro.' });
             return;
         }
         const confirmDelete = window.confirm(`Deseja Excluir/Cancelar a Ordem de Serviço: ${os.IdOrdemServico}?`);
@@ -2177,6 +2520,9 @@ function OrdemServicoContent() {
                             <div className="text-xs text-gray-400">Ordem de Serviço</div>
                             <div className="text-lg font-bold text-primary flex items-center justify-end gap-2">
                                 OS {os.IdOrdemServico}
+                                <span className={`text-xs px-2.5 py-0.5 font-bold rounded-full border ${getStatusBadge(os)}`} title="Status da Ordem de Serviço">
+                                    {getStatusText(os)}
+                                </span>
                                 <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-800 rounded-full border border-yellow-200" title="Fator Multiplicador">
                                     Fator {os.Fator != null ? os.Fator : '?'}
                                 </span>
@@ -2184,7 +2530,7 @@ function OrdemServicoContent() {
                         </div>
                         <div className="flex items-center gap-2">
                             {/* Botão Incluir Itens — apenas se não liberada */}
-                            {os.Liberado_Engenharia !== 'S' && os.OrdemServicoFinalizado !== 'C' && (
+                            {os.Liberado_Engenharia !== 'S' && os.Liberado_Engenharia !== 'SIM' && os.OrdemServicoFinalizado !== 'C' && (
                                 <button
                                     onClick={() => handleOpenIncluirItens(os)}
                                     disabled={liberandoOS === os.IdOrdemServico}
@@ -2205,7 +2551,7 @@ function OrdemServicoContent() {
                                 <RefreshCw size={15} />
                             </button>
 
-                            {os.Liberado_Engenharia === 'S' && os.OrdemServicoFinalizado !== 'C' && (
+                            {(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') && os.OrdemServicoFinalizado !== 'C' && (
                                 <button 
                                     onClick={() => handleInserirOpOmie(os)}
                                     disabled={liberandoOS === os.IdOrdemServico}
@@ -2234,29 +2580,44 @@ function OrdemServicoContent() {
                                 <FileSpreadsheet size={15} />
                             </button>
 
-                            <button 
-                                onClick={() => handleAlterarFator(os)}
-                                disabled={liberandoOS === os.IdOrdemServico}
-                                className="p-2.5 border rounded-lg shadow-sm transition-colors bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100 disabled:opacity-50"
-                                title="Alterar Fator Multiplicador da O.S."
-                            >
-                                <Settings2 size={15} />
-                            </button>
+                            {(() => {
+                                const isOsLiberada = os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C';
+                                return (
+                                    <>
+                                        <button 
+                                            onClick={() => !isOsLiberada && handleAlterarFator(os)}
+                                            disabled={liberandoOS === os.IdOrdemServico || isOsLiberada}
+                                            className={`p-2.5 border rounded-lg shadow-sm transition-colors ${
+                                                isOsLiberada
+                                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                                                    : 'bg-purple-50 text-purple-600 border-purple-200 hover:bg-purple-100'
+                                            }`}
+                                            title={isOsLiberada ? 'Ação bloqueada: OS liberada ou finalizada não pode ter o fator alterado.' : 'Alterar Fator Multiplicador da O.S.'}
+                                        >
+                                            <Settings2 size={15} />
+                                        </button>
 
-                            <button 
-                                onClick={() => os.OrdemServicoFinalizado !== 'C' && handleExcluirOS(os)}
-                                disabled={liberandoOS === os.IdOrdemServico || os.OrdemServicoFinalizado === 'C'}
-                                className={`p-2.5 border rounded-lg transition-colors shadow-sm disabled:opacity-50 ${
-                                    os.OrdemServicoFinalizado === 'C' 
-                                        ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
-                                        : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                                }`}
-                                title={os.OrdemServicoFinalizado === 'C' 
-                                    ? 'Ação bloqueada: O.S. já está concluída/finalizada.' 
-                                    : 'Excluir Ordem de Serviço'}
-                            >
-                                <Trash2 size={15} />
-                            </button>
+                                        <button 
+                                            onClick={() => !isOsLiberada && handleExcluirOS(os)}
+                                            disabled={liberandoOS === os.IdOrdemServico || isOsLiberada}
+                                            className={`p-2.5 border rounded-lg transition-colors shadow-sm disabled:opacity-50 ${
+                                                isOsLiberada
+                                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed' 
+                                                    : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
+                                            }`}
+                                            title={
+                                                os.OrdemServicoFinalizado === 'C' 
+                                                    ? 'Ação bloqueada: O.S. já está concluída/finalizada.' 
+                                                    : (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM')
+                                                        ? 'Ação bloqueada: O.S. já está liberada. Para excluir, cancele a liberação primeiro.'
+                                                        : 'Excluir Ordem de Serviço'
+                                            }
+                                        >
+                                            <Trash2 size={15} />
+                                        </button>
+                                    </>
+                                );
+                            })()}
 
                             <button 
                                 onClick={() => handleOpenClonarOS(os)}
@@ -2291,7 +2652,7 @@ function OrdemServicoContent() {
                                 </button>
                             )}
 
-                            {os.Liberado_Engenharia !== 'S' ? (
+                            {os.Liberado_Engenharia !== 'S' && os.Liberado_Engenharia !== 'SIM' ? (
                                 <button 
                                     onClick={() => handleLiberarOS(os)}
                                     disabled={liberandoOS === os.IdOrdemServico}
@@ -2312,7 +2673,7 @@ function OrdemServicoContent() {
                                 </button>
                             )}
 
-                            {os.Liberado_Engenharia === 'S' && (
+                            {(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') && (
                                 <button 
                                     onClick={() => !os.temApontamento && os.OrdemServicoFinalizado !== 'C' && handleCancelarLiberacao(os)}
                                     disabled={liberandoOS === os.IdOrdemServico || os.temApontamento || os.OrdemServicoFinalizado === 'C'}
@@ -2402,13 +2763,13 @@ function OrdemServicoContent() {
                                         <div className="space-y-1 text-xs">
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Status:</span>
-                                                <span className={`font-medium ${(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'text-blue-600' : os.Liberado_Engenharia === 'S' ? 'text-green-600' : 'text-yellow-600'}`}>
-                                                    {(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'Finalizada' : os.Liberado_Engenharia === 'S' ? 'Liberada' : 'Pendente'}
+                                                <span className={`font-semibold ${(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'text-green-600' : (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') ? 'text-blue-600' : 'text-yellow-600'}`}>
+                                                    {(os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? 'Finalizada' : (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') ? 'Liberada' : 'Aguard. Lib.'}
                                                 </span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span className="text-gray-400">Data Liberação:</span>
-                                                <span className="text-gray-800 font-bold">{formatDateBR(os.Data_Liberacao_Engenharia)}</span>
+                                                <span className="text-gray-800 font-bold">{(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM') ? formatDateBR(os.Data_Liberacao_Engenharia) : '-'}</span>
                                             </div>
                                         </div>
                                     </div>
@@ -2579,7 +2940,7 @@ function OrdemServicoContent() {
                                     </div>
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2 pl-6 py-1 text-[10px] font-medium text-gray-400 uppercase">
-                                            <div className="flex gap-1 shrink-0" style={{ width: '21rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '23.5rem' }}>
                                                 <span className="w-8 text-center" title="PDF do Item">PDF</span>
                                                 <span className="w-8 text-center">DXF</span>
                                                 <span className="w-8 text-center">3D</span>
@@ -2587,6 +2948,7 @@ function OrdemServicoContent() {
                                                 <span className="w-8 text-center" title="Conjunto Principal">★</span>
                                                 <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Recursos"><Layers size={12} className="inline" /></span>
+                                                <span className="w-8 text-center" title="Árvore da Peça Manufaturada"><GitFork size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Pendências"><ShieldAlert size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Excluir"><Trash2 size={12} className="inline" /></span>
                                             </div>
@@ -2612,9 +2974,11 @@ function OrdemServicoContent() {
                                             const matProcsNode = matProcsMap[compKey];
                                             const hasProcessos = matProcsNode && matProcsNode.processos && matProcsNode.processos.length > 0;
                                             const isExpandedProc = expandedItemProcessos.has(item.IdOrdemServicoItem);
+                                            const isPecaManufat = item.PecaManufat === 'S' || item.PecaManufat === 'SIM' || Number(item.TotalFilhosMontaPeca) > 0;
+                                            const isArvoreExpanded = expandedItemArvore.has(item.IdOrdemServicoItem);
 
                                             return (
-                                            <div key={item.IdOrdemServicoItem} className="flex flex-col border-b border-gray-100 last:border-0">
+                                            <div key={item.IdOrdemServicoItem} className={`flex flex-col border-b border-gray-100 last:border-0 ${isPecaManufat ? 'bg-purple-50/15' : ''}`}>
                                               <div
                                                 onClick={() => !osLiberada && toggleItemSelection(item.IdOrdemServicoItem)}
                                                 className={`flex items-center gap-2 pl-6 py-2 transition-colors group ${
@@ -2622,10 +2986,12 @@ function OrdemServicoContent() {
                                                         ? 'bg-blue-50'
                                                         : item.ProdutoPrincipal === 'SIM'
                                                             ? 'bg-amber-50/60 hover:bg-amber-100/60'
-                                                            : 'hover:bg-gray-50'
+                                                            : isPecaManufat
+                                                                ? 'hover:bg-purple-50/40'
+                                                                : 'hover:bg-gray-50'
                                                 } ${!osLiberada ? 'cursor-pointer' : ''}`}
                                               >
-                                                <div className="flex gap-1 shrink-0" style={{ width: '21rem' }}>
+                                                <div className="flex gap-1 shrink-0" style={{ width: '23.5rem' }}>
                                                     {item.EnderecoArquivo ? (
                                                         <button
                                                             onClick={(e) => handleOpenFile(e, item.EnderecoArquivo || '', 'pdf')}
@@ -2724,13 +3090,30 @@ function OrdemServicoContent() {
                                                         </button>
                                                     )}
                                                     {/* Botão Manutenção de Tempos de Produção — somente OS não liberadas */}
-                                                    <button
-                                                        onClick={(e) => handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico })}
-                                                        className="w-8 h-8 rounded flex items-center justify-center bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
-                                                        title="Manutenção de Tempos de Produção"
-                                                    >
-                                                        <Clock size={14} />
-                                                    </button>
+                                                    {(() => {
+                                                        const isOsBloqueada = (os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S');
+                                                        return (
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    if (isOsBloqueada) {
+                                                                        e.stopPropagation();
+                                                                        addToast({ type: 'warning', title: 'Atenção', message: 'Ação bloqueada: Não é permitido incluir ou alterar recursos em uma OS liberada ou finalizada!' });
+                                                                        return;
+                                                                    }
+                                                                    handleOpenTempoModal(e, { ...item, IdOrdemServico: os.IdOrdemServico });
+                                                                }}
+                                                                disabled={isOsBloqueada}
+                                                                className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                                                                    isOsBloqueada 
+                                                                        ? 'bg-gray-100 text-gray-300 cursor-not-allowed border border-gray-200' 
+                                                                        : 'bg-blue-50 text-blue-500 hover:bg-blue-500 hover:text-white'
+                                                                }`}
+                                                                title={isOsBloqueada ? 'Ação bloqueada: OS liberada ou finalizada (não permite alterar recursos/tempos)' : 'Manutenção de Tempos de Produção'}
+                                                            >
+                                                                <Clock size={14} />
+                                                            </button>
+                                                        );
+                                                    })()}
                                                     
                                                     {/* Botão de Ver Recursos (Movido da coluna direita) */}
                                                     {hasProcessos ? (
@@ -2758,6 +3141,31 @@ function OrdemServicoContent() {
                                                         </div>
                                                     )}
 
+                                                    {/* Botão de Ver Árvore de Componentes (Peça Manufaturada) */}
+                                                    {isPecaManufat ? (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleItemArvore(item);
+                                                            }}
+                                                            className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+                                                                isArvoreExpanded 
+                                                                    ? 'bg-purple-700 text-white shadow-sm ring-1 ring-purple-400' 
+                                                                    : 'bg-purple-50 text-purple-700 hover:bg-purple-200'
+                                                            }`}
+                                                            title="Ver Árvore de Componentes e Sub-Níveis (Peça Manufaturada)"
+                                                        >
+                                                            <GitFork size={14} />
+                                                        </button>
+                                                    ) : (
+                                                        <div 
+                                                            className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-300"
+                                                            title="Item Comum (Sem árvore de componentes)"
+                                                        >
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                                        </div>
+                                                    )}
+
                                                     {/* Botão Gerar Pendência (RNC) - movido do final da linha */}
                                                     <button
                                                         onClick={(e) => handleGerarRnc(e, item, os.IdOrdemServico)}
@@ -2780,16 +3188,53 @@ function OrdemServicoContent() {
                                                     )}
                                                 </div>
 
-                                                <span
-                                                    className="w-32 shrink-0 text-xs font-bold text-primary bg-accent/20 px-2 py-1 rounded truncate"
-                                                    title={item.CodMatFabricante || 'Sem código'}
-                                                >
-                                                    {item.CodMatFabricante || '-'}
-                                                </span>
+                                                {isPecaManufat ? (
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            toggleItemArvore(item);
+                                                        }}
+                                                        className={`w-36 shrink-0 text-xs font-bold px-2 py-1 rounded truncate flex items-center justify-between gap-1 shadow-xs transition-all border ${
+                                                            isArvoreExpanded
+                                                                ? 'bg-purple-700 text-white border-purple-800 ring-2 ring-purple-300'
+                                                                : 'bg-gradient-to-r from-purple-100 to-indigo-100 text-purple-900 border-purple-300 hover:from-purple-200 hover:to-indigo-200 cursor-pointer'
+                                                        }`}
+                                                        title={`Peça Manufaturada: ${item.CodMatFabricante || 'Sem código'}. Clique para abrir/fechar a árvore hierárquica completa.`}
+                                                    >
+                                                        <span className="truncate flex items-center gap-1 font-mono">
+                                                            <GitFork size={12} className={isArvoreExpanded ? 'text-purple-200' : 'text-purple-600'} />
+                                                            {item.CodMatFabricante || '-'}
+                                                        </span>
+                                                        <span className={`text-[10px] px-1 py-0.2 rounded font-bold shrink-0 ${isArvoreExpanded ? 'bg-purple-800 text-white' : 'bg-white/80 text-purple-700'}`}>
+                                                            {isArvoreExpanded ? '▲' : '▼'}
+                                                        </span>
+                                                    </button>
+                                                ) : (
+                                                    <span
+                                                        className="w-32 shrink-0 text-xs font-bold text-slate-700 bg-slate-100 px-2 py-1 rounded truncate border border-slate-200"
+                                                        title={item.CodMatFabricante || 'Sem código'}
+                                                    >
+                                                        {item.CodMatFabricante || '-'}
+                                                    </span>
+                                                )}
 
-                                                <span className="flex-1 min-w-0 text-xs text-gray-700 truncate" title={item.DescDetal || item.DescResumo}>
-                                                    {item.DescResumo || '-'}
-                                                </span>
+                                                <div 
+                                                    className={`flex-1 min-w-0 flex items-center gap-2 ${isPecaManufat ? 'cursor-pointer' : ''}`}
+                                                    onClick={() => {
+                                                        if (isPecaManufat) toggleItemArvore(item);
+                                                    }}
+                                                    title={isPecaManufat ? 'Clique para ver a árvore completa de componentes desta peça' : undefined}
+                                                >
+                                                    <span className="text-xs text-gray-700 truncate font-medium" title={item.DescDetal || item.DescResumo}>
+                                                        {item.DescResumo || '-'}
+                                                    </span>
+                                                    {isPecaManufat && (
+                                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200 shrink-0 shadow-xs" title="Peça Manufaturada com composição de múltiplos níveis">
+                                                            <Box size={10} /> Peça Manufaturada
+                                                        </span>
+                                                    )}
+                                                </div>
 
                                                 {!(os.Liberado_Engenharia === 'S' || os.Liberado_Engenharia === 'SIM' || os.OrdemServicoFinalizado === 'C' || os.OrdemServicoFinalizado === 'S') ? (
                                                     editingFatorItem && editingFatorItem.id === item.IdOrdemServicoItem ? (
@@ -2874,6 +3319,89 @@ function OrdemServicoContent() {
                                                                       <div className="w-20 text-center font-mono">{proc.TempoPadraoMin || 0}m</div>
                                                                   </div>
                                                               ))}
+                                                          </div>
+                                                      </div>
+                                                  </div>
+                                              )}
+
+                                              {/* Sub-grid da Árvore de Componentes (Peça Manufaturada) */}
+                                              {isArvoreExpanded && isPecaManufat && (
+                                                  <div className="bg-purple-50/40 border-t border-purple-100 p-3 pl-8 sm:pl-16 transition-all">
+                                                      <div className="bg-white border border-purple-200 rounded-xl shadow-sm overflow-hidden">
+                                                          {/* Header da Árvore */}
+                                                          <div className="flex flex-wrap items-center justify-between gap-2 bg-gradient-to-r from-purple-700 to-indigo-700 text-white px-4 py-2.5 shadow-inner">
+                                                              <div className="flex items-center gap-2">
+                                                                  <GitFork size={16} className="text-purple-200" />
+                                                                  <span className="font-bold text-xs uppercase tracking-wider">
+                                                                      Estrutura e Árvore de Componentes (BOM)
+                                                                  </span>
+                                                                  <span className="bg-purple-900/80 text-white px-2 py-0.5 rounded text-xs font-mono font-bold border border-purple-400">
+                                                                      {item.CodMatFabricante}
+                                                                  </span>
+                                                                  <span className="text-xs text-purple-100 font-medium truncate max-w-xs hidden sm:inline" title={item.DescDetal || item.DescResumo}>
+                                                                      - {item.DescResumo || item.DescDetal}
+                                                                  </span>
+                                                              </div>
+                                                              <div className="flex items-center gap-2">
+                                                                  {/* Botão Expandir / Recolher Todos os Níveis */}
+                                                                  <button
+                                                                      type="button"
+                                                                      onClick={(e) => {
+                                                                          e.stopPropagation();
+                                                                          toggleExpandAllNodes(item.CodMatFabricante || '');
+                                                                      }}
+                                                                      className="px-2.5 py-1 rounded bg-white/20 hover:bg-white/30 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 border border-white/30 cursor-pointer"
+                                                                      title="Alternar entre expandir todos os níveis internos ou recolher ramos"
+                                                                  >
+                                                                      {expandAllMap[item.CodMatFabricante || ''] === false ? (
+                                                                          <>
+                                                                              <ChevronDown size={13} /> Expandir Todos os Níveis
+                                                                          </>
+                                                                      ) : (
+                                                                          <>
+                                                                              <ChevronUp size={13} /> Recolher Níveis Internos
+                                                                          </>
+                                                                      )}
+                                                                  </button>
+                                                                  {/* Botão Fechar Árvore */}
+                                                                  <button
+                                                                      type="button"
+                                                                      onClick={(e) => {
+                                                                          e.stopPropagation();
+                                                                          toggleItemArvore(item);
+                                                                      }}
+                                                                      className="p-1 rounded bg-white/10 hover:bg-white/20 text-purple-200 hover:text-white transition-colors cursor-pointer"
+                                                                      title="Fechar visualização da árvore"
+                                                                  >
+                                                                      <X size={14} />
+                                                                  </button>
+                                                              </div>
+                                                          </div>
+
+                                                          {/* Conteúdo da Árvore */}
+                                                          <div className="p-3 bg-slate-50/50">
+                                                              {loadingArvore[item.CodMatFabricante || ''] ? (
+                                                                  <div className="flex items-center justify-center gap-2 py-8 text-purple-700 text-xs font-semibold">
+                                                                      <Loader2 size={18} className="animate-spin text-purple-600" />
+                                                                      <span>Carregando árvore hierárquica e sub-níveis de {item.CodMatFabricante}...</span>
+                                                                  </div>
+                                                              ) : !arvoreData[item.CodMatFabricante || ''] || arvoreData[item.CodMatFabricante || ''].length === 0 ? (
+                                                                  <div className="py-6 text-center text-xs text-slate-500 font-medium bg-white rounded-lg border border-dashed border-slate-200 p-4">
+                                                                      Nenhum componente ou insumo cadastrado na montagem desta peça manufaturada ({item.CodMatFabricante}).
+                                                                  </div>
+                                                              ) : (
+                                                                  <div className="space-y-1">
+                                                                      <div className="flex items-center justify-between text-[11px] font-semibold text-slate-500 px-2 pb-1 border-b border-slate-200 mb-2">
+                                                                          <span>Componentes e Peças dos Níveis Internos ({arvoreData[item.CodMatFabricante || ''].length} itens diretos):</span>
+                                                                          <span className="text-[10px] text-purple-700 bg-purple-100 px-2 py-0.5 rounded-full font-bold">
+                                                                              Peças manufaturadas destacadas em Roxo
+                                                                          </span>
+                                                                      </div>
+                                                                      {arvoreData[item.CodMatFabricante || ''].map((node, nIdx) =>
+                                                                          renderArvoreNode(node, 1, 'root', nIdx, item.CodMatFabricante || '')
+                                                                      )}
+                                                                  </div>
+                                                              )}
                                                           </div>
                                                       </div>
                                                   </div>
@@ -3373,6 +3901,26 @@ function OrdemServicoContent() {
                                 onSuccess={() => {
                                     fetchOrdens(1);
                                 }} 
+                                initialProjetoId={
+                                    selectedOSId 
+                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdProjeto 
+                                        : (ordens.length > 0 ? ordens[0]?.IdProjeto : undefined)
+                                }
+                                initialProjetoName={
+                                    selectedOSId 
+                                        ? (ordens.find(o => o.IdOrdemServico === selectedOSId)?.Projeto || ordens.find(o => o.IdOrdemServico === selectedOSId)?.CodProjeto)
+                                        : (projetoFilter || (ordens.length > 0 ? (ordens[0]?.Projeto || ordens[0]?.CodProjeto) : undefined))
+                                }
+                                initialTagId={
+                                    selectedOSId 
+                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.IdTag 
+                                        : (ordens.length > 0 ? ordens[0]?.IdTag : undefined)
+                                }
+                                initialTagName={
+                                    selectedOSId 
+                                        ? ordens.find(o => o.IdOrdemServico === selectedOSId)?.Tag 
+                                        : (tagFilter || (ordens.length > 0 ? ordens[0]?.Tag : undefined))
+                                }
                             />
                         </motion.div>
                     </motion.div>
@@ -3832,7 +4380,7 @@ function OrdemServicoContent() {
                     const qtde = parseFloat(String(tempoModalItem.QtdeTotal)) || 0;
                     const hasRecursos = Object.keys(recursoTemposEdit).length > 0;
                     const parentOs = ordens.find(o => String(o.IdOrdemServico) === String(tempoModalItem.IdOrdemServico));
-                    const isFinalizado = tempoModalItem.OrdemServicoItemFinalizado === 'C' || tempoModalItem.OrdemServicoItemFinalizado === 'S' || parentOs?.OrdemServicoFinalizado === 'C' || parentOs?.OrdemServicoFinalizado === 'S';
+                    const isFinalizado = tempoModalItem.OrdemServicoItemFinalizado === 'C' || tempoModalItem.OrdemServicoItemFinalizado === 'S' || parentOs?.OrdemServicoFinalizado === 'C' || parentOs?.OrdemServicoFinalizado === 'S' || parentOs?.Liberado_Engenharia === 'S' || parentOs?.Liberado_Engenharia === 'SIM';
 
                     // Calcular total geral para exibição
                     let totalGlobal = 0;
@@ -4442,8 +4990,6 @@ function OrdemServicoContent() {
                                                                     </td>
                                                                     <td className="px-2 py-1 text-center font-medium bg-gray-50">{p.IDRNC}</td>
                                                                     <td className="px-2 py-1 font-bold truncate max-w-[120px]" title={p.CodMatFabricante}>{p.CodMatFabricante}</td>
-                                                                    
-                                                                    
                                                                     <td className="px-2 py-1 truncate max-w-[100px]" title={p.Projeto}>{p.Projeto}</td>
                                                                     <td className="px-2 py-1 truncate max-w-[100px]" title={p.Tag}>{p.Tag}</td>
                                                                     <td className="px-2 py-1 truncate max-w-[120px]" title={p.DescResumo}>{p.DescResumo}</td>

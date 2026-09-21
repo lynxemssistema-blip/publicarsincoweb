@@ -87,7 +87,7 @@ const emptyForm: Material = {
  UnidadeSW: '',
  ValorSW: '',
  Imagem: '',
- StatusMat: '',
+ StatusMat: 'A',
  IdValor: '',
  TotalValor: '',
  EnderecoArquivo: '',
@@ -660,11 +660,10 @@ export default function MaterialPage() {
  <label className="block text-xs font-medium text-gray-500 mb-1">Status</label>
  <select
  name="StatusMat"
- value={formData.StatusMat || ''}
+ value={formData.StatusMat || 'A'}
  onChange={handleInputChange}
  className={selectClass + " py-1 text-xs"}
  >
- <option value="">Selecione...</option>
  <option value="A">Ativo</option>
  <option value="I">Inativo</option>
  </select>

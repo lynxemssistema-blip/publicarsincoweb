@@ -15,9 +15,20 @@ interface Option {
 interface CriarOrdemServicoProps {
   onClose?: () => void;
   onSuccess?: () => void;
+  initialProjetoId?: string | number;
+  initialProjetoName?: string;
+  initialTagId?: string | number;
+  initialTagName?: string;
 }
 
-export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdemServicoProps = {}) {
+export default function CriarOrdemServicoPage({ 
+  onClose, 
+  onSuccess,
+  initialProjetoId,
+  initialProjetoName,
+  initialTagId,
+  initialTagName
+}: CriarOrdemServicoProps = {}) {
   const { user, token } = useAuth();
   
   const [projetos, setProjetos] = useState<Option[]>([]);
@@ -62,24 +73,76 @@ export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdem
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const json = await res.json();
-      if (json.success) setProjetos(json.data);
+      if (json.success && Array.isArray(json.data)) {
+        setProjetos(json.data);
+
+        // Pré-selecionar projeto vindo da tela de OS
+        let targetProj = null;
+        if (initialProjetoId) {
+          targetProj = json.data.find((p: any) => (p.value || p.id)?.toString() === initialProjetoId.toString());
+        }
+        if (!targetProj && initialProjetoName) {
+          const norm = initialProjetoName.trim().toUpperCase();
+          targetProj = json.data.find((p: any) => (p.label || '')?.trim().toUpperCase() === norm)
+                    || json.data.find((p: any) => (p.label || '')?.trim().toUpperCase().includes(norm));
+        }
+
+        if (targetProj) {
+          const idProj = (targetProj.value || targetProj.id).toString();
+          setFormData(prev => ({ ...prev, IdProjeto: idProj, Projeto: targetProj.label }));
+          fetchTags(idProj, initialTagId, initialTagName);
+        }
+      }
     } catch (err) {
       console.error('Error fetching projetos:', err);
     }
   };
 
-  const fetchTags = async (projetoId: string) => {
+  useEffect(() => {
+    if (projetos.length > 0 && (initialProjetoId || initialProjetoName) && !formData.IdProjeto) {
+      let targetProj = null;
+      if (initialProjetoId) {
+        targetProj = projetos.find((p: any) => (p.value || p.id)?.toString() === initialProjetoId.toString());
+      }
+      if (!targetProj && initialProjetoName) {
+        const norm = initialProjetoName.trim().toUpperCase();
+        targetProj = projetos.find((p: any) => (p.label || '')?.trim().toUpperCase() === norm)
+                  || projetos.find((p: any) => (p.label || '')?.trim().toUpperCase().includes(norm));
+      }
+      if (targetProj) {
+        const idProj = (targetProj.value || targetProj.id).toString();
+        setFormData(prev => ({ ...prev, IdProjeto: idProj, Projeto: targetProj.label }));
+        fetchTags(idProj, initialTagId, initialTagName);
+      }
+    }
+  }, [initialProjetoId, initialProjetoName, projetos]);
+
+  const fetchTags = async (projetoId: string, preSelectTagId?: string | number, preSelectTagName?: string) => {
     try {
       const res = await fetch(`${API_BASE}/ordemservico/tags-clonagem?projetoId=${projetoId}&t=${Date.now()}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {}
       });
       const json = await res.json();
-      if (json.success) {
+      if (json.success && Array.isArray(json.data)) {
         setTags(json.data);
         if (json.data.length > 0) {
-          const singleTag = json.data[0];
-          setFormData(prev => ({ ...prev, IdTag: (singleTag.value || singleTag.id).toString(), Tag: singleTag.label }));
-          fetchTagDetails((singleTag.value || singleTag.id).toString(), true);
+          let chosenTag = null;
+          if (preSelectTagId) {
+            chosenTag = json.data.find((t: any) => (t.value || t.id)?.toString() === preSelectTagId.toString());
+          }
+          if (!chosenTag && preSelectTagName) {
+            const normTag = preSelectTagName.trim().toUpperCase();
+            chosenTag = json.data.find((t: any) => (t.label || '')?.trim().toUpperCase() === normTag)
+                     || json.data.find((t: any) => (t.label || '')?.trim().toUpperCase().includes(normTag));
+          }
+          if (!chosenTag) {
+            chosenTag = json.data[0];
+          }
+          const chosenTagId = (chosenTag.value || chosenTag.id).toString();
+          setFormData(prev => ({ ...prev, IdTag: chosenTagId, Tag: chosenTag.label }));
+          fetchTagDetails(chosenTagId, true);
+        } else {
+          setFormData(prev => ({ ...prev, IdTag: '', Tag: '', DescTag: '', DataPrevisao: '' }));
         }
       }
     } catch (err) {
@@ -387,45 +450,27 @@ export default function CriarOrdemServicoPage({ onClose, onSuccess }: CriarOrdem
           </div>
         </section>
 
-        {/* Parte 6 e 7 */}
-        <section>
-          <h3 className="text-sm font-semibold text-gray-700 border-b pb-1 mb-3">4. Configurações de Liberação e Salvar</h3>
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div className="flex gap-4 flex-1">
-              <div className="w-1/3">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Fator <span className="text-red-500">*</span></label>
-                <input type="number" step="0.01" min="0.01" name="Fator" value={formData.Fator} onChange={handleInputChange} className={inputClass} required />
-              </div>
-              <div className="w-1/3">
-                <label className="block text-xs font-medium text-gray-500 mb-1">Tipo de Liberação</label>
-                <select name="TipoLiberacaoOrdemServico" value={formData.TipoLiberacaoOrdemServico} onChange={handleInputChange} className={inputClass}>
-                  <option value="Total">Total</option>
-                  <option value="Parcial">Parcial</option>
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                type="submit" 
-                onClick={() => setSaveAction('sem_itens')}
-                disabled={saving} 
-                className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-1.5 rounded font-bold text-xs transition-colors whitespace-nowrap border border-gray-300"
-              >
-                {saving && saveAction === 'sem_itens' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
-                Salvar (Vazio)
-              </button>
-              <button 
-                type="submit" 
-                onClick={() => setSaveAction('com_itens')}
-                disabled={saving} 
-                className="flex items-center gap-2 bg-[#32423D] hover:bg-[#E0E800]/100 hover:text-black text-white px-5 py-1.5 rounded font-bold text-xs transition-colors whitespace-nowrap"
-              >
-                {saving && saveAction === 'com_itens' ? <Loader2 size={15} className="animate-spin" /> : <PackagePlus size={15} />}
-                Salvar e Compor Itens
-              </button>
-            </div>
-          </div>
-        </section>
+        {/* Botões de Ação para Salvar */}
+        <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+          <button 
+            type="submit" 
+            onClick={() => setSaveAction('sem_itens')}
+            disabled={saving} 
+            className="flex items-center gap-2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-bold text-xs transition-colors whitespace-nowrap border border-gray-300 cursor-pointer shadow-2xs"
+          >
+            {saving && saveAction === 'sem_itens' ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
+            Salvar (Vazio)
+          </button>
+          <button 
+            type="submit" 
+            onClick={() => setSaveAction('com_itens')}
+            disabled={saving} 
+            className="flex items-center gap-2 bg-[#32423D] hover:bg-[#25322e] hover:text-[#E0E800] text-white px-5 py-2 rounded-lg font-bold text-xs transition-colors whitespace-nowrap cursor-pointer shadow-sm"
+          >
+            {saving && saveAction === 'com_itens' ? <Loader2 size={15} className="animate-spin" /> : <PackagePlus size={15} />}
+            Salvar e Compor Itens
+          </button>
+        </div>
       </form>
       <ModalIncluirMaterialOS 
         isOpen={showModal} 

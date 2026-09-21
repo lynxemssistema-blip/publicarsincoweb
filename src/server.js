@@ -4542,8 +4542,9 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 Autor, Palavrachave, Titulo, SubTitulo, Notas,
                 AreaPintura, NumeroDobras, UnidadeSW, ValorSW,
                 Imagem, StatusMat, IdValor, TotalValor, EnderecoArquivo,
-                MaterialSW, ConfiguracaoArquivo, txtItemEstoque, IdMatriz
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                MaterialSW, ConfiguracaoArquivo, txtItemEstoque, IdMatriz,
+                PecaManufat, Espessura
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.CodMatFabricante?.trim(),
                 data.DescResumo?.trim().toUpperCase() || null,
@@ -4583,10 +4584,26 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 data.MaterialSW || null,
                 data.ConfiguracaoArquivo || null,
                 data.txtItemEstoque || null,
-                idMatriz
+                idMatriz,
+                data.PecaManufat || 'N',
+                data.Espessura || null
             ]
         );
-        res.json({ success: true, message: 'Material cadastrado com sucesso', id: result.insertId });
+        res.json({ 
+            success: true, 
+            message: 'Material cadastrado com sucesso', 
+            id: result.insertId,
+            data: {
+                IdMaterial: result.insertId,
+                CodMatFabricante: data.CodMatFabricante?.trim(),
+                DescResumo: data.DescResumo?.trim().toUpperCase(),
+                DescDetal: data.DescDetal?.trim().toUpperCase() || null,
+                Unidade: data.Unidade || null,
+                Peso: data.Peso || null,
+                Espessura: data.Espessura || null,
+                PecaManufat: data.PecaManufat || 'N'
+            }
+        });
     } catch (error) {
         console.error('Error creating material:', error);
         if (error.code === 'ER_DUP_ENTRY') {
@@ -8073,10 +8090,11 @@ app.post('/api/ordemservico/cancelar-finalizacao', tenantMiddleware, async (req,
 app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, res) => {
     let connection;
     try {
-        connection = await pool.getConnection();
+        const tenantPool = req.tenantDbPool || pool;
+        connection = await tenantPool.getConnection();
         const { IdOrdemServico } = req.body;
 
-        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico ? obrigatório' });
+        if (!IdOrdemServico) return res.status(400).json({ success: false, message: 'IdOrdemServico é obrigatório' });
 
         // 1. Verificar se a OS existe e está liberada
         const [osRows] = await connection.query(
@@ -8085,7 +8103,8 @@ app.post('/api/ordemservico/cancelar-liberacao', tenantMiddleware, async (req, r
         );
         if (osRows.length === 0) return res.status(404).json({ success: false, message: 'Ordem de Serviço não encontrada.' });
 
-        if (osRows[0].Liberado_Engenharia !== 'S') {
+        const libStatus = String(osRows[0].Liberado_Engenharia || '').trim().toUpperCase();
+        if (libStatus !== 'S' && libStatus !== 'SIM') {
             return res.status(400).json({ success: false, message: 'A Ordem de Serviço não está liberada.' });
         }
 
@@ -9425,6 +9444,9 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                     COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
                     COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
                     COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal,
+                    COALESCE(m.PecaManufat, '') AS PecaManufat,
+                    m.IdMaterial,
+                    (SELECT COUNT(1) FROM montapeca mp WHERE (mp.IdMaterialPeca = m.IdMaterial OR mp.CodMatFabricantePeca = osi.CodMatFabricante) AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')) AS TotalFilhosMontaPeca,
                     -- Dados agregados de material_processo para este item
                     (SELECT MAX(mp2.TotalExecutar)
                      FROM material_processo mp2
@@ -9449,7 +9471,10 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                     IF(osi.Peso IS NULL OR osi.Peso = 0, m.Peso, osi.Peso) AS Peso,
                     COALESCE(osi.EnderecoArquivo, m.EnderecoArquivo) AS EnderecoArquivo,
                     COALESCE(osi.Liberado_Engenharia, 'N') AS Liberado_Engenharia,
-                    COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal
+                    COALESCE(osi.ProdutoPrincipal, 'N') AS ProdutoPrincipal,
+                    COALESCE(m.PecaManufat, '') AS PecaManufat,
+                    m.IdMaterial,
+                    (SELECT COUNT(1) FROM montapeca mp WHERE (mp.IdMaterialPeca = m.IdMaterial OR mp.CodMatFabricantePeca = osi.CodMatFabricante) AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')) AS TotalFilhosMontaPeca
                 FROM ordemservicoitem osi
                 LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
                 WHERE osi.IdOrdemServico = ?

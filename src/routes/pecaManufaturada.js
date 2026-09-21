@@ -96,6 +96,68 @@ router.get('/composicao/:idMaterialPeca', async (req, res) => {
 });
 
 // ────────────────────────────────────────────────────────────────────────────────
+// GET /arvore/:codMat — Retorna toda a árvore hierárquica (todos os níveis) da peça manufaturada
+// ────────────────────────────────────────────────────────────────────────────────
+router.get('/arvore/:codMat', async (req, res) => {
+    try {
+        const { codMat } = req.params;
+        const pool = db(req);
+        
+        async function buildTree(cod, idMat, visited = new Set(), depth = 0) {
+            if (depth > 12 || visited.has(cod)) return [];
+            visited.add(cod);
+            
+            const sql = `SELECT
+                            mp.IdMontaPeca,
+                            mp.IdMaterial,
+                            mp.IdMaterialPeca,
+                            mp.CodMatFabricante,
+                            mp.CodMatFabricantePeca,
+                            COALESCE(m.DescDetal, m.DescResumo, mp.CodMatFabricante) AS DescDetal,
+                            COALESCE(m.DescResumo, mp.CodMatFabricante) AS DescResumo,
+                            mp.PecaQtde,
+                            mp.QtdeUnitaria,
+                            mp.Ordem,
+                            m.EnderecoArquivo,
+                            COALESCE(m.PecaManufat, '') AS PecaManufat,
+                            m.MaterialSW,
+                            m.Espessura,
+                            m.Unidade,
+                            m.Peso,
+                            (SELECT COUNT(1) FROM montapeca sub 
+                             WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) 
+                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                         FROM montapeca mp
+                         LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
+                         WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
+                           AND (mp.CodMatFabricantePeca = ? OR (mp.IdMaterialPeca = ? AND ? > 0))
+                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
+            
+            const [rows] = await pool.execute(sql, [cod, idMat || 0, idMat || 0]);
+            
+            const result = [];
+            for (const row of rows) {
+                let children = [];
+                if (row.NumChildren > 0) {
+                    children = await buildTree(row.CodMatFabricante, row.IdMaterial, new Set(visited), depth + 1);
+                }
+                result.push({
+                    ...row,
+                    children
+                });
+            }
+            return result;
+        }
+
+        const tree = await buildTree(decodeURIComponent(codMat), 0);
+        res.json({ success: true, data: tree });
+    } catch (error) {
+        console.error('[PecaManufaturada] GET /arvore error:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar árvore da peça: ' + error.message });
+    }
+});
+
+// ────────────────────────────────────────────────────────────────────────────────
 // POST /composicao-ordem — Reordena os itens na composição
 // ────────────────────────────────────────────────────────────────────────────────
 router.post('/composicao-ordem', async (req, res) => {
