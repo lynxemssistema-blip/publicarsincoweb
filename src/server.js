@@ -10779,6 +10779,29 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
             LIMIT ${limitNum} OFFSET ${offsetNum}
         `, params);
 
+        let osInfo = null;
+        if (os) {
+            try {
+                const [osCheck] = await req.db.query(
+                    `SELECT IdOrdemServico, Liberado_Engenharia, ST, Finalizada FROM ordemservico WHERE IdOrdemServico = ? LIMIT 1`,
+                    [os]
+                );
+                if (osCheck && osCheck.length > 0) {
+                    const row = osCheck[0];
+                    osInfo = {
+                        id: row.IdOrdemServico,
+                        existe: true,
+                        liberada: row.Liberado_Engenharia === 'S',
+                        finalizada: row.ST === 'FINALIZADO' || row.Finalizada === 'S' || row.Finalizada === 1
+                    };
+                } else {
+                    osInfo = { id: os, existe: false, liberada: false, finalizada: false };
+                }
+            } catch (errCheck) {
+                console.error('[mapa producao] Erro ao verificar status da OS:', errCheck);
+            }
+        }
+
         res.json({ 
             success: true, 
             data: rows,
@@ -10787,7 +10810,8 @@ app.get('/api/apontamento/mapa/producao', tenantMiddleware, async (req, res) => 
                 page: pageNum,
                 limit: limitNum,
                 totalPages: Math.ceil(total / limitNum)
-            }
+            },
+            osInfo
         });
     } catch (error) {
         console.error('Error fetching mapa producao (Rota 2):', error);
@@ -11141,10 +11165,41 @@ app.get('/api/apontamento/:setor', tenantMiddleware, async (req, res) => {
             }
         }
 
+        let osInfo = null;
+        if (req.query.os) {
+            try {
+                const [osRows] = await req.tenantDbPool.execute(
+                    `SELECT IdOrdemServico, Liberado_Engenharia, OrdemServicoFinalizado 
+                     FROM ordemservico 
+                     WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E != '*')`,
+                    [req.query.os]
+                );
+                if (osRows.length > 0) {
+                    const isLib = osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM';
+                    osInfo = {
+                        id: osRows[0].IdOrdemServico,
+                        existe: true,
+                        liberada: isLib,
+                        finalizada: osRows[0].OrdemServicoFinalizado === 'C' || osRows[0].OrdemServicoFinalizado === 'S'
+                    };
+                } else {
+                    osInfo = {
+                        id: req.query.os,
+                        existe: false,
+                        liberada: false,
+                        finalizada: false
+                    };
+                }
+            } catch (e) {
+                console.warn('[Apontamento] Erro ao checar status da OS:', e.message);
+            }
+        }
+
         res.json({ 
             success: true, 
             data: rows, 
             setor,
+            osInfo,
             pagination: {
                 total,
                 page: pageNum,

@@ -9,7 +9,7 @@ import {
  Plus, Search, Edit2, Trash2, X, FolderKanban, Save,
  Loader2, RefreshCw, Calendar, Tag as TagIcon, FolderOpen, CheckCircle2, RotateCcw,
  Building2, Truck, Banknote, Ban, Pause, Play, XCircle, Flag
-, Filter} from 'lucide-react';
+, Filter, Eye, Lock} from 'lucide-react';
 import { useAlert } from '../contexts/AlertContext';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -155,6 +155,37 @@ const emptyTagForm: Tag = {
  SaldoTag: '',
 };
 
+const getPrevisaoAtrasoInfo = (dataPrev: string | undefined | null) => {
+  if (!dataPrev || dataPrev === '-' || dataPrev === '0000-00-00') {
+    return { isPast: false, dias: 0 };
+  }
+  try {
+    let date: Date;
+    if (dataPrev.includes('/')) {
+      const [d, m, y] = dataPrev.split('/');
+      date = new Date(Number(y), Number(m) - 1, Number(d));
+    } else if (dataPrev.includes('-') && !dataPrev.includes('T')) {
+      const [y, m, d] = dataPrev.split('-');
+      date = new Date(Number(y), Number(m) - 1, Number(d));
+    } else {
+      date = new Date(dataPrev);
+    }
+    if (isNaN(date.getTime())) return { isPast: false, dias: 0 };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+
+    const diffTime = today.getTime() - date.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    return {
+      isPast: diffDays > 0,
+      dias: diffDays > 0 ? diffDays : 0
+    };
+  } catch {
+    return { isPast: false, dias: 0 };
+  }
+};
+
 export default function ProjetoPage() {
  const { showAlert } = useAlert();
  const { user } = useAuth();
@@ -167,6 +198,7 @@ export default function ProjetoPage() {
  const [projetoFormData, setProjetoFormData] = useState<Projeto>(emptyProjetoForm);
  const [isEditingProjeto, setIsEditingProjeto] = useState(false);
  const [showProjetoForm, setShowProjetoForm] = useState(false);
+ const isProjectFinalizado = projetoFormData.Finalizado === 'C';
 
  // Expanded projects and their tags
  const [expandedProjects, setExpandedProjects] = useState<Set<number>>(new Set());
@@ -396,40 +428,53 @@ export default function ProjetoPage() {
         if (opt && opt.cnpj) nextData.CnpjCobranca = opt.cnpj;
       }
 
-      // Cálculo automático de 'Dias (Prazo)'
- if (name === 'DataPrevisao') {
- if (value) {
- const parts = value.split('-');
- if (parts.length === 3) {
- const prevDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
- const today = new Date();
- today.setHours(0, 0, 0, 0);
+      // Cálculo automático de 'Dias (Prazo)' ou 'Dias em atraso'
+      if (name === 'DataPrevisao') {
+        if (value) {
+          const info = getPrevisaoAtrasoInfo(value);
+          if (info.isPast) {
+            nextData.PrazoEntrega = String(info.dias);
+          } else {
+            const parts = value.split('-');
+            if (parts.length === 3) {
+              const prevDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
 
- const diffTime = prevDate.getTime() - today.getTime();
- const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
- nextData.PrazoEntrega = diffDays.toString();
- }
- } else {
- nextData.PrazoEntrega = '';
- }
- }
+              const diffTime = prevDate.getTime() - today.getTime();
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+              nextData.PrazoEntrega = diffDays >= 0 ? diffDays.toString() : '';
+            }
+          }
+        } else {
+          nextData.PrazoEntrega = '';
+        }
+      }
 
  return nextData;
  });
  };
 
- const handleProjetoSubmit = async (e: React.FormEvent) => {
- e.preventDefault();
- setSaving(true);
- setError(null);
+  const handleProjetoSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (projetoFormData.Finalizado === 'C') {
+      showAlert('Projeto finalizado está no modo somente visualização.', 'warning');
+      return;
+    }
+    setSaving(true);
+    setError(null);
 
  try {
  const url = isEditingProjeto ? `${API_BASE}/projeto/${projetoFormData.IdProjeto}` : `${API_BASE}/projeto`;
  const method = isEditingProjeto ? 'PUT' : 'POST';
 
- const payload: Record<string, unknown> = { ...projetoFormData };
- delete payload.IE;
- delete payload.Ie;
+  const infoPrevisao = getPrevisaoAtrasoInfo(projetoFormData.DataPrevisao);
+  const payload: Record<string, unknown> = {
+    ...projetoFormData,
+    PrazoEntrega: infoPrevisao.isPast ? String(infoPrevisao.dias) : (projetoFormData.PrazoEntrega || null)
+  };
+  delete payload.IE;
+  delete payload.Ie;
 
  const res = await authFetch(url, {
  method,
@@ -477,8 +522,14 @@ export default function ProjetoPage() {
  const valPlanejado = data.PlanejadoFinanceiro || data.planejadofinanceiro || data.DataPlanejadoFinanceiro;
  if (valPlanejado) data.PlanejadoFinanceiro = parseToInputDate(valPlanejado);
  
- const valPrevisao = data.DataPrevisao || data.dataprevisao;
- if (valPrevisao) data.DataPrevisao = parseToInputDate(valPrevisao);
+  const valPrevisao = data.DataPrevisao || data.dataprevisao;
+  if (valPrevisao) {
+    data.DataPrevisao = parseToInputDate(valPrevisao);
+    const info = getPrevisaoAtrasoInfo(data.DataPrevisao);
+    if (info.isPast) {
+      data.PrazoEntrega = String(info.dias);
+    }
+  }
  
  // Unified mapping for IE/InscEst
  const valIE = data.InscEst || data.IE || data.Ie || data.inscest;
@@ -496,8 +547,13 @@ export default function ProjetoPage() {
  }
  };
 
- const handleProjetoDelete = async (id: number) => {
- if (!confirm('Deseja realmente excluir este projeto?')) return;
+  const handleProjetoDelete = async (id: number) => {
+    const proj = projetos.find(p => p.IdProjeto === id);
+    if (proj?.Finalizado === 'C') {
+      showAlert('Projeto finalizado não pode ser excluído.', 'warning');
+      return;
+    }
+    if (!confirm('Deseja realmente excluir este projeto?')) return;
 
  try {
  const res = await authFetch(`${API_BASE}/projeto/${id}`, {
@@ -766,17 +822,21 @@ export default function ProjetoPage() {
  };
 
  // === TAG HANDLERS ===
- const openTagForm = (projeto: Projeto) => {
- setSelectedProjetoForTag(projeto);
- // Ensure the date is in YYYY-MM-DD for the input
- const defaultDate = parseToInputDate(projeto.DataPrevisao);
- setTagFormData({
- ...emptyTagForm,
- DataPrevisao: defaultDate
- });
- setIsEditingTag(false);
- setShowTagForm(true);
- };
+  const openTagForm = (projeto: Projeto) => {
+    if (projeto.Finalizado === 'C') {
+      showAlert('Projeto finalizado: não permite criação de novas tags.', 'warning');
+      return;
+    }
+    setSelectedProjetoForTag(projeto);
+    // Ensure the date is in YYYY-MM-DD for the input
+    const defaultDate = parseToInputDate(projeto.DataPrevisao);
+    setTagFormData({
+      ...emptyTagForm,
+      DataPrevisao: defaultDate
+    });
+    setIsEditingTag(false);
+    setShowTagForm(true);
+  };
 
  const handleTagInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
  const target = e.target;
@@ -851,8 +911,13 @@ export default function ProjetoPage() {
  }
  };
 
- const handleTagDelete = async (tagId: number, projetoId: number) => {
- if (!confirm('Deseja realmente excluir esta tag?')) return;
+  const handleTagDelete = async (tagId: number, projetoId: number) => {
+    const proj = projetos.find(p => p.IdProjeto === projetoId);
+    if (proj?.Finalizado === 'C') {
+      showAlert('Projeto finalizado: não permite exclusão de tags.', 'warning');
+      return;
+    }
+    if (!confirm('Deseja realmente excluir esta tag?')) return;
 
  try {
  const res = await authFetch(`${API_BASE}/tag/${tagId}`, {
@@ -1039,153 +1104,160 @@ export default function ProjetoPage() {
  </button>
  </div>
  {showFilters && (
- <div className="px-4 pb-2 pt-2">
+  <form
+    onSubmit={(e) => {
+      e.preventDefault();
+      fetchProjetos();
+    }}
+    onKeyDown={(e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        fetchProjetos();
+      }
+    }}
+    className="px-4 pb-2 pt-2"
+  >
 
- {/* Linha 1: Projeto | Descrição | Cliente | Finalizado */}
- <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-1.5 mb-1.5">
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Projeto:</label>
- <input
- type="search"
- value={searchFilters.projeto}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, projeto: e.target.value.toUpperCase() }))}
- onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- />
- </div>
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Descrição:</label>
- <input
- type="search"
- value={searchFilters.descProjeto}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, descProjeto: e.target.value.toUpperCase() }))}
- onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- 
- />
- </div>
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Cliente:</label>
- <input
- type="search"
- value={searchFilters.cliente}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, cliente: e.target.value.toUpperCase() }))}
- onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- 
- />
- </div>
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">CNPJ:</label>
- <input
- type="search"
- value={searchFilters.cnpj}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, cnpj: e.target.value }))}
- onKeyDown={(e) => e.key === 'Enter' && fetchProjetos()}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- 
- />
- </div>
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Condição do Projeto:</label>
- <select
- value={searchFilters.finalizado}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, finalizado: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm appearance-none"
- >
- <option value="">— Todos —</option>
- <option value="N">Não Finalizados</option>
- <option value="C">Finalizados</option>
- </select>
- </div>
- <div>
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Status do Projeto:</label>
- <select
- value={searchFilters.statusProj}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, statusProj: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm appearance-none"
- >
- <option value="">— Todos —</option>
- <option value="AT">Ativo</option>
- <option value="PA">Parado</option>
- <option value="CA">Cancelado</option>
- </select>
- </div>
- </div>
+  {/* Linha 1: Projeto | Descrição | Cliente | Finalizado */}
+  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-x-3 gap-y-1.5 mb-1.5">
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Projeto:</label>
+  <input
+  type="search"
+  value={searchFilters.projeto}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, projeto: e.target.value.toUpperCase() }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Descrição:</label>
+  <input
+  type="search"
+  value={searchFilters.descProjeto}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, descProjeto: e.target.value.toUpperCase() }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Cliente:</label>
+  <input
+  type="search"
+  value={searchFilters.cliente}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, cliente: e.target.value.toUpperCase() }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">CNPJ:</label>
+  <input
+  type="search"
+  value={searchFilters.cnpj}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, cnpj: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Condição do Projeto:</label>
+  <select
+  value={searchFilters.finalizado}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, finalizado: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm appearance-none"
+  >
+  <option value="">— Todos —</option>
+  <option value="N">Não Finalizados</option>
+  <option value="C">Finalizados</option>
+  </select>
+  </div>
+  <div>
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Status do Projeto:</label>
+  <select
+  value={searchFilters.statusProj}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, statusProj: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm appearance-none"
+  >
+  <option value="">— Todos —</option>
+  <option value="AT">Ativo</option>
+  <option value="PA">Parado</option>
+  <option value="CA">Cancelado</option>
+  </select>
+  </div>
+  </div>
 
- {/* Linha 2: Datas */}
- <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5 mb-2">
- {/* Data Previsão */}
- <div className="flex items-center gap-1.5">
- <div className="flex-1">
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Prev. de:</label>
- <input
- type="date"
- value={searchFilters.previsaoInicio}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, previsaoInicio: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- />
- </div>
- <span className="text-gray-400 text-xs italic pt-4">a</span>
- <div className="flex-1">
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
- <input
- type="date"
- value={searchFilters.previsaoFim}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, previsaoFim: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- />
- </div>
- </div>
+  {/* Linha 2: Datas */}
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5 mb-2">
+  {/* Data Previsão */}
+  <div className="flex items-center gap-1.5">
+  <div className="flex-1">
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Prev. de:</label>
+  <input
+  type="date"
+  value={searchFilters.previsaoInicio}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, previsaoInicio: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <span className="text-gray-400 text-xs italic pt-4">a</span>
+  <div className="flex-1">
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
+  <input
+  type="date"
+  value={searchFilters.previsaoFim}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, previsaoFim: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  </div>
 
- {/* Data Criação */}
- <div className="flex items-center gap-1.5">
- <div className="flex-1">
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Criação de:</label>
- <input
- type="date"
- value={searchFilters.criacaoInicio}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoInicio: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- />
- </div>
- <span className="text-gray-400 text-xs italic pt-4">a</span>
- <div className="flex-1">
- <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
- <input
- type="date"
- value={searchFilters.criacaoFim}
- onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoFim: e.target.value }))}
- className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
- />
- </div>
- </div>
- </div>
+  {/* Data Criação */}
+  <div className="flex items-center gap-1.5">
+  <div className="flex-1">
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Criação de:</label>
+  <input
+  type="date"
+  value={searchFilters.criacaoInicio}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoInicio: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  <span className="text-gray-400 text-xs italic pt-4">a</span>
+  <div className="flex-1">
+  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
+  <input
+  type="date"
+  value={searchFilters.criacaoFim}
+  onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoFim: e.target.value }))}
+  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
+  />
+  </div>
+  </div>
+  </div>
 
- {/* Botões de ação */}
- <div className="flex justify-end gap-2">
- <button
- onClick={() => {
- const emptyFilters = { projeto: '', descProjeto: '', cliente: '', cnpj: '', previsaoInicio: '', previsaoFim: '', criacaoInicio: '', criacaoFim: '', finalizado: '' };
- setSearchFilters(emptyFilters);
- fetchProjetos(emptyFilters);
- }}
- className="px-2 py-0.5 text-red-500 font-semibold text-xs tracking-wide rounded border border-gray-200 hover:bg-gray-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5"
- >
- <X size={13} />
- Limpar
- </button>
- <button
- onClick={() => fetchProjetos()}
- disabled={loading}
- className="px-5 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs tracking-wide rounded hover:bg-emerald-200 transition-colors flex items-center gap-1.5 disabled:opacity-50"
- >
- <Search size={13} />
- {loading ? 'Buscando...' : 'Pesquisar'}
- </button>
- </div>
- </div>
- )}
+  {/* Botões de ação */}
+  <div className="flex justify-end gap-2">
+  <button
+  type="button"
+  onClick={() => {
+  const emptyFilters = { projeto: '', descProjeto: '', cliente: '', cnpj: '', previsaoInicio: '', previsaoFim: '', criacaoInicio: '', criacaoFim: '', finalizado: '' };
+  setSearchFilters(emptyFilters);
+  fetchProjetos(emptyFilters);
+  }}
+  className="px-2 py-0.5 text-red-500 font-semibold text-xs tracking-wide rounded border border-gray-200 hover:bg-gray-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5"
+  >
+  <X size={13} />
+  Limpar
+  </button>
+  <button
+  type="submit"
+  onClick={() => fetchProjetos()}
+  disabled={loading}
+  className="px-5 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs tracking-wide rounded hover:bg-emerald-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+  >
+  <Search size={13} />
+  {loading ? 'Buscando...' : 'Pesquisar'}
+  </button>
+  </div>
+  </form>
+  )}
  </div>
 
  {/* Tree View */}
@@ -1376,30 +1448,49 @@ export default function ProjetoPage() {
 
   <div className="w-px h-3 bg-gray-200 mx-0.5"></div>
 
-  <button
-  onClick={() => !isDisabledStatus && openTagForm(projeto)}
-  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
-  title="Nova Tag"
-  disabled={isDisabledStatus}
-  >
-  <Plus size={14} />
-  </button>
-  <button
-  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
-  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
-  title="Editar Projeto"
-  disabled={isDisabledStatus}
-  >
-  <Edit2 size={14} />
-  </button>
-  <button
-  onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
-  className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-red-500 hover:bg-red-50'}`}
-  title="Excluir Projeto"
-  disabled={isDisabledStatus}
-  >
-  <Trash2 size={14} />
-  </button>
+  {/* Nova Tag: apenas projetos não finalizados */}
+  {!isFinalizado && (
+    <button
+      onClick={() => !isDisabledStatus && openTagForm(projeto)}
+      className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+      title="Nova Tag"
+      disabled={isDisabledStatus}
+    >
+      <Plus size={14} />
+    </button>
+  )}
+
+  {/* Visualizar Projeto (se finalizado) ou Editar Projeto (se ativo) */}
+  {isFinalizado ? (
+    <button
+      onClick={() => projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
+      className="p-1.5 rounded-md transition-colors text-blue-600 hover:bg-blue-50"
+      title="Visualizar Projeto (Somente Visualização)"
+    >
+      <Eye size={14} />
+    </button>
+  ) : (
+    <button
+      onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoEdit(projeto.IdProjeto)}
+      className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+      title="Editar Projeto"
+      disabled={isDisabledStatus}
+    >
+      <Edit2 size={14} />
+    </button>
+  )}
+
+  {/* Excluir Projeto: apenas projetos não finalizados */}
+  {!isFinalizado && (
+    <button
+      onClick={() => !isDisabledStatus && projeto.IdProjeto && handleProjetoDelete(projeto.IdProjeto)}
+      className={`p-1.5 rounded-md transition-colors ${isDisabledStatus ? 'opacity-30 cursor-not-allowed text-gray-400' : 'text-red-500 hover:bg-red-50'}`}
+      title="Excluir Projeto"
+      disabled={isDisabledStatus}
+    >
+      <Trash2 size={14} />
+    </button>
+  )}
  </div>
  </motion.div>
 
@@ -1422,12 +1513,14 @@ export default function ProjetoPage() {
  <div className="pl-16 py-4 text-xs text-gray-400 flex items-center gap-2">
  <TagIcon size={14} />
  Nenhuma tag cadastrada
+ {!isFinalizado && (
  <button
  onClick={() => openTagForm(projeto)}
  className="text-[#32423D] font-medium hover:underline ml-2"
  >
  Adicionar
  </button>
+ )}
  </div>
  ) : (
  <div className="pl-10 pr-4 py-2 space-y-1">
@@ -1475,18 +1568,20 @@ export default function ProjetoPage() {
  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
  <button
  onClick={() => handleTagEdit(tag, projeto)}
- className="p-1.5 rounded-lg text-[#32423D] hover:bg-[#E0E800]/20 transition-colors"
- title="Editar Tag"
+ className={`p-1.5 rounded-lg transition-colors ${isFinalizado ? 'text-blue-600 hover:bg-blue-50' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+ title={isFinalizado ? "Visualizar Tag (Somente Visualização)" : "Editar Tag"}
  >
- <Edit2 size={14} />
+ {isFinalizado ? <Eye size={14} /> : <Edit2 size={14} />}
  </button>
- <button
- onClick={() => tag.IdTag && projeto.IdProjeto && handleTagDelete(tag.IdTag, projeto.IdProjeto)}
- className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
- title="Excluir Tag"
- >
- <Trash2 size={14} />
- </button>
+ {!isFinalizado && (
+    <button
+    onClick={() => tag.IdTag && projeto.IdProjeto && handleTagDelete(tag.IdTag, projeto.IdProjeto)}
+    className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+    title="Excluir Tag"
+    >
+    <Trash2 size={14} />
+    </button>
+  )}
  </div>
  </motion.div>
  ))}
@@ -1548,51 +1643,70 @@ export default function ProjetoPage() {
  className="bg-white rounded-md shadow-2xl w-full max-w-5xl my-4 overflow-hidden border border-gray-100"
  >
  <form onSubmit={handleProjetoSubmit}>
- {/* Header / Toolbar */}
- <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/80">
- <div className="flex items-center gap-4">
- <div className="w-10 h-10 rounded bg-[#32423D] text-white flex items-center justify-center">
- <FolderKanban size={20} />
- </div>
- <div>
- <h2 className="text-lg font-bold text-[#32423D] tracking-tight">
- {isEditingProjeto ? 'Editar Projeto' : 'Novo Projeto'}
- </h2>
- <p className="text-xs text-gray-500 uppercase tracking-widest mt-0.5 font-medium">Gestão de Projetos</p>
- </div>
- </div>
+  {/* Header / Toolbar */}
+  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50/80">
+  <div className="flex items-center gap-4">
+  <div className="w-10 h-10 rounded bg-[#32423D] text-white flex items-center justify-center">
+  <FolderKanban size={20} />
+  </div>
+  <div>
+  <div className="flex items-center gap-2">
+  <h2 className="text-lg font-bold text-[#32423D] tracking-tight">
+  {isProjectFinalizado ? 'Visualizar Projeto' : isEditingProjeto ? 'Editar Projeto' : 'Novo Projeto'}
+  </h2>
+  {isProjectFinalizado && (
+    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded uppercase">
+      Finalizado
+    </span>
+  )}
+  </div>
+  <p className="text-xs text-gray-500 uppercase tracking-widest mt-0.5 font-medium">Gestão de Projetos</p>
+  </div>
+  </div>
 
- <div className="flex items-center gap-2">
- <button type="button" onClick={() => resetProjetoForm()} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-sm rounded">
- <Plus size={14} /> Novo
- </button>
- <button type="submit" disabled={saving} className="px-2 py-1 bg-[#32423D] text-white text-xs font-semibold hover:bg-[#3d4f49] transition-colors flex items-center gap-2 disabled:opacity-50 shadow-sm rounded">
- {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
- Salvar
- </button>
- {isEditingProjeto && projetoFormData.liberado === 'S' && (
- <button type="button" onClick={() => projetoFormData.IdProjeto && handleCancelarLiberacao(projetoFormData.IdProjeto)} 
- disabled={Number(projetoFormData.temApontamento) > 0}
- className={`px-2 py-1 border text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm rounded ${Number(projetoFormData.temApontamento) > 0 ? 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed' : 'border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100'}`}
- title={Number(projetoFormData.temApontamento) > 0 ? 'Não é possível cancelar: projeto possui apontamentos de produção' : 'Cancelar Liberação'}
- >
- <RotateCcw size={14} /> Cancelar Liberação
- </button>
- )}
- {isEditingProjeto && (
- <button type="button" onClick={() => { setShowProjetoForm(false); setIsEditingTag(false); openTagForm(projetoFormData); }} className="px-2 py-1 border border-[#32423D]/20 text-[#32423D] bg-[#E0E800]/20 text-xs font-semibold hover:bg-[#E0E800]/40 transition-colors flex items-center gap-2 shadow-sm rounded">
- <TagIcon size={14} /> Inserir Tag
- </button>
- )}
- <div className="w-px h-6 bg-gray-200 mx-1"></div>
- <button type="button" onClick={resetProjetoForm} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors flex items-center gap-2 shadow-sm rounded">
- Fechar <X size={14} />
- </button>
- </div>
- </div>
+  <div className="flex items-center gap-2">
+  {!isProjectFinalizado && (
+    <button type="button" onClick={() => resetProjetoForm()} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-sm rounded">
+    <Plus size={14} /> Novo
+    </button>
+  )}
+  {!isProjectFinalizado && (
+    <button type="submit" disabled={saving} className="px-2 py-1 bg-[#32423D] text-white text-xs font-semibold hover:bg-[#3d4f49] transition-colors flex items-center gap-2 disabled:opacity-50 shadow-sm rounded">
+    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+    Salvar
+    </button>
+  )}
+  {!isProjectFinalizado && isEditingProjeto && projetoFormData.liberado === 'S' && (
+  <button type="button" onClick={() => projetoFormData.IdProjeto && handleCancelarLiberacao(projetoFormData.IdProjeto)} 
+  disabled={Number(projetoFormData.temApontamento) > 0}
+  className={`px-2 py-1 border text-xs font-semibold transition-colors flex items-center gap-2 shadow-sm rounded ${Number(projetoFormData.temApontamento) > 0 ? 'border-gray-200 text-gray-400 bg-gray-50 cursor-not-allowed' : 'border-orange-200 text-orange-700 bg-orange-50 hover:bg-orange-100'}`}
+  title={Number(projetoFormData.temApontamento) > 0 ? 'Não é possível cancelar: projeto possui apontamentos de produção' : 'Cancelar Liberação'}
+  >
+  <RotateCcw size={14} /> Cancelar Liberação
+  </button>
+  )}
+  {!isProjectFinalizado && isEditingProjeto && (
+  <button type="button" onClick={() => { setShowProjetoForm(false); setIsEditingTag(false); openTagForm(projetoFormData); }} className="px-2 py-1 border border-[#32423D]/20 text-[#32423D] bg-[#E0E800]/20 text-xs font-semibold hover:bg-[#E0E800]/40 transition-colors flex items-center gap-2 shadow-sm rounded">
+  <TagIcon size={14} /> Inserir Tag
+  </button>
+  )}
+  <div className="w-px h-6 bg-gray-200 mx-1"></div>
+  <button type="button" onClick={resetProjetoForm} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition-colors flex items-center gap-2 shadow-sm rounded">
+  Fechar <X size={14} />
+  </button>
+  </div>
+  </div>
 
- {/* 4-tab form – same for all matrices */}
- <div className="flex flex-col">
+  {isProjectFinalizado && (
+    <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 text-xs text-amber-800 flex items-center gap-2 font-medium">
+      <Lock size={14} className="shrink-0 text-amber-600" />
+      <span><strong>Projeto Finalizado:</strong> Este projeto foi finalizado{projetoFormData.DataFinalizado ? ` em ${formatToBRDate(projetoFormData.DataFinalizado.substring(0, 10))}` : ''}. Não são permitidas alterações em nenhum nível (modo somente visualização).</span>
+    </div>
+  )}
+
+  <fieldset disabled={isProjectFinalizado} className="contents border-0 p-0 m-0 min-w-0">
+  {/* 4-tab form – same for all matrices */}
+  <div className="flex flex-col">
  
  <div className="p-6">
  {/* TAB 0 – PROJETO */}
@@ -1664,14 +1778,51 @@ export default function ProjetoPage() {
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Planejado Financeiro</label>
  <input type="date" name="PlanejadoFinanceiro" value={projetoFormData.PlanejadoFinanceiro || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm" />
  </div>
- <div>
- <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Data Prev. Entrega</label>
- <input type="date" name="DataPrevisao" value={projetoFormData.DataPrevisao || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm" />
- </div>
- <div>
- <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Dias (Prazo)</label>
- <input type="text" name="PrazoEntrega" value={projetoFormData.PrazoEntrega || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm font-semibold text-[#32423D]" />
- </div>
+                  <div>
+                    {(() => {
+                      const infoPrev = getPrevisaoAtrasoInfo(projetoFormData.DataPrevisao);
+                      return (
+                        <>
+                          <label className={`block text-[10px] uppercase tracking-wider font-bold mb-1 ${infoPrev.isPast ? 'text-red-600' : 'text-gray-700'}`}>
+                            Data Prev. Entrega
+                          </label>
+                          <input
+                            type="date"
+                            name="DataPrevisao"
+                            value={projetoFormData.DataPrevisao || ''}
+                            onChange={handleProjetoInputChange}
+                            className={infoPrev.isPast
+                              ? "w-full px-2 py-1 bg-red-50 border border-red-400 text-xs focus:outline-none focus:border-red-500 rounded shadow-sm font-semibold text-red-600"
+                              : "w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm"
+                            }
+                          />
+                        </>
+                      );
+                    })()}
+                  </div>
+                  <div>
+                    {(() => {
+                      const infoPrev = getPrevisaoAtrasoInfo(projetoFormData.DataPrevisao);
+                      return (
+                        <>
+                          <label className={`block text-[10px] uppercase tracking-wider font-bold mb-1 ${infoPrev.isPast ? 'text-red-600' : 'text-gray-700'}`}>
+                            {infoPrev.isPast ? 'Dias em atraso' : 'Dias (Prazo)'}
+                          </label>
+                          <input
+                            type="text"
+                            name="PrazoEntrega"
+                            value={infoPrev.isPast ? String(infoPrev.dias) : (projetoFormData.PrazoEntrega || '')}
+                            onChange={handleProjetoInputChange}
+                            readOnly={infoPrev.isPast}
+                            className={infoPrev.isPast
+                              ? "w-full px-2 py-1 bg-red-50 border border-red-400 text-xs focus:outline-none focus:border-red-500 rounded shadow-sm font-bold text-red-600"
+                              : "w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm font-semibold text-[#32423D]"
+                            }
+                          />
+                        </>
+                      );
+                    })()}
+                  </div>
  </div>
  </div>
  </div>
@@ -1971,6 +2122,7 @@ export default function ProjetoPage() {
 
  </div>{/* closes <div className="p-6"> */}
  </div>{/* closes <div className="flex flex-col"> */}
+        </fieldset>
  </form>
 
  </motion.div>
@@ -1995,6 +2147,7 @@ export default function ProjetoPage() {
     dataPrevisaoProjeto={selectedProjetoForTag?.DataPrevisao || ''}
     tagToEdit={isEditingTag ? tagFormData : null}
     API_BASE={API_BASE}
+    isProjetoFinalizado={selectedProjetoForTag?.Finalizado === 'C'}
   />
 
  {showPessoaJuridicaModal && (

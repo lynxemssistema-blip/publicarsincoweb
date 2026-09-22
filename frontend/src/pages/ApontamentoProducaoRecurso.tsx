@@ -184,6 +184,9 @@ useEffect(() => {
  const [projetoFilter, setProjetoFilter] = useState('');
  const [tagFilter, setTagFilter] = useState('');
  const [osFilter, setOsFilter] = useState(initialOsFilter || '');
+ const [osInfo, setOsInfo] = useState<{ id: number | string; existe: boolean; liberada: boolean; finalizada: boolean } | null>(null);
+ const [showOsWarning, setShowOsWarning] = useState(false);
+ const osWarningTimerRef = useRef<NodeJS.Timeout | null>(null);
  const [clienteFilter, setClienteFilter] = useState('');
  const [itemFilter, setItemFilter] = useState(initialItemFilter || '');
  const [codMatFabricanteFilter, setCodMatFabricanteFilter] = useState('');
@@ -216,7 +219,7 @@ useEffect(() => {
       else if (pred === 'dobra') base = 'Dobra';
       else if (pred === 'solda') base = 'Solda';
       else if (pred === 'pintura') base = 'Pintura';
-      else if (pred === 'montagem') base = 'Montagem';
+      else if (pred === 'montagem') base = 'TxtMontagem' ? 'TxtMontagem' : 'Montagem';
       else if (pred === 'acabamento') base = 'ACABAMENTO';
       else if (pred === 'usinagem') base = 'Usinagem';
       else if (pred === 'caldeiraria') base = 'CALDEIRARIA';
@@ -557,6 +560,66 @@ useEffect(() => {
  setTotalPages(1);
  setTotalItems(json.data.length);
  }
+
+ // Tratamento de status da OS (liberada/não liberada pela engenharia)
+ const triggerOsWarning = () => {
+   setShowOsWarning(true);
+   if (osWarningTimerRef.current) {
+     clearTimeout(osWarningTimerRef.current);
+   }
+   osWarningTimerRef.current = setTimeout(() => {
+     setShowOsWarning(false);
+   }, 5000);
+ };
+
+ if (json.osInfo) {
+   setOsInfo(json.osInfo);
+   if (json.osInfo.existe && !json.osInfo.liberada) {
+     triggerOsWarning();
+     addToast({
+       type: 'warning',
+       title: 'OS Não Liberada',
+       message: `Atenção: A Ordem de Serviço #${json.osInfo.id} ainda não foi liberada pela Engenharia!`,
+       duration: 5000
+     });
+   } else {
+     setShowOsWarning(false);
+   }
+ } else if (osFilter.trim()) {
+   try {
+     const osRes = await fetch(`${API_BASE}/ordemservico/${osFilter.trim()}`, { headers: getAuthHeaders() });
+     const osJson = await osRes.json();
+     if (osJson.success && osJson.data) {
+       const isLib = osJson.data.Liberado_Engenharia === 'S';
+       const info = {
+         id: osJson.data.IdOrdemServico,
+         existe: true,
+         liberada: isLib,
+         finalizada: osJson.data.ST === 'FINALIZADO' || osJson.data.Finalizada === 'S' || osJson.data.Finalizada === 1
+       };
+       setOsInfo(info);
+       if (!isLib) {
+         triggerOsWarning();
+         addToast({
+           type: 'warning',
+           title: 'OS Não Liberada',
+           message: `Atenção: A Ordem de Serviço #${info.id} ainda não foi liberada pela Engenharia!`,
+           duration: 5000
+         });
+       } else {
+         setShowOsWarning(false);
+       }
+     } else {
+       setOsInfo({ id: osFilter.trim(), existe: false, liberada: false, finalizada: false });
+       setShowOsWarning(false);
+     }
+   } catch {
+     setShowOsWarning(false);
+   }
+ } else {
+   setOsInfo(null);
+   setShowOsWarning(false);
+ }
  } else {
  setError(json.message || 'Erro ao carregar itens');
  }
@@ -671,6 +734,11 @@ useEffect(() => {
  setClienteFilter('');
  setDataPlanejamentoInicio('');
  setDataPlanejamentoFim('');
+ setOsInfo(null);
+ setShowOsWarning(false);
+ if (osWarningTimerRef.current) {
+   clearTimeout(osWarningTimerRef.current);
+ }
  
  setItens([]);
  setHasSearched(false);
@@ -714,7 +782,7 @@ useEffect(() => {
 
     const recExecutar = parseFloat(String(
       item[`${secFormatted}TotalExecutar`] ??    // 'GalvanizarTotalExecutar'
-      item[`${secUpper}TotalExecutar`] ??         // 'GALVANIZARTotalExecutar' ← retornado pela API
+      item[`${secUpper}TotalExecutar`] ??         // 'GALVANIZARTotalExecutado' ← retornado pela API
       (item as any).TotalExecutar ??               // alias genérico da query de listagem
       (parseFloat(String(item.QtdeTotal || 1)) - recExecutado)
     )) || Math.max(0, parseFloat(String(item.QtdeTotal || 1)) - recExecutado);
@@ -1167,7 +1235,7 @@ useEffect(() => {
  const setorInfo = setores.find(s => s.id === setorAtivo) || { id: setorAtivo as any, label: String(setorAtivo).charAt(0).toUpperCase() + String(setorAtivo).slice(1), icon: Settings2, color: "bg-gray-500" };
   const unauthorizedError = (!user || (user.role !== 'admin' && user.mapaProducao !== 'S' && !user.isSuperadmin && user.superadmin !== 'S')) ? (
  <div className="flex flex-col items-center justify-center h-[calc(100vh-4rem)] gap-4 min-h-0 bg-slate-50">
- <div className="p-4 bg-red-100 rounded-full text-red-600"><Lock size={40} /></div>
+ <div className="p-4 bg-red-150 rounded-full text-red-600"><Lock size={40} /></div>
  <h2 className="text-xl font-black text-red-700">Acesso Negado</h2>
  <p className="text-xs text-slate-500 text-center max-w-xs">
  Somente usuários com permissão de Mapa de Produção ou Administradores podem acessar esta tela.
@@ -1522,6 +1590,43 @@ useEffect(() => {
  </motion.div>
  )}
 
+ {/* Aviso de OS Não Liberada - Exibido temporariamente por 5 segundos */}
+ <AnimatePresence>
+ {showOsWarning && osInfo && osInfo.existe && !osInfo.liberada && (
+   <motion.div
+     initial={{ opacity: 0, y: -10 }}
+     animate={{ opacity: 1, y: 0 }}
+     exit={{ opacity: 0, y: -10 }}
+     transition={{ duration: 0.2 }}
+     className="p-3.5 mb-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-xs flex items-center justify-between gap-3 shadow-xs"
+   >
+     <div className="flex items-center gap-3">
+       <div className="p-2 bg-amber-100 rounded-lg text-amber-700 shrink-0">
+         <AlertTriangle size={20} />
+       </div>
+       <div>
+         <h4 className="font-bold text-xs text-amber-950 flex items-center gap-2">
+           Atenção: A Ordem de Serviço #{osInfo.id} ainda não foi liberada pela Engenharia!
+           <span className="px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 text-[10px] uppercase font-black tracking-wider">
+             Aguardando Liberação
+           </span>
+         </h4>
+         <p className="text-[11px] text-amber-800 mt-0.5">
+           Os itens desta OS estão cadastrados, mas seus recursos de fabricação ainda não foram disponibilizados para apontamento porque a OS não foi liberada pela Engenharia.
+         </p>
+       </div>
+     </div>
+     <button
+       onClick={() => setShowOsWarning(false)}
+       className="p-1 rounded-lg text-amber-700 hover:bg-amber-100 hover:text-amber-900 transition-colors"
+       title="Fechar aviso"
+     >
+       <X size={16} />
+     </button>
+   </motion.div>
+ )}
+ </AnimatePresence>
+
  {/* Content Container */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 flex flex-col min-h-[150px] flex-1 overflow-auto relative">
  
@@ -1570,7 +1675,44 @@ useEffect(() => {
  Cancelar Busca
  </button>
  </div>
- ) : itens.length === 0 ? (
+ ) : (showOsWarning && osInfo && osInfo.existe && !osInfo.liberada) ? (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    transition={{ duration: 0.2 }}
+    className="p-14 flex flex-col items-center justify-center gap-4 text-gray-500"
+  >
+    <motion.div
+      initial={{ scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      className="w-20 h-20 rounded-full bg-amber-50 flex items-center justify-center border-4 border-amber-200 shadow-inner"
+    >
+      <AlertTriangle size={40} className="text-amber-500" />
+    </motion.div>
+    <div className="text-center max-w-md">
+      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-100 text-amber-900 text-xs font-bold uppercase tracking-wider mb-2">
+        <Lock size={12} /> Bloqueado para Produção
+      </div>
+      <h3 className="text-lg font-bold text-gray-800 mb-1">Ordem de Serviço Não Liberada</h3>
+      <p className="text-xs text-gray-600 font-medium">
+        A Ordem de Serviço <span className="font-bold font-mono text-amber-950 bg-amber-100 px-1.5 py-0.5 rounded border border-amber-300">#{osInfo.id}</span> ainda <strong>não foi liberada</strong> pela Engenharia para a produção.
+      </p>
+      <div className="text-xs text-amber-900 mt-4 bg-amber-50/90 p-3.5 rounded-xl border border-amber-200 text-left space-y-1.5 shadow-xs">
+        <p className="font-semibold flex items-center gap-1.5 text-amber-800">
+          <AlertCircle size={14} className="shrink-0 text-amber-600" />
+          Por que esta mensagem está aparecendo?
+        </p>
+        <p className="text-gray-600 leading-relaxed">
+          Os itens e recursos de fabricação de uma OS só ficam disponíveis para apontamento nos setores após a validação e liberação formal da Engenharia.
+        </p>
+        <p className="text-[11px] text-amber-800 font-medium pt-1 border-t border-amber-200">
+          👉 Para liberar, acesse o menu <strong>Gestão de Ordens de Serviço</strong> e efetue a liberação da OS #{osInfo.id}.
+        </p>
+      </div>
+    </div>
+  </motion.div>
+  ) : itens.length === 0 ? (
  <div className="p-16 flex flex-col items-center justify-center gap-4 text-gray-400">
  <motion.div
  initial={{ scale: 0.8, opacity: 0 }}

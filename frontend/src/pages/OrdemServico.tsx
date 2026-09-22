@@ -10,7 +10,7 @@ import {
     Activity, Search, ChevronRight, ChevronDown, ChevronUp, ClipboardList, Eye,
     Loader2, RefreshCw, Box, CheckCircle, Clock, XCircle, User, Calendar, Settings2, FileText, FolderOpen,
     Filter, Layers, X, ArrowLeft, Trash2, Flag, RotateCcw, Hash, Copy, FileSpreadsheet, PenTool, AlertTriangle, Star,
-    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus, Plus, GitFork
+    ShieldAlert, Scissors, Wrench, Flame, Paintbrush, PackagePlus, Plus, GitFork, Maximize2
 } from 'lucide-react';
 import { ProgressBar } from '../components/ordem-servico/ProgressBar';
 import { SetorDatas } from '../components/ordem-servico/SetorDatas';
@@ -462,6 +462,12 @@ function OrdemServicoContent() {
     const [loadingArvore, setLoadingArvore] = useState<Record<string, boolean>>({});
     const [collapsedNodes, setCollapsedNodes] = useState<Set<string>>(new Set());
     const [expandAllMap, setExpandAllMap] = useState<Record<string, boolean>>({});
+
+    // Estados de Recursos dos Componentes da Árvore (BOM Multi-Nível)
+    const [nodeRecursosMap, setNodeRecursosMap] = useState<Record<string, any[]>>({});
+    const [loadingNodeRecursos, setLoadingNodeRecursos] = useState<Record<string, boolean>>({});
+    const [expandedNodeRecursos, setExpandedNodeRecursos] = useState<Set<string>>(new Set());
+    const [modalRecursosNode, setModalRecursosNode] = useState<{ node: ArvorePecaNode; qtdProduzir: number; level: number } | null>(null);
 
     // ============================================================
     // Estados do Modal Gerar Pendência (RNC) - idêntico ao ApontamentoProducao
@@ -1345,6 +1351,38 @@ function OrdemServicoContent() {
         }
     }, [token]);
 
+    const fetchNodeRecursos = useCallback(async (codMat: string, osId?: number) => {
+        if (!codMat || nodeRecursosMap[codMat]) return;
+        setLoadingNodeRecursos(prev => ({ ...prev, [codMat]: true }));
+        try {
+            const activeToken = token || localStorage.getItem('sinco_token') || '';
+            const headers = activeToken ? { 'Authorization': `Bearer ${activeToken}` } : {};
+            const url = `${API_BASE}/peca-manufaturada/processos-existentes/${encodeURIComponent(codMat)}${osId ? `?osId=${osId}` : ''}`;
+            const res = await authFetch(url, { headers });
+            const json = await res.json();
+            if (json.success) {
+                setNodeRecursosMap(prev => ({ ...prev, [codMat]: json.data || [] }));
+            }
+        } catch (err) {
+            console.error('Erro ao buscar recursos do componente:', err);
+        } finally {
+            setLoadingNodeRecursos(prev => ({ ...prev, [codMat]: false }));
+        }
+    }, [token, nodeRecursosMap]);
+
+    const toggleNodeRecursos = (nodeKey: string, codMat: string, osId?: number) => {
+        setExpandedNodeRecursos(prev => {
+            const next = new Set(prev);
+            if (next.has(nodeKey)) {
+                next.delete(nodeKey);
+            } else {
+                next.add(nodeKey);
+                fetchNodeRecursos(codMat, osId);
+            }
+            return next;
+        });
+    };
+
     const toggleItemArvore = (item: OrdemServicoItem) => {
         const id = item.IdOrdemServicoItem;
         const codMat = item.CodMatFabricante || '';
@@ -1416,7 +1454,8 @@ function OrdemServicoContent() {
         parentKey: string = 'root',
         index: number = 0,
         rootCodMat: string = '',
-        parentTotalQty: number = 1
+        parentTotalQty: number = 1,
+        osId?: number
     ) => {
         const nodeKey = `${rootCodMat}::${parentKey}-${node.CodMatFabricante}-${index}`;
         const hasChildren = Boolean(node.children && node.children.length > 0);
@@ -1426,6 +1465,10 @@ function OrdemServicoContent() {
         // Cálculo da quantidade a ser produzida neste nível: (unitário do nível × quantidade total a produzir do nível pai)
         const unitQty = Number(node.PecaQtde || node.QtdeUnitaria) || 1;
         const qtdProduzir = Math.round(unitQty * parentTotalQty * 1000) / 1000;
+
+        const isRecursosExpanded = expandedNodeRecursos.has(nodeKey);
+        const recursosList = nodeRecursosMap[node.CodMatFabricante] || [];
+        const isLoadingRecursos = loadingNodeRecursos[node.CodMatFabricante];
 
         return (
             <div key={nodeKey} className="relative">
@@ -1518,14 +1561,164 @@ function OrdemServicoContent() {
                                 {Number(node.Peso).toFixed(2)} kg
                             </span>
                         ) : null}
+
+                        {/* Botão de Ver Recursos para cada item componente (qualquer nível) */}
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleNodeRecursos(nodeKey, node.CodMatFabricante, osId);
+                            }}
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-semibold transition-all cursor-pointer shadow-xs ${
+                                isRecursosExpanded
+                                    ? 'bg-teal-700 text-white ring-1 ring-teal-500 shadow-teal-200'
+                                    : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 hover:border-teal-300'
+                            }`}
+                            title={`Visualizar recursos e processos de fabricação de ${node.CodMatFabricante}`}
+                        >
+                            <Layers size={13} className={isRecursosExpanded ? 'text-teal-200' : 'text-teal-600'} />
+                            <span>Recursos</span>
+                            {recursosList.length > 0 && (
+                                <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                                    isRecursosExpanded ? 'bg-teal-800 text-white' : 'bg-teal-200 text-teal-900'
+                                }`}>
+                                    {recursosList.length}
+                                </span>
+                            )}
+                        </button>
                     </div>
                 </div>
+
+                {/* Sub-grid de Recursos do Componente */}
+                {isRecursosExpanded && (
+                    <div 
+                        className="my-1.5 p-3 rounded-lg border bg-gradient-to-br from-teal-50/80 via-white to-slate-50 border-teal-200 shadow-sm"
+                        style={{ marginLeft: `${(level - 1) * 24 + 16}px` }}
+                    >
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 mb-2 border-b border-teal-100 text-xs">
+                            <div className="flex items-center gap-2">
+                                <div className="w-6 h-6 rounded bg-teal-700 text-white flex items-center justify-center shrink-0">
+                                    <Layers size={13} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="font-bold text-teal-950">Recursos de Fabricação:</span>
+                                        <span className="font-mono font-bold px-1.5 py-0.5 rounded bg-teal-100 text-teal-900 border border-teal-300 text-[11px]">
+                                            {node.CodMatFabricante}
+                                        </span>
+                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 font-semibold border border-purple-200">
+                                            Nível N{level}
+                                        </span>
+                                    </div>
+                                    <p className="text-[11px] text-gray-500 font-normal truncate max-w-md">
+                                        {node.DescDetal || node.DescResumo || '-'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <div className="text-right text-[11px] bg-white px-2 py-1 rounded border border-teal-100">
+                                    <span className="text-gray-500">Lote a Produzir: </span>
+                                    <span className="font-bold text-emerald-700">
+                                        {qtdProduzir} {node.Unidade || 'UN'}
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setModalRecursosNode({ node, qtdProduzir, level });
+                                    }}
+                                    className="p-1 px-2 rounded bg-white hover:bg-teal-50 text-teal-700 border border-teal-200 text-[11px] font-medium transition-colors flex items-center gap-1 cursor-pointer"
+                                    title="Visualizar em Janela Modal"
+                                >
+                                    <Maximize2 size={12} />
+                                    <span className="hidden sm:inline">Modal</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleNodeRecursos(nodeKey, node.CodMatFabricante);
+                                    }}
+                                    className="p-1 rounded text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                                    title="Fechar visualização de recursos"
+                                >
+                                    <X size={14} />
+                                </button>
+                            </div>
+                        </div>
+
+                        {isLoadingRecursos ? (
+                            <div className="flex items-center justify-center gap-2 py-4 text-teal-700 text-xs font-semibold">
+                                <Loader2 size={16} className="animate-spin text-teal-600" />
+                                <span>Buscando recursos e processos de fabricação...</span>
+                            </div>
+                        ) : recursosList.length === 0 ? (
+                            <div className="py-3 px-4 text-center text-xs text-slate-500 bg-white/90 rounded border border-dashed border-slate-200">
+                                Nenhum recurso ou processo de fabricação cadastrado para este componente ({node.CodMatFabricante}).
+                            </div>
+                        ) : (
+                            <div className="bg-white border border-teal-200 rounded-lg overflow-hidden shadow-2xs">
+                                <div className="grid grid-cols-12 gap-2 bg-teal-800 text-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider">
+                                    <div className="col-span-1 text-center">Seq</div>
+                                    <div className="col-span-5">Recurso / Processo</div>
+                                    <div className="col-span-2 text-center">Setup (min)</div>
+                                    <div className="col-span-2 text-center">Padrão (min)</div>
+                                    <div className="col-span-2 text-center">Total p/ Lote</div>
+                                </div>
+                                <div className="divide-y divide-teal-50 text-xs">
+                                    {recursosList.map((proc: any, pIdx: number) => {
+                                        const setupMin = Number(proc.TempoEstimadoMin) || 0;
+                                        const padraoMin = Number(proc.TempoPadraoMin) || 0;
+                                        const totalMinLote = Math.round((setupMin + (padraoMin * qtdProduzir)) * 100) / 100;
+                                        return (
+                                            <div key={pIdx} className="grid grid-cols-12 gap-2 items-center px-3 py-1.5 hover:bg-teal-50/40 transition-colors text-slate-700">
+                                                <div className="col-span-1 text-center font-mono font-bold text-teal-700">
+                                                    {proc.SequenciaExecucao || (pIdx + 1) * 10}
+                                                </div>
+                                                <div className="col-span-5 font-semibold text-slate-800 flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0"></span>
+                                                    <span className="truncate" title={proc.NomeProcesso || proc.processofabricacao}>
+                                                        {proc.NomeProcesso || proc.processofabricacao}
+                                                    </span>
+                                                </div>
+                                                <div className="col-span-2 text-center font-mono text-slate-600">
+                                                    {setupMin.toFixed(2)}m
+                                                </div>
+                                                <div className="col-span-2 text-center font-mono text-slate-600">
+                                                    {padraoMin.toFixed(2)}m
+                                                </div>
+                                                <div className="col-span-2 text-center font-mono font-bold text-teal-900 bg-teal-50/70 py-0.5 rounded">
+                                                    {totalMinLote.toFixed(2)}m
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {(() => {
+                                    const totalGeralMin = recursosList.reduce((acc: number, proc: any) => {
+                                        const setup = Number(proc.TempoEstimadoMin) || 0;
+                                        const padrao = Number(proc.TempoPadraoMin) || 0;
+                                        return acc + setup + (padrao * qtdProduzir);
+                                    }, 0);
+                                    return (
+                                        <div className="flex items-center justify-between px-3 py-1.5 bg-teal-50 border-t border-teal-200 text-[11px] font-bold text-teal-900">
+                                            <span>Total de Recursos: {recursosList.length} processos</span>
+                                            <span>Tempo Total para o Lote: {totalGeralMin.toFixed(2)} min ({(totalGeralMin / 60).toFixed(2)} h)</span>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+                    </div>
+                )}
 
                 {/* Renderização recursiva dos filhos com propagação da quantidade a produzir */}
                 {hasChildren && !isCollapsed && (
                     <div className="relative pl-3 border-l-2 border-purple-200 ml-4 my-0.5">
                         {node.children!.map((child, cIdx) => 
-                            renderArvoreNode(child, level + 1, nodeKey, cIdx, rootCodMat, qtdProduzir)
+                            renderArvoreNode(child, level + 1, nodeKey, cIdx, rootCodMat, qtdProduzir, osId)
                         )}
                     </div>
                 )}
@@ -5143,14 +5336,144 @@ function OrdemServicoContent() {
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Modal de Recursos do Componente da Árvore */}
+            {modalRecursosNode && (
+                <div 
+                    className="fixed inset-0 z-[120] overflow-y-auto bg-black/60 flex items-center justify-center p-4" 
+                    onClick={() => setModalRecursosNode(null)}
+                >
+                    <div 
+                        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-teal-200" 
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between p-4 bg-gradient-to-r from-teal-800 via-teal-700 to-emerald-800 text-white">
+                            <div className="flex items-center gap-2.5">
+                                <div className="w-9 h-9 rounded-lg bg-white/20 flex items-center justify-center text-white shrink-0">
+                                    <Layers size={18} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm font-bold tracking-wide">Recursos de Fabricação</h3>
+                                        <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded font-mono font-bold">
+                                            Nível N{modalRecursosNode.level}
+                                        </span>
+                                    </div>
+                                    <p className="text-xs text-teal-100 font-mono font-semibold">
+                                        {modalRecursosNode.node.CodMatFabricante} — {modalRecursosNode.node.DescDetal || modalRecursosNode.node.DescResumo || ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <button 
+                                type="button" 
+                                onClick={() => setModalRecursosNode(null)} 
+                                className="p-1.5 rounded-lg text-teal-200 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                        <div className="p-5 space-y-4">
+                            <div className="grid grid-cols-3 gap-3 p-3 bg-teal-50/60 rounded-lg border border-teal-100 text-xs">
+                                <div>
+                                    <span className="text-gray-500 block text-[10px] uppercase font-bold">Unidade Unitária</span>
+                                    <span className="font-bold text-gray-800">{modalRecursosNode.node.PecaQtde || 1} {modalRecursosNode.node.Unidade || 'UN'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 block text-[10px] uppercase font-bold">Lote a Produzir</span>
+                                    <span className="font-bold text-emerald-700">{modalRecursosNode.qtdProduzir} {modalRecursosNode.node.Unidade || 'UN'}</span>
+                                </div>
+                                <div>
+                                    <span className="text-gray-500 block text-[10px] uppercase font-bold">Material</span>
+                                    <span className="font-bold text-gray-800">{modalRecursosNode.node.MaterialSW || '-'}{modalRecursosNode.node.Espessura ? ` (${modalRecursosNode.node.Espessura})` : ''}</span>
+                                </div>
+                            </div>
+
+                            {loadingNodeRecursos[modalRecursosNode.node.CodMatFabricante] ? (
+                                <div className="flex items-center justify-center gap-2 py-8 text-teal-700 text-xs font-semibold">
+                                    <Loader2 size={20} className="animate-spin text-teal-600" />
+                                    <span>Carregando recursos...</span>
+                                </div>
+                            ) : (nodeRecursosMap[modalRecursosNode.node.CodMatFabricante] || []).length === 0 ? (
+                                <div className="py-8 text-center text-xs text-gray-500 bg-gray-50 rounded-lg border border-dashed border-gray-200">
+                                    Nenhum recurso ou processo cadastrado para este componente ({modalRecursosNode.node.CodMatFabricante}).
+                                </div>
+                            ) : (
+                                <div className="border border-gray-200 rounded-lg overflow-hidden shadow-2xs">
+                                    <table className="w-full text-xs text-left">
+                                        <thead className="bg-teal-800 text-[10px] font-bold text-white uppercase">
+                                            <tr>
+                                                <th className="p-2.5 text-center w-12">Seq</th>
+                                                <th className="p-2.5">Recurso / Processo</th>
+                                                <th className="p-2.5 text-center">Setup (min)</th>
+                                                <th className="p-2.5 text-center">Padrão (min)</th>
+                                                <th className="p-2.5 text-center">Total Estimado p/ Lote</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-gray-100">
+                                            {(nodeRecursosMap[modalRecursosNode.node.CodMatFabricante] || []).map((proc: any, idx: number) => {
+                                                const setupMin = Number(proc.TempoEstimadoMin) || 0;
+                                                const padraoMin = Number(proc.TempoPadraoMin) || 0;
+                                                const totalMin = setupMin + (padraoMin * modalRecursosNode.qtdProduzir);
+                                                return (
+                                                    <tr key={idx} className="hover:bg-teal-50/40 transition-colors">
+                                                        <td className="p-2.5 text-center font-mono font-bold text-teal-700">
+                                                            {proc.SequenciaExecucao || (idx + 1) * 10}
+                                                        </td>
+                                                        <td className="p-2.5 font-semibold text-gray-800">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="w-2 h-2 rounded-full bg-teal-600 shrink-0"></span>
+                                                                <span>{proc.NomeProcesso || proc.processofabricacao}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-2.5 text-center font-mono text-gray-600">{setupMin.toFixed(2)} min</td>
+                                                        <td className="p-2.5 text-center font-mono text-gray-600">{padraoMin.toFixed(2)} min</td>
+                                                        <td className="p-2.5 text-center font-mono font-bold text-teal-900 bg-teal-50/50">{totalMin.toFixed(2)} min</td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                        {(() => {
+                                            const list = nodeRecursosMap[modalRecursosNode.node.CodMatFabricante] || [];
+                                            const totalGeral = list.reduce((acc: number, proc: any) => {
+                                                const setup = Number(proc.TempoEstimadoMin) || 0;
+                                                const padrao = Number(proc.TempoPadraoMin) || 0;
+                                                return acc + setup + (padrao * modalRecursosNode.qtdProduzir);
+                                            }, 0);
+                                            return (
+                                                <tfoot>
+                                                    <tr className="bg-teal-100/60 font-bold text-teal-900 border-t border-teal-200">
+                                                        <td colSpan={2} className="p-2.5">Total de Recursos: {list.length} processos</td>
+                                                        <td colSpan={3} className="p-2.5 text-right font-mono">
+                                                            Tempo Total do Componente: {totalGeral.toFixed(2)} min ({(totalGeral / 60).toFixed(2)} h)
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            );
+                                        })()}
+                                    </table>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex justify-end p-4 border-t border-gray-100 bg-gray-50">
+                            <button 
+                                type="button" 
+                                onClick={() => setModalRecursosNode(null)} 
+                                className="px-5 py-2 bg-[#32423D] hover:bg-emerald-800 text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                            >
+                                Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {sectorModal && (
+                <SectorProductionModal
+                    modalData={sectorModal}
+                    onClose={() => setSectorModal(null)}
+                    onSaved={() => { if (typeof fetchOrdensServico === 'function') fetchOrdensServico(); }}
+                />
+            )}
         </div>
     );
-    {sectorModal && (
-    <SectorProductionModal
-      modalData={sectorModal}
-      onClose={() => setSectorModal(null)}
-      onSaved={() => { if (typeof fetchOrdensServico === 'function') fetchOrdensServico(); }}
-    />
-  )}
-
 }

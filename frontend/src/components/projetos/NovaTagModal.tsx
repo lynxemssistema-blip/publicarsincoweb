@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Tag as TagIcon, X, Plus } from 'lucide-react';
+import { Tag as TagIcon, X, Plus, Eye, Lock } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import TipoProdutoPage from '../../pages/TipoProduto';
+import UnidadeMedidaPage from '../../pages/UnidadeMedida';
 import { useToast } from '../../contexts/ToastContext';
+import { isDateInPast } from '../../utils/dateUtils';
 
 interface Tag {
   IdTag?: number;
   Tag?: string;
   DataPrevisao?: string;
   TipoProduto?: string;
+  UnidadeProduto?: string;
   QtdeTag?: string;
   QtdeLiberada?: string;
   SaldoTag?: string;
@@ -27,6 +30,7 @@ interface NovaTagModalProps {
   dataPrevisaoProjeto?: string;
   tagToEdit?: Tag | null;
   API_BASE: string;
+  isProjetoFinalizado?: boolean;
 }
 
 const normalizeToBRDate = (val?: string | null): string => {
@@ -57,26 +61,32 @@ export default function NovaTagModal({
   projetoNome,
   dataPrevisaoProjeto,
   tagToEdit,
-  API_BASE
+  API_BASE,
+  isProjetoFinalizado = false
 }: NovaTagModalProps) {
   const { user } = useAuth();
   const { showAlert } = useToast();
   const isEditingTag = !!tagToEdit;
   
   const emptyTagForm: Tag = {
-    Tag: '', DataPrevisao: '', TipoProduto: '', QtdeTag: '', QtdeLiberada: '', SaldoTag: '', Medida: '', DescTag: ''
+    Tag: '', DataPrevisao: '', TipoProduto: '', UnidadeProduto: '', QtdeTag: '', QtdeLiberada: '', SaldoTag: '', Medida: '', DescTag: ''
   };
 
   const [tagFormData, setTagFormData] = useState<Tag>(emptyTagForm);
   const [showTipoProdutoModal, setShowTipoProdutoModal] = useState(false);
+  const [showUnidadeMedidaModal, setShowUnidadeMedidaModal] = useState(false);
   const [tipoProdutoOptions, setTipoProdutoOptions] = useState<{ id: string | number; label: string; Unidade?: string }[]>([]);
+  const [medidaOptions, setMedidaOptions] = useState<{ id: string | number; label: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       if (tagToEdit) {
+        const initialMedida = tagToEdit.UnidadeProduto || tagToEdit.Medida || '';
         setTagFormData({
           ...tagToEdit,
+          Medida: initialMedida,
+          UnidadeProduto: initialMedida,
           DataPrevisao: normalizeToBRDate(tagToEdit.DataPrevisao || dataPrevisaoProjeto)
         });
       } else {
@@ -92,6 +102,7 @@ export default function NovaTagModal({
         }
       }
       fetchOptions();
+      fetchMedidaOptions();
     }
   }, [isOpen, tagToEdit, dataPrevisaoProjeto, projetoId]);
 
@@ -129,15 +140,44 @@ export default function NovaTagModal({
         setTipoProdutoOptions(json.data);
         if (selectValue) {
           const matched = json.data.find((opt: any) => opt.label?.toUpperCase() === selectValue.toUpperCase());
+          const unit = matched?.Unidade || '';
           setTagFormData(prev => ({
             ...prev,
             TipoProduto: matched ? matched.label : selectValue,
-            Medida: matched?.Unidade || prev.Medida || ''
+            ...(unit ? { Medida: unit, UnidadeProduto: unit } : {})
           }));
         }
       }
     } catch (err) {
       console.error('Error fetching type options:', err);
+    }
+  };
+
+  const fetchMedidaOptions = async (selectValue?: string) => {
+    try {
+      let token = localStorage.getItem('sinco_token') || localStorage.getItem('superadmin_token');
+      if (token === 'null' || token === 'undefined') token = null;
+      const headers: HeadersInit = token ? { 'Authorization': `Bearer ${token}` } : {};
+
+      const res = await fetch(`${API_BASE}/medida/options`, { headers });
+      const json = await res.json();
+      if (json.success && Array.isArray(json.data)) {
+        setMedidaOptions(json.data);
+        if (selectValue) {
+          const matched = json.data.find((opt: any) =>
+            String(opt.id).toUpperCase() === selectValue.toUpperCase() ||
+            String(opt.label).toUpperCase().startsWith(selectValue.toUpperCase())
+          );
+          const val = matched ? String(matched.id) : selectValue;
+          setTagFormData(prev => ({
+            ...prev,
+            Medida: val,
+            UnidadeProduto: val
+          }));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching medida options:', err);
     }
   };
 
@@ -148,10 +188,19 @@ export default function NovaTagModal({
     }
     if (name === 'TipoProduto') {
       const selected = tipoProdutoOptions.find(opt => opt.label === value);
+      const unit = selected?.Unidade || '';
       setTagFormData(prev => ({
         ...prev,
         [name]: value,
-        Medida: selected?.Unidade || prev.Medida || ''
+        ...(unit ? { Medida: unit, UnidadeProduto: unit } : {})
+      }));
+      return;
+    }
+    if (name === 'Medida' || name === 'UnidadeProduto') {
+      setTagFormData(prev => ({
+        ...prev,
+        Medida: value,
+        UnidadeProduto: value
       }));
       return;
     }
@@ -160,6 +209,7 @@ export default function NovaTagModal({
 
   const handleTagSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isProjetoFinalizado) return;
     setSaving(true);
 
     try {
@@ -167,8 +217,12 @@ export default function NovaTagModal({
       const dataHoje = `${String(hoje.getDate()).padStart(2, '0')}/${String(hoje.getMonth() + 1).padStart(2, '0')}/${hoje.getFullYear()}`;
       const loginUsuario = (user as any)?.Login || (user as any)?.login || (user as any)?.NomeCompleto || (user as any)?.nome || 'Sistema';
 
+      const unitVal = tagFormData.UnidadeProduto || tagFormData.Medida || null;
+
       const payload = {
         ...tagFormData,
+        Medida: unitVal,
+        UnidadeProduto: unitVal,
         IdProjeto: projetoId,
         Projeto: projetoNome,
         ...(!isEditingTag ? { CriadoPor: loginUsuario, DataEntrada: dataHoje } : {})
@@ -225,9 +279,16 @@ export default function NovaTagModal({
                 <TagIcon size={20} />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-[#32423D]">
-                  {isEditingTag ? 'Editar Tag' : 'Nova Tag'}
-                </h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-[#32423D]">
+                    {isProjetoFinalizado ? 'Visualizar Tag' : isEditingTag ? 'Editar Tag' : 'Nova Tag'}
+                  </h2>
+                  {isProjetoFinalizado && (
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded uppercase">
+                      Finalizado
+                    </span>
+                  )}
+                </div>
                 <p className="text-xs text-gray-500">Projeto: {projetoNome}</p>
               </div>
             </div>
@@ -236,25 +297,45 @@ export default function NovaTagModal({
             </button>
           </div>
 
+          {isProjetoFinalizado && (
+            <div className="mx-5 mt-4 p-2.5 bg-amber-50 border border-amber-200 text-amber-800 text-xs rounded flex items-center gap-2 font-medium">
+              <Lock size={14} className="shrink-0 text-amber-600" />
+              <span>Projeto finalizado: este registro está em modo de somente visualização (nenhuma alteração permitida).</span>
+            </div>
+          )}
+
           <form onSubmit={handleTagSubmit} className="p-5 space-y-4">
+            <fieldset disabled={isProjetoFinalizado} className="space-y-4 border-0 p-0 m-0 min-w-0">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Descrição Tag <span className="text-red-500">*</span></label>
                 <input type="text" name="Tag" value={tagFormData.Tag || ''} onChange={handleTagInputChange} className={inputRequired} required />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-500 mb-1">Data Prev. Entrega</label>
-                <input
-                  type="date"
-                  name="DataPrevisao"
-                  value={parseToInputDate(tagFormData.DataPrevisao)}
-                  onChange={e => {
-                    const [y, m, d] = (e.target.value || '').split('-');
-                    const br = y && m && d ? `${d}/${m}/${y}` : '';
-                    setTagFormData(prev => ({ ...prev, DataPrevisao: br }));
-                  }}
-                  className={inputOptional}
-                />
+                {(() => {
+                  const isPrevisaoPast = isDateInPast(tagFormData.DataPrevisao);
+                  return (
+                    <>
+                      <label className={`block text-xs font-medium mb-1 ${isPrevisaoPast ? 'text-red-600 font-semibold' : 'text-gray-500'}`}>
+                        Data Prev. Entrega
+                      </label>
+                      <input
+                        type="date"
+                        name="DataPrevisao"
+                        value={parseToInputDate(tagFormData.DataPrevisao)}
+                        onChange={e => {
+                          const [y, m, d] = (e.target.value || '').split('-');
+                          const br = y && m && d ? `${d}/${m}/${y}` : '';
+                          setTagFormData(prev => ({ ...prev, DataPrevisao: br }));
+                        }}
+                        className={isPrevisaoPast
+                          ? 'w-full border border-red-400 bg-red-50 text-red-600 font-semibold rounded px-2 py-1.5 focus:ring-1 focus:ring-red-500 text-xs shadow-sm'
+                          : inputOptional
+                        }
+                      />
+                    </>
+                  );
+                })()}
               </div>
             </div>
             
@@ -291,12 +372,34 @@ export default function NovaTagModal({
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center gap-2">
-                  <button type="button" className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-400 border border-gray-200 cursor-not-allowed" disabled>
+                  <button
+                    type="button"
+                    onClick={() => setShowUnidadeMedidaModal(true)}
+                    disabled={isProjetoFinalizado}
+                    className="inline-flex items-center justify-center w-4 h-4 rounded bg-gray-100 text-gray-500 hover:bg-[#32423D] hover:text-white transition-colors border border-gray-200 disabled:opacity-40 disabled:cursor-not-allowed"
+                    title="Nova Unidade de Medida"
+                  >
                     <Plus size={10} strokeWidth={3} />
                   </button>
-                  Medida
+                  Unidade de Medida
                 </label>
-                <input type="text" name="Medida" value={tagFormData.Medida || ''} onChange={handleTagInputChange} className={inputOptional} />
+                <select
+                  name="Medida"
+                  value={tagFormData.Medida || tagFormData.UnidadeProduto || ''}
+                  onChange={handleTagInputChange}
+                  className={selectClass}
+                  disabled={isProjetoFinalizado}
+                >
+                  <option value="">Selecione...</option>
+                  {tagFormData.Medida && !medidaOptions.some(opt => opt.id === tagFormData.Medida) && (
+                    <option value={tagFormData.Medida}>{tagFormData.Medida}</option>
+                  )}
+                  {medidaOptions.map(opt => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             
@@ -304,15 +407,25 @@ export default function NovaTagModal({
               <label className="block text-xs font-medium text-gray-500 mb-1">Descrição</label>
               <textarea name="DescTag" value={tagFormData.DescTag || ''} onChange={handleTagInputChange} rows={3} className={inputOptional} />
             </div>
+            </fieldset>
             
-            <div className="flex justify-end pt-4 mt-6 border-t border-gray-100">
+            <div className="flex justify-end gap-2 pt-4 mt-6 border-t border-gray-100">
               <button
-                type="submit"
-                disabled={saving}
-                className="px-6 py-2 bg-[#32423D] hover:bg-emerald-800 text-white rounded font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded font-medium transition-colors text-xs"
               >
-                {saving ? 'Salvando...' : 'Salvar'}
+                Fechar
               </button>
+              {!isProjetoFinalizado && (
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-6 py-2 bg-[#32423D] hover:bg-emerald-800 text-white rounded font-medium transition-colors disabled:opacity-50 flex items-center gap-2 text-xs"
+                >
+                  {saving ? 'Salvando...' : 'Salvar'}
+                </button>
+              )}
             </div>
           </form>
         </motion.div>
@@ -324,6 +437,18 @@ export default function NovaTagModal({
               onCloseModal={(createdItem) => {
                 setShowTipoProdutoModal(false);
                 fetchOptions(createdItem?.TipoProduto);
+              }}
+            />
+          </div>
+        )}
+
+        {showUnidadeMedidaModal && (
+          <div className="fixed inset-0 z-[110]">
+            <UnidadeMedidaPage
+              isModal
+              onCloseModal={(createdItem) => {
+                setShowUnidadeMedidaModal(false);
+                fetchMedidaOptions(createdItem?.TipoMedida);
               }}
             />
           </div>

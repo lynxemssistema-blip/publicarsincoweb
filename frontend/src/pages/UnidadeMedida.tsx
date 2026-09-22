@@ -20,7 +20,7 @@ const emptyForm: UnidadeMedida = {
 
 interface Props {
   isModal?: boolean;
-  onCloseModal?: () => void;
+  onCloseModal?: (createdItem?: UnidadeMedida) => void;
 }
 
 const getAuthHeaders = () => {
@@ -105,11 +105,12 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  body: JSON.stringify(formData),
  });
 
- const json = await res.json();
- if (json.success) {
- await fetchUnidades();
- resetForm();
- } else {
+  const json = await res.json();
+  if (json.success) {
+  await fetchUnidades();
+  const createdItem = { ...formData };
+  resetForm(createdItem);
+  } else {
  setError(json.message || 'Erro ao salvar');
  }
  } catch (err) {
@@ -154,14 +155,14 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
  }
  };
 
- const resetForm = () => {
-   setFormData(emptyForm);
-   setIsEditing(false);
-   setShowForm(false);
-   if (isModal && onCloseModal) onCloseModal();
-   const params = new URLSearchParams(window.location.search);
-   if (params.get('action') === 'new') window.close();
- };
+  const resetForm = (createdItem?: UnidadeMedida) => {
+    setFormData(emptyForm);
+    setIsEditing(false);
+    setShowForm(false);
+    if (isModal && onCloseModal) onCloseModal(createdItem);
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'new') window.close();
+  };
 
   const isActionNew = new URLSearchParams(window.location.search).get('action') === 'new';
   const modalContent = (
@@ -234,7 +235,14 @@ export default function UnidadeMedidaPage({ isModal = false, onCloseModal }: Pro
                 <span className="text-red-500 font-bold">*</span> Campos obrigatórios
               </p>
 
-              <div className="pt-2 flex justify-end w-full">
+              <div className="pt-2 flex justify-end gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => resetForm()}
+                  className="px-4 py-2 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-lg font-medium transition-colors text-xs"
+                >
+                  Cancelar
+                </button>
                 <motion.button
                   type="submit"
                   whileHover={{ scale: 1.02 }}

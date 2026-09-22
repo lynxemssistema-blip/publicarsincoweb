@@ -199,9 +199,40 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
             }
         }
 
+        let osInfo = null;
+        if (os) {
+            try {
+                const [osRows] = await req.tenantDbPool.execute(
+                    `SELECT IdOrdemServico, Liberado_Engenharia, OrdemServicoFinalizado 
+                     FROM ordemservico 
+                     WHERE IdOrdemServico = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '' OR D_E_L_E_T_E != '*')`,
+                    [os]
+                );
+                if (osRows.length > 0) {
+                    const isLib = osRows[0].Liberado_Engenharia === 'S' || osRows[0].Liberado_Engenharia === 'SIM';
+                    osInfo = {
+                        id: osRows[0].IdOrdemServico,
+                        existe: true,
+                        liberada: isLib,
+                        finalizada: osRows[0].OrdemServicoFinalizado === 'C' || osRows[0].OrdemServicoFinalizado === 'S'
+                    };
+                } else {
+                    osInfo = {
+                        id: os,
+                        existe: false,
+                        liberada: false,
+                        finalizada: false
+                    };
+                }
+            } catch(e) {
+                console.warn('[Rota2] Erro ao checar status da OS:', e.message);
+            }
+        }
+
         res.json({
             success: true,
             data: rows,
+            osInfo,
             pagination: { total, page: pageNum, limit: limitNum, totalPages: Math.ceil(total / limitNum) }
         });
     } catch (error) {
