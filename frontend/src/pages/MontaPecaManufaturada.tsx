@@ -130,33 +130,29 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
       });
   }, [token]);
 
-  const fetchMateriais1 = useCallback(async (cod: string, desc: string) => {
-    if (!token) return;
-    setLoading1(true);
-    try {
-      let url = `${API}/materiais-criar?`;
-      if (cod) url += `cod=${encodeURIComponent(cod)}&`;
-      if (desc) url += `desc=${encodeURIComponent(desc)}&`;
-      
-      const r = await fetch(url, { headers: authHdr() });
-      const j = await r.json();
-      if (j.success) {
-        setMateriais1(j.data);
-        if (j.data.length === 0) {
-          setSelMat1(null);
-          setComp2([]);
-          setStaging([]);
-        }
-      }
-    } finally {
-      setLoading1(false);
-    }
-  }, [token]);
+  const clearForm = useCallback(() => {
+    setSelId('');
+    setProcSearch('');
+    setSeq('');
+    setOb('');
+    setEstMin('');
+    setPadMin('');
+  }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => fetchMateriais1(fCod1, fDesc1), 400);
-    return () => clearTimeout(t);
-  }, [fCod1, fDesc1, fetchMateriais1]);
+  const clearSelection1 = useCallback(() => {
+    setSelMat1(null);
+    setComp2([]);
+    setStaging([]);
+    clearForm();
+    setSubComps({});
+    setExpandedItems(new Set());
+    setSelecionados3(new Set());
+    setExpandedPecas3(new Set());
+    setPecasMontaPeca({});
+    setQuantidades3({});
+    setEditSq(null);
+    setLastAutoSeq(0);
+  }, [clearForm]);
 
   const clearTotal1 = () => {
     if (hasUnsavedChanges) {
@@ -167,9 +163,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     setHasUnsavedChanges(false);
     setFCod1('');
     setFDesc1('');
-    setSelMat1(null);
-    setComp2([]);
-    setStaging([]);
+    clearSelection1();
     setShowModalCadastroMaterial(false);
   };
 
@@ -238,8 +232,13 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     }
   }, [osId, osContext]);
 
-  const selectMat1 = async (m: MatRow) => {
-    if (hasUnsavedChanges && selMat1 && selMat1.IdMaterial !== m.IdMaterial) {
+  const selMat1Ref = useRef(selMat1);
+  useEffect(() => {
+    selMat1Ref.current = selMat1;
+  }, [selMat1]);
+
+  const selectMat1 = useCallback(async (m: MatRow) => {
+    if (hasUnsavedChanges && selMat1Ref.current && selMat1Ref.current.IdMaterial !== m.IdMaterial) {
       if (!window.confirm('Existem alterações não salvas na estrutura deste item. Deseja descartar as alterações e selecionar outro item?')) {
         return;
       }
@@ -269,7 +268,57 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
 
     fetchComp2(m.IdMaterial, m.CodMatFabricante);
     fetchProcs(m.CodMatFabricante);
-  };
+  }, [hasUnsavedChanges, clearForm, fetchComp2, fetchProcs]);
+
+  const fetchMateriais1 = useCallback(async (cod: string, desc: string) => {
+    if (!token) return;
+    setLoading1(true);
+    try {
+      let url = `${API}/materiais-criar?`;
+      if (cod) url += `cod=${encodeURIComponent(cod)}&`;
+      if (desc) url += `desc=${encodeURIComponent(desc)}&`;
+      
+      const r = await fetch(url, { headers: authHdr() });
+      const j = await r.json();
+      if (j.success) {
+        const rows: MatRow[] = j.data || [];
+        setMateriais1(rows);
+
+        const trimmedCod = cod.trim().toUpperCase();
+        const trimmedDesc = desc.trim().toUpperCase();
+
+        if (rows.length === 0) {
+          // Caso o item não exista: limpa seleção, composição (grid 1 inferior) e processos (grid 2)
+          clearSelection1();
+        } else if (trimmedCod || trimmedDesc) {
+          // 1. Procura correspondência exata de código
+          const exactMatch = trimmedCod ? rows.find(m => m.CodMatFabricante?.toUpperCase() === trimmedCod) : null;
+
+          if (exactMatch) {
+            if (selMat1Ref.current?.IdMaterial !== exactMatch.IdMaterial) {
+              selectMat1(exactMatch);
+            }
+          } else if (rows.length === 1 && trimmedCod) {
+            if (selMat1Ref.current?.IdMaterial !== rows[0].IdMaterial) {
+              selectMat1(rows[0]);
+            }
+          } else {
+            // Múltiplos resultados: se o item selecionado não está mais nos resultados, limpa
+            if (selMat1Ref.current && !rows.some(m => m.IdMaterial === selMat1Ref.current?.IdMaterial)) {
+              clearSelection1();
+            }
+          }
+        }
+      }
+    } finally {
+      setLoading1(false);
+    }
+  }, [token, clearSelection1, selectMat1]);
+
+  useEffect(() => {
+    const t = setTimeout(() => fetchMateriais1(fCod1, fDesc1), 400);
+    return () => clearTimeout(t);
+  }, [fCod1, fDesc1, fetchMateriais1]);
 
   const fetchSubComp = async (idMontaPeca: number, idMaterial: number, codMat?: string) => {
     if (expandedItems.has(idMontaPeca)) {
@@ -300,7 +349,6 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
     setHasUnsavedChanges(true);
   };
 
-  const clearForm = () => { setSelId(''); setProcSearch(''); setSeq(''); setOb(''); setEstMin(''); setPadMin(''); };
   const nextSeq = () => lastAutoSeq + 10;
 
   const saveProcs = async (newStaging: Proc[]) => {
@@ -773,12 +821,46 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
             </div>
             <div className="p-2 flex gap-1.5 relative items-center">
               <div className="relative flex-1">
-                <input value={fCod1} onChange={e=>setFCod1(e.target.value)} placeholder="Código..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
-                {fCod1 && <button onClick={()=>setFCod1('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar Código"><X size={12}/></button>}
+                <input 
+                  value={fCod1} 
+                  onChange={e=>setFCod1(e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter') fetchMateriais1(fCod1, fDesc1); }} 
+                  placeholder="Código..." 
+                  className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                />
+                {fCod1 && (
+                  <button 
+                    onClick={() => {
+                      setFCod1('');
+                      fetchMateriais1('', fDesc1);
+                    }} 
+                    className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" 
+                    title="Limpar Código"
+                  >
+                    <X size={12}/>
+                  </button>
+                )}
               </div>
               <div className="relative flex-[1.5]">
-                <input value={fDesc1} onChange={e=>setFDesc1(e.target.value)} placeholder="Descrição..." className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"/>
-                {fDesc1 && <button onClick={()=>setFDesc1('')} className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" title="Limpar Descrição"><X size={12}/></button>}
+                <input 
+                  value={fDesc1} 
+                  onChange={e=>setFDesc1(e.target.value)} 
+                  onKeyDown={e => { if (e.key === 'Enter') fetchMateriais1(fCod1, fDesc1); }} 
+                  placeholder="Descrição..." 
+                  className="w-full px-2 pr-6 py-1 text-[10px] border border-gray-300 rounded focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
+                />
+                {fDesc1 && (
+                  <button 
+                    onClick={() => {
+                      setFDesc1('');
+                      fetchMateriais1(fCod1, '');
+                    }} 
+                    className="absolute right-1 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 bg-white rounded p-0.5 shadow-sm" 
+                    title="Limpar Descrição"
+                  >
+                    <X size={12}/>
+                  </button>
+                )}
               </div>
               <button onClick={clearTotal1} className="shrink-0 px-2.5 py-1 bg-red-50 text-red-600 border border-red-200 rounded hover:bg-red-100 shadow-sm text-[10px] font-bold" title="Limpar Tudo (Filtro e Seleção)">Limpar</button>
             </div>
@@ -787,7 +869,9 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
             {loading1 ? (
               <div className="flex justify-center p-4"><Loader2 className="animate-spin text-emerald-500" size={18}/></div>
             ) : materiais1.length === 0 ? (
-              <div className="p-4 text-center text-[10px] text-gray-400">Digite um filtro para buscar materiais</div>
+              <div className="p-4 text-center text-[10px] text-gray-400">
+                {fCod1 || fDesc1 ? 'Nenhum material encontrado com os filtros informados' : 'Digite um filtro para buscar materiais'}
+              </div>
             ) : (
               <table className="w-full text-left">
                 <thead className="bg-white sticky top-0 z-10 shadow-sm">
@@ -798,7 +882,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {(selMat1 ? [selMat1] : materiais1).map(m => (
+                  {materiais1.map(m => (
                     <tr key={m.IdMaterial} onClick={() => selectMat1(m)}
                       className={`cursor-pointer transition-all ${selMat1?.IdMaterial === m.IdMaterial ? 'bg-emerald-100/70 border-l-[3px] border-emerald-500 shadow-sm' : 'hover:bg-gray-100 border-l-[3px] border-transparent'}`}>
                       <td className={`${cellCls} font-bold text-[#32423D] min-w-[100px] flex items-center gap-1`} title={m.CodMatFabricante}>

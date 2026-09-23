@@ -46,9 +46,11 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
     const offsetNum = (pageNum - 1) * limitNum;
 
     try {
+        // Base: inclui todos os registros material_processo vinculados a uma OS
+        // Filtro Fabrica=SIM: apenas processos de produção física (exclui APROVAÇÃO, EXPEDIÇÃO, etc.)
         let whereClause = `(osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
-            AND osi.Liberado_engenharia = 'S'
-            AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')`;
+            AND UPPER(REPLACE(REPLACE(COALESCE(pf.Fabrica,''), 'Â', 'A'), 'Ã', 'A')) = 'SIM'`;
+
         const params = [];
 
         if (!isTodos && idProcesso !== null) {
@@ -67,9 +69,11 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
         }
 
         if (status === 'pendente') {
-            whereClause += ' AND (mp.TotalExecutado IS NULL OR mp.TotalExecutado < mp.TotalExecutar OR mp.RealizadoFinal IS NULL)';
+            // Pendente: ou ainda não concluído (RealizadoFinal NULL) ou produção abaixo da meta
+            whereClause += ' AND (mp.RealizadoFinal IS NULL OR mp.TotalExecutado IS NULL OR mp.TotalExecutado < mp.TotalExecutar)';
         } else if (status === 'concluido') {
-            whereClause += ' AND mp.TotalExecutado >= mp.TotalExecutar AND mp.RealizadoFinal IS NOT NULL';
+            // Concluído: finalizou E atingiu a meta (só para itens que tinham meta > 0)
+            whereClause += ' AND mp.RealizadoFinal IS NOT NULL AND mp.TotalExecutar > 0 AND mp.TotalExecutado >= mp.TotalExecutar';
         }
 
         if (tag) {
@@ -114,10 +118,14 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
         const countQuery = `
             SELECT COUNT(*) as total 
             FROM material_processo mp
-            JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
-            JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            LEFT JOIN ordemservicoitem osi
+                ON osi.IdOrdemServico = mp.IdOrdemServico
+               AND osi.codmatFabricante = mp.codmatFabricante
+            JOIN ordemservico os ON os.IdOrdemServico = mp.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
-            WHERE ${whereClause}
+            LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+            WHERE mp.IdOrdemServico IS NOT NULL AND mp.IdOrdemServico > 0
+              AND ${whereClause}
         `;
 
         // Pré-agregar TodosRecursosTooltip em uma única query (substitui N subqueries correlacionados)
@@ -129,15 +137,15 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 mp.IdProcesso,
                 mp.codmatFabricante AS CodMatFabricante,
                 COALESCE(mp.TotalExecutado, 0) AS QtdeProduzidaSetor,
-                COALESCE(mp.TotalExecutar, osi.QtdeTotal) AS TotalExecutar,
+                COALESCE(mp.TotalExecutar, osi.QtdeTotal, 0) AS TotalExecutar,
                 mp.RealizadoInicio,
                 mp.RealizadoFinal,
                 mp.PlanejadoInicio AS DataPlanejamento,
                 osi.IdOrdemServicoItem,
-                osi.IdOrdemServico,
-                osi.DescResumo,
+                mp.IdOrdemServico,
+                COALESCE(osi.DescResumo, mp.codmatFabricante) AS DescResumo,
                 osi.DescDetal,
-                osi.QtdeTotal,
+                COALESCE(osi.QtdeTotal, mp.TotalExecutar, 0) AS QtdeTotal,
                 mp.TempoEstimadoMin,
                 mp.TempoPadraoMin,
                 mp.MinutosProducao,
@@ -148,13 +156,20 @@ app.get('/api/material-processo/apontamentos/:recurso', tenantMiddleware, async 
                 COALESCE(NULLIF(TRIM(COALESCE(os.NomeCliente, os.DescEmpresa, '')), ''), p.ClienteProjeto) AS Cliente,
                 os.Estatus AS StatusOS,
                 os.OrdemServicoFinalizado AS OSFinalizado,
-                p.Finalizado AS StatusProjeto
+                p.Finalizado AS StatusProjeto,
+                pf.processofabricacao AS NomeProcesso,
+                pf.Fabrica AS FabricaProcesso
             FROM material_processo mp
-            JOIN ordemservicoitem osi ON osi.IdOrdemServico = mp.IdOrdemServico AND osi.codmatFabricante = mp.codmatFabricante
-            JOIN ordemservico os ON os.IdOrdemServico = osi.IdOrdemServico
+            LEFT JOIN ordemservicoitem osi
+                ON osi.IdOrdemServico = mp.IdOrdemServico
+               AND osi.codmatFabricante = mp.codmatFabricante
+            JOIN ordemservico os ON os.IdOrdemServico = mp.IdOrdemServico
             LEFT JOIN projetos p ON os.IdProjeto = p.IdProjeto
-            WHERE ${whereClause}
-            ORDER BY osi.IdOrdemServico DESC, osi.IdOrdemServicoItem ASC
+            LEFT JOIN processofabricacao pf ON pf.IdProcessoFabricacao = mp.IdProcesso
+            WHERE mp.IdOrdemServico IS NOT NULL AND mp.IdOrdemServico > 0
+              AND (os.D_E_L_E_T_E IS NULL OR os.D_E_L_E_T_E = '' OR os.D_E_L_E_T_E != '*')
+              AND ${whereClause}
+            ORDER BY mp.IdOrdemServico DESC, COALESCE(osi.IdOrdemServicoItem, mp.IdMaterialProcesso) ASC
             LIMIT ? OFFSET ?
         `;
 

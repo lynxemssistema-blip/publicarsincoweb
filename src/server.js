@@ -9740,18 +9740,31 @@ app.get('/api/ordemservico/:id/materiais-em-processo', tenantMiddleware, async (
             }
             if (r.processofabricacao) {
                 const key = r.processofabricacao.trim().replace(/\s+/g, '');
-                mats[compKey].recursoTempos[key] = {
-                    tempoSetup: Number(r.TempoEstimadoMin || 0),
-                    tempoPadrao: Number(r.TempoPadraoMin || 0),
-                    label: r.processofabricacao
-                };
-                mats[compKey].processos.push({
-                    SequenciaExecucao: r.SequenciaExecucao,
-                    processofabricacao: r.processofabricacao,
-                    Qtde: Number(r.Qtde) || 1,
-                    TempoEstimadoMin: Number(r.TempoEstimadoMin || 0),
-                    TempoPadraoMin: Number(r.TempoPadraoMin || 0)
-                });
+                // Acumula tempos no mapa recursoTempos (sem duplicar)
+                if (!mats[compKey].recursoTempos[key]) {
+                    mats[compKey].recursoTempos[key] = {
+                        tempoSetup: Number(r.TempoEstimadoMin || 0),
+                        tempoPadrao: Number(r.TempoPadraoMin || 0),
+                        label: r.processofabricacao
+                    };
+                }
+
+                // Deduplicar processos por IdProcesso + SequenciaExecucao
+                // Se o processo já existe, acumula a Qtde; senão adiciona
+                const procKey = `${r.IdProcesso}_${r.SequenciaExecucao}`;
+                const existingProc = mats[compKey].processos.find((p) => p._procKey === procKey);
+                if (existingProc) {
+                    existingProc.Qtde = (Number(existingProc.Qtde) || 0) + (Number(r.Qtde) || 0);
+                } else {
+                    mats[compKey].processos.push({
+                        _procKey: procKey,
+                        SequenciaExecucao: r.SequenciaExecucao,
+                        processofabricacao: r.processofabricacao,
+                        Qtde: Number(r.Qtde) || 0,
+                        TempoEstimadoMin: Number(r.TempoEstimadoMin || 0),
+                        TempoPadraoMin: Number(r.TempoPadraoMin || 0)
+                    });
+                }
             }
         }
         res.json({ success: true, data: mats });
@@ -10237,7 +10250,11 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
                     `, [childMatId, childCod]);
 
                     if (childProcs.length > 0) {
-                        for (const proc of childProcs) {
+                        // CASCATA: só o 1º recurso (menor seq) recebe TotalExecutar;
+                        // os demais ficam com 0 até o anterior finalizar
+                        for (let procIdx = 0; procIdx < childProcs.length; procIdx++) {
+                            const proc = childProcs[procIdx];
+                            const totalExec = procIdx === 0 ? childQtdeTotal : 0;
                             // Cota de Referência para o Apontamento de Produção calculada exclusivamente em material_processo
                             await conn.execute(`
                                 INSERT INTO material_processo (
@@ -10247,7 +10264,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
                                 ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)
                             `, [
                                 childMatId, childCod, proc.IdProcesso, proc.SequenciaExecucao,
-                                proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, childQtdeTotal,
+                                proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, totalExec,
                                 osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
                             ]);
                         }
@@ -10335,10 +10352,13 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
             // Insere processos em material_processo com TotalExecutar (apenas em material_processo)
             if (recursoTempos && typeof recursoTempos === 'object') {
                 let seq = 1;
-                for (const [secKey, recVal] of Object.entries(recursoTempos)) {
-                    if (!recVal) continue;
-                    const rSetup = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
+                const recursoEntries = Object.entries(recursoTempos).filter(([, v]) => !!v);
+                for (let ri = 0; ri < recursoEntries.length; ri++) {
+                    const [secKey, recVal] = recursoEntries[ri];
+                    const rSetup  = Math.max(0, parseInt(String(recVal.tempoSetup), 10) || 0);
                     const rPadrao = Math.max(0, parseInt(String(recVal.tempoPadrao), 10) || 0);
+                    // CASCATA: só o 1º recurso recebe TotalExecutar; os demais ficam 0
+                    const rTotalExecutar = ri === 0 ? qtdeTotalNum : 0;
 
                     const [procIds] = await conn.execute(`SELECT IdProcessoFabricacao, ProcessoFabricacao FROM processofabricacao WHERE REPLACE(processofabricacao, ' ', '') = ? LIMIT 1`, [secKey]);
                     if (procIds.length > 0) {
@@ -10351,7 +10371,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)`,
                             [
                                 mat.IdMaterial, codmatfabricante, idProcesso, seq,
-                                rSetup, rPadrao, qtdeTotalNum,
+                                rSetup, rPadrao, rTotalExecutar,
                                 osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
                             ]
                         );
@@ -10369,7 +10389,10 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
                     ORDER BY mp.SequenciaExecucao ASC
                 `, [mat.IdMaterial, codmatfabricante]);
 
-                for (const proc of parentProcs) {
+                // CASCATA: 1º processo = qtdeTotalNum, demais = 0
+                for (let pi = 0; pi < parentProcs.length; pi++) {
+                    const proc = parentProcs[pi];
+                    const totalExec = pi === 0 ? qtdeTotalNum : 0;
                     await conn.execute(`
                         INSERT INTO material_processo (
                             IdMaterial, codmatFabricante, IdProcesso, SequenciaExecucao,
@@ -10378,7 +10401,7 @@ app.post('/api/ordemservico/:id/incluir-materiais-dinamico', tenantMiddleware, a
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, 'A', 'Sistema', NOW(), ?, ?, ?)
                     `, [
                         mat.IdMaterial, codmatfabricante, proc.IdProcesso, proc.SequenciaExecucao,
-                        proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, qtdeTotalNum,
+                        proc.TempoEstimadoMin || 0, proc.TempoPadraoMin || 0, totalExec,
                         osId, osData.IdProjeto || osContext?.IdProjeto || null, osData.IdTag || osContext?.IdTag || null
                     ]);
                 }
@@ -11446,6 +11469,7 @@ WHERE osi.IdOrdemServicoItem = ?
             item: item,
             historico: historicoRows,
             totalProduzido: totalExecutado,
+            totalExecutar: Math.max(0, totalExecutar),
             qtdeFaltante: Math.min(item.QtdeTotal - totalExecutado, Math.max(0, totalExecutar)),
             dailyMinProd  // minutos acumulados HOJE no campo auxiliar (começa em 0 a cada novo dia)
         };

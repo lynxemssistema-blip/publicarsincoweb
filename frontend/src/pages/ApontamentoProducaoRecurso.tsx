@@ -472,8 +472,8 @@ useEffect(() => {
 
  // Config for visible sectors (fetched via context)
  useEffect(() => {
- // Permite setores meta-built-in
- if (['mapa', 'planejamento', 'mapaproducao'].includes(setorAtivo)) return;
+ // Permite setores meta-built-in (incluindo 'todos' — exibe todos os recursos em linhas)
+ if (['mapa', 'planejamento', 'mapaproducao', 'todos'].includes(setorAtivo)) return;
 
  // Verifica se o setorAtivo atual é um recurso válido carregado do banco
  const isDynamicResource = recursosList.some(r => r.processofabricacao.toLowerCase().replace(/\s+/g, '') === setorAtivo);
@@ -540,6 +540,7 @@ useEffect(() => {
  // Use different route for mapa and mapaproducao
  const getResourceFetchId = () => {
    if (setorAtivo === 'mapa' || setorAtivo === 'mapaproducao') return setorAtivo;
+   if (setorAtivo === 'todos') return 'todos';
    const r = recursosList.find((x: any) => x.processofabricacao.toLowerCase().replace(/\s+/g, '') === setorAtivo);
    return r ? r.IdProcessoFabricacao : setorAtivo;
  };
@@ -1324,6 +1325,8 @@ useEffect(() => {
         }}
         className="w-full px-2 py-1.5 rounded border border-gray-200 bg-white text-xs focus:outline-none focus:ring-1 focus:ring-[#E0E800]/50"
     >
+        {/* Opção TODOS — exibe todos os recursos sem filtro */}
+        <option value="todos">TODOS</option>
         {recursosList.map((r, idx) => {
             const val = r.processofabricacao.toLowerCase().replace(/\s+/g, '');
             return <option key={idx} value={val}>{r.processofabricacao}</option>;
@@ -1643,7 +1646,7 @@ useEffect(() => {
  {/* Primary Table Header - Movido para dentro do container com sticky */}
  {!loading && itens.length > 0 && setorAtivo !== 'mapa' && (
  <div className="bg-gray-100 px-2 py-1.5 flex items-center gap-1.5 text-[9px] font-black text-gray-500 uppercase sticky top-0 z-20 border-b border-gray-200 shadow-sm min-w-max">
- <span className="w-10 shrink-0 text-center">OS</span>
+ <span className="w-10 shrink-0 text-center">Os</span>
  <span className="w-40 shrink-0 sticky left-0 bg-gray-100 z-30 border-r border-gray-200">Cliente/Empresa</span>
  <span className="w-32 shrink-0">Projeto</span>
  <span className="w-24 shrink-0">Tag</span>
@@ -1653,6 +1656,7 @@ useEffect(() => {
  <span className="w-16 shrink-0 text-center">Apontar</span>
  <span className="w-10 shrink-0 text-center">Qt</span>
  <span className="w-14 shrink-0 text-center">Prod.</span>
+ {setorAtivo === 'todos' && <span className="w-28 shrink-0 text-center bg-[#E0E800]/30 rounded py-0.5">Recurso</span>}
  <span className="w-12 shrink-0 text-center">Esp.</span>
  <span className="w-48 shrink-0">Descrição</span>
  <span className="w-24 shrink-0 text-center">Data Planej.</span>
@@ -1731,7 +1735,7 @@ useEffect(() => {
  </p>
  </div>
  </div>
- ) : setorAtivo === 'mapa' ? (
+ ) : (setorAtivo === 'mapa') ? (
  /* Mapa da Produção View */
  <div>
  {/* Mapa Header */}
@@ -2034,7 +2038,10 @@ useEffect(() => {
  {items.map((item) => {
  // Calculate specific sector target quantity
  const qtdeProduzida = Number(item.QtdeProduzidaSetor) || 0;
- const qtdeAlvoSetor = Number(item.TotalExecutar || 0) + qtdeProduzida;
+ // TotalExecutar é o total a produzir para o recurso nesta OS
+ // Usa ?? (nullish) para respeitar TotalExecutar=0 (cascata aguardando recurso anterior)
+ // || trataria 0 como falsy e usaria QtdeTotal incorretamente
+ const qtdeAlvoSetor = item.TotalExecutar != null ? Number(item.TotalExecutar) : Number(item.QtdeTotal ?? 0);
  const percentual = qtdeAlvoSetor > 0 ? Math.round((qtdeProduzida / qtdeAlvoSetor) * 100) : 0;
  const concluido = qtdeAlvoSetor > 0 && qtdeProduzida >= qtdeAlvoSetor;
  // We still need the global item qtdeTotal for the checkPredecessorStatus logic
@@ -2140,7 +2147,14 @@ useEffect(() => {
  </span>
  </div>
 
- 
+ {/* Recurso (visível apenas em modo TODOS) */}
+ {setorAtivo === 'todos' && (
+ <div className="w-28 shrink-0 text-center">
+ <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black bg-[#E0E800]/20 text-[#32423D] border border-[#E0E800]/40">
+ {(item as any).NomeProcesso || '-'}
+ </span>
+ </div>
+ )}
 
  {/* Espessura */}
  <div className="w-12 shrink-0 text-center text-[10px] text-gray-600">
@@ -2686,12 +2700,12 @@ useEffect(() => {
                   <input
                     type="number"
                     min="1"
-                    max={itemDetails.qtdeFaltante}
+                    max={itemDetails.totalExecutar ?? itemDetails.qtdeFaltante}
                     value={qtdeApontar} autoFocus onFocus={(e) => e.target.select()} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!submitting) handleSubmit(); } }} onChange={(e) => {
                       let val = e.target.value;
                       if (val !== '') {
                         const num = parseInt(val) || 0;
-                        const max = itemDetails?.qtdeFaltante || 0;
+                        const max = itemDetails?.totalExecutar ?? itemDetails?.qtdeFaltante ?? 0;
                         if (num > max) val = String(max);
                         else if (num < 0) val = '0';
                       }

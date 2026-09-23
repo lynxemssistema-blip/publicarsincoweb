@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench, Trash2 } from 'lucide-react';
+import { Search, Plus, X, Loader2, Check, CheckCircle, Wrench, Trash2, Save } from 'lucide-react';
 import ModalMontagemProcessoFabricacao from './ModalMontagemProcessoFabricacao';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -549,14 +549,21 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
     }
   };
 
-  const handleConcluir = async () => {
-    const temItensNaoSalvos = Object.keys(selectedItems).some(cod => !selectedItems[cod].alreadyInOS);
-    if (temItensNaoSalvos) {
-      const success = await handleSubmit();
-      if (!success) return;
-    }
-    onSuccess();
+  // Apenas fecha o modal SEM incluir nada na OS
+  const handleFechar = () => {
     onClose();
+  };
+
+  // Salva os itens selecionados na OS (sem fechar o modal)
+  const handleSalvarNaOS = async () => {
+    const temItensNaoSalvos = Object.keys(selectedItems).some(cod => !selectedItems[cod].alreadyInOS);
+    if (!temItensNaoSalvos) {
+      setSuccessMsg('Nenhum item novo para salvar.');
+      setTimeout(() => setSuccessMsg(null), 3000);
+      return;
+    }
+    await handleSubmit();
+    // handleSubmit já limpa selectedItems e exibe mensagem de sucesso
   };
 
   if (!isOpen) return null;
@@ -578,9 +585,9 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
             </p>
           </div>
           <button
-            onClick={handleConcluir}
+            onClick={handleFechar}
             className="px-3 py-1.5 bg-white/10 hover:bg-red-600/80 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs"
-            title="Fechar Modal"
+            title="Fechar modal sem salvar"
           >
             <X size={16} /> Fechar e Retornar
           </button>
@@ -759,13 +766,30 @@ export default function ModalIncluirMaterialOS({ isOpen, onClose, osId, osContex
 
           {/* Right panel - Selected Items */}
           <div className="w-full md:w-[410px] shrink-0 flex flex-col bg-white">
-            <div className="p-3 border-b bg-gray-50 flex items-center justify-between">
+            <div className="p-3 border-b bg-gray-50 flex items-center justify-between gap-2">
               <div>
                 <h3 className="font-bold text-gray-700 text-sm">Itens Selecionados ({totalSelected})</h3>
                 {totalSelected > 0 && (
                   <span className="text-[10px] text-slate-500">Recursos via material_processo</span>
                 )}
               </div>
+              {/* Botão principal de salvar — só aparece quando há itens selecionados */}
+              {totalSelected > 0 && (
+                <button
+                  type="button"
+                  onClick={handleSalvarNaOS}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                  title="Incluir os itens selecionados na O.S."
+                >
+                  {saving ? (
+                    <Loader2 size={14} className="animate-spin" />
+                  ) : (
+                    <Save size={14} />
+                  )}
+                  {saving ? 'Salvando...' : `Salvar na O.S. (${totalSelected})`}
+                </button>
+              )}
             </div>
 
             <div className="flex-1 overflow-auto p-3 space-y-3">

@@ -126,13 +126,15 @@ router.get('/arvore/:codMat', async (req, res) => {
                             m.Peso,
                             (SELECT COUNT(1) FROM montapeca sub 
                              WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) 
-                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren,
+                            (SELECT COUNT(1) FROM material_processo proc
+                             WHERE proc.codmatFabricante = mp.CodMatFabricante
+                               AND (proc.IdOrdemServico IS NULL OR proc.IdOrdemServico = 0)) AS NumProcessos
                          FROM montapeca mp
                          LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
                          WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
                            AND (mp.CodMatFabricantePeca = ? OR (mp.IdMaterialPeca = ? AND ? > 0))
-                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
-            
+                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;            
             const [rows] = await pool.execute(sql, [cod, idMat || 0, idMat || 0]);
             
             const result = [];

@@ -156,6 +156,7 @@ interface ArvorePecaNode {
     Unidade?: string;
     Peso?: number;
     NumChildren?: number;
+    NumProcessos?: number;  // número de processos/recursos cadastrados no template
     children?: ArvorePecaNode[];
 }
 
@@ -1469,6 +1470,9 @@ function OrdemServicoContent() {
         const isRecursosExpanded = expandedNodeRecursos.has(nodeKey);
         const recursosList = nodeRecursosMap[node.CodMatFabricante] || [];
         const isLoadingRecursos = loadingNodeRecursos[node.CodMatFabricante];
+        // Botão de recursos: ativo somente se há processos cadastrados no template
+        // NumProcessos vem do backend; fallback: se já carregamos e tinha dados
+        const hasRecursos = (Number(node.NumProcessos) > 0) || recursosList.length > 0;
 
         return (
             <div key={nodeKey} className="relative">
@@ -1562,8 +1566,9 @@ function OrdemServicoContent() {
                             </span>
                         ) : null}
 
-                        {/* Botão de Ver Recursos para cada item componente (qualquer nível) */}
-                        <button
+                        {/* Botão de Ver Recursos: só exibe quando o nó possui processos cadastrados */}
+                        {hasRecursos && (
+                          <button
                             type="button"
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -1575,7 +1580,7 @@ function OrdemServicoContent() {
                                     : 'bg-teal-50 text-teal-700 hover:bg-teal-100 border border-teal-200 hover:border-teal-300'
                             }`}
                             title={`Visualizar recursos e processos de fabricação de ${node.CodMatFabricante}`}
-                        >
+                          >
                             <Layers size={13} className={isRecursosExpanded ? 'text-teal-200' : 'text-teal-600'} />
                             <span>Recursos</span>
                             {recursosList.length > 0 && (
@@ -1585,7 +1590,8 @@ function OrdemServicoContent() {
                                     {recursosList.length}
                                 </span>
                             )}
-                        </button>
+                          </button>
+                        )}
                     </div>
                 </div>
 
@@ -3247,7 +3253,8 @@ function OrdemServicoContent() {
                                                 <span className="w-8 text-center" title="Conjunto Principal">★</span>
                                                 <span className="w-8 text-center" title="Manutenção de Tempos"><Clock size={12} className="inline" /></span>
                                                 <span className="w-8 text-center" title="Recursos"><Layers size={12} className="inline" /></span>
-                                                <span className="w-8 text-center" title="Árvore da Peça Manufaturada"><GitFork size={12} className="inline" /></span>
+
+
                                                 <span className="w-8 text-center" title="Excluir"><Trash2 size={12} className="inline" /></span>
                                             </div>
                                             <span className="w-32 shrink-0">Código Desenho</span>
@@ -3439,30 +3446,8 @@ function OrdemServicoContent() {
                                                         </div>
                                                     )}
 
-                                                    {/* Botão de Ver Árvore de Componentes (Peça Manufaturada) */}
-                                                    {isPecaManufat ? (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                toggleItemArvore(item);
-                                                            }}
-                                                            className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                                                                isArvoreExpanded 
-                                                                    ? 'bg-purple-700 text-white shadow-sm ring-1 ring-purple-400' 
-                                                                    : 'bg-purple-50 text-purple-700 hover:bg-purple-200'
-                                                            }`}
-                                                            title="Ver Árvore de Componentes e Sub-Níveis (Peça Manufaturada)"
-                                                        >
-                                                            <GitFork size={14} />
-                                                        </button>
-                                                    ) : (
-                                                        <div 
-                                                            className="w-8 h-8 rounded flex items-center justify-center bg-gray-50 text-gray-300"
-                                                            title="Item Comum (Sem árvore de componentes)"
-                                                        >
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                                        </div>
-                                                    )}
+
+
 
 
 
