@@ -19610,3 +19610,21 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
         res.status(500).json({ success: false, message: 'Erro ao excluir arquivo' });
     }
 });
+
+// ============================================================
+// React SPA — catch-all FINAL (deve ser o último route handler)
+// Serve index.html para QUALQUER rota que não seja /api/*
+// Isso permite que o React Router gerencie rotas como /ordens-servico, /materiais, etc.
+// ============================================================
+app.get(/^(?!\/api\/).*$/, (req, res) => {
+    const fs = require('fs');
+    const devPath = path.join(__dirname, '../frontend/dist/index.html');
+    const prodPath = path.join(__dirname, '../index.html');
+    if (fs.existsSync(devPath)) {
+        res.sendFile(devPath);
+    } else if (fs.existsSync(prodPath)) {
+        res.sendFile(prodPath);
+    } else {
+        res.status(404).send('index.html not found');
+    }
+});
