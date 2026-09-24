@@ -585,109 +585,105 @@ exports.processItems = async (req, res) => {
                 totalPecasIncluidas += processQty;
 
                 // ═══════════════════════════════════════════════════════════════════
-                // EXPANSÃO montapeca: Se o material PAI possui componentes filhos
-                // cadastrados em montapeca, cada filho é incluído como item
-                // independente na OS, respeitando as operações matemáticas:
+                // EXPANSÃO RECURSIVA montapeca: Se o material PAI possui componentes
+                // cadastrados em montapeca em qualquer nível hierárquico, cada item
+                // é incluído como item independente na OS, multiplicando pelo Fator K:
                 //
-                //   QtdeTotal_filho = processQty × PecaQtde
+                //   QtdeTotal_filho = processQty × QtdeAcumulada
                 //   Peso_filho      = PesoUnitario_filho × QtdeTotal_filho
                 //   AreaPintura_f   = AreaPintura_filho  × QtdeTotal_filho
-                //   TotalExecutar   = QtdeTotal_filho (atribuído ao 1º setor ativo)
+                //   TotalExecutar   = QtdeTotal_filho (referência p/ apontamento)
                 // ═══════════════════════════════════════════════════════════════════
                 if (mat.IdMaterial) {
-                    const [filhosMP] = await connection.query(`
-                        SELECT
-                            mp.IdMaterialPeca, mp.PecaQtde,
-                            f.CodMatFabricante AS FilhoCodMat,
-                            f.IdMaterial       AS FilhoIdMaterial,
-                            f.DescResumo       AS FilhoDescResumo,
-                            f.DescDetal        AS FilhoDescDetal,
-                            f.Unidade          AS FilhoUnidade,
-                            f.txtTipoDesenho   AS FilhoTipoDesenho,
-                            f.txtCorte         AS FilhoCorte,
-                            f.txtDobra         AS FilhoDobra,
-                            f.txtSolda         AS FilhoSolda,
-                            f.txtPintura       AS FilhoPintura,
-                            f.TxtMontagem      AS FilhoMontagem,
-                            f.Espessura        AS FilhoEspessura,
-                            f.MaterialSW       AS FilhoMaterialSW,
-                            f.Peso             AS FilhoPesoUnit,
-                            f.AreaPintura      AS FilhoAreaUnit,
-                            f.txtItemEstoque   AS FilhoItemEstoque,
-                            f.ProdutoPrincipal AS FilhoProdutoPrincipal
-                        FROM montapeca mp
-                        INNER JOIN material f ON f.IdMaterial = mp.IdMaterialPeca
-                        WHERE mp.IdMaterial = ?
-                          AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
-                          AND mp.IdMaterialPeca IS NOT NULL
-                          AND mp.IdMaterialPeca > 0
-                    `, [mat.IdMaterial]);
+                    async function expandFilhosBlocksetRecursive(parentMatId, parentCod, parentQtdeAcumulada, path = []) {
+                        if (path.includes(parentMatId) || path.length > 25) return;
+                        const currentPath = [...path, parentMatId];
 
-                    console.log(`[MONTAPECA] PAI=${item.Part_Reference} (IdMaterial=${mat.IdMaterial}) → ${filhosMP.length} filho(s)`);
+                        const [filhosMP] = await connection.query(`
+                            SELECT
+                                mp.IdMaterialPeca, mp.PecaQtde,
+                                COALESCE(mp.QtdeUnitaria, CAST(NULLIF(mp.PecaQtde, '') AS DECIMAL(18,4)), 1) AS QtdeUnitaria,
+                                f.CodMatFabricante AS FilhoCodMat,
+                                f.IdMaterial       AS FilhoIdMaterial,
+                                f.DescResumo       AS FilhoDescResumo,
+                                f.DescDetal        AS FilhoDescDetal,
+                                f.Unidade          AS FilhoUnidade,
+                                f.txtTipoDesenho   AS FilhoTipoDesenho,
+                                f.txtCorte         AS FilhoCorte,
+                                f.txtDobra         AS FilhoDobra,
+                                f.txtSolda         AS FilhoSolda,
+                                f.txtPintura       AS FilhoPintura,
+                                f.TxtMontagem      AS FilhoMontagem,
+                                f.Espessura        AS FilhoEspessura,
+                                f.MaterialSW       AS FilhoMaterialSW,
+                                f.Peso             AS FilhoPesoUnit,
+                                f.AreaPintura      AS FilhoAreaUnit,
+                                f.txtItemEstoque   AS FilhoItemEstoque,
+                                f.ProdutoPrincipal AS FilhoProdutoPrincipal
+                            FROM montapeca mp
+                            INNER JOIN material f ON (f.IdMaterial = mp.IdMaterialPeca OR (f.IdMaterial = mp.IdMaterial AND mp.IdMaterialPeca = ?))
+                            WHERE (mp.IdMaterial = ? OR mp.IdMaterialPeca = ?)
+                              AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
+                              AND f.IdMaterial != ?
+                        `, [parentMatId, parentMatId, parentMatId, parentMatId]);
 
-                    for (const f of filhosMP) {
-                        const pecaQtde = Number(f.PecaQtde) || 0;
-                        if (pecaQtde <= 0) continue;
+                        for (const f of filhosMP) {
+                            const pecaQtde = Number(f.QtdeUnitaria || f.PecaQtde) || 0;
+                            if (pecaQtde <= 0) continue;
 
-                        const filhoQtdeTotal = processQty * pecaQtde;
-                        const filhoPesoUnit  = Number(f.FilhoPesoUnit) || 0;
-                        const filhoAreaUnit  = Number(f.FilhoAreaUnit) || 0;
-                        const filhoPesoTotal = filhoPesoUnit * filhoQtdeTotal;
-                        const filhoAreaTotal = filhoAreaUnit * filhoQtdeTotal;
+                            const filhoQtdeAcumulada = parentQtdeAcumulada * pecaQtde;
+                            const filhoQtdeTotal = processQty * filhoQtdeAcumulada;
+                            const filhoPesoUnit  = Number(f.FilhoPesoUnit) || 0;
+                            const filhoAreaUnit  = Number(f.FilhoAreaUnit) || 0;
+                            const filhoPesoTotal = filhoPesoUnit * filhoQtdeTotal;
+                            const filhoAreaTotal = filhoAreaUnit * filhoQtdeTotal;
 
-                        let filhoEndereco = 'IMPORTADO DA PLANILHA';
-                        if (dbAtivo === 'amceletrica') {
-                            const codF = (f.FilhoCodMat || '').trim();
-                            const tipoF = (f.FilhoTipoDesenho || '').trim().toUpperCase();
-                            const sufF = tipoF === 'CONJUNTO' ? '.SLDASM' : '.SLDPRT';
-                            if (codF) filhoEndereco = `${AMCELETRICA_BASE_PATH}\\${codF}${sufF}`;
+                            let filhoEndereco = 'IMPORTADO DA PLANILHA';
+                            if (dbAtivo === 'amceletrica') {
+                                const codF = (f.FilhoCodMat || '').trim();
+                                const tipoF = (f.FilhoTipoDesenho || '').trim().toUpperCase();
+                                const sufF = tipoF === 'CONJUNTO' ? '.SLDASM' : '.SLDPRT';
+                                if (codF) filhoEndereco = `${AMCELETRICA_BASE_PATH}\\${codF}${sufF}`;
+                            }
+
+                            const [filhoRes] = await connection.query(`
+                                INSERT INTO ordemservicoitem (
+                                    IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag,
+                                    IdMaterial, CodMatFabricante, DescResumo, DescDetal,
+                                    qtde, QtdeTotal, Fator,
+                                    Peso, PesoUnitario, AreaPintura, AreaPinturaUnitario,
+                                    Unidade, EnderecoArquivo,
+                                    txtTipoDesenho, txtCorte, txtDobra, txtSolda, txtPintura, TxtMontagem,
+                                    Espessura, MaterialSW, txtItemEstoque, ProdutoPrincipal,
+                                    DtCad, UsuarioCriacao, CriadoPor, Liberado_Engenharia, Data_Liberacao_Engenharia
+                                ) VALUES (
+                                    ?,?,?,?,?,?,  ?,?,?,?,  ?,?,?,  ?,?,?,?,  ?,?,
+                                    ?,?,?,?,?,?,  ?,?,?,?,  NOW(),?,?,'S',NOW()
+                                )
+                            `, [
+                                idOSDestino, osInfo.IdProjeto, osInfo.Projeto, osInfo.IdTag, osInfo.Tag, osInfo.DescTag,
+                                f.FilhoIdMaterial, f.FilhoCodMat, f.FilhoDescResumo, f.FilhoDescDetal,
+                                filhoQtdeAcumulada, filhoQtdeTotal, processQty,
+                                filhoPesoTotal, filhoPesoUnit, filhoAreaTotal, filhoAreaUnit,
+                                f.FilhoUnidade, filhoEndereco,
+                                f.FilhoTipoDesenho, f.FilhoCorte, f.FilhoDobra, f.FilhoSolda, f.FilhoPintura, f.FilhoMontagem,
+                                f.FilhoEspessura, f.FilhoMaterialSW, f.FilhoItemEstoque, f.FilhoProdutoPrincipal,
+                                usuario, usuario
+                            ]);
+
+                            itensProcessados++;
+                            totalPecasIncluidas += filhoQtdeTotal;
+
+                            console.log(`[MONTAPECA] ✅ Filho: ${f.FilhoCodMat} | QtdeTotal=${filhoQtdeTotal} (${processQty}×${filhoQtdeAcumulada}) | Peso=${filhoPesoTotal.toFixed(4)}`);
+
+                            if (f.FilhoIdMaterial) {
+                                await expandFilhosBlocksetRecursive(f.FilhoIdMaterial, f.FilhoCodMat, filhoQtdeAcumulada, currentPath);
+                            }
                         }
-
-                        const [filhoRes] = await connection.query(`
-                            INSERT INTO ordemservicoitem (
-                                IdOrdemServico, IdProjeto, Projeto, IdTag, Tag, DescTag,
-                                IdMaterial, CodMatFabricante, DescResumo, DescDetal,
-                                qtde, QtdeTotal, Fator,
-                                Peso, PesoUnitario, AreaPintura, AreaPinturaUnitario,
-                                Unidade, EnderecoArquivo,
-                                txtTipoDesenho, txtCorte, txtDobra, txtSolda, txtPintura, TxtMontagem,
-                                Espessura, MaterialSW, txtItemEstoque, ProdutoPrincipal,
-                                DtCad, UsuarioCriacao, CriadoPor, Liberado_Engenharia, Data_Liberacao_Engenharia
-                            ) VALUES (
-                                ?,?,?,?,?,?,  ?,?,?,?,  ?,?,?,  ?,?,?,?,  ?,?,
-                                ?,?,?,?,?,?,  ?,?,?,?,  NOW(),?,?,'S',NOW()
-                            )
-                        `, [
-                            idOSDestino, osInfo.IdProjeto, osInfo.Projeto, osInfo.IdTag, osInfo.Tag, osInfo.DescTag,
-                            f.FilhoIdMaterial, f.FilhoCodMat, f.FilhoDescResumo, f.FilhoDescDetal,
-                            pecaQtde, filhoQtdeTotal, processQty,
-                            filhoPesoTotal, filhoPesoUnit, filhoAreaTotal, filhoAreaUnit,
-                            f.FilhoUnidade, filhoEndereco,
-                            f.FilhoTipoDesenho, f.FilhoCorte, f.FilhoDobra, f.FilhoSolda, f.FilhoPintura, f.FilhoMontagem,
-                            f.FilhoEspessura, f.FilhoMaterialSW, f.FilhoItemEstoque, f.FilhoProdutoPrincipal,
-                            usuario, usuario
-                        ]);
-
-                        // Inicializar 1º setor ativo do filho (Corte→Dobra→Solda→Pintura→Montagem)
-                        const fItemId = filhoRes.insertId;
-                        const setorCol = f.FilhoCorte    === '1' ? 'CorteTotalExecutar'    :
-                                         f.FilhoDobra    === '1' ? 'DobraTotalExecutar'    :
-                                         f.FilhoSolda    === '1' ? 'SoldaTotalExecutar'    :
-                                         f.FilhoPintura  === '1' ? 'PinturaTotalExecutar'  :
-                                         f.FilhoMontagem === '1' ? 'MontagemTotalExecutar' : null;
-                        if (setorCol) {
-                            await connection.query(
-                                `UPDATE ordemservicoitem SET ${setorCol} = ? WHERE IdOrdemServicoItem = ?`,
-                                [filhoQtdeTotal, fItemId]
-                            );
-                        }
-
-                        itensProcessados++;
-                        totalPecasIncluidas += filhoQtdeTotal;
-
-                        console.log(`[MONTAPECA] ✅ Filho: ${f.FilhoCodMat} | QtdeTotal=${filhoQtdeTotal} (${processQty}×${pecaQtde}) | Peso=${filhoPesoTotal.toFixed(4)} | 1ºSetor=${setorCol || 'nenhum'}`);
                     }
-                } // fim if (mat.IdMaterial) — expansão montapeca
+
+                    await expandFilhosBlocksetRecursive(mat.IdMaterial, item.Part_Reference, 1, []);
+                } // fim if (mat.IdMaterial) — expansão montapeca recursiva
 
             } // fim else (material encontrado)
 

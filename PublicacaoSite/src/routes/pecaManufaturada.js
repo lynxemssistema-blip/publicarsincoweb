@@ -126,13 +126,15 @@ router.get('/arvore/:codMat', async (req, res) => {
                             m.Peso,
                             (SELECT COUNT(1) FROM montapeca sub 
                              WHERE (sub.IdMaterialPeca = mp.IdMaterial OR sub.CodMatFabricantePeca = mp.CodMatFabricante) 
-                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren
+                               AND (sub.D_E_L_E_T_E IS NULL OR sub.D_E_L_E_T_E = '')) AS NumChildren,
+                            (SELECT COUNT(1) FROM material_processo proc
+                             WHERE proc.codmatFabricante = mp.CodMatFabricante
+                               AND (proc.IdOrdemServico IS NULL OR proc.IdOrdemServico = 0)) AS NumProcessos
                          FROM montapeca mp
                          LEFT JOIN material m ON m.IdMaterial = mp.IdMaterial
                          WHERE (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')
                            AND (mp.CodMatFabricantePeca = ? OR (mp.IdMaterialPeca = ? AND ? > 0))
-                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;
-            
+                         ORDER BY mp.Ordem ASC, mp.CodMatFabricante ASC`;            
             const [rows] = await pool.execute(sql, [cod, idMat || 0, idMat || 0]);
             
             const result = [];
@@ -578,23 +580,82 @@ router.get('/processos', async (req, res) => {
 router.get('/processos-existentes/:codmatFabricante', async (req, res) => {
     try {
         const { codmatFabricante } = req.params;
-        const [rows] = await db(req).execute(
-            `SELECT
-                mp.IdProcesso,
-                mp.SequenciaExecucao,
-                mp.TempoEstimadoMin,
-                mp.TempoPadraoMin,
-                mp.Ativo,
-                mp.Observacao,
-                mp.DataCriacao,
-                mp.UsuarioCriacao,
-                COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso
-             FROM material_processo mp
-             LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
-             WHERE mp.codmatFabricante = ? AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
-             ORDER BY mp.SequenciaExecucao ASC`,
-            [codmatFabricante]
-        );
+        const osId = req.query.osId ? Number(req.query.osId) : null;
+        const pool = db(req);
+
+        let rows = [];
+        // 1. Tenta buscar específico da OS se informada
+        if (osId) {
+            [rows] = await pool.execute(
+                `SELECT
+                    mp.IdProcesso,
+                    mp.SequenciaExecucao,
+                    mp.TempoEstimadoMin,
+                    mp.TempoPadraoMin,
+                    mp.Ativo,
+                    mp.Observacao,
+                    mp.DataCriacao,
+                    mp.UsuarioCriacao,
+                    COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso
+                 FROM material_processo mp
+                 LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+                 WHERE mp.codmatFabricante = ? AND mp.IdOrdemServico = ?
+                 ORDER BY mp.SequenciaExecucao ASC`,
+                [codmatFabricante, osId]
+            );
+        }
+
+        // 2. Se não encontrou ou não passou osId, busca o padrão (IdOrdemServico IS NULL ou 0)
+        if (rows.length === 0) {
+            [rows] = await pool.execute(
+                `SELECT
+                    mp.IdProcesso,
+                    mp.SequenciaExecucao,
+                    mp.TempoEstimadoMin,
+                    mp.TempoPadraoMin,
+                    mp.Ativo,
+                    mp.Observacao,
+                    mp.DataCriacao,
+                    mp.UsuarioCriacao,
+                    COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso
+                 FROM material_processo mp
+                 LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+                 WHERE mp.codmatFabricante = ? AND (mp.IdOrdemServico IS NULL OR mp.IdOrdemServico = 0)
+                 ORDER BY mp.SequenciaExecucao ASC`,
+                [codmatFabricante]
+            );
+        }
+
+        // 3. Fallback: Se ainda não encontrou, busca os processos mais recentes desse material em qualquer OS
+        if (rows.length === 0) {
+            const [anyOsRows] = await pool.execute(
+                `SELECT IdOrdemServico FROM material_processo 
+                 WHERE codmatFabricante = ? AND IdOrdemServico IS NOT NULL AND IdOrdemServico > 0
+                 ORDER BY IdOrdemServico DESC LIMIT 1`,
+                [codmatFabricante]
+            );
+            if (anyOsRows.length > 0) {
+                const fallbackOsId = anyOsRows[0].IdOrdemServico;
+                [rows] = await pool.execute(
+                    `SELECT
+                        mp.IdProcesso,
+                        mp.SequenciaExecucao,
+                        mp.TempoEstimadoMin,
+                        mp.TempoPadraoMin,
+                        mp.Ativo,
+                        mp.Observacao,
+                        mp.DataCriacao,
+                        mp.UsuarioCriacao,
+                        COALESCE(pf.ProcessoFabricacao, CONCAT('Processo #', mp.IdProcesso)) AS NomeProcesso
+                     FROM material_processo mp
+                     LEFT JOIN processofabricacao pf ON mp.IdProcesso = pf.IdProcessoFabricacao
+                     WHERE mp.codmatFabricante = ? AND mp.IdOrdemServico = ?
+                     ORDER BY mp.SequenciaExecucao ASC`,
+                    [codmatFabricante, fallbackOsId]
+                );
+            }
+        }
+
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('[PecaManufaturada] GET /processos-existentes:', error.message);
