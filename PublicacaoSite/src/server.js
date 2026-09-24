@@ -18420,6 +18420,35 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
 }
 
 
+// ============================================================
+// Service Worker — NUNCA cachear sw.js e workbox (força atualização automática)
+// Qualquer mudança no bundle será detectada imediatamente por todos os browsers
+// ============================================================
+app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    const swPath = path.join(__dirname, '../sw.js');
+    const fs = require('fs');
+    if (fs.existsSync(swPath)) {
+        res.sendFile(swPath);
+    } else {
+        res.status(404).send('sw.js not found');
+    }
+});
+app.get(/workbox.*\.js$/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    const wbFile = path.basename(req.path);
+    const wbPath = path.join(__dirname, '..', wbFile);
+    const fs = require('fs');
+    if (fs.existsSync(wbPath)) {
+        res.sendFile(wbPath);
+    } else {
+        res.status(404).send(`${wbFile} not found`);
+    }
+});
 // Static: landing page assets (root)
 app.use(express.static(path.join(__dirname, '../')));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
