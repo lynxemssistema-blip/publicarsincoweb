@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const compression = require('compression');
@@ -19647,12 +19647,14 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
 // ============================================================
 app.get(/^(?!\/api\/).*$/, (req, res) => {
     const fs = require('fs');
-    const devPath = path.join(__dirname, '../frontend/dist/index.html');
+    // CORRIGIDO: prodPath (raiz) tem PRIORIDADE - sempre o index.html atualizado pelo deploy
+    // frontend/dist/index.html pode estar desatualizado (bug selecao multipla BOM em prod)
     const prodPath = path.join(__dirname, '../index.html');
-    if (fs.existsSync(devPath)) {
-        res.sendFile(devPath);
-    } else if (fs.existsSync(prodPath)) {
+    const devPath = path.join(__dirname, '../frontend/dist/index.html');
+    if (fs.existsSync(prodPath)) {
         res.sendFile(prodPath);
+    } else if (fs.existsSync(devPath)) {
+        res.sendFile(devPath);
     } else {
         res.status(404).send('index.html not found');
     }
