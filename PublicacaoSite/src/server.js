@@ -9692,7 +9692,41 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
         }
 
         console.log(`[API /itens] Request for OS ${req.params.id} returned ${rows.length} rows.`);
-        res.json({ success: true, data: rows });
+
+        // Normalizar nomes de colunas para PascalCase esperado pelo frontend.
+        // MySQL2 no Linux retorna nomes de coluna exatamente como definidos no DDL.
+        // Se o banco foi criado com colunas em lowercase (ex: idordemservicoitem),
+        // o frontend nao encontra o campo (item.IdOrdemServicoItem = undefined),
+        // causando NaN no Set e abertura de TODOS os paineis BOM simultaneamente.
+        const FIELD_MAP = {
+            'idordemservicoitem':    'IdOrdemServicoItem',
+            'idordemservico':        'IdOrdemServico',
+            'codmatfabricante':      'CodMatFabricante',
+            'descresumo':            'DescResumo',
+            'descdetal':             'DescDetal',
+            'pecamanutaf':           'PecaManufat',
+            'pecamanutaf':           'PecaManufat',
+            'pecamanutaf':           'PecaManufat',
+            'totalfilhosmontapeca':  'TotalFilhosMontaPeca',
+            'produtoprincipal':      'ProdutoPrincipal',
+            'liberado_engenharia':   'Liberado_Engenharia',
+            'enderecoarduivo':       'EnderecoArquivo',
+        };
+        const normalizedRows = rows.map(row => {
+            const normalized = {};
+            for (const [key, val] of Object.entries(row)) {
+                const mappedKey = FIELD_MAP[key.toLowerCase()] || key;
+                normalized[mappedKey] = val;
+            }
+            // Garantir IdOrdemServicoItem sempre presente (chave mais critica)
+            if (normalized.IdOrdemServicoItem === undefined) {
+                const found = Object.entries(row).find(([k]) => k.toLowerCase() === 'idordemservicoitem');
+                if (found) normalized.IdOrdemServicoItem = found[1];
+            }
+            return normalized;
+        });
+
+        res.json({ success: true, data: normalizedRows });
     } catch (error) {
         console.error('Error fetching ordemservicoitem:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar itens OS' });
