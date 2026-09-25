@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const mysql = require('mysql2/promise');
 const path = require('path');
 const compression = require('compression');
@@ -9644,7 +9644,19 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                      WHERE mp3.IdOrdemServico = osi.IdOrdemServico
                        AND mp3.codmatFabricante = osi.CodMatFabricante) AS TotalProcessos
                 FROM ordemservicoitem osi
-                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                -- IMPORTANTE: usar subquery com GROUP BY para evitar duplicatas quando
+                -- a tabela material tem mais de um registro com o mesmo CodMatFabricante.
+                -- O JOIN direto gerava multiplas linhas com o mesmo IdOrdemServicoItem,
+                -- causando abertura simultanea de multiplos paineis BOM.
+                LEFT JOIN (
+                    SELECT CodMatFabricante,
+                           MAX(IdMaterial) AS IdMaterial,
+                           MAX(PecaManufat) AS PecaManufat,
+                           MAX(Peso) AS Peso,
+                           MAX(EnderecoArquivo) AS EnderecoArquivo
+                    FROM material
+                    GROUP BY CodMatFabricante
+                ) m ON m.CodMatFabricante = osi.CodMatFabricante
                 WHERE osi.IdOrdemServico = ?
                   AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
                 ORDER BY osi.IdOrdemServicoItem
@@ -9662,7 +9674,17 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                     m.IdMaterial,
                     (SELECT COUNT(1) FROM montapeca mp WHERE (mp.IdMaterialPeca = m.IdMaterial OR mp.CodMatFabricantePeca = osi.CodMatFabricante) AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')) AS TotalFilhosMontaPeca
                 FROM ordemservicoitem osi
-                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                -- IMPORTANTE: subquery com GROUP BY evita duplicatas por CodMatFabricante
+                -- repetido na tabela material (corrige bug de multiplos BOMs abrindo)
+                LEFT JOIN (
+                    SELECT CodMatFabricante,
+                           MAX(IdMaterial) AS IdMaterial,
+                           MAX(PecaManufat) AS PecaManufat,
+                           MAX(Peso) AS Peso,
+                           MAX(EnderecoArquivo) AS EnderecoArquivo
+                    FROM material
+                    GROUP BY CodMatFabricante
+                ) m ON m.CodMatFabricante = osi.CodMatFabricante
                 WHERE osi.IdOrdemServico = ?
                   AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
                 ORDER BY osi.IdOrdemServicoItem
