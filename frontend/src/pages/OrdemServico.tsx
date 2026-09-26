@@ -2,6 +2,7 @@ import SectorProductionModal from '../components/SectorProductionModal';
 import CriarOrdemServicoPage from './CriarOrdemServico';
 import UsuarioPage from './Usuario';
 import SetorPage from './Setor';
+// BOM-FIX-v20260924 — expande somente 1 BOM por vez
 /* eslint-disable */
 import { createPortal } from 'react-dom';
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
@@ -1290,7 +1291,28 @@ function OrdemServicoContent() {
             
             const jsonItens = await itensResponse.json();
             if (jsonItens.success) {
-                setOrdensItens(prev => ({ ...prev, [osId]: jsonItens.data }));
+                // Deduplicar por IdOrdemServicoItem: o LEFT JOIN com 'material' pode gerar
+                // linhas duplicadas quando o mesmo CodMatFabricante existe multiplas vezes
+                // na tabela material. Sem deduplicacao, clicar em 1 item abre todos os
+                // duplicados simultaneamente (mesmo IdOrdemServicoItem no Set).
+                // NOTA: se IdOrdemServicoItem for undefined (casing MySQL Linux vs Windows),
+                // usamos um contador para nao descartar itens validos.
+                const rawItens: OrdemServicoItem[] = jsonItens.data || [];
+                const seen = new Set<any>();
+                let undefinedCount = 0;
+                const deduplicatedItens = rawItens.filter(item => {
+                    const id = item.IdOrdemServicoItem;
+                    // Se ID for valido, deduplica normalmente
+                    if (id !== undefined && id !== null) {
+                        if (seen.has(id)) return false;
+                        seen.add(id);
+                        return true;
+                    }
+                    // Se ID for undefined/null, nao deduplica - usa contador unico
+                    seen.add(`__undef_${undefinedCount++}`);
+                    return true;
+                });
+                setOrdensItens(prev => ({ ...prev, [osId]: deduplicatedItens }));
             }
 
             const jsonProc = await procResponse.json();
@@ -1385,21 +1407,32 @@ function OrdemServicoContent() {
     };
 
     const toggleItemArvore = (item: OrdemServicoItem) => {
-        const id = item.IdOrdemServicoItem;
+        // Number() garante comparacao correta: MySQL2 pode retornar o ID como string
+        // Set<number>.has("123") !== Set<number>.has(123)
+        const id = Number(item.IdOrdemServicoItem);
         const codMat = item.CodMatFabricante || '';
         setExpandedItemArvore(prev => {
-            const next = new Set(prev);
-            if (next.has(id)) {
+            if (prev.has(id)) {
+                // Ja esta aberto - fechar
+                const next = new Set(prev);
                 next.delete(id);
+                return next;
             } else {
+                // Abrir somente este, fechando todos os demais
+                const next = new Set<number>();
                 next.add(id);
                 if (codMat && !arvoreData[codMat]) {
                     fetchArvorePeca(codMat);
                 }
+                return next;
             }
-            return next;
         });
     };
+
+    // Fecha todos os BOMs abertos quando o usuário navega para outra OS
+    useEffect(() => {
+        setExpandedItemArvore(new Set<number>());
+    }, [selectedOSId]);
 
     const toggleTreeNodeCollapse = (nodeKey: string) => {
         setCollapsedNodes(prev => {
@@ -3278,9 +3311,10 @@ function OrdemServicoContent() {
                                             const compKey = `${item.CodMatFabricante}__${itemIdTag}__${itemIdProjeto}`;
                                             const matProcsNode = matProcsMap[compKey];
                                             const hasProcessos = matProcsNode && matProcsNode.processos && matProcsNode.processos.length > 0;
-                                            const isExpandedProc = expandedItemProcessos.has(item.IdOrdemServicoItem);
+                                            const isExpandedProc = expandedItemProcessos.has(Number(item.IdOrdemServicoItem));
                                             const isPecaManufat = item.PecaManufat === 'S' || item.PecaManufat === 'SIM' || Number(item.TotalFilhosMontaPeca) > 0;
-                                            const isArvoreExpanded = expandedItemArvore.has(item.IdOrdemServicoItem);
+                                            // Number() forçado: MySQL2 pode retornar string, mas Set armazena number
+                                            const isArvoreExpanded = expandedItemArvore.has(Number(item.IdOrdemServicoItem));
 
                                             return (
                                             <div key={item.IdOrdemServicoItem} className={`flex flex-col border-b border-gray-100 last:border-0 ${isPecaManufat ? 'bg-purple-50/15' : ''}`}>

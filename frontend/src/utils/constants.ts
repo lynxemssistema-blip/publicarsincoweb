@@ -7,6 +7,7 @@ export const defaultMenuItems: MenuItem[] = [
 
     { id: 'apontamento-producao-recurso', icon: 'Activity', label: 'Apontamento Produção Recurso', href: '/apontamento-producao-recurso' },
     { id: 'apontamentos-parciais', icon: 'PieChart', label: 'Apontamentos Parciais', href: '/apontamentos-parciais' },
+    { id: 'recursos-fabricacao', icon: 'Factory', label: 'Cadastro de Recursos', href: '/recursos-fabricacao' },
     {
         id: 'cadastro-usuarios',
         icon: 'Users',
@@ -65,6 +66,7 @@ export const defaultMenuItems: MenuItem[] = [
 
     { id: 'producao-diaria-recurso', icon: 'Activity', label: 'Produção Diaria Recurso', href: '/producao-diaria-recurso' },
     { id: 'tipos-produto', icon: 'Boxes', label: 'Tipos Produto', href: '/tipos-produto' },
+    { id: 'tipos-material', icon: 'Layers', label: 'Tipos Material', href: '/tipos-material' },
     { id: 'tipos-transporte', icon: 'Truck', label: 'Tipos Transporte', href: '/tipos-transporte' },
     { id: 'visao-geral-pendencias', icon: 'ListChecks', label: 'Todas as Pendências', href: '/visao-geral-pendencias' },
     { id: 'unidades-medida', icon: 'Ruler', label: 'Unidades de Medida', href: '/unidades-medida' },

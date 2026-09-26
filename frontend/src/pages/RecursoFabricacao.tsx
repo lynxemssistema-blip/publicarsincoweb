@@ -61,6 +61,14 @@ export default function RecursoFabricacaoPage() {
 
   useEffect(() => {
     fetchRecursos();
+    // Auto-abrir modal "Novo Processo" se navegou com ?novo=1
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('novo') === '1') {
+      setShowForm(true);
+      setFormData(emptyForm);
+      // Limpar param da URL sem recarregar
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
 
   const filteredRecursos = recursos.filter(s => {

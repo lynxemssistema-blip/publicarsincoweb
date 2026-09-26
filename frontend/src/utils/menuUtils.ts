@@ -130,5 +130,22 @@ export const getMergedMenu = (savedMenu: MenuItem[]): MenuItem[] => {
     }
   }
 
+  // Force add/replace 'tipos-material' — garante id e href corretos independente do que o DB salvou
+  const tmIdx = menu.findIndex(item => item.id === 'tipos-material' || item.label === 'Tipos Material');
+  const tmItem = defaultMenuItems.find(item => item.id === 'tipos-material');
+  if (tmItem) {
+    if (tmIdx >= 0) {
+      // Substitui o item do DB pelo item correto do defaultMenuItems (corrige id/href)
+      menu[tmIdx] = tmItem;
+    } else {
+      const tpIdx2 = menu.findIndex(item => item.id === 'tipos-produto');
+      if (tpIdx2 >= 0) {
+        menu = [...menu.slice(0, tpIdx2 + 1), tmItem, ...menu.slice(tpIdx2 + 1)];
+      } else {
+        menu = [...menu, tmItem];
+      }
+    }
+  }
+
   return menu;
 };

@@ -36,12 +36,34 @@ git commit -m "chore: atualiza PublicacaoSite com a ultima versao - $(Get-Date -
 git push origin main
 git push deployrepo main --force
 
-# 6. Acionar deploy no Easypanel via Webhook
+# 6. Atualizar FORCE_REDEPLOY no Easypanel para forçar rebuild Docker sem cache
+Write-Host ""
+Write-Host "Atualizando FORCE_REDEPLOY no Easypanel..." -ForegroundColor Cyan
+$easyUrl  = "http://85.31.60.68:3000"
+$easyUser = "edsonmanoel2012@gmail.com"
+$easyPass = "10207597Rdv*1"
+$buildTag = "deploy-$(Get-Date -Format 'yyyyMMdd-HHmm')"
+try {
+    # Login
+    $loginBody = @{ email = $easyUser; password = $easyPass } | ConvertTo-Json
+    $loginResp = Invoke-WebRequest -Uri "$easyUrl/api/auth/login" -Method POST -Body $loginBody -ContentType "application/json" -UseBasicParsing -ErrorAction Stop
+    $token = ($loginResp.Content | ConvertFrom-Json).token
+    if ($token) {
+        # Atualiza env var
+        $envBody = @{ projectName = "sinco"; serviceName = "app"; env = "FORCE_REDEPLOY=$buildTag" } | ConvertTo-Json
+        Invoke-WebRequest -Uri "$easyUrl/api/services/update" -Method POST -Body $envBody -ContentType "application/json" -Headers @{ Authorization = "Bearer $token" } -UseBasicParsing -ErrorAction SilentlyContinue | Out-Null
+        Write-Host "✅ FORCE_REDEPLOY = $buildTag" -ForegroundColor Green
+    }
+} catch {
+    Write-Warning "Não foi possível atualizar FORCE_REDEPLOY via API: $_"
+}
+
+# 7. Acionar deploy no Easypanel via Webhook
 Write-Host ""
 Write-Host "Acionando deploy no Easypanel..." -ForegroundColor Cyan
 $webhookUrl = "http://85.31.60.68:3000/api/deploy/f91a80aa82214fce8c7eb46808eec772b3dfce8953c0849e"
 try {
-    $response = Invoke-WebRequest -Uri $webhookUrl -Method GET -TimeoutSec 15 -ErrorAction Stop
+    $response = Invoke-WebRequest -Uri $webhookUrl -Method GET -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
     if ($response.StatusCode -eq 200) {
         Write-Host "✅ Deploy acionado com sucesso no Easypanel!" -ForegroundColor Green
         Write-Host "   Acompanhe em: http://85.31.60.68:3000/projects/sinco/app/app/deployments" -ForegroundColor DarkCyan
@@ -54,6 +76,6 @@ try {
 }
 
 Write-Host ""
-Write-Host "=============================================" -ForegroundColor Green
+Write-Host "==============================================" -ForegroundColor Green
 Write-Host " Deploy finalizado! Novo build em andamento." -ForegroundColor Green
-Write-Host "=============================================" -ForegroundColor Green
+Write-Host "==============================================" -ForegroundColor Green

@@ -6,6 +6,7 @@ import {
  Factory, Layers
 } from 'lucide-react';
 import { EstruturaProdutoModal } from '../components/EstruturaProdutoModal';
+import TiposMaterialPage from './TiposMaterial';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -16,6 +17,7 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
  DescDetal?: string;
  PecaManufat?: string;
  TxtTipoDesenho?: string;
+ TipoMaterial?: string;
  NumeroRP?: string;
  FamiliaMat?: number;
  DescFamilia?: string;
@@ -118,32 +120,38 @@ export default function MaterialPage() {
  const [showUrlInput, setShowUrlInput] = useState(false);
  const [arquivos, setArquivos] = useState<any[]>([]);
  const [loadingArquivos, setLoadingArquivos] = useState(false);
+ const [showTipoMaterialModal, setShowTipoMaterialModal] = useState(false);
 
  // Options for dropdowns
  const [familiaOptions, setFamiliaOptions] = useState<Option[]>([]);
  const [fornecedorOptions, setFornecedorOptions] = useState<Option[]>([]);
  const [unidadeOptions, setUnidadeOptions] = useState<Option[]>([]);
  const [acabamentoOptions, setAcabamentoOptions] = useState<Option[]>([]);
+ const [tipoMaterialOptions, setTipoMaterialOptions] = useState<{id:number;value:string;label:string}[]>([]);
 
  // Fetch dropdown options
  const fetchOptions = async () => {
  try {
- const [famRes, fornRes, unidRes, acabRes] = await Promise.all([
- fetch(`${API_BASE}/familia/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
- fetch(`${API_BASE}/pj/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
- fetch(`${API_BASE}/medida/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } }),
- fetch(`${API_BASE}/acabamento/options`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` } })
+ const token = localStorage.getItem('sinco_token');
+ const h = { 'Authorization': `Bearer ${token}` };
+ const [famRes, fornRes, unidRes, acabRes, tipoMatRes] = await Promise.all([
+ fetch(`${API_BASE}/familia/options`, { headers: h }),
+ fetch(`${API_BASE}/pj/options`, { headers: h }),
+ fetch(`${API_BASE}/medida/options`, { headers: h }),
+ fetch(`${API_BASE}/acabamento/options`, { headers: h }),
+ fetch(`${API_BASE}/tipomaterial/options`, { headers: h }).catch(() => null)
  ]);
  const [famJson, fornJson, unidJson, acabJson] = await Promise.all([
- famRes.json(),
- fornRes.json(),
- unidRes.json(),
- acabRes.json()
+ famRes.json(), fornRes.json(), unidRes.json(), acabRes.json()
  ]);
  if (famJson.success) setFamiliaOptions(famJson.data);
  if (fornJson.success) setFornecedorOptions(fornJson.data);
  if (unidJson.success) setUnidadeOptions(unidJson.data);
  if (acabJson.success) setAcabamentoOptions(acabJson.data);
+ if (tipoMatRes && tipoMatRes.ok) {
+ const tipoMatJson = await tipoMatRes.json();
+ if (tipoMatJson.success) setTipoMaterialOptions(tipoMatJson.data);
+ }
  } catch (err) {
  console.error('Error fetching options:', err);
  }
@@ -727,7 +735,7 @@ export default function MaterialPage() {
     {/* Classificação */}
     <div className="border-b border-gray-100 pb-2 mb-2 mt-2">
       <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Classificação</h3>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
         <div>
           <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
             Família
@@ -755,6 +763,20 @@ export default function MaterialPage() {
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-0.5">Código Jurídico Mat.</label>
           <input type="number" name="CodigoJuridicoMat" value={formData.CodigoJuridicoMat || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+        </div>
+        <div>
+          <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
+            Tipo Material
+            <button type="button" onClick={() => setShowTipoMaterialModal(true)} className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors" title="Adicionar Tipo de Material">
+              <Plus size={12} strokeWidth={3} />
+            </button>
+          </label>
+          <select name="TipoMaterial" value={formData.TipoMaterial || ''} onChange={handleInputChange} className={selectClass + " py-1 text-xs"}>
+            <option value="">Selecione...</option>
+            {tipoMaterialOptions.map(opt => (
+              <option key={opt.id} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       </div>
     </div>
@@ -989,7 +1011,6 @@ export default function MaterialPage() {
  
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-12">Img</th>
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-40">Código</th>
- <th className="px-2 py-1.5 text-center text-[10px] font-semibold text-white uppercase tracking-wider w-36">Classificação</th>
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider">Descrição</th>
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-36">Família</th>
  <th className="px-2 py-1.5 text-left text-[10px] font-semibold text-white uppercase tracking-wider w-40">Fornecedor</th>
@@ -999,7 +1020,7 @@ export default function MaterialPage() {
  <tbody className="divide-y divide-gray-100">
  {filteredMateriais.length === 0 ? (
  <tr>
- <td colSpan={7} className="px-4 py-12 text-center">
+ <td colSpan={6} className="px-4 py-12 text-center">
  <div className="flex flex-col items-center gap-3 text-gray-400">
  <Package size={40} strokeWidth={1.5} />
  <p className="text-xs">Nenhum material encontrado</p>
@@ -1036,23 +1057,21 @@ export default function MaterialPage() {
  </div>
  </td>
  <td className="px-2 py-1.5 font-mono">
- <span className="text-[11px] font-bold text-gray-900 truncate block max-w-[150px]" title={material.CodMatFabricante}>
- {material.CodMatFabricante || '-'}
- </span>
- </td>
- <td className="px-2 py-1.5 text-center">
  {material.PecaManufat === 'S' ? (
-   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs" title="Produto/peça fabricado internamente">
-     <Factory size={11} className="text-emerald-600" />
-     Peça Manufaturada
+   <span
+     className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 shadow-sm truncate max-w-[160px] block"
+     title={material.CodMatFabricante}
+   >
+     <Factory size={11} className="text-emerald-600 shrink-0" />
+     {material.CodMatFabricante || '-'}
    </span>
  ) : (
-   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200" title="Matéria-prima / insumo comprado externamente">
-     <Package size={11} className="text-slate-400" />
-     Insumo / Comprado
+   <span className="text-[11px] font-bold text-gray-900 truncate block max-w-[150px]" title={material.CodMatFabricante}>
+     {material.CodMatFabricante || '-'}
    </span>
  )}
  </td>
+
  <td className="px-2 py-1.5 text-[11px] text-gray-600 truncate max-w-[240px]" title={material.DescResumo || material.DescDetal}>
  {material.DescResumo || material.DescDetal?.substring(0, 50) || '-'}
  </td>
@@ -1117,6 +1136,19 @@ export default function MaterialPage() {
  </div>
  )}
  </div>
+
+ {/* Sub-modal Tipos de Material */}
+ {showTipoMaterialModal && (
+   <div className="fixed inset-0 z-[110]">
+     <TiposMaterialPage
+       isModal
+       onCloseModal={() => {
+         setShowTipoMaterialModal(false);
+         fetchOptions();
+       }}
+     />
+   </div>
+ )}
 
  {/* Modal de Estrutura Completa do Produto */}
  <EstruturaProdutoModal

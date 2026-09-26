@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAppConfig } from '../contexts/AppConfigContext';
 import { 
- Search, Filter, Save, X, Calendar, Edit3,  
+ Search, Filter, Save, X, Calendar, Edit3, Plus,  
    AlertCircle,  Maximize2, Minimize2
 } from 'lucide-react';
 
@@ -135,11 +135,34 @@ export default function AcompanhamentoEtapas() {
  const [modoIndividual, setModoIndividual] = useState(false);
  const [selectedSingleTagId, setSelectedSingleTagId] = useState<number | null>(null);
 
+  // Mini-modal criar recurso de engenharia
+  const [showCriarRecurso, setShowCriarRecurso] = useState(false);
+  const [novoRecursoNome, setNovoRecursoNome] = useState<string>('');
+  const [novoRecursoCodigo, setNovoRecursoCodigo] = useState<string>('');
+  const [savingRecurso, setSavingRecurso] = useState(false);
+
  // Configuração: Permitir Realizado sem Planejamento (lida do localStorage)
  const [permitirRealizado, setPermitirRealizado] = useState<boolean>(getPermitirRealizadoSemPlanejamento);
 
  // Linha mostrando datas — acordeão exclusivo (só 1 projeto por vez)
  const [viewDatesRow, setViewDatesRow] = useState<number | null>(null);
+
+  const handleCriarRecurso = async () => {
+    if (!novoRecursoNome.trim()) return;
+    setSavingRecurso(true);
+    try {
+      const body = JSON.stringify({ processofabricacao: novoRecursoNome, CodigoProcessoFabricacao: novoRecursoCodigo, Fabrica: "NAO", DataLiberada: "NAO" });
+      const res = await fetch("/api/recursos", { method: "POST", headers: { ...getAuthHeaders(), "Content-Type": "application/json" }, body });
+      const json = await res.json();
+      if (json.success) {
+        setShowCriarRecurso(false);
+        setNovoRecursoNome("");
+        setNovoRecursoCodigo("");
+        fetchData();
+      } else { alert("Erro: " + json.message); }
+    } catch { alert("Erro de conexao"); }
+    finally { setSavingRecurso(false); }
+  };
 
  const toggleDatesView = (idProjeto: number) => {
  setViewDatesRow(prev => prev === idProjeto ? null : idProjeto);
@@ -208,7 +231,7 @@ export default function AcompanhamentoEtapas() {
       const unique = Array.from(new Map(list.map((item: any) => [item.sulfixo, item])).values()) as {titulo: string, sulfixo: string}[];
       setSetoresDinamicos(unique);
       // Inicializa setoresVisiveis vazio por padrão (desativados)
-      // setSetoresVisiveis(prev => prev.length === 0 ? unique.map(u => u.sulfixo) : prev);
+      setSetoresVisiveis(unique.map(u => u.sulfixo));
  }
  } catch (err) {
  console.error('Erro ao buscar dados:', err);
@@ -576,29 +599,28 @@ export default function AcompanhamentoEtapas() {
  {/* Main Grid Toolbar */}
  <div className="px-6 py-2 border-b border-gray-300 flex items-center justify-between bg-white shrink-0 shadow-sm z-10">
  <div className="font-bold text-gray-800 text-xs flex flex-col gap-2">
- <div>Acompanhamento Etapas</div>
  <div className="flex flex-wrap gap-2 items-center">
  <label 
- className={`flex items-center gap-1.5 cursor-pointer font-semibold text-xs px-3 py-1.5 rounded-full transition-all border ${
- setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0
- ? 'bg-[#03624C] text-white border-[#03624C] shadow-sm'
- : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
- }`}
- >
- <input 
- type="checkbox" 
- checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
- onChange={(e) => {
- if (e.target.checked) {
- setSetoresVisiveis(setoresDinamicos.map(s => s.sulfixo));
- } else {
- setSetoresVisiveis([]);
- }
- }}
- className="sr-only"
- />
- <span>TODOS</span>
- </label>
+  className={`flex items-center gap-1.5 cursor-pointer font-semibold text-xs px-3 py-1.5 rounded-full transition-all border ${
+  setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0
+  ? 'bg-[#03624C] text-white border-[#03624C] shadow-sm'
+  : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+  }`}
+  >
+  <input 
+  type="checkbox" 
+  checked={setoresVisiveis.length === setoresDinamicos.length && setoresDinamicos.length > 0}
+  onChange={(e) => {
+  if (e.target.checked) {
+  setSetoresVisiveis(setoresDinamicos.map(s => s.sulfixo));
+  } else {
+  setSetoresVisiveis([]);
+  }
+  }}
+  className="sr-only"
+  />
+  <span>TODOS</span>
+  </label>
  {setoresDinamicos.map(s => {
  const isChecked = setoresVisiveis.includes(s.sulfixo);
  return (
@@ -1021,7 +1043,8 @@ export default function AcompanhamentoEtapas() {
  {/* FORMULÁRIO DE DATAS */}
  <div className="w-2/3 bg-white border border-gray-200 rounded-md p-4">
  {/* Badge de status da configuração */}
- <div className={`flex items-center gap-2 mb-3 px-2 py-0.5 rounded-full w-fit text-[10px] font-bold border ${
+   <div className="flex items-center gap-3 mb-3 flex-wrap min-h-[28px]">
+    <div className={`flex items-center gap-2 px-2 py-0.5 rounded-full w-fit text-[10px] font-bold border ${
  permitirRealizado
  ? 'bg-green-50 border-green-300 text-green-700'
  : 'bg-red-50 border-red-300 text-red-700'
@@ -1033,13 +1056,21 @@ export default function AcompanhamentoEtapas() {
  : 'Restrito (exige Planejamento preenchido)'}
  </span>
  </div>
+    {setoresDinamicos.length === 0 && (
+      <button
+        type="button"
+        onClick={() => { setShowCriarRecurso(true); setNovoRecursoNome(''); setNovoRecursoCodigo(''); }}
+        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-500 hover:bg-emerald-600 text-white border border-emerald-600 shadow-sm transition-all"
+        title="Ir para Cadastro de Recursos de Engenharia"
+      >
+        <span className="text-base leading-none">+</span>
+        Criar Recursos para Engenharia
+      </button>
+    )}
+  </div>
  {setoresDinamicos.length > 0 ? (
      setoresDinamicos.map(s => <React.Fragment key={s.sulfixo}>{renderFormRow(s.titulo, s.sulfixo)}</React.Fragment>)
- ) : (
-     <div className="p-4 text-center text-gray-500 text-sm">
-         Carregando setores ou nenhum setor encontrado (Fabrica = NÃO).
-     </div>
- )}
+ ) : null}
  </div>
 
  </div>
@@ -1056,7 +1087,7 @@ export default function AcompanhamentoEtapas() {
  </button>
  <button 
  onClick={handleSave} 
- disabled={saving || (modoIndividual && !selectedSingleTagId)}
+ disabled={saving || (modoIndividual && !selectedSingleTagId) || setoresDinamicos.length === 0}
  className="px-2 py-1 bg-[#03624C] hover:bg-[#024a3a] text-white rounded text-xs font-medium shadow flex items-center gap-2 transition-colors disabled:opacity-50"
  >
  {saving ? (
@@ -1069,6 +1100,38 @@ export default function AcompanhamentoEtapas() {
  </div>
  </div>
  )}
+
+  {/* Mini-Modal: Criar Recurso de Engenharia */}
+  {showCriarRecurso && (
+    <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-2xl border border-gray-200 w-full max-w-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Plus size={18} className="text-emerald-600" />
+            <h3 className="text-sm font-bold text-gray-800">Novo Recurso de Engenharia</h3>
+          </div>
+          <button onClick={() => setShowCriarRecurso(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+        </div>
+        <p className="text-xs text-gray-500 mb-4">O recurso será criado com <strong>Fábrica = NÃO</strong> e aparecerá como coluna na visão de etapas.</p>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Nome do Recurso *</label>
+            <input type="text" value={novoRecursoNome} onChange={e => setNovoRecursoNome(e.target.value.toUpperCase())} placeholder="Ex: APROVAÇÃO, MEDIÇÃO..." className="w-full text-xs p-2 border border-gray-300 rounded focus:outline-none focus:border-emerald-500" onKeyDown={e => e.key === `Enter` && handleCriarRecurso()} autoFocus />
+          </div>
+          <div>
+            <label className="block text-[10px] font-semibold text-gray-500 uppercase mb-1">Código (opcional)</label>
+            <input type="text" value={novoRecursoCodigo} onChange={e => setNovoRecursoCodigo(e.target.value.toUpperCase())} placeholder="Ex: ENG-01" className="w-full text-xs p-2 border border-gray-300 rounded focus:outline-none focus:border-emerald-500" />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button onClick={() => setShowCriarRecurso(false)} className="px-3 py-1.5 text-xs border border-gray-300 rounded text-gray-600 hover:bg-gray-50">Cancelar</button>
+          <button onClick={handleCriarRecurso} disabled={savingRecurso || !novoRecursoNome.trim()} className="px-4 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold disabled:opacity-50 flex items-center gap-1">
+            {savingRecurso ? `Salvando...` : <><Save size={12} /> Criar Recurso</>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
  </div>
  );
 }

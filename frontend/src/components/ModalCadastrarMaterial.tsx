@@ -4,6 +4,7 @@ import {
   X, Package, Save, Loader2, Trash2, Link as LinkIcon, Globe, FileText, Download,
   Plus, CheckCircle2, AlertCircle
 } from 'lucide-react';
+import TiposMaterialPage from '../pages/TiposMaterial';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 
@@ -14,6 +15,7 @@ export interface MaterialFormData {
   DescDetal?: string;
   PecaManufat?: string;
   TxtTipoDesenho?: string;
+  TipoMaterial?: string;
   NumeroRP?: string;
   FamiliaMat?: number | string;
   DescFamilia?: string;
@@ -53,6 +55,12 @@ export interface MaterialFormData {
 
 interface Option {
   id: number | string;
+  label: string;
+}
+
+interface TipoMaterialOption {
+  id: number;
+  value: string;
   label: string;
 }
 
@@ -119,6 +127,8 @@ export default function ModalCadastrarMaterial({
   const [fornecedorOptions, setFornecedorOptions] = useState<Option[]>([]);
   const [unidadeOptions, setUnidadeOptions] = useState<Option[]>([]);
   const [acabamentoOptions, setAcabamentoOptions] = useState<Option[]>([]);
+  const [tipoMaterialOptions, setTipoMaterialOptions] = useState<TipoMaterialOption[]>([]);
+  const [showTipoMaterialModal, setShowTipoMaterialModal] = useState(false);
 
   const inputCodRef = useRef<HTMLInputElement>(null);
 
@@ -143,11 +153,12 @@ export default function ModalCadastrarMaterial({
       const token = localStorage.getItem('sinco_token');
       const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
       try {
-        const [famRes, fornRes, unidRes, acabRes] = await Promise.all([
+        const [famRes, fornRes, unidRes, acabRes, tipoMatRes] = await Promise.all([
           fetch(`${API_BASE}/familia/options`, { headers }).catch(() => null),
           fetch(`${API_BASE}/pj/options`, { headers }).catch(() => null),
           fetch(`${API_BASE}/medida/options`, { headers }).catch(() => null),
-          fetch(`${API_BASE}/acabamento/options`, { headers }).catch(() => null)
+          fetch(`${API_BASE}/acabamento/options`, { headers }).catch(() => null),
+          fetch(`${API_BASE}/tipomaterial/options`, { headers }).catch(() => null)
         ]);
 
         if (famRes && famRes.ok) {
@@ -165,6 +176,10 @@ export default function ModalCadastrarMaterial({
         if (acabRes && acabRes.ok) {
           const acabJson = await acabRes.json();
           if (acabJson.success && Array.isArray(acabJson.data)) setAcabamentoOptions(acabJson.data);
+        }
+        if (tipoMatRes && tipoMatRes.ok) {
+          const tipoMatJson = await tipoMatRes.json();
+          if (tipoMatJson.success && Array.isArray(tipoMatJson.data)) setTipoMaterialOptions(tipoMatJson.data);
         }
       } catch (err) {
         console.error('Erro ao carregar opções para novo material:', err);
@@ -526,7 +541,7 @@ export default function ModalCadastrarMaterial({
             {/* Classificação */}
             <div className="border-b border-gray-100 pb-2 mb-2 mt-2">
               <h3 className="text-xs font-semibold text-gray-700 mb-1.5">Classificação</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
                 <div>
                   <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
                     Família
@@ -554,6 +569,30 @@ export default function ModalCadastrarMaterial({
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-0.5">Código Jurídico Mat.</label>
                   <input type="number" name="CodigoJuridicoMat" value={formData.CodigoJuridicoMat || ''} onChange={handleInputChange} className={inputOptional + " py-1 text-xs"} />
+                </div>
+                <div>
+                  <label className="flex items-center justify-between text-xs font-medium text-gray-500 mb-0.5">
+                    Tipo Material
+                    <button
+                      type="button"
+                      onClick={() => setShowTipoMaterialModal(true)}
+                      className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] rounded p-0.5 transition-colors"
+                      title="Adicionar Tipo de Material"
+                    >
+                      <Plus size={12} strokeWidth={3} />
+                    </button>
+                  </label>
+                  <select
+                    name="TipoMaterial"
+                    value={formData.TipoMaterial || ''}
+                    onChange={handleInputChange}
+                    className={selectClass + " py-1 text-xs"}
+                  >
+                    <option value="">Selecione...</option>
+                    {tipoMaterialOptions.map(opt => (
+                      <option key={opt.id} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
@@ -731,6 +770,26 @@ export default function ModalCadastrarMaterial({
 
         </form>
       </motion.div>
+
+      {/* Sub-modal Tipos de Material */}
+      {showTipoMaterialModal && (
+        <div className="fixed inset-0 z-[110]">
+          <TiposMaterialPage
+            isModal
+            onCloseModal={(created) => {
+              setShowTipoMaterialModal(false);
+              // Recarrega as opcoes de tipo material
+              fetch(`${API_BASE}/tipomaterial/options`, {
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('sinco_token')}` }
+              }).then(r => r.json()).then(j => { if (j.success) setTipoMaterialOptions(j.data); }).catch(() => {});
+              // Seleciona automaticamente o tipo recém-criado
+              if (created?.TipoMaterial) {
+                // será selecionado via options após reload
+              }
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

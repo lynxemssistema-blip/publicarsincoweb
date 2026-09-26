@@ -3895,6 +3895,100 @@ app.get('/api/familia/options', tenantMiddleware, async (req, res) => {
     }
 });
 
+// ============================================================
+// TIPOMATERIAL — CRUD
+// ============================================================
+
+// GET: opções para dropdown
+app.get('/api/tipomaterial/options', tenantMiddleware, async (req, res) => {
+    try {
+        const db = req.tenantDbPool || pool;
+        await db.execute("CREATE TABLE IF NOT EXISTS `tipomaterial` (`IdTipoMaterial` INT(11) NOT NULL AUTO_INCREMENT, `TipoMaterial` VARCHAR(2) NOT NULL, `Descricao` VARCHAR(200) NULL DEFAULT NULL, `UsuarioCriacao` VARCHAR(100) NULL DEFAULT NULL, `D_E_L_E_T_E` VARCHAR(1) NULL DEFAULT NULL, `IdMatriz` INT(11) NULL DEFAULT NULL, PRIMARY KEY (`IdTipoMaterial`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4").catch(() => {});
+        const [rows] = await db.execute(
+            "SELECT IdTipoMaterial as id, TipoMaterial as value, CONCAT(TipoMaterial, CASE WHEN Descricao IS NOT NULL AND Descricao <> '' THEN CONCAT(' — ', Descricao) ELSE '' END) as label FROM tipomaterial WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY TipoMaterial"
+        );
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error fetching tipomaterial options:', error);
+        res.status(500).json({ success: false, message: 'Erro ao buscar tipos de material' });
+    }
+});
+
+// GET: lista completa
+app.get('/api/tipomaterial', tenantMiddleware, async (req, res) => {
+    try {
+        const db = req.tenantDbPool || pool;
+        const [rows] = await db.execute("SELECT * FROM tipomaterial WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') ORDER BY TipoMaterial");
+        res.json({ success: true, data: rows });
+    } catch (error) {
+        console.error('Error fetching tipomaterial:', error);
+        res.status(500).json({ success: false, message: 'Erro ao listar tipos de material' });
+    }
+});
+
+// POST: criar novo tipo
+app.post('/api/tipomaterial', tenantMiddleware, async (req, res) => {
+    const { TipoMaterial, Descricao } = req.body;
+    if (!TipoMaterial || !TipoMaterial.trim()) return res.status(400).json({ success: false, message: 'TipoMaterial é obrigatório' });
+    try {
+        const db = req.tenantDbPool || pool;
+        const loggedUser = req.tenantUser?.login || req.user?.login || req.user?.nome || 'Sistema';
+        const idMatriz = req.tenantUser?.tenantId || null;
+        // Validar duplicidade
+        const [dupCheck] = await db.execute(
+            "SELECT IdTipoMaterial FROM tipomaterial WHERE TipoMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1",
+            [TipoMaterial.trim().toUpperCase()]
+        );
+        if (dupCheck.length > 0) return res.status(400).json({ success: false, message: `Tipo de material "${TipoMaterial.trim().toUpperCase()}" já existe.` });
+        const [result] = await db.execute(
+            'INSERT INTO tipomaterial (TipoMaterial, Descricao, UsuarioCriacao, IdMatriz) VALUES (?, ?, ?, ?)',
+            [TipoMaterial.trim().toUpperCase(), Descricao?.trim() || null, loggedUser, idMatriz]
+        );
+        res.json({ success: true, message: 'Tipo de material criado com sucesso', id: result.insertId });
+    } catch (error) {
+        if (error.code === 'ER_DUP_ENTRY') return res.status(400).json({ success: false, message: 'Tipo de material já existe' });
+        res.status(500).json({ success: false, message: 'Erro ao criar: ' + error.message });
+    }
+});
+
+// PUT: editar tipo
+app.put('/api/tipomaterial/:id', tenantMiddleware, async (req, res) => {
+    const { TipoMaterial, Descricao } = req.body;
+    if (!TipoMaterial || !TipoMaterial.trim()) return res.status(400).json({ success: false, message: 'TipoMaterial é obrigatório' });
+    try {
+        const db = req.tenantDbPool || pool;
+        // Validar duplicidade (excluindo o próprio registro)
+        const [dupCheck] = await db.execute(
+            "SELECT IdTipoMaterial FROM tipomaterial WHERE TipoMaterial = ? AND IdTipoMaterial <> ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') LIMIT 1",
+            [TipoMaterial.trim().toUpperCase(), req.params.id]
+        );
+        if (dupCheck.length > 0) return res.status(400).json({ success: false, message: `Tipo de material "${TipoMaterial.trim().toUpperCase()}" já existe.` });
+        await db.execute(
+            'UPDATE tipomaterial SET TipoMaterial = ?, Descricao = ? WHERE IdTipoMaterial = ?',
+            [TipoMaterial.trim().toUpperCase(), Descricao?.trim() || null, req.params.id]
+        );
+        res.json({ success: true, message: 'Tipo de material atualizado com sucesso' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao atualizar tipo de material' });
+    }
+});
+
+// DELETE: soft delete
+app.delete('/api/tipomaterial/:id', tenantMiddleware, async (req, res) => {
+    try {
+        const db = req.tenantDbPool || pool;
+        const loggedUser = req.tenantUser?.nome || req.user?.NomeCompleto || 'Sistema';
+        await db.execute(
+            "UPDATE tipomaterial SET D_E_L_E_T_E = '*', UsuarioCriacao = ? WHERE IdTipoMaterial = ?",
+            [loggedUser, req.params.id]
+        );
+        res.json({ success: true, message: 'Tipo de material excluído com sucesso' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: 'Erro ao excluir tipo de material' });
+    }
+});
+
+// ============================================================
 // GET ONE (Read Single)
 app.get('/api/familia/:id', tenantMiddleware, async (req, res) => {
     try {
@@ -4117,6 +4211,7 @@ app.get('/api/material', tenantMiddleware, async (req, res) => {
             ensureColumn(db, 'material', 'PecaManufat', 'VARCHAR(1) NULL'),
             ensureColumn(db, 'material', 'EnderecoArquivo', 'VARCHAR(500) NULL'),
             ensureColumn(db, 'material', 'TxtTipoDesenho', 'VARCHAR(100) NULL'),
+            ensureColumn(db, 'material', 'TipoMaterial', 'VARCHAR(2) NULL'),
         ]);
 
         const { tipo } = req.query;
@@ -4135,7 +4230,7 @@ app.get('/api/material', tenantMiddleware, async (req, res) => {
                 m.Peso, m.Unidade, m.Altura, m.Largura, m.Profundidade,
                 m.Valor, m.PercICMS, m.vICMS, m.PercIPI, m.vIPI, m.vLiquido,
                 m.acabamento, m.DtCad, m.ImagemProduto,
-                m.PecaManufat, m.EnderecoArquivo, m.TxtTipoDesenho
+                m.PecaManufat, m.EnderecoArquivo, m.TxtTipoDesenho, m.TipoMaterial
             FROM material m
             LEFT JOIN familia f ON m.FamiliaMat = f.IdFamilia
             LEFT JOIN pessoajuridica pj ON m.CodigoJuridicoMat = pj.IdPessoa
@@ -4543,8 +4638,9 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 AreaPintura, NumeroDobras, UnidadeSW, ValorSW,
                 Imagem, StatusMat, IdValor, TotalValor, EnderecoArquivo,
                 MaterialSW, ConfiguracaoArquivo, txtItemEstoque, IdMatriz,
-                PecaManufat, Espessura
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                PecaManufat, Espessura, TipoMaterial
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+
             [
                 data.CodMatFabricante?.trim(),
                 data.DescResumo?.trim().toUpperCase() || null,
@@ -4586,7 +4682,8 @@ app.post('/api/material', tenantMiddleware, async (req, res) => {
                 data.txtItemEstoque || null,
                 idMatriz,
                 data.PecaManufat || 'N',
-                data.Espessura || null
+                data.Espessura || null,
+                data.TipoMaterial || null
             ]
         );
         res.json({ 
@@ -4638,7 +4735,8 @@ app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
                 Autor = ?, Palavrachave = ?, Titulo = ?, SubTitulo = ?, Notas = ?,
                 AreaPintura = ?, NumeroDobras = ?, UnidadeSW = ?, ValorSW = ?,
                 Imagem = ?, StatusMat = ?, IdValor = ?, TotalValor = ?, EnderecoArquivo = ?,
-                MaterialSW = ?, ConfiguracaoArquivo = ?, txtItemEstoque = ?, IdMatriz = ?
+                MaterialSW = ?, ConfiguracaoArquivo = ?, txtItemEstoque = ?, IdMatriz = ?,
+                TipoMaterial = ?
             WHERE IdMaterial = ?`,
             [
                 data.CodMatFabricante?.trim(),
@@ -4680,6 +4778,7 @@ app.put('/api/material/:id', tenantMiddleware, async (req, res) => {
                 data.ConfiguracaoArquivo || null,
                 data.txtItemEstoque || null,
                 idMatriz,
+                data.TipoMaterial || null,
                 id
             ]
         );
@@ -9545,7 +9644,19 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                      WHERE mp3.IdOrdemServico = osi.IdOrdemServico
                        AND mp3.codmatFabricante = osi.CodMatFabricante) AS TotalProcessos
                 FROM ordemservicoitem osi
-                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                -- IMPORTANTE: usar subquery com GROUP BY para evitar duplicatas quando
+                -- a tabela material tem mais de um registro com o mesmo CodMatFabricante.
+                -- O JOIN direto gerava multiplas linhas com o mesmo IdOrdemServicoItem,
+                -- causando abertura simultanea de multiplos paineis BOM.
+                LEFT JOIN (
+                    SELECT CodMatFabricante,
+                           MAX(IdMaterial) AS IdMaterial,
+                           MAX(PecaManufat) AS PecaManufat,
+                           MAX(Peso) AS Peso,
+                           MAX(EnderecoArquivo) AS EnderecoArquivo
+                    FROM material
+                    GROUP BY CodMatFabricante
+                ) m ON m.CodMatFabricante = osi.CodMatFabricante
                 WHERE osi.IdOrdemServico = ?
                   AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
                 ORDER BY osi.IdOrdemServicoItem
@@ -9563,7 +9674,17 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
                     m.IdMaterial,
                     (SELECT COUNT(1) FROM montapeca mp WHERE (mp.IdMaterialPeca = m.IdMaterial OR mp.CodMatFabricantePeca = osi.CodMatFabricante) AND (mp.D_E_L_E_T_E IS NULL OR mp.D_E_L_E_T_E = '')) AS TotalFilhosMontaPeca
                 FROM ordemservicoitem osi
-                LEFT JOIN material m ON m.CodMatFabricante = osi.CodMatFabricante
+                -- IMPORTANTE: subquery com GROUP BY evita duplicatas por CodMatFabricante
+                -- repetido na tabela material (corrige bug de multiplos BOMs abrindo)
+                LEFT JOIN (
+                    SELECT CodMatFabricante,
+                           MAX(IdMaterial) AS IdMaterial,
+                           MAX(PecaManufat) AS PecaManufat,
+                           MAX(Peso) AS Peso,
+                           MAX(EnderecoArquivo) AS EnderecoArquivo
+                    FROM material
+                    GROUP BY CodMatFabricante
+                ) m ON m.CodMatFabricante = osi.CodMatFabricante
                 WHERE osi.IdOrdemServico = ?
                   AND (osi.D_E_L_E_T_E IS NULL OR osi.D_E_L_E_T_E = '' OR osi.D_E_L_E_T_E != '*')
                 ORDER BY osi.IdOrdemServicoItem
@@ -9571,7 +9692,41 @@ app.get('/api/ordemservico/:id/itens', tenantMiddleware, async (req, res) => {
         }
 
         console.log(`[API /itens] Request for OS ${req.params.id} returned ${rows.length} rows.`);
-        res.json({ success: true, data: rows });
+
+        // Normalizar nomes de colunas para PascalCase esperado pelo frontend.
+        // MySQL2 no Linux retorna nomes de coluna exatamente como definidos no DDL.
+        // Se o banco foi criado com colunas em lowercase (ex: idordemservicoitem),
+        // o frontend nao encontra o campo (item.IdOrdemServicoItem = undefined),
+        // causando NaN no Set e abertura de TODOS os paineis BOM simultaneamente.
+        const FIELD_MAP = {
+            'idordemservicoitem':    'IdOrdemServicoItem',
+            'idordemservico':        'IdOrdemServico',
+            'codmatfabricante':      'CodMatFabricante',
+            'descresumo':            'DescResumo',
+            'descdetal':             'DescDetal',
+            'pecamanutaf':           'PecaManufat',
+            'pecamanutaf':           'PecaManufat',
+            'pecamanutaf':           'PecaManufat',
+            'totalfilhosmontapeca':  'TotalFilhosMontaPeca',
+            'produtoprincipal':      'ProdutoPrincipal',
+            'liberado_engenharia':   'Liberado_Engenharia',
+            'enderecoarduivo':       'EnderecoArquivo',
+        };
+        const normalizedRows = rows.map(row => {
+            const normalized = {};
+            for (const [key, val] of Object.entries(row)) {
+                const mappedKey = FIELD_MAP[key.toLowerCase()] || key;
+                normalized[mappedKey] = val;
+            }
+            // Garantir IdOrdemServicoItem sempre presente (chave mais critica)
+            if (normalized.IdOrdemServicoItem === undefined) {
+                const found = Object.entries(row).find(([k]) => k.toLowerCase() === 'idordemservicoitem');
+                if (found) normalized.IdOrdemServicoItem = found[1];
+            }
+            return normalized;
+        });
+
+        res.json({ success: true, data: normalizedRows });
     } catch (error) {
         console.error('Error fetching ordemservicoitem:', error);
         res.status(500).json({ success: false, message: 'Erro ao listar itens OS' });
@@ -15394,6 +15549,7 @@ app.get('/api/pesquisar-desenho', tenantMiddleware, async (req, res) => {
     let connection = null;
     try {
         const { projeto, tag, codMat, descResumo, descDetal, espessura, material } = req.query;
+        const tipoMaterial = 'DE'; // filtro interno fixo
         
         // Use connection specific to tenant db if applicable
         connection = await (req.tenantDbPool || pool).getConnection();
@@ -15466,6 +15622,10 @@ app.get('/api/pesquisar-desenho', tenantMiddleware, async (req, res) => {
         if (material) {
             query += ` AND MaterialSW LIKE ?`;
             params.push(`%${material}%`);
+        }
+        if (tipoMaterial) {
+            query += ` AND CodMatFabricante IN (SELECT CodMatFabricante FROM material WHERE TipoMaterial = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = ''))`;
+            params.push(tipoMaterial.trim().toUpperCase());
         }
 
         query += ` ORDER BY Projeto ASC, Tag ASC LIMIT 500`;
@@ -18316,6 +18476,35 @@ async function recalcularQuantidadesTotais(IdOrdemServico, connection) {
 }
 
 
+// ============================================================
+// Service Worker — NUNCA cachear sw.js e workbox (força atualização automática)
+// Qualquer mudança no bundle será detectada imediatamente por todos os browsers
+// ============================================================
+app.get('/sw.js', (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    const swPath = path.join(__dirname, '../sw.js');
+    const fs = require('fs');
+    if (fs.existsSync(swPath)) {
+        res.sendFile(swPath);
+    } else {
+        res.status(404).send('sw.js not found');
+    }
+});
+app.get(/workbox.*\.js$/, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    const wbFile = path.basename(req.path);
+    const wbPath = path.join(__dirname, '..', wbFile);
+    const fs = require('fs');
+    if (fs.existsSync(wbPath)) {
+        res.sendFile(wbPath);
+    } else {
+        res.status(404).send(`${wbFile} not found`);
+    }
+});
 // Static: landing page assets (root)
 app.use(express.static(path.join(__dirname, '../')));
 app.use('/uploads', express.static(path.join(__dirname, '../public/uploads')));
@@ -19504,5 +19693,25 @@ app.delete('/api/materiais/arquivos/:idArquivo', tenantMiddleware, async (req, r
     } catch (error) {
         console.error('Error deleting material arquivo:', error);
         res.status(500).json({ success: false, message: 'Erro ao excluir arquivo' });
+    }
+});
+
+// ============================================================
+// React SPA — catch-all FINAL (deve ser o último route handler)
+// Serve index.html para QUALQUER rota que não seja /api/*
+// Isso permite que o React Router gerencie rotas como /ordens-servico, /materiais, etc.
+// ============================================================
+app.get(/^(?!\/api\/).*$/, (req, res) => {
+    const fs = require('fs');
+    // CORRIGIDO: prodPath (raiz) tem PRIORIDADE - sempre o index.html atualizado pelo deploy
+    // frontend/dist/index.html pode estar desatualizado (bug selecao multipla BOM em prod)
+    const prodPath = path.join(__dirname, '../index.html');
+    const devPath = path.join(__dirname, '../frontend/dist/index.html');
+    if (fs.existsSync(prodPath)) {
+        res.sendFile(prodPath);
+    } else if (fs.existsSync(devPath)) {
+        res.sendFile(devPath);
+    } else {
+        res.status(404).send('index.html not found');
     }
 });

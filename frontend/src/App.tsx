@@ -17,6 +17,7 @@ import AcabamentoPage from './pages/Acabamento';
 import MaterialPage from './pages/Material';
 import ProjetoPage from './pages/Projeto';
 import TipoProdutoPage from './pages/TipoProduto';
+import TiposMaterialPage from './pages/TiposMaterial';
 import TiposTransportePage from './pages/TiposTransporte';
 import SetorPage from './pages/Setor';
 import RecursoFabricacaoPage from './pages/RecursoFabricacao';
@@ -329,6 +330,8 @@ function AppContent() {
         return <ProducaoDiariaRecursoPage />;
       case 'tipos-produto':
         return <TipoProdutoPage />;
+      case 'tipos-material':
+        return <TiposMaterialPage />;
       case 'tipos-transporte':
         return <TiposTransportePage />;
       case 'setor':

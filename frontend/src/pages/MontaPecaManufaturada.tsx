@@ -13,7 +13,8 @@ interface MatRow {
   Espessura:string|null; 
   MaterialSW:string|null; 
   EnderecoArquivo:string|null; 
-  TxtTipoDesenho:string|null; 
+  TxtTipoDesenho:string|null;
+  TipoMaterial:string|null; 
   FamiliaMat:any; 
   IdEmpresa:any; 
   Peso:any; 
@@ -1229,7 +1230,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
             ) : materiais3Filtrados.length === 0 ? (
               <div className="p-6 text-center text-[10px] text-gray-400">Nenhum material novo disponível para adição</div>
             ) : (
-              <table className="w-full text-left">
+              <table className="w-full text-left table-fixed">
                 <thead className="bg-white sticky top-0 z-10 shadow-xs border-b border-gray-200">
                   <tr>
                     <th className="p-1 px-2 w-8 text-center">
@@ -1292,7 +1293,7 @@ export default function MontaPecaManufaturadaPage({ usuario='Sistema', initialCo
                               </span>
                             )}
                           </td>
-                          <td className={`${cellCls} text-gray-600 min-w-[130px]`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
+                          <td className={`${cellCls} text-gray-600 max-w-[160px] truncate`} title={m.DescResumo || m.DescDetal}>{m.DescResumo || m.DescDetal || '-'}</td>
                           <td className="p-1.5 px-2 text-center" onClick={e=>e.stopPropagation()}>
                             {selecionados3.has(m.IdMaterial) ? (
                               <input type="number" min="0.01" step="0.01" 
