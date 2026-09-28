@@ -37,7 +37,26 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         navigateFallbackDenylist: [/^\/api/],
-        maximumFileSizeToCacheInBytes: 5000000
+        maximumFileSizeToCacheInBytes: 5000000,
+        runtimeCaching: [
+          {
+            // HTML navigation: sempre busca a versão nova na rede primeiro
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 5,
+            }
+          },
+          {
+            // JS/CSS com hash: StaleWhileRevalidate atualiza silenciosamente
+            urlPattern: /\.(?:js|css)$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'static-assets',
+            }
+          }
+        ]
       }
     })
   ],

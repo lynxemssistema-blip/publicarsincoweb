@@ -3081,7 +3081,7 @@ function OrdemServicoContent() {
                                                         <span>{os.IdTag || '-'} - {os.DescTag || os.Tag || '-'}</span>
                                                         {os.QtdeTag != null && os.QtdeTag !== '' && (
                                                             <span className="text-gray-500 font-normal ml-1.5">
-                                                                (Qtde: {os.QtdeTag} • Fabricada: {os.TagQtdeLiberada != null && os.TagQtdeLiberada !== '' ? os.TagQtdeLiberada : (os.QtdeLiberada ?? 0)} • Saldo: {os.SaldoTag != null && os.SaldoTag !== '' ? os.SaldoTag : Math.max(0, Number(os.QtdeTag) - Number(os.TagQtdeLiberada ?? os.QtdeLiberada ?? 0))})
+                                                                (Qtde: {os.QtdeTag} • Fabricada: {os.TagQtdeLiberada ?? 0} • Saldo: {os.SaldoTag ?? Math.max(0, Number(os.QtdeTag) - Number(os.TagQtdeLiberada ?? 0))})
                                                             </span>
                                                         )}
                                                     </span>

@@ -8044,23 +8044,40 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 }
             }
 
-            // Buscar dados das tags associadas (QtdeTag, QtdeLiberada, SaldoTag)
+            // Buscar dados das tags associadas (QtdeTag, SaldoTag)
+            // Fabricada = SUM(Fator) das OS liberadas da TAG (calculado dinamicamente)
+            // Saldo = QtdeTag - Fabricada
             try {
                 const tagIds = [...new Set(rows.map(r => r.IdTag).filter(Boolean))];
                 if (tagIds.length > 0) {
                     const placeholders = tagIds.map(() => '?').join(',');
                     const [tagRows] = await req.tenantDbPool.execute(
-                        `SELECT IdTag, QtdeTag, QtdeLiberada as TagQtdeLiberada, SaldoTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag IN (${placeholders})`,
+                        `SELECT IdTag, QtdeTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag IN (${placeholders})`,
                         tagIds
                     );
+
+                    // Fabricada: soma do Fator de todas as OS liberadas (Liberado_Engenharia='S') por tag
+                    const [fabRows] = await req.tenantDbPool.execute(
+                        `SELECT IdTag, COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                         FROM ordemservico
+                         WHERE IdTag IN (${placeholders})
+                           AND Liberado_Engenharia = 'S'
+                           AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+                         GROUP BY IdTag`,
+                        tagIds
+                    );
+                    const fabMap = new Map(fabRows.map(f => [f.IdTag, parseFloat(f.QtdeFabricadaOS) || 0]));
+
                     const tagMap = new Map(tagRows.map(t => [t.IdTag, t]));
                     for (const os of rows) {
                         const t = tagMap.get(os.IdTag);
                         if (t) {
-                            os.QtdeTag = t.QtdeTag;
-                            os.TagQtdeLiberada = t.TagQtdeLiberada;
-                            os.SaldoTag = t.SaldoTag;
-                            os.QtdePecasOS = t.QtdePecasOS;
+                            const qtdeTag   = parseFloat(t.QtdeTag) || 0;
+                            const fabricada = fabMap.get(os.IdTag) ?? 0;
+                            os.QtdeTag            = t.QtdeTag;
+                            os.TagQtdeLiberada    = fabricada;
+                            os.SaldoTag           = Math.max(0, qtdeTag - fabricada);
+                            os.QtdePecasOS        = t.QtdePecasOS;
                             os.QtdePecasExecutadas = t.QtdePecasExecutadas;
                         }
                     }
@@ -8123,14 +8140,25 @@ app.get('/api/ordemservico/:id', tenantMiddleware, async (req, res) => {
             if (os.IdTag) {
                 try {
                     const [tagRows] = await req.tenantDbPool.execute(
-                        `SELECT QtdeTag, QtdeLiberada as TagQtdeLiberada, SaldoTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag = ? LIMIT 1`,
+                        `SELECT QtdeTag, QtdePecasOS, QtdePecasExecutadas FROM tags WHERE IdTag = ? LIMIT 1`,
                         [os.IdTag]
                     );
                     if (tagRows.length > 0) {
-                        os.QtdeTag = tagRows[0].QtdeTag;
-                        os.TagQtdeLiberada = tagRows[0].TagQtdeLiberada;
-                        os.SaldoTag = tagRows[0].SaldoTag;
-                        os.QtdePecasOS = tagRows[0].QtdePecasOS;
+                        // Fabricada: soma do Fator de todas as OS liberadas da TAG
+                        const [fabRows] = await req.tenantDbPool.execute(
+                            `SELECT COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                             FROM ordemservico
+                             WHERE IdTag = ?
+                               AND Liberado_Engenharia = 'S'
+                               AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                            [os.IdTag]
+                        );
+                        const qtdeTag   = parseFloat(tagRows[0].QtdeTag) || 0;
+                        const fabricada = parseFloat(fabRows[0]?.QtdeFabricadaOS) || 0;
+                        os.QtdeTag             = tagRows[0].QtdeTag;
+                        os.TagQtdeLiberada     = fabricada;
+                        os.SaldoTag            = Math.max(0, qtdeTag - fabricada);
+                        os.QtdePecasOS         = tagRows[0].QtdePecasOS;
                         os.QtdePecasExecutadas = tagRows[0].QtdePecasExecutadas;
                     }
                 } catch (tagErr) {

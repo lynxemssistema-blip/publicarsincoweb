@@ -212,6 +212,8 @@ export default function ProjetoPage() {
  const [showTipoProdutoModal, setShowTipoProdutoModal] = useState(false);
   const [showUnidadeModal, setShowUnidadeModal] = useState(false);
  const [selectedProjetoForTag, setSelectedProjetoForTag] = useState<Projeto | null>(null);
+ // Ref para guardar o IdProjeto antes do reset (evita closure stale)
+ const lastEditedProjetoIdRef = useRef<number | null>(null);
 
  // Common state
  const [searchFilters, setSearchFilters] = useState({
@@ -343,6 +345,20 @@ export default function ProjetoPage() {
  fetchProjetos();
  fetchOptions();
  }, []);
+
+ // Ao fechar o modal de tag, recarrega tags do projeto e lista de projetos
+ const prevShowTagFormRef = useRef(false);
+ useEffect(() => {
+   const wasOpen = prevShowTagFormRef.current;
+   prevShowTagFormRef.current = showTagForm;
+   if (wasOpen && !showTagForm) {
+     const projetoId = lastEditedProjetoIdRef.current;
+     if (projetoId) {
+       fetchTags(projetoId);
+     }
+     fetchProjetos();
+   }
+ }, [showTagForm]);
 
  // Auto-calculate TotalFinal (sum of composition table values)
  useEffect(() => {
@@ -828,6 +844,7 @@ export default function ProjetoPage() {
       return;
     }
     setSelectedProjetoForTag(projeto);
+    lastEditedProjetoIdRef.current = projeto.IdProjeto ?? null;
     // Ensure the date is in YYYY-MM-DD for the input
     const defaultDate = parseToInputDate(projeto.DataPrevisao);
     setTagFormData({
@@ -898,6 +915,7 @@ export default function ProjetoPage() {
 
  const handleTagEdit = async (tag: Tag, projeto: Projeto) => {
  setSelectedProjetoForTag(projeto);
+ lastEditedProjetoIdRef.current = projeto.IdProjeto ?? null;
  try {
  const res = await authFetch(`${API_BASE}/tag/${tag.IdTag}`);
  const json = await res.json();
@@ -2135,13 +2153,7 @@ export default function ProjetoPage() {
   <NovaTagModal
     isOpen={showTagForm}
     onClose={resetTagForm}
-    onSuccess={() => {
-      if (selectedProjetoForTag?.IdProjeto) {
-        fetchTags(selectedProjetoForTag.IdProjeto);
-      }
-      resetTagForm();
-      showAlert('Tag salva com sucesso!', 'success');
-    }}
+    onSuccess={resetTagForm}
     projetoId={selectedProjetoForTag?.IdProjeto || ''}
     projetoNome={selectedProjetoForTag?.Projeto || ''}
     dataPrevisaoProjeto={selectedProjetoForTag?.DataPrevisao || ''}

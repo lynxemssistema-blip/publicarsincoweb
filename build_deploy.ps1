@@ -41,7 +41,7 @@ Write-Host ""
 Write-Host "Atualizando FORCE_REDEPLOY no Easypanel..." -ForegroundColor Cyan
 $easyUrl  = "http://85.31.60.68:3000"
 $easyUser = "edsonmanoel2012@gmail.com"
-$easyPass = "10207597Rdv*1"
+$easyPass = "10207597Rdv*"
 $buildTag = "deploy-$(Get-Date -Format 'yyyyMMdd-HHmm')"
 try {
     # Login
