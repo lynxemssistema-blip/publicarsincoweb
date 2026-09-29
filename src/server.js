@@ -7281,6 +7281,30 @@ app.get('/api/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
             WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             ORDER BY IdTag DESC
         `, [req.params.projetoId]);
+
+        if (rows.length > 0) {
+            const tagIds = rows.map(r => r.IdTag);
+            const placeholders = tagIds.map(() => '?').join(',');
+            // Fabricada: soma do Fator de todas as OS liberadas (Liberado_Engenharia='S') por tag
+            const [fabRows] = await req.tenantDbPool.execute(
+                `SELECT IdTag, COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                 FROM ordemservico
+                 WHERE IdTag IN (${placeholders})
+                   AND Liberado_Engenharia = 'S'
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+                 GROUP BY IdTag`,
+                tagIds
+            );
+            const fabMap = new Map(fabRows.map(f => [f.IdTag, parseFloat(f.QtdeFabricadaOS) || 0]));
+
+            for (const tag of rows) {
+                const qtdeTag = parseFloat(tag.QtdeTag) || 0;
+                const fabricada = fabMap.get(tag.IdTag) ?? 0;
+                tag.QtdeLiberada = fabricada;
+                tag.SaldoTag = Math.max(0, Math.round((qtdeTag - fabricada) * 100) / 100);
+            }
+        }
+
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -7296,7 +7320,21 @@ app.get('/api/tag/:id', tenantMiddleware, async (req, res) => {
             [req.params.id]
         );
         if (rows.length > 0) {
-            res.json({ success: true, data: rows[0] });
+            const tag = rows[0];
+            const [fabRows] = await req.tenantDbPool.execute(
+                `SELECT COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                 FROM ordemservico
+                 WHERE IdTag = ?
+                   AND Liberado_Engenharia = 'S'
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [tag.IdTag]
+            );
+            const qtdeTag = parseFloat(tag.QtdeTag) || 0;
+            const fabricada = parseFloat(fabRows[0]?.QtdeFabricadaOS) || 0;
+            tag.QtdeLiberada = fabricada;
+            tag.SaldoTag = Math.max(0, Math.round((qtdeTag - fabricada) * 100) / 100);
+
+            res.json({ success: true, data: tag });
         } else {
             res.status(404).json({ success: false, message: 'Tag não encontrada' });
         }

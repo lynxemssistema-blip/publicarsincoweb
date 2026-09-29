@@ -1305,18 +1305,18 @@ export default function ProjetoPage() {
  ) : (
  <div className="flex flex-col h-full min-h-0">
  {/* Headers */}
- <div className="flex items-center gap-2 px-2 py-1 border-b border-[#2a3830] bg-[#32423D] text-[10px] font-bold text-white uppercase tracking-wider sticky top-0 z-10">
- <div className="flex-1 min-w-0 max-w-[360px] flex items-center gap-2">
- Projeto / Cliente
- <span className="ml-1 text-[9px] font-normal text-white/50 normal-case tracking-normal">
+ <div className="grid grid-cols-[minmax(240px,1fr)_130px_70px_110px_84px_300px] items-center gap-2 px-3 py-1.5 border-b border-[#2a3830] bg-[#32423D] text-[10px] font-bold text-white uppercase tracking-wider sticky top-0 z-10">
+ <div className="flex items-center gap-2 min-w-0">
+ <span className="truncate">Projeto / Cliente</span>
+ <span className="ml-1 text-[9px] font-normal text-white/50 normal-case tracking-normal shrink-0">
  {projetos.length} de {totalCount} registros
  </span>
  </div>
- <div className="hidden sm:block w-32 shrink-0 text-center">Dt. Previsão</div>
- <div className="hidden sm:block w-20 shrink-0">Prazo</div>
- <div className="hidden sm:block w-28 shrink-0">Condição</div>
- <div className="hidden sm:block w-[72px] shrink-0 text-center">Status</div>
- <div className="flex items-center justify-end w-[280px] shrink-0">Ações</div>
+ <div className="hidden sm:block text-left">Dt. Previsão</div>
+ <div className="hidden sm:block text-left">Prazo</div>
+ <div className="hidden sm:block text-left">Condição</div>
+ <div className="hidden sm:block text-center">Status</div>
+ <div className="text-right pr-2">Ações</div>
  </div>
  <div className="divide-y divide-gray-100 overflow-y-auto min-h-0">
  {filteredProjetos.map((projeto) => {
@@ -1334,14 +1334,14 @@ export default function ProjetoPage() {
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
  transition={{ duration: 0.15 }}
- className={`flex items-center gap-2 px-2 py-0.5 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-[#E0E800]/5' : ''}`}
+ className={`grid grid-cols-[minmax(240px,1fr)_130px_70px_110px_84px_300px] items-center gap-2 px-3 py-1 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-[#E0E800]/5' : ''}`}
  onClick={() => projeto.IdProjeto && toggleProject(projeto.IdProjeto)}
  >
  {/* Project Info */}
- <div className="flex-1 min-w-0 max-w-[360px]">
+ <div className="min-w-0">
  <div className="flex items-center gap-1.5 overflow-hidden">
  <span className="text-xs text-gray-400 font-mono shrink-0">{projeto.IdProjeto}</span>
- <span className="text-xs font-medium text-gray-900 truncate">{projeto.Projeto}</span>
+ <span className="text-xs font-semibold text-gray-900 truncate">{projeto.Projeto}</span>
  <span className="text-xs text-gray-500 truncate ml-1 border-l border-gray-200 pl-1.5">
  {(projeto.DescEmpresa && !projeto.DescEmpresa.toLowerCase().includes('sem cliente') && projeto.DescEmpresa !== 'SEM CLIENTE DEFINIDO') ? projeto.DescEmpresa : (projeto.ClienteProjeto || 'Sem cliente')}
  </span>
@@ -1349,19 +1349,19 @@ export default function ProjetoPage() {
  </div>
 
  {/* Data Previsão */}
- <div className={`hidden sm:flex items-center gap-1 text-xs w-32 shrink-0 ${isDateInPast(projeto.DataPrevisao) ? 'text-red-500 font-semibold' : 'text-gray-500'}`} title="Previsão de Entrega">
- <Calendar size={12} className={isDateInPast(projeto.DataPrevisao) ? 'text-red-400' : 'text-gray-400'} />
- {formatToBRDate(projeto.DataPrevisao)}
+ <div className={`hidden sm:flex items-center gap-1 text-xs ${isDateInPast(projeto.DataPrevisao) ? 'text-red-500 font-semibold' : 'text-gray-500'}`} title="Previsão de Entrega">
+ <Calendar size={12} className={isDateInPast(projeto.DataPrevisao) ? 'text-red-400 shrink-0' : 'text-gray-400 shrink-0'} />
+ <span className="truncate">{formatToBRDate(projeto.DataPrevisao)}</span>
  </div>
 
  {/* Prazo */}
- <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500 w-20 shrink-0" title="Prazo em dias">
- <TagIcon size={12} className="text-gray-400" />
- {projeto.PrazoEntrega ? `${projeto.PrazoEntrega}d` : '-'}
+ <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500" title="Prazo em dias">
+ <TagIcon size={12} className="text-gray-400 shrink-0" />
+ <span>{projeto.PrazoEntrega ? `${projeto.PrazoEntrega}d` : '-'}</span>
  </div>
 
- {/* Finalizado */}
- <div className="hidden sm:flex flex-col text-[11px] w-28 shrink-0 justify-center">
+ {/* Finalizado / Condição */}
+ <div className="hidden sm:flex flex-col text-[11px] justify-center">
  {projeto.Finalizado === 'C' ? (
  <>
  <span className="font-semibold text-emerald-600">Finalizado</span>
@@ -1379,12 +1379,14 @@ export default function ProjetoPage() {
  </div>
 
  {/* Status */}
- <span className={`hidden sm:inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full w-[72px] shrink-0 justify-center ${getStatusColor(projeto.Finalizado === 'C' ? 'FN' : projeto.StatusProj)}`}>
+ <div className="hidden sm:flex justify-center">
+ <span className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full w-[72px] justify-center ${getStatusColor(projeto.Finalizado === 'C' ? 'FN' : projeto.StatusProj)}`}>
  {getStatusLabel(projeto.Finalizado === 'C' ? 'FN' : projeto.StatusProj, projeto.DescStatus)}
  </span>
+ </div>
 
  {/* Actions */}
- <div className="flex items-center justify-end w-[320px] shrink-0 gap-1" onClick={(e) => e.stopPropagation()}>
+ <div className="flex items-center justify-end gap-1 pr-2" onClick={(e) => e.stopPropagation()}>
 
   {/* Abrir Pasta */}
   <button
@@ -1543,66 +1545,79 @@ export default function ProjetoPage() {
  ) : (
  <div className="pl-10 pr-4 py-2 space-y-1">
  {/* Tags Header */}
- <div className="flex items-center gap-3 pl-6 py-1 text-xs font-medium text-gray-400 uppercase">
- <div className="w-4 shrink-0"></div>
- <div className="w-7 shrink-0"></div>
- 
- <span className="flex-1 min-w-0">Tag</span>
- <span className="hidden sm:block shrink-0 text-center" style={{width:'96px'}}>Prev. Entrega</span>
- <span className="hidden sm:block shrink-0" style={{width:'128px'}}>Tipo</span>
- <span className="shrink-0 text-center" style={{width:'64px'}}>Qtde</span>
- <span className="shrink-0 text-center" style={{width:'64px'}}>Lib.</span>
- <span className="shrink-0 text-center" style={{width:'64px'}}>Saldo</span>
- <span className="shrink-0" style={{width:'80px'}}></span>
- </div>
+                <div className="grid grid-cols-[minmax(180px,1fr)_120px_130px_70px_70px_70px_80px] items-center gap-2 pl-4 pr-4 py-1.5 text-xs font-medium text-gray-400 uppercase border-b border-gray-100">
+                  <div className="flex items-center gap-2 pl-9 min-w-0">
+                    <span>Tag</span>
+                  </div>
+                  <div className="hidden sm:block text-center">Prev. Entrega</div>
+                  <div className="hidden sm:block">Tipo</div>
+                  <div className="text-center font-semibold">Qtde</div>
+                  <div className="text-center font-semibold" title="Quantidade Fabricada (soma do Fator das OS liberadas)">Lib.</div>
+                  <div className="text-center font-semibold" title="Saldo a fabricar (Qtde - Fabricada)">Saldo</div>
+                  <div className="text-right pr-2">Ações</div>
+                </div>
 
- {/* Tag Rows */}
- {tags.map((tag) => (
- <motion.div
- key={tag.IdTag}
- initial={{ opacity: 0, x: -10 }}
- animate={{ opacity: 1, x: 0 }}
- className="flex items-center gap-3 pl-6 py-2 rounded-lg hover:bg-white transition-colors group"
- >
- {/* Tree line connector */}
- <div className="w-4 h-4 border-l-2 border-b-2 border-gray-300 rounded-bl-lg -ml-2"></div>
+                {/* Tag Rows */}
+                {tags.map((tag) => {
+                  const qtdeTag = Number(tag.QtdeTag || 0);
+                  const fabricada = Number(tag.QtdeLiberada ?? 0);
+                  const saldo = tag.SaldoTag != null ? Number(tag.SaldoTag) : Math.max(0, Math.round((qtdeTag - fabricada) * 100) / 100);
 
- {/* Tag Icon */}
- <div className="w-7 h-7 rounded-lg bg-[#E0E800]/20 text-[#32423D] flex items-center justify-center">
- <TagIcon size={12} />
- </div>
+                  return (
+                    <motion.div
+                      key={tag.IdTag}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      className="grid grid-cols-[minmax(180px,1fr)_120px_130px_70px_70px_70px_80px] items-center gap-2 pl-4 pr-4 py-2 rounded-lg hover:bg-white transition-colors group"
+                    >
+                      {/* Tree line connector + Tag Icon + IdTag + Name */}
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-4 h-4 border-l-2 border-b-2 border-gray-300 rounded-bl-lg -ml-1 shrink-0"></div>
+                        <div className="w-7 h-7 rounded-lg bg-[#E0E800]/20 text-[#32423D] flex items-center justify-center shrink-0">
+                          <TagIcon size={12} />
+                        </div>
+                        <span className="shrink-0 text-xs text-gray-400 font-mono w-8">{tag.IdTag}</span>
+                        <span className="text-xs font-semibold text-gray-800 truncate" title={tag.Tag}>{tag.Tag}</span>
+                      </div>
 
- <span className="shrink-0 text-xs text-gray-400 font-mono" style={{width:'40px'}}>{tag.IdTag}</span>
- <span className="flex-1 min-w-0 text-xs font-medium text-gray-800 truncate">{tag.Tag}</span>
- <span className="hidden sm:block shrink-0 text-xs text-gray-500 truncate text-center" style={{width:'96px'}}>
- {formatToBRDate(tag.DataPrevisao)}
- </span>
- <span className="hidden sm:block shrink-0 text-xs text-gray-500 truncate" style={{width:'128px'}}>{tag.TipoProduto || '-'}</span>
- <span className="shrink-0 text-xs text-gray-600 text-center" style={{width:'64px'}}>{tag.QtdeTag || '-'}</span>
- <span className="shrink-0 text-xs text-gray-600 text-center" style={{width:'64px'}}>{tag.QtdeLiberada || '-'}</span>
- <span className="shrink-0 text-xs text-gray-600 text-center" style={{width:'64px'}}>{tag.SaldoTag || '-'}</span>
+                      <span className="hidden sm:block text-xs text-gray-500 truncate text-center">
+                        {formatToBRDate(tag.DataPrevisao)}
+                      </span>
+                      <span className="hidden sm:block text-xs text-gray-500 truncate" title={tag.TipoProduto || ''}>
+                        {tag.TipoProduto || '-'}
+                      </span>
+                      <span className="text-xs font-semibold text-gray-700 text-center">
+                        {tag.QtdeTag != null && tag.QtdeTag !== '' ? tag.QtdeTag : '-'}
+                      </span>
+                      <span className="text-xs font-semibold text-blue-600 text-center" title="Quantidade Fabricada (soma do Fator das OS liberadas)">
+                        {fabricada}
+                      </span>
+                      <span className={`text-xs font-semibold text-center ${saldo > 0 ? 'text-amber-700 font-bold' : 'text-gray-500'}`} title="Saldo a fabricar (Qtde - Fabricada)">
+                        {saldo}
+                      </span>
 
- {/* Tag Actions */}
- <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
- <button
- onClick={() => handleTagEdit(tag, projeto)}
- className={`p-1.5 rounded-lg transition-colors ${isFinalizado ? 'text-blue-600 hover:bg-blue-50' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
- title={isFinalizado ? "Visualizar Tag (Somente Visualização)" : "Editar Tag"}
- >
- {isFinalizado ? <Eye size={14} /> : <Edit2 size={14} />}
- </button>
- {!isFinalizado && (
-    <button
-    onClick={() => tag.IdTag && projeto.IdProjeto && handleTagDelete(tag.IdTag, projeto.IdProjeto)}
-    className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
-    title="Excluir Tag"
-    >
-    <Trash2 size={14} />
-    </button>
-  )}
- </div>
- </motion.div>
- ))}
+                      {/* Tag Actions */}
+                      <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+                        <button
+                          onClick={() => handleTagEdit(tag, projeto)}
+                          className={`p-1.5 rounded-lg transition-colors ${isFinalizado ? 'text-blue-600 hover:bg-blue-50' : 'text-[#32423D] hover:bg-[#E0E800]/20'}`}
+                          title={isFinalizado ? "Visualizar Tag (Somente Visualização)" : "Editar Tag"}
+                        >
+                          {isFinalizado ? <Eye size={14} /> : <Edit2 size={14} />}
+                        </button>
+                        {!isFinalizado && (
+                          <button
+                            onClick={() => tag.IdTag && projeto.IdProjeto && handleTagDelete(tag.IdTag, projeto.IdProjeto)}
+                            className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                            title="Excluir Tag"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+                })}
  </div>
  )}
  </motion.div>

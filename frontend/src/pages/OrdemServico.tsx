@@ -303,6 +303,13 @@ const checkSectorActiveInOS = (obj: any, fieldName: string): boolean => {
   return false;
 };
 
+const formatQtdeDisplay = (val: any): string => {
+  if (val == null || val === '') return '-';
+  const num = Number(val);
+  if (isNaN(num)) return String(val);
+  return parseFloat(num.toFixed(4)).toString();
+};
+
 const getOsHeaderActiveSectors = (os: any) => {
   if (!os) return [];
   return SECTOR_RESOURCE_FIELDS.filter(f => checkSectorActiveInOS(os, f.field)).map(f => {
@@ -3196,19 +3203,21 @@ function OrdemServicoContent() {
 
                                     {/* Skeleton Table Header */}
                                     <div className="flex items-center gap-2 pl-6 py-2 text-[10px] font-medium text-gray-300 uppercase border-b border-gray-100">
-                                        <div className="flex gap-1 shrink-0" style={{ width: '18.5rem' }}>
+                                        <div className="flex gap-1 shrink-0" style={{ width: '21.25rem' }}>
                                             <span className="w-8 text-center">PDF</span>
                                             <span className="w-8 text-center">DXF</span>
                                             <span className="w-8 text-center">3D</span>
                                             <span className="w-8 text-center">OS</span>
                                             <span className="w-8 text-center">★</span>
                                             <span className="w-8 text-center">⏱</span>
+                                            <span className="w-8 text-center">⚙</span>
+                                            <span className="w-8 text-center">🗑</span>
                                         </div>
                                         <span className="w-32 shrink-0">Código Desenho</span>
                                         <span className="flex-1 min-w-0">Descrição</span>
                                         <span className="w-12 shrink-0 text-center">Fator</span>
-                                        <span className="w-12 shrink-0 text-center">Qtde</span>
-                                        <span className="w-14 shrink-0 text-center">Peso</span>
+                                        <span className="w-20 shrink-0 text-center">Qtde</span>
+                                        <span className="w-20 shrink-0 text-center">Peso</span>
                                         {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
                                         <span className="w-8 shrink-0"></span>
                                         <span className="w-8 shrink-0 mr-2"></span>
@@ -3218,7 +3227,9 @@ function OrdemServicoContent() {
                                     {[1, 2, 3, 4, 5].map((i) => (
                                         <div key={i} className="flex items-center gap-2 pl-6 py-3 animate-pulse" style={{ animationDelay: `${i * 100}ms` }}>
                                             {/* Media Icon Skeletons */}
-                                            <div className="flex gap-1 shrink-0" style={{ width: '18.5rem' }}>
+                                            <div className="flex gap-1 shrink-0" style={{ width: '21.25rem' }}>
+                                                <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
+                                                <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
                                                 <div className="w-8 h-8 rounded bg-gray-200 shrink-0" />
@@ -3233,9 +3244,9 @@ function OrdemServicoContent() {
                                             {/* Fator Skeleton */}
                                             <div className="w-12 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Qtde Skeleton */}
-                                            <div className="w-12 shrink-0 h-4 rounded bg-gray-100" />
+                                            <div className="w-20 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Peso Skeleton */}
-                                            <div className="w-14 shrink-0 h-4 rounded bg-gray-100" />
+                                            <div className="w-20 shrink-0 h-4 rounded bg-gray-100" />
                                             {/* Progress Skeletons */}
                                             {setoresParaRender.map(s => <div key={s.key} className="w-16 shrink-0 h-1.5 rounded-full bg-gray-100 hidden lg:block" />)}
                                         </div>
@@ -3293,8 +3304,8 @@ function OrdemServicoContent() {
                                             <span className="w-32 shrink-0">Código Desenho</span>
                                             <span className="flex-1 min-w-0">Descrição</span>
                                             <span className="w-12 shrink-0 text-center" title="Fator Multiplicador">Fator</span>
-                                            <span className="w-12 shrink-0 text-center">Qtde</span>
-                                            <span className="w-14 shrink-0 text-center">Peso</span>
+                                            <span className="w-20 shrink-0 text-center">Qtde</span>
+                                            <span className="w-20 shrink-0 text-center">Peso</span>
                                             {setoresParaRender.map(s => <span key={s.key} className="w-16 shrink-0 hidden lg:block text-center">{s.labelShort}</span>)}
                                         </div>
 
@@ -3582,8 +3593,12 @@ function OrdemServicoContent() {
                                                         {item.Fator !== undefined ? item.Fator : '1'}
                                                     </span>
                                                 )}
-                                                <span className="w-12 shrink-0 text-xs text-gray-600 text-center">{item.QtdeTotal || '-'}</span>
-                                                <span className="w-14 shrink-0 text-xs text-gray-600 text-center">{item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}</span>
+                                                <span className="w-20 shrink-0 text-xs text-gray-600 text-center truncate px-0.5" title={item.QtdeTotal != null && item.QtdeTotal !== '' ? String(item.QtdeTotal) : '-'}>
+                                                    {formatQtdeDisplay(item.QtdeTotal)}
+                                                </span>
+                                                <span className="w-20 shrink-0 text-xs text-gray-600 text-center truncate px-0.5" title={item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}>
+                                                    {item.Peso ? `${parseFloat(String(item.Peso)).toFixed(2)}kg` : '-'}
+                                                </span>
                                                 {setoresParaRender.map(s => {
                                                     const temSetorNoItem = String((item as any)[s.txtField] ?? '') === '1';
                                                     return (
