@@ -214,6 +214,10 @@ export default function ProjetoPage() {
  const [selectedProjetoForTag, setSelectedProjetoForTag] = useState<Projeto | null>(null);
  // Ref para guardar o IdProjeto antes do reset (evita closure stale)
  const lastEditedProjetoIdRef = useRef<number | null>(null);
+ const [mounted, setMounted] = useState(false);
+ useEffect(() => {
+   setMounted(true);
+ }, []);
 
  // Common state
  const [searchFilters, setSearchFilters] = useState({
@@ -360,6 +364,26 @@ export default function ProjetoPage() {
    }
  }, [showTagForm]);
 
+ // Ao fechar o modal de projeto (voltando à tela de projetos) ou focar a janela, atualiza projetos e opções de pessoajuridica
+ const prevShowProjetoFormRef = useRef(false);
+ useEffect(() => {
+   const wasOpen = prevShowProjetoFormRef.current;
+   prevShowProjetoFormRef.current = showProjetoForm;
+   if (wasOpen && !showProjetoForm) {
+     fetchOptions();
+     fetchProjetos();
+   }
+ }, [showProjetoForm]);
+
+ useEffect(() => {
+   const handleFocus = () => {
+     fetchOptions();
+     fetchProjetos();
+   };
+   window.addEventListener('focus', handleFocus);
+   return () => window.removeEventListener('focus', handleFocus);
+ }, []);
+
  // Auto-calculate TotalFinal (sum of composition table values)
  useEffect(() => {
  const toNum = (v: string | undefined) => parseFloat(v || '0') || 0;
@@ -435,13 +459,13 @@ export default function ProjetoPage() {
 
       if (name === 'ClienteProjeto') {
         const opt = clienteOptions.find(o => o.label === value);
-        if (opt && opt.cnpj) nextData.Cnpj = opt.cnpj;
+        if (opt && opt.cnpj) nextData.Cnpj = opt.cnpj.replace(/,/g, '.');
       } else if (name === 'ClienteEntrega') {
         const opt = clienteOptions.find(o => o.label === value);
-        if (opt && opt.cnpj) nextData.CnpjEntrega = opt.cnpj;
+        if (opt && opt.cnpj) nextData.CnpjEntrega = opt.cnpj.replace(/,/g, '.');
       } else if (name === 'ClienteCobranca') {
         const opt = clienteOptions.find(o => o.label === value);
-        if (opt && opt.cnpj) nextData.CnpjCobranca = opt.cnpj;
+        if (opt && opt.cnpj) nextData.CnpjCobranca = opt.cnpj.replace(/,/g, '.');
       }
 
       // Cálculo automático de 'Dias (Prazo)' ou 'Dias em atraso'
@@ -553,6 +577,17 @@ export default function ProjetoPage() {
  delete data.IE;
  delete data.Ie;
  delete data.inscest;
+
+  if (!data.ClienteProjeto && data.DescEmpresa) {
+    data.ClienteProjeto = data.DescEmpresa;
+  }
+  if (!data.Cnpj && (data.ClienteProjeto || data.DescEmpresa)) {
+    const opt = clienteOptions.find(o => o.label === data.ClienteProjeto || o.label === data.DescEmpresa);
+    if (opt && opt.cnpj) data.Cnpj = opt.cnpj;
+  }
+  if (data.Cnpj) {
+    data.Cnpj = data.Cnpj.replace(/,/g, '.');
+  }
 
  setProjetoFormData(data);
  setIsEditingProjeto(true);
@@ -781,6 +816,16 @@ export default function ProjetoPage() {
  setProjetoFormData(emptyProjetoForm);
  setIsEditingProjeto(false);
  setShowProjetoForm(false);
+ fetchOptions();
+ fetchProjetos();
+ };
+
+ const handleNovoProjeto = () => {
+ setProjetoFormData(emptyProjetoForm);
+ setIsEditingProjeto(false);
+ setActiveTab(0);
+ setShowProjetoForm(true);
+ fetchOptions();
  };
 
  // === PARAR / CANCELAR / REATIVAR PROJETO ===
@@ -1087,36 +1132,48 @@ export default function ProjetoPage() {
  document.body
  )}
 
- {/* Page Header */}
- <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
- <div>
- 
- <p className="text-gray-500 text-xs">Clique em um projeto para expandir e ver suas tags</p>
- </div>
- <div className="flex gap-2">
+ {/* Portais para o Cabeçalho Principal da Página (AppLayout) */}
+ {mounted && document.getElementById('page-subtitle-portal') && createPortal(
+   <span className="text-gray-500 text-xs font-normal">Clique em um projeto para expandir e ver suas tags</span>,
+   document.getElementById('page-subtitle-portal')!
+ )}
 
- <motion.button
- whileHover={{ scale: 1.02 }}
- whileTap={{ scale: 0.98 }}
- onClick={() => { resetProjetoForm(); setShowProjetoForm(true); }}
- className="inline-flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[#32423D] text-white font-medium hover:bg-[#3d4f49] transition-colors shadow-sm"
- >
- <Plus size={15} />
- Novo Projeto
- </motion.button>
- </div>
- </div>
+ {mounted && document.getElementById('page-actions-portal') && createPortal(
+   <motion.button
+     whileHover={{ scale: 1.02 }}
+     whileTap={{ scale: 0.98 }}
+     onClick={handleNovoProjeto}
+     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#32423D] text-white text-xs font-semibold hover:bg-[#3d4f49] transition-all shadow-sm active:scale-95 cursor-pointer"
+   >
+     <Plus size={14} />
+     Novo Projeto
+   </motion.button>,
+   document.getElementById('page-actions-portal')!
+ )}
+
+ {(!mounted || !document.getElementById('page-actions-portal')) && (
+   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-1">
+     <p className="text-gray-500 text-xs">Clique em um projeto para expandir e ver suas tags</p>
+     <button
+       onClick={handleNovoProjeto}
+       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#32423D] text-white text-xs font-semibold hover:bg-[#3d4f49] transition-colors shadow-sm"
+     >
+       <Plus size={14} />
+       Novo Projeto
+     </button>
+   </div>
+ )}
 
  {/* Search Filters Section */}
  <div className="bg-white rounded-md shadow-sm border border-gray-100 mb-2 shrink-0">
- <div className="flex justify-between items-center px-2 py-1 border-b border-gray-100">
- <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-400 flex items-center gap-2 m-0">
+ <div className="flex justify-between items-center px-3 py-1.5 bg-slate-50/70 border-b border-gray-100">
+ <h3 className="text-[10px] uppercase tracking-widest font-bold text-gray-500 flex items-center gap-2 m-0">
  <Search size={12} /> Dados para Pesquisa
  </h3>
  <button
  type="button"
  onClick={() => setShowFilters(!showFilters)}
- className="text-[10px] flex items-center gap-1.5 text-blue-500 hover:text-blue-700 hover:bg-gray-50 px-2 py-1 rounded transition-colors border border-gray-200 uppercase font-bold"
+ className="text-[10px] flex items-center gap-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-2 py-0.5 rounded transition-colors border border-blue-200/60 uppercase font-bold cursor-pointer"
  >
  <Filter size={11} /> {showFilters ? 'Ocultar Filtros' : 'Mostrar Filtros'}
  </button>
@@ -1201,11 +1258,11 @@ export default function ProjetoPage() {
   </div>
   </div>
 
-  {/* Linha 2: Datas */}
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-1.5 mb-2">
+  {/* Linha 2: Data Previsão + Botões Fechar, Limpar e Pesquisar ao lado */}
+  <div className="flex flex-wrap items-end justify-between gap-3 pt-0.5">
   {/* Data Previsão */}
   <div className="flex items-center gap-1.5">
-  <div className="flex-1">
+  <div className="w-36">
   <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Prev. de:</label>
   <input
   type="date"
@@ -1215,7 +1272,7 @@ export default function ProjetoPage() {
   />
   </div>
   <span className="text-gray-400 text-xs italic pt-4">a</span>
-  <div className="flex-1">
+  <div className="w-36">
   <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
   <input
   type="date"
@@ -1226,53 +1283,40 @@ export default function ProjetoPage() {
   </div>
   </div>
 
-  {/* Data Criação */}
-  <div className="flex items-center gap-1.5">
-  <div className="flex-1">
-  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5">Dt Criação de:</label>
-  <input
-  type="date"
-  value={searchFilters.criacaoInicio}
-  onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoInicio: e.target.value }))}
-  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
-  />
-  </div>
-  <span className="text-gray-400 text-xs italic pt-4">a</span>
-  <div className="flex-1">
-  <label className="block text-[10px] font-semibold text-gray-500 mb-0.5 invisible">até</label>
-  <input
-  type="date"
-  value={searchFilters.criacaoFim}
-  onChange={(e) => setSearchFilters(prev => ({ ...prev, criacaoFim: e.target.value }))}
-  className="w-full px-2 py-1 border border-gray-300 bg-white text-xs focus:outline-none focus:border-[#32423D] rounded-sm"
-  />
-  </div>
-  </div>
-  </div>
-
-  {/* Botões de ação */}
-  <div className="flex justify-end gap-2">
+  {/* Ações ao lado da data de previsão */}
+  <div className="flex items-center gap-2">
   <button
   type="button"
   onClick={() => {
-  const emptyFilters = { projeto: '', descProjeto: '', cliente: '', cnpj: '', previsaoInicio: '', previsaoFim: '', criacaoInicio: '', criacaoFim: '', finalizado: '' };
+  const emptyFilters = { projeto: '', descProjeto: '', cliente: '', cnpj: '', previsaoInicio: '', previsaoFim: '', criacaoInicio: '', criacaoFim: '', finalizado: '', statusProj: '' };
   setSearchFilters(emptyFilters);
   fetchProjetos(emptyFilters);
   }}
-  className="px-2 py-0.5 text-red-500 font-semibold text-xs tracking-wide rounded border border-gray-200 hover:bg-gray-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5"
+  className="px-2.5 py-1 text-red-500 font-semibold text-xs tracking-wide rounded border border-gray-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200 transition-colors flex items-center gap-1.5 cursor-pointer"
+  title="Limpar todos os filtros"
+  >
+  <RotateCcw size={12} />
+  Limpar
+  </button>
+  <button
+  type="button"
+  onClick={() => setShowFilters(false)}
+  className="px-2.5 py-1 text-gray-600 font-semibold text-xs tracking-wide rounded border border-gray-200 hover:bg-gray-100 hover:text-gray-900 transition-colors flex items-center gap-1.5 cursor-pointer"
+  title="Fechar pesquisa"
   >
   <X size={13} />
-  Limpar
+  Fechar
   </button>
   <button
   type="submit"
   onClick={() => fetchProjetos()}
   disabled={loading}
-  className="px-5 py-1.5 bg-emerald-100 border border-emerald-200 text-emerald-800 font-bold text-xs tracking-wide rounded hover:bg-emerald-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer"
+  className="px-4 py-1 bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold text-xs tracking-wide rounded hover:bg-emerald-200 transition-colors flex items-center gap-1.5 disabled:opacity-50 cursor-pointer shadow-sm"
   >
   <Search size={13} />
   {loading ? 'Buscando...' : 'Pesquisar'}
   </button>
+  </div>
   </div>
   </form>
   )}
@@ -1290,8 +1334,8 @@ export default function ProjetoPage() {
  <div className="h-3 bg-gray-100 rounded w-2/3" />
  <div className="h-2.5 bg-gray-100 rounded w-1/3" />
  </div>
+ <div className="hidden sm:block w-28 h-3 bg-gray-100 rounded" />
  <div className="hidden sm:block w-24 h-3 bg-gray-100 rounded" />
- <div className="hidden sm:block w-16 h-3 bg-gray-100 rounded" />
  <div className="hidden sm:block w-14 h-5 bg-gray-100 rounded-full" />
  <div className="w-28 h-7 bg-gray-100 rounded-lg" />
  </div>
@@ -1305,15 +1349,15 @@ export default function ProjetoPage() {
  ) : (
  <div className="flex flex-col h-full min-h-0">
  {/* Headers */}
- <div className="grid grid-cols-[minmax(240px,1fr)_130px_70px_110px_84px_300px] items-center gap-2 px-3 py-1.5 border-b border-[#2a3830] bg-[#32423D] text-[10px] font-bold text-white uppercase tracking-wider sticky top-0 z-10">
+ <div className="grid grid-cols-[minmax(200px,1fr)_140px_130px_110px_84px_300px] items-center gap-2 px-3 py-1.5 border-b border-[#2a3830] bg-[#32423D] text-[10px] font-bold text-white uppercase tracking-wider sticky top-0 z-10">
  <div className="flex items-center gap-2 min-w-0">
  <span className="truncate">Projeto / Cliente</span>
  <span className="ml-1 text-[9px] font-normal text-white/50 normal-case tracking-normal shrink-0">
  {projetos.length} de {totalCount} registros
  </span>
  </div>
+ <div className="hidden sm:block text-left">CNPJ</div>
  <div className="hidden sm:block text-left">Dt. Previsão</div>
- <div className="hidden sm:block text-left">Prazo</div>
  <div className="hidden sm:block text-left">Condição</div>
  <div className="hidden sm:block text-center">Status</div>
  <div className="text-right pr-2">Ações</div>
@@ -1334,7 +1378,7 @@ export default function ProjetoPage() {
  initial={{ opacity: 0 }}
  animate={{ opacity: 1 }}
  transition={{ duration: 0.15 }}
- className={`grid grid-cols-[minmax(240px,1fr)_130px_70px_110px_84px_300px] items-center gap-2 px-3 py-1 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-[#E0E800]/5' : ''}`}
+ className={`grid grid-cols-[minmax(200px,1fr)_140px_130px_110px_84px_300px] items-center gap-2 px-3 py-1 hover:bg-gray-50/50 transition-colors cursor-pointer ${isExpanded ? 'bg-[#E0E800]/5' : ''}`}
  onClick={() => projeto.IdProjeto && toggleProject(projeto.IdProjeto)}
  >
  {/* Project Info */}
@@ -1348,16 +1392,21 @@ export default function ProjetoPage() {
  </div>
  </div>
 
+ {/* CNPJ */}
+ <div className="hidden sm:flex items-center text-xs text-gray-600 font-mono" title={projeto.Cnpj || '-'}>
+ <span className="truncate">
+ {projeto.Cnpj ? (
+ projeto.Cnpj.includes('.') || projeto.Cnpj.includes('/') 
+ ? projeto.Cnpj.replace(/,/g, '.') 
+ : projeto.Cnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5')
+ ) : '-'}
+ </span>
+ </div>
+
  {/* Data Previsão */}
  <div className={`hidden sm:flex items-center gap-1 text-xs ${isDateInPast(projeto.DataPrevisao) ? 'text-red-500 font-semibold' : 'text-gray-500'}`} title="Previsão de Entrega">
  <Calendar size={12} className={isDateInPast(projeto.DataPrevisao) ? 'text-red-400 shrink-0' : 'text-gray-400 shrink-0'} />
  <span className="truncate">{formatToBRDate(projeto.DataPrevisao)}</span>
- </div>
-
- {/* Prazo */}
- <div className="hidden sm:flex items-center gap-1 text-[11px] text-gray-500" title="Prazo em dias">
- <TagIcon size={12} className="text-gray-400 shrink-0" />
- <span>{projeto.PrazoEntrega ? `${projeto.PrazoEntrega}d` : '-'}</span>
  </div>
 
  {/* Finalizado / Condição */}
@@ -1580,9 +1629,10 @@ export default function ProjetoPage() {
                         <span className="text-xs font-semibold text-gray-800 truncate" title={tag.Tag}>{tag.Tag}</span>
                       </div>
 
-                      <span className="hidden sm:block text-xs text-gray-500 truncate text-center">
-                        {formatToBRDate(tag.DataPrevisao)}
-                      </span>
+                      <div className={`hidden sm:flex items-center justify-center gap-1 text-xs ${isDateInPast(tag.DataPrevisao) ? 'text-red-500 font-semibold' : 'text-gray-500'}`} title="Previsão de Entrega">
+                        {isDateInPast(tag.DataPrevisao) && <Calendar size={11} className="text-red-400 shrink-0" />}
+                        <span className="truncate">{formatToBRDate(tag.DataPrevisao)}</span>
+                      </div>
                       <span className="hidden sm:block text-xs text-gray-500 truncate" title={tag.TipoProduto || ''}>
                         {tag.TipoProduto || '-'}
                       </span>
@@ -1699,7 +1749,7 @@ export default function ProjetoPage() {
 
   <div className="flex items-center gap-2">
   {!isProjectFinalizado && (
-    <button type="button" onClick={() => resetProjetoForm()} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-sm rounded">
+    <button type="button" onClick={handleNovoProjeto} className="px-2 py-1 bg-white border border-gray-200 text-xs font-semibold text-gray-700 hover:bg-gray-100 transition-colors flex items-center gap-2 shadow-sm rounded">
     <Plus size={14} /> Novo
     </button>
   )}
@@ -1783,12 +1833,15 @@ export default function ProjetoPage() {
 </label>
  <select name="ClienteProjeto" value={projetoFormData.ClienteProjeto || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded shadow-sm">
  <option value="">Selecione...</option>
+ {projetoFormData.ClienteProjeto && !clienteOptions.some(opt => opt.label === projetoFormData.ClienteProjeto) && (
+   <option value={projetoFormData.ClienteProjeto}>{projetoFormData.ClienteProjeto}</option>
+ )}
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
  </select>
  </div>
  <div>
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">CNPJ</label>
- <input type="text" name="Cnpj" value={projetoFormData.Cnpj || ''} onChange={handleProjetoInputChange} placeholder="00.000.000/0000-00" className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm" />
+ <input type="text" name="Cnpj" value={projetoFormData.Cnpj ? projetoFormData.Cnpj.replace(/,/g, '.') : ''} onChange={handleProjetoInputChange} placeholder="00.000.000/0000-00" className="w-full px-2 py-1 bg-white border border-gray-300 text-xs focus:outline-none focus:border-[#32423D] rounded shadow-sm" />
  </div>
  <div className="md:col-span-2">
  <label className="block text-[10px] uppercase tracking-wider font-bold text-gray-700 mb-1">Responsável Técnico</label>
@@ -1881,6 +1934,9 @@ export default function ProjetoPage() {
 </label>
  <select name="ClienteProjeto" value={projetoFormData.ClienteProjeto || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] appearance-none rounded-none">
  <option value="">Selecione...</option>
+ {projetoFormData.ClienteProjeto && !clienteOptions.some(opt => opt.label === projetoFormData.ClienteProjeto) && (
+   <option value={projetoFormData.ClienteProjeto}>{projetoFormData.ClienteProjeto}</option>
+ )}
  {clienteOptions.map(opt => <option key={opt.id} value={opt.label}>{opt.label}</option>)}
  </select>
  </div>
@@ -1891,7 +1947,7 @@ export default function ProjetoPage() {
  <div></div>
  <div>
  <label className="block text-xs font-semibold text-gray-600 mb-1">CNPJ</label>
- <input type="text" name="Cnpj" value={projetoFormData.Cnpj || ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] rounded-none" placeholder="__.___.___/____-__" />
+ <input type="text" name="Cnpj" value={projetoFormData.Cnpj ? projetoFormData.Cnpj.replace(/,/g, '.') : ''} onChange={handleProjetoInputChange} className="w-full px-2 py-1 border border-gray-200 text-xs focus:outline-none focus:border-[#32423D] rounded-none" placeholder="__.___.___/____-__" />
  </div>
  <div>
  <label className="block text-xs font-semibold text-gray-600 mb-1">IE (Insc. Estadual)</label>
@@ -2185,11 +2241,8 @@ export default function ProjetoPage() {
     isModal={true} 
     onCloseModal={() => {
       setShowPessoaJuridicaModal(false);
-      fetch(`${API_BASE}/pj/options`)
-        .then(res => res.json())
-        .then(json => {
-          if (json.success) setClienteOptions(json.data);
-        });
+      fetchOptions();
+      fetchProjetos();
     }} 
   />
  </div>

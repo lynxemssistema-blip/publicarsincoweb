@@ -623,6 +623,43 @@ function OrdemServicoContent() {
         }
     };
 
+    const getDateStatus = (dateStr?: string, isFinalizado?: boolean): 'empty' | 'finalizado' | 'vencida' | 'hoje' | 'future' => {
+        if (!dateStr || dateStr === '-') return 'empty';
+        if (isFinalizado) return 'finalizado';
+        try {
+            let year = 0, month = 0, day = 0;
+            const brMatch = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+            if (brMatch) {
+                day = parseInt(brMatch[1], 10);
+                month = parseInt(brMatch[2], 10);
+                year = parseInt(brMatch[3], 10);
+            } else {
+                const isoMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+                if (isoMatch) {
+                    year = parseInt(isoMatch[1], 10);
+                    month = parseInt(isoMatch[2], 10);
+                    day = parseInt(isoMatch[3], 10);
+                } else {
+                    const parsed = new Date(dateStr);
+                    if (isNaN(parsed.getTime())) return 'future';
+                    year = parsed.getFullYear();
+                    month = parsed.getMonth() + 1;
+                    day = parsed.getDate();
+                }
+            }
+            const targetDate = new Date(year, month - 1, day);
+            targetDate.setHours(0, 0, 0, 0);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (targetDate.getTime() < today.getTime()) return 'vencida';
+            if (targetDate.getTime() === today.getTime()) return 'hoje';
+            return 'future';
+        } catch {
+            return 'future';
+        }
+    };
+
 
     const handleOpenFile = async (e: React.MouseEvent, path: string, type: 'pdf' | 'dxf' | 'sldprt') => {
         e.stopPropagation();
@@ -3068,14 +3105,36 @@ function OrdemServicoContent() {
                                             </div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-gray-400">Data Previsão:</span>
-                                                {isDateBeforeToday(os.DataPrevisao) ? (
-                                                    <span className="inline-flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-1.5 py-0.5 rounded shadow-2xs" title="Previsão Vencida (menor que a data atual)">
-                                                        <AlertTriangle size={11} className="text-red-500" />
-                                                        {formatDateBR(os.DataPrevisao)}
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-600 font-medium">{formatDateBR(os.DataPrevisao)}</span>
-                                                )}
+                                                {(() => {
+                                                    const isFin = os.OrdemServicoFinalizado === 'C';
+                                                    const status = getDateStatus(os.DataPrevisao, isFin);
+                                                    if (status === 'empty') return <span className="text-gray-400 font-medium">-</span>;
+                                                    if (status === 'finalizado') {
+                                                        return <span className="text-gray-500 font-medium">{formatDateBR(os.DataPrevisao)}</span>;
+                                                    }
+                                                    if (status === 'vencida') {
+                                                        return (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-red-700 bg-red-100/80 border border-red-300 px-1.5 py-0.5 rounded shadow-2xs" title="Previsão Vencida (menor que a data atual)">
+                                                                <AlertTriangle size={11} className="text-red-600" />
+                                                                {formatDateBR(os.DataPrevisao)}
+                                                            </span>
+                                                        );
+                                                    }
+                                                    if (status === 'hoje') {
+                                                        return (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 bg-amber-100/80 border border-amber-300 px-1.5 py-0.5 rounded shadow-2xs" title="Previsão Vence Hoje">
+                                                                <Clock size={11} className="text-amber-600" />
+                                                                {formatDateBR(os.DataPrevisao)}
+                                                            </span>
+                                                        );
+                                                    }
+                                                    return (
+                                                        <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded shadow-2xs" title="No Prazo">
+                                                            <Calendar size={11} className="text-emerald-600" />
+                                                            {formatDateBR(os.DataPrevisao)}
+                                                        </span>
+                                                    );
+                                                })()}
                                             </div>
                                             <div className="flex flex-col mt-2 pt-2 border-t border-gray-50">
                                                 <div className="flex justify-between gap-2">
@@ -3783,21 +3842,49 @@ function OrdemServicoContent() {
                     
                     {/* Data de Previsão */}
                     <div className="hidden sm:flex flex-col items-center justify-center w-24 shrink-0 min-w-0" title="Data de Previsão">
-                        {os.DataPrevisao ? (
-                            isDateBeforeToday(os.DataPrevisao) ? (
-                                <span className="flex items-center gap-1 text-[10px] text-red-700 bg-red-50 px-1.5 py-0.5 rounded font-bold border border-red-200 shadow-sm" title="Previsão Vencida (menor que a data atual)">
-                                    <AlertTriangle size={10} className="text-red-600" />
+                        {(() => {
+                            const isFin = os.OrdemServicoFinalizado === 'C';
+                            const status = getDateStatus(os.DataPrevisao, isFin);
+
+                            if (status === 'empty') {
+                                return <span className="text-xs text-gray-400 font-medium">-</span>;
+                            }
+
+                            if (status === 'finalizado') {
+                                return (
+                                    <span className="flex items-center gap-1 text-[10px] text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded font-medium border border-gray-200" title="OS Finalizada">
+                                        <Calendar size={10} className="text-gray-400" />
+                                        {formatDateBR(os.DataPrevisao)}
+                                    </span>
+                                );
+                            }
+
+                            if (status === 'vencida') {
+                                return (
+                                    <span className="flex items-center gap-1 text-[10px] text-red-700 bg-red-100/80 px-1.5 py-0.5 rounded font-bold border border-red-300 shadow-sm" title="Previsão Vencida (menor que a data atual)">
+                                        <AlertTriangle size={10} className="text-red-600" />
+                                        {formatDateBR(os.DataPrevisao)}
+                                    </span>
+                                );
+                            }
+
+                            if (status === 'hoje') {
+                                return (
+                                    <span className="flex items-center gap-1 text-[10px] text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded font-bold border border-amber-300 shadow-sm" title="Previsão Vence Hoje">
+                                        <Clock size={10} className="text-amber-600" />
+                                        {formatDateBR(os.DataPrevisao)}
+                                    </span>
+                                );
+                            }
+
+                            // No Prazo (data futura) -> Verde suave bem distinto do vermelho
+                            return (
+                                <span className="flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded font-medium border border-emerald-200/90 shadow-2xs" title="No Prazo (Previsão Futura)">
+                                    <Calendar size={10} className="text-emerald-600" />
                                     {formatDateBR(os.DataPrevisao)}
                                 </span>
-                            ) : (
-                                <span className="flex items-center gap-1 text-[10px] text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded font-bold border border-orange-100 shadow-sm" title="Data de Previsão">
-                                    <Calendar size={10} />
-                                    {formatDateBR(os.DataPrevisao)}
-                                </span>
-                            )
-                        ) : (
-                            <span className="text-xs text-gray-400 font-medium">-</span>
-                        )}
+                            );
+                        })()}
                     </div>
 
                     {/* Descrição da OS */}

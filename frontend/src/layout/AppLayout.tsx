@@ -425,9 +425,11 @@ export function AppLayout({ children, menuItems, activePageId, activeLabel, onNa
                                         )}
                                     </AnimatePresence>
                                 </div>
+                                <div id="page-subtitle-portal" className="text-xs text-muted-foreground mt-0.5 empty:hidden" />
                             </div>
                         </div>
-                        <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden">
+                        <div className="flex items-center gap-2">
+                            <div id="page-actions-portal" className="flex items-center gap-2 empty:hidden" />
                             <button
                                 onClick={() => setIsSidebarCollapsed(prev => !prev)}
                                 className="hidden md:flex p-1.5 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-md border border-border/60 transition-colors text-xs items-center gap-1.5"

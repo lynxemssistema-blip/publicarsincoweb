@@ -13,7 +13,6 @@ interface DashboardProps {
 
 const quickAccessItems = [
     { icon: Building2,       label: 'Pessoa Jurídica',        page: 'pessoa-juridica',        desc: 'Gestão de clientes' },
-    { icon: FileText,        label: 'Relatórios',             page: 'relatorios',             desc: 'Análise de dados' },
     { icon: ClipboardList,   label: 'Apontamento Produção',   page: 'apontamento',            desc: 'Registrar execução por setor' },
     { icon: Factory,         label: 'Visão Geral Produção',   page: 'visao-geral-producao',   desc: 'Painel operacional da fábrica' },
     { icon: HardHat,         label: 'Visão Geral Engenharia', page: 'acompanhamento-etapas',  desc: 'Etapas e prazos de engenharia' },

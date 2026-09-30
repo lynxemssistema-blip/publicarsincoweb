@@ -10,7 +10,30 @@ const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
 interface Option {
   id: string | number;
   label: string;
+  value?: string | number;
+  DescEmpresa?: string;
+  IdEmpresa?: string | number;
+  DataPrevisao?: string;
 }
+
+const toInputDate = (val?: string | null): string => {
+  if (!val || val === 'null' || val === '-') return '';
+  const str = String(val).trim();
+  const brMatch = str.match(/^(\d{2})\/(\d{2})\/(\d{4})/);
+  if (brMatch) {
+    const [, d, m, y] = brMatch;
+    return `${y}-${m}-${d}`;
+  }
+  const isoMatch = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    return isoMatch[0];
+  }
+  const parsed = new Date(str);
+  if (!isNaN(parsed.getTime())) {
+    return parsed.toISOString().split('T')[0];
+  }
+  return '';
+};
 
 interface CriarOrdemServicoProps {
   onClose?: () => void;
@@ -89,7 +112,13 @@ export default function CriarOrdemServicoPage({
 
         if (targetProj) {
           const idProj = (targetProj.value || targetProj.id).toString();
-          setFormData(prev => ({ ...prev, IdProjeto: idProj, Projeto: targetProj.label }));
+          setFormData(prev => ({ 
+            ...prev, 
+            IdProjeto: idProj, 
+            Projeto: targetProj.label,
+            DescEmpresa: targetProj.DescEmpresa || '',
+            IdEmpresa: targetProj.IdEmpresa ? String(targetProj.IdEmpresa) : ''
+          }));
           fetchTags(idProj, initialTagId, initialTagName);
         }
       }
@@ -111,7 +140,13 @@ export default function CriarOrdemServicoPage({
       }
       if (targetProj) {
         const idProj = (targetProj.value || targetProj.id).toString();
-        setFormData(prev => ({ ...prev, IdProjeto: idProj, Projeto: targetProj.label }));
+        setFormData(prev => ({ 
+          ...prev, 
+          IdProjeto: idProj, 
+          Projeto: targetProj.label,
+          DescEmpresa: targetProj.DescEmpresa || '',
+          IdEmpresa: targetProj.IdEmpresa ? String(targetProj.IdEmpresa) : ''
+        }));
         fetchTags(idProj, initialTagId, initialTagName);
       }
     }
@@ -139,7 +174,13 @@ export default function CriarOrdemServicoPage({
             chosenTag = json.data[0];
           }
           const chosenTagId = (chosenTag.value || chosenTag.id).toString();
-          setFormData(prev => ({ ...prev, IdTag: chosenTagId, Tag: chosenTag.label }));
+          const initialDate = chosenTag.DataPrevisao ? toInputDate(chosenTag.DataPrevisao) : '';
+          setFormData(prev => ({ 
+            ...prev, 
+            IdTag: chosenTagId, 
+            Tag: chosenTag.label,
+            DataPrevisao: initialDate || prev.DataPrevisao || ''
+          }));
           fetchTagDetails(chosenTagId, true);
         } else {
           setFormData(prev => ({ ...prev, IdTag: '', Tag: '', DescTag: '', DataPrevisao: '' }));
@@ -159,10 +200,13 @@ export default function CriarOrdemServicoPage({
       if (json.success && json.data) {
         setMessage(null);
 
+        const rawDate = json.data.DataPrevisao || json.data.ProjDataPrevisao || '';
+        const formattedDate = toInputDate(rawDate);
+
         setFormData(prev => ({
           ...prev,
           DescTag: json.data.DescTag || '',
-          DataPrevisao: json.data.DataPrevisao || ''
+          DataPrevisao: formattedDate || prev.DataPrevisao || ''
         }));
       }
     } catch (err) {
@@ -194,16 +238,37 @@ export default function CriarOrdemServicoPage({
 
   const handleProjetoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idProjeto = e.target.value;
-    const projeto = projetos.find(p => (p.value || p.id)?.toString() === idProjeto)?.label || '';
-    setFormData(prev => ({ ...prev, IdProjeto: idProjeto, Projeto: projeto, IdTag: '', Tag: '', DescTag: '', DataPrevisao: '' }));
+    const selectedProj = projetos.find(p => (p.value || p.id)?.toString() === idProjeto);
+    const projeto = selectedProj?.label || '';
+    const descEmpresa = selectedProj?.DescEmpresa || '';
+    const idEmpresa = selectedProj?.IdEmpresa ? String(selectedProj.IdEmpresa) : '';
+
+    setFormData(prev => ({ 
+      ...prev, 
+      IdProjeto: idProjeto, 
+      Projeto: projeto, 
+      DescEmpresa: descEmpresa,
+      IdEmpresa: idEmpresa,
+      IdTag: '', 
+      Tag: '', 
+      DescTag: '', 
+      DataPrevisao: '' 
+    }));
     setTags([]);
     if (idProjeto) fetchTags(idProjeto);
   };
 
   const handleTagChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const idTag = e.target.value;
-    const tag = tags.find(t => (t.value || t.id)?.toString() === idTag)?.label || '';
-    setFormData(prev => ({ ...prev, IdTag: idTag, Tag: tag }));
+    const selectedTag = tags.find(t => (t.value || t.id)?.toString() === idTag);
+    const tag = selectedTag?.label || '';
+    const initialDate = selectedTag?.DataPrevisao ? toInputDate(selectedTag.DataPrevisao) : '';
+    setFormData(prev => ({ 
+      ...prev, 
+      IdTag: idTag, 
+      Tag: tag,
+      DataPrevisao: initialDate || ''
+    }));
     if (idTag) fetchTagDetails(idTag, false);
   };
 
@@ -223,9 +288,10 @@ export default function CriarOrdemServicoPage({
 
   const getWorkingDays = (endDateStr: string) => {
     if (!endDateStr) return null;
-    const end = new Date(endDateStr);
-    // Para resolver fuso horario com strings YYYY-MM-DD
-    const endLocal = new Date(end.getTime() + end.getTimezoneOffset() * 60000);
+    const iso = toInputDate(endDateStr);
+    if (!iso) return null;
+    const [y, m, d] = iso.split('-').map(Number);
+    const endLocal = new Date(y, m - 1, d);
     const start = new Date();
     if (isNaN(endLocal.getTime())) return null;
     
@@ -259,8 +325,13 @@ export default function CriarOrdemServicoPage({
     setSaving(true);
     setMessage(null);
 
+    const selectedTag = tags.find(t => (t.value || t.id)?.toString() === formData.IdTag);
+    const fallbackDate = toInputDate(selectedTag?.DataPrevisao);
+    const finalDataPrevisao = formData.DataPrevisao || fallbackDate || null;
+
     const payload = {
       ...formData,
+      DataPrevisao: finalDataPrevisao,
       CriadoPor: user?.nomeCompleto || user?.nome || user?.login || 'Sistema',
       Estatus: 'A',
       IdMatriz: user?.IdMatriz || 0
@@ -380,6 +451,12 @@ export default function CriarOrdemServicoPage({
                   : projetos.map(p => <option key={p.value || p.id} value={p.value || p.id}>{p.label}</option>)
                 }
               </select>
+              {formData.DescEmpresa && (
+                <p className="text-[11px] text-gray-500 mt-1 flex items-center gap-1">
+                  <span>Cliente / Empresa:</span>
+                  <strong className="text-gray-800 font-semibold">{formData.DescEmpresa}</strong>
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1 flex items-center justify-between">
@@ -419,7 +496,7 @@ export default function CriarOrdemServicoPage({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="flex-1">
               <label className="block text-xs font-medium text-gray-500 mb-1">Data de Previsão (Tag)</label>
-              <input type="date" name="DataPrevisao" value={formData.DataPrevisao?.substring(0, 10) || ''} onChange={handleInputChange} className={inputClass} />
+              <input type="date" name="DataPrevisao" value={toInputDate(formData.DataPrevisao)} onChange={handleInputChange} className={inputClass} />
             </div>
             <div className="flex items-end pb-0">
               {formData.DataPrevisao && (
