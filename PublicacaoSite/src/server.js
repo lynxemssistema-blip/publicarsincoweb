@@ -4899,8 +4899,8 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
             queryParams.push(`%${descEmpresa}%`);
         }
         if (cnpj) {
-            conditions.push("p.Cnpj LIKE ?");
-            queryParams.push(`%${cnpj}%`);
+            conditions.push("(p.Cnpj LIKE ? OR pj.Cnpj LIKE ?)");
+            queryParams.push(`%${cnpj}%`, `%${cnpj}%`);
         }
 
         const whereClause = 'WHERE ' + conditions.join(' AND ');
@@ -4915,7 +4915,8 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
         const sql = `
             SELECT
                 p.IdProjeto, p.Projeto, p.DescProjeto,
-                p.ClienteProjeto, p.DescEmpresa, p.Cnpj,
+                p.ClienteProjeto, p.DescEmpresa,
+                COALESCE(NULLIF(TRIM(p.Cnpj), ''), pj.Cnpj) AS Cnpj,
                 p.DataPrevisao, p.DataCriacao, p.PrazoEntrega,
                 p.StatusProj, p.DescStatus,
                 p.liberado, p.DataLiberacao,
@@ -4926,6 +4927,7 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
                 COALESCE(ap.qtd, 0) AS temApontamento,
                 0 AS temSaldoPendente
             FROM projetos p
+            LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
             LEFT JOIN (
                 SELECT os2.IdProjeto, COUNT(c2.IdOrdemServicoItemControle) AS qtd
                 FROM ordemservicoitemcontrole c2
@@ -4941,6 +4943,7 @@ app.get('/api/projeto', tenantMiddleware, async (req, res) => {
 
         const countSql = `
             SELECT COUNT(*) AS total FROM projetos p
+            LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
             ${whereClause}
         `;
 
@@ -4967,13 +4970,28 @@ app.get('/api/projeto/:id', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(
             `SELECT p.*,
+                COALESCE(
+                    NULLIF(TRIM(p.Cnpj), ''),
+                    pj.Cnpj,
+                    (SELECT pj2.Cnpj FROM pessoajuridica pj2 WHERE (pj2.RazaoSocial = p.ClienteProjeto OR pj2.NomeFantasia = p.DescEmpresa OR pj2.RazaoSocial = p.DescEmpresa OR pj2.NomeFantasia = p.ClienteProjeto) LIMIT 1)
+                ) AS Cnpj,
+                COALESCE(NULLIF(TRIM(p.ClienteProjeto), ''), pj.RazaoSocial, pj.NomeFantasia, p.DescEmpresa) AS ClienteProjeto,
+                COALESCE(NULLIF(TRIM(p.DescEmpresa), ''), pj.NomeFantasia, pj.RazaoSocial, p.ClienteProjeto) AS DescEmpresa,
+                COALESCE(NULLIF(TRIM(p.NomeFantasia), ''), pj.NomeFantasia) AS NomeFantasia,
+                COALESCE(NULLIF(TRIM(p.InscEst), ''), pj.InscEst) AS InscEst,
+                COALESCE(NULLIF(TRIM(p.EnderecoCliente), ''), pj.Endereco) AS EnderecoCliente,
+                COALESCE(NULLIF(TRIM(p.TelefoneEntrega), ''), pj.Telefone, pj.Celular) AS TelefoneEntrega,
+                COALESCE(NULLIF(TRIM(p.EmailComercial), ''), pj.Email) AS EmailComercial,
+                COALESCE(NULLIF(TRIM(p.ContatoComercial), ''), pj.Responsavel) AS ContatoComercial,
                 (SELECT COUNT(*) FROM ordemservicoitemcontrole c
                  INNER JOIN ordemservicoitem oi ON oi.IdOrdemServicoItem = c.IdOrdemServicoItem
                  INNER JOIN ordemservico os ON os.IdOrdemServico = oi.IdOrdemServico
                  WHERE os.IdProjeto = p.IdProjeto
                    AND (c.D_E_L_E_T_E IS NULL OR c.D_E_L_E_T_E <> '*')
                 ) AS temApontamento
-            FROM projetos p WHERE p.IdProjeto = ?`,
+            FROM projetos p
+            LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
+            WHERE p.IdProjeto = ?`,
             [req.params.id]
         );
         if (rows.length > 0) {
@@ -7281,6 +7299,30 @@ app.get('/api/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
             WHERE IdProjeto = ? AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
             ORDER BY IdTag DESC
         `, [req.params.projetoId]);
+
+        if (rows.length > 0) {
+            const tagIds = rows.map(r => r.IdTag);
+            const placeholders = tagIds.map(() => '?').join(',');
+            // Fabricada: soma do Fator de todas as OS liberadas (Liberado_Engenharia='S') por tag
+            const [fabRows] = await req.tenantDbPool.execute(
+                `SELECT IdTag, COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                 FROM ordemservico
+                 WHERE IdTag IN (${placeholders})
+                   AND Liberado_Engenharia = 'S'
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')
+                 GROUP BY IdTag`,
+                tagIds
+            );
+            const fabMap = new Map(fabRows.map(f => [f.IdTag, parseFloat(f.QtdeFabricadaOS) || 0]));
+
+            for (const tag of rows) {
+                const qtdeTag = parseFloat(tag.QtdeTag) || 0;
+                const fabricada = fabMap.get(tag.IdTag) ?? 0;
+                tag.QtdeLiberada = fabricada;
+                tag.SaldoTag = Math.max(0, Math.round((qtdeTag - fabricada) * 100) / 100);
+            }
+        }
+
         res.json({ success: true, data: rows });
     } catch (error) {
         console.error('Error fetching tags:', error);
@@ -7292,11 +7334,31 @@ app.get('/api/projeto/:projetoId/tags', tenantMiddleware, async (req, res) => {
 app.get('/api/tag/:id', tenantMiddleware, async (req, res) => {
     try {
         const [rows] = await req.tenantDbPool.execute(
-            'SELECT * FROM tags WHERE IdTag = ?',
+            `SELECT t.*, p.DataPrevisao AS ProjDataPrevisao
+             FROM tags t
+             LEFT JOIN projetos p ON p.IdProjeto = t.IdProjeto
+             WHERE t.IdTag = ?`,
             [req.params.id]
         );
         if (rows.length > 0) {
-            res.json({ success: true, data: rows[0] });
+            const tag = rows[0];
+            if (!tag.DataPrevisao || tag.DataPrevisao === 'null' || String(tag.DataPrevisao).trim() === '') {
+                tag.DataPrevisao = tag.ProjDataPrevisao || null;
+            }
+            const [fabRows] = await req.tenantDbPool.execute(
+                `SELECT COALESCE(SUM(Fator), 0) AS QtdeFabricadaOS
+                 FROM ordemservico
+                 WHERE IdTag = ?
+                   AND Liberado_Engenharia = 'S'
+                   AND (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '')`,
+                [tag.IdTag]
+            );
+            const qtdeTag = parseFloat(tag.QtdeTag) || 0;
+            const fabricada = parseFloat(fabRows[0]?.QtdeFabricadaOS) || 0;
+            tag.QtdeLiberada = fabricada;
+            tag.SaldoTag = Math.max(0, Math.round((qtdeTag - fabricada) * 100) / 100);
+
+            res.json({ success: true, data: tag });
         } else {
             res.status(404).json({ success: false, message: 'Tag não encontrada' });
         }
@@ -7743,9 +7805,18 @@ app.get('/api/ordemservico/projetos-clonagem', tenantMiddleware, async (req, res
     try {
         // Exibe projetos ativos (não deletados e não finalizados)
         // Projetos liberados pela engenharia (liberado='S') TAMBÉM aparecem — apenas finalizados são excluídos
-        const [rows] = await req.tenantDbPool.execute(
-            "SELECT IdProjeto as value, Projeto as label FROM projetos WHERE (D_E_L_E_T_E IS NULL OR D_E_L_E_T_E = '') AND (Finalizado IS NULL OR Finalizado <> 'C') ORDER BY Projeto"
-        );
+        const [rows] = await req.tenantDbPool.execute(`
+            SELECT 
+                p.IdProjeto as value, 
+                p.Projeto as label,
+                COALESCE(NULLIF(p.DescEmpresa, ''), pj.NomeFantasia, pj.RazaoSocial, p.ClienteProjeto, '') as DescEmpresa,
+                COALESCE(NULLIF(p.IdEmpresa, 0), pj.IdPessoa, 0) as IdEmpresa
+            FROM projetos p
+            LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
+            WHERE (p.D_E_L_E_T_E IS NULL OR p.D_E_L_E_T_E = '') 
+              AND (p.Finalizado IS NULL OR p.Finalizado <> 'C') 
+            ORDER BY p.Projeto
+        `);
         console.log(`[ProjetosClonagem] Tenant: ${req.tenantId || 'default'} | Projetos disponíveis: ${rows.length}`);
         res.json({ success: true, data: rows });
     } catch (error) {
@@ -7759,7 +7830,19 @@ app.get('/api/ordemservico/tags-clonagem', tenantMiddleware, async (req, res) =>
     try {
         const projetoId = req.query.projetoId;
         if (!projetoId) return res.json({ success: true, data: [] });
-        const [rows] = await req.tenantDbPool.execute("SELECT IdTag as value, Tag as label FROM tags WHERE (D_E_L_E_T_E IS NULL OR TRIM(D_E_L_E_T_E) = '') AND (Finalizado IS NULL OR (TRIM(Finalizado) <> 'C' AND TRIM(Finalizado) <> 'S')) AND IdProjeto = ? ORDER BY Tag", [projetoId]);
+        const [rows] = await req.tenantDbPool.execute(`
+            SELECT 
+                t.IdTag as value, 
+                t.Tag as label, 
+                COALESCE(NULLIF(NULLIF(t.DataPrevisao, 'null'), ''), p.DataPrevisao) as DataPrevisao,
+                t.DescTag
+            FROM tags t
+            LEFT JOIN projetos p ON p.IdProjeto = t.IdProjeto
+            WHERE (t.D_E_L_E_T_E IS NULL OR TRIM(t.D_E_L_E_T_E) = '') 
+              AND (t.Finalizado IS NULL OR (TRIM(t.Finalizado) <> 'C' AND TRIM(t.Finalizado) <> 'S')) 
+              AND t.IdProjeto = ? 
+            ORDER BY t.Tag
+        `, [projetoId]);
         res.json({ success: true, data: rows });
     } catch (error) { res.status(500).json({ success: false }); }
 });
@@ -7799,6 +7882,44 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
     }
     try {
         const now = getCurrentDateTimeBR();
+
+        // Garante que DescEmpresa e IdEmpresa venham diretamente do Projeto selecionado
+        let descEmpresa = data.DescEmpresa || '';
+        let idEmpresa = data.IdEmpresa || 0;
+        if (!descEmpresa || !idEmpresa) {
+            const [projInfo] = await req.tenantDbPool.execute(`
+                SELECT 
+                    COALESCE(NULLIF(p.DescEmpresa, ''), pj.NomeFantasia, pj.RazaoSocial, p.ClienteProjeto, '') as resolvedDescEmpresa,
+                    COALESCE(NULLIF(p.IdEmpresa, 0), pj.IdPessoa, 0) as resolvedIdEmpresa
+                FROM projetos p
+                LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
+                WHERE p.IdProjeto = ? OR p.Projeto = ?
+                LIMIT 1
+            `, [data.IdProjeto || 0, data.Projeto || '']);
+            if (projInfo.length > 0) {
+                if (!descEmpresa) descEmpresa = projInfo[0].resolvedDescEmpresa || '';
+                if (!idEmpresa) idEmpresa = projInfo[0].resolvedIdEmpresa || 0;
+            }
+        }
+
+        // Se não estipular DataPrevisao, o default será a data de previsão da tag correspondente (com fallback para o projeto)
+        let dataPrevisao = (data.DataPrevisao && data.DataPrevisao !== 'null' && String(data.DataPrevisao).trim() !== '')
+            ? String(data.DataPrevisao).trim()
+            : null;
+
+        if (!dataPrevisao && data.IdTag) {
+            const [tagInfo] = await req.tenantDbPool.execute(`
+                SELECT 
+                    COALESCE(NULLIF(NULLIF(t.DataPrevisao, 'null'), ''), NULLIF(NULLIF(p.DataPrevisao, 'null'), '')) AS defaultDataPrevisao
+                FROM tags t
+                LEFT JOIN projetos p ON p.IdProjeto = t.IdProjeto
+                WHERE t.IdTag = ?
+                LIMIT 1
+            `, [data.IdTag]);
+            if (tagInfo.length > 0 && tagInfo[0].defaultDataPrevisao) {
+                dataPrevisao = tagInfo[0].defaultDataPrevisao;
+            }
+        }
         
         const [result] = await req.tenantDbPool.execute(
             `INSERT INTO ordemservico (
@@ -7812,15 +7933,15 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.Tag || '',
                 data.DescTag || '',
                 data.Descricao || '',
-                data.IdEmpresa || 0,
+                idEmpresa,
                 data.IdProjeto || 0,
                 data.IdTag || 0,
-                data.DescEmpresa || '',
+                descEmpresa,
                 '',  // endereço real definido abaixo após obter o ID
                 data.CriadoPor || 'Sistema',
                 data.DataCriacao || now,
                 data.Estatus || 'A',
-                data.DataPrevisao || null,
+                dataPrevisao,
                 data.ProdutoPadrao || '',
                 data.CodDesenhoProduto || '',
                 data.DescricaoProduto || '',
@@ -8388,9 +8509,17 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
         const os = origOS[0];
 
         // 2. Obter Dados do Novo Projeto e Nova Tag
-        const [rowProjeto] = await connection.query('SELECT Projeto FROM projetos WHERE IdProjeto = ?', [novoIdProjeto]);
+        const [rowProjeto] = await connection.query(`
+            SELECT 
+                p.Projeto,
+                COALESCE(NULLIF(p.DescEmpresa, ''), pj.NomeFantasia, pj.RazaoSocial, p.ClienteProjeto, '') as DescEmpresa,
+                COALESCE(NULLIF(p.IdEmpresa, 0), pj.IdPessoa, 0) as IdEmpresa
+            FROM projetos p
+            LEFT JOIN pessoajuridica pj ON pj.IdPessoa = p.IdEmpresa
+            WHERE p.IdProjeto = ?
+        `, [novoIdProjeto]);
         if (rowProjeto.length === 0) return res.status(404).json({ success: false, message: 'Projeto de destino não encontrado' });
-        const { Projeto: nomeProjeto } = rowProjeto[0];
+        const { Projeto: nomeProjeto, DescEmpresa: novoDescEmpresa, IdEmpresa: novoIdEmpresa } = rowProjeto[0];
 
         const [rowTag] = await connection.query('SELECT Tag, DescTag, DataPrevisao, QtdeTag, QtdeLiberada, SaldoTag FROM tags WHERE IdTag = ?', [novoIdTag]);
         if (rowTag.length === 0) return res.status(404).json({ success: false, message: 'Tag de destino não encontrada' });
@@ -8414,7 +8543,7 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
 
         const [resultInsert] = await connection.query(queryInsertMestre, [
             novoIdProjeto, nomeProjeto, novoIdTag, nomeTag, descTagDestino, descUsada, fator, os.EnderecoOrdemServico,
-            criador, dataCriacaoFormatada, IdOrdemServico, prevUsada, os.IdEmpresa, os.DescEmpresa
+            criador, dataCriacaoFormatada, IdOrdemServico, prevUsada, novoIdEmpresa || os.IdEmpresa, novoDescEmpresa || os.DescEmpresa
         ]);
 
         const novoId = resultInsert.insertId;
