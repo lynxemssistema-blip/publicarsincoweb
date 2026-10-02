@@ -60,6 +60,21 @@ const fmtBR = (d?: string | null): string | null => {
  return s;
 };
 
+// Converte data (DD/MM/YYYY ou YYYY-MM-DD ou ISO) em timestamp numérico para comparação
+const parseDateToTimestamp = (d?: string | null): number | null => {
+ if (!d || typeof d !== 'string' || !d.trim()) return null;
+ const s = d.trim();
+ if (/^\d{2}\/\d{2}\/\d{4}/.test(s)) {
+ const [day, mon, year] = s.substring(0, 10).split('/').map(Number);
+ return new Date(year, mon - 1, day).getTime();
+ }
+ if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+ const [year, mon, day] = s.substring(0, 10).split('-').map(Number);
+ return new Date(year, mon - 1, day).getTime();
+ }
+ return null;
+};
+
 interface EtapasRow {
  IdProjeto: number;
  Projeto: string;
@@ -186,19 +201,8 @@ export default function AcompanhamentoEtapas() {
  // Retorna 'late' se Real > Previsão, 'ok' se <= Previsão, 'none' se sem dados
  const checkRealVsPrevisao = (realStr: string | undefined, previsaoStr: string): 'late' | 'ok' | 'none' => {
  if (!realStr || !previsaoStr) return 'none';
- const toBRDate = (s: string) => {
- const clean = s.substring(0, 10);
- // DD/MM/YYYY
- if (/^\d{2}\/\d{2}\/\d{4}/.test(clean)) {
- const [d, m, y] = clean.split('/');
- return new Date(`${y}-${m}-${d}`);
- }
- // YYYY-MM-DD
- if (/^\d{4}-\d{2}-\d{2}/.test(clean)) return new Date(clean);
- return null;
- };
- const dReal = toBRDate(realStr);
- const dPrev = toBRDate(previsaoStr);
+ const dReal = parseDateToTimestamp(realStr);
+ const dPrev = parseDateToTimestamp(previsaoStr);
  if (!dReal || !dPrev) return 'none';
  return dReal > dPrev ? 'late' : 'ok';
  };
@@ -705,6 +709,9 @@ export default function AcompanhamentoEtapas() {
  const isFinalizado = row.Finalizado?.toUpperCase() === 'C';
  const isLiberado = row.liberado?.toUpperCase() === 'S';
  const isBloqueado = row.liberado?.toUpperCase() === 'B';
+ const tFinal = parseDateToTimestamp(row.DataFinal);
+ const tPrev = parseDateToTimestamp(row.DataPrevisao);
+ const isConcluidoAntesDoPrazo = (isFinalizado || !!tFinal) && tFinal !== null && tPrev !== null && tFinal <= tPrev;
   // Desabilitar botão calendario se não há nenhuma data
   const hasDates = setoresDinamicos.some(s => 
       row[`Plan${s.sulfixo}` as keyof EtapasRow] || 
@@ -749,7 +756,13 @@ export default function AcompanhamentoEtapas() {
  {/* PREV. PROJETO */}
  <td className="p-2 border-r border-gray-200 text-center">
  {row.DataPrevisao ? (
- <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-orange-100 border border-orange-400 text-orange-800 font-bold text-[10px] whitespace-nowrap">
+ <span 
+ title={isConcluidoAntesDoPrazo ? `Concluído em ${row.DataFinal || 'data anterior'} (dentro do prazo previsto)` : undefined}
+ className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-bold text-[10px] whitespace-nowrap ${
+ isConcluidoAntesDoPrazo
+ ? 'bg-emerald-100 border border-emerald-500 text-emerald-800'
+ : 'bg-orange-100 border border-orange-400 text-orange-800'
+ }`}>
  🗓 {typeof row.DataPrevisao === 'string' && row.DataPrevisao.includes('T')
  ? fmtBR(row.DataPrevisao)
  : row.DataPrevisao}
