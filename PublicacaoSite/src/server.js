@@ -14426,48 +14426,26 @@ const ensureDynamicResourceColumns = async (pool, resourceName, fabricaFlag) => 
             console.error('ensureDynamicResourceColumns failed for Eng Stage:', e);
         }
     } else {
-        // --- EXISTING LOGIC FOR FABRICA = SIM ---
+        // --- LOGIC FOR FABRICA = SIM ---
+        // Conforme regra: não incluir colunas dinâmicas nas tabelas 'ordemservicoitem' e 'ordemservico'.
+        // O controle operacional e apontamentos destes recursos ocorrem via tabela 'material_processo'.
         const cleanResource = rawClean;
         try {
-            const [rows] = await pool.execute(`SHOW COLUMNS FROM ordemservicoitem`);
-            const existingCols = rows.map(c => c.Field.toLowerCase());
-            const columnsToAdd = [
-                { name: `txt${cleanResource}`, type: 'VARCHAR(255) NULL' },
-                { name: `${cleanResource}TotalExecutado`, type: 'VARCHAR(255) NULL' },
-                { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
-            ];
-            for (const col of columnsToAdd) {
-                if (!existingCols.includes(col.name.toLowerCase())) {
-                    await pool.execute(`ALTER TABLE ordemservicoitem ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
-                }
-            }
-            
-            const [osCols] = await pool.execute(`SHOW COLUMNS FROM ordemservico`);
-            const existingOsCols = osCols.map(c => c.Field.toLowerCase());
-            const osColumnsToAdd = [
-                { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
-                { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
-            ];
-            for (const col of osColumnsToAdd) {
-                if (!existingOsCols.includes(col.name.toLowerCase())) {
-                    await pool.execute(`ALTER TABLE ordemservico ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
-                }
-            }
-
             const [tagsCols] = await pool.execute(`SHOW COLUMNS FROM tags`);
             const existingTagsCols = tagsCols.map(c => c.Field.toLowerCase());
-            for (const col of osColumnsToAdd) {
+            const tagsColumnsToAdd = [
+                { name: `PlanejadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `PlanejadoFinal${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoInicio${cleanResource}`, type: 'DATETIME NULL' },
+                { name: `RealizadoFinal${cleanResource}`, type: 'DATETIME NULL' }
+            ];
+            for (const col of tagsColumnsToAdd) {
                 if (!existingTagsCols.includes(col.name.toLowerCase())) {
                     await pool.execute(`ALTER TABLE tags ADD COLUMN \`${col.name}\` ${col.type}`).catch(()=>{});
                 }
             }
         } catch (e) {
-            console.error('ensureDynamicResourceColumns failed:', e);
+            console.error('ensureDynamicResourceColumns failed for tags:', e);
         }
     }
 };
