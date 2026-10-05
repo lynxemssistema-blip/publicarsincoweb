@@ -25,7 +25,12 @@ const emptyForm: Recurso = {
   DataLiberada: 'NAO'
 };
 
-export default function RecursoFabricacaoPage() {
+interface Props {
+  isModal?: boolean;
+  onCloseModal?: (createdItem?: Recurso) => void;
+}
+
+export default function RecursoFabricacaoPage({ isModal = false, onCloseModal }: Props = {}) {
   const { token } = useAuth();
   const [recursos, setRecursos] = useState<Recurso[]>([]);
   const [formData, setFormData] = useState<Recurso>(emptyForm); // For modal (NEW)
@@ -34,7 +39,7 @@ export default function RecursoFabricacaoPage() {
   
   const [searchNome, setSearchNome] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(isModal);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,13 +68,13 @@ export default function RecursoFabricacaoPage() {
     fetchRecursos();
     // Auto-abrir modal "Novo Processo" se navegou com ?novo=1
     const params = new URLSearchParams(window.location.search);
-    if (params.get('novo') === '1') {
+    if (params.get('novo') === '1' && !isModal) {
       setShowForm(true);
       setFormData(emptyForm);
       // Limpar param da URL sem recarregar
       window.history.replaceState({}, '', window.location.pathname);
     }
-  }, []);
+  }, [isModal]);
 
   const filteredRecursos = recursos.filter(s => {
     return !searchNome || s.processofabricacao?.toLowerCase().includes(searchNome.toLowerCase());
@@ -122,7 +127,8 @@ export default function RecursoFabricacaoPage() {
       const json = await res.json();
       if (json.success) {
         await fetchRecursos();
-        setFormData(emptyForm);
+        const created = json.data || formData;
+        resetForm(created);
       } else {
         setError(json.message || 'Erro ao salvar');
       }
@@ -213,11 +219,165 @@ export default function RecursoFabricacaoPage() {
     }
   };
 
-  const resetForm = () => {
+  const resetForm = (createdItem?: Recurso) => {
     setFormData(emptyForm);
     setShowForm(false);
     setError(null);
+    if (isModal && onCloseModal) {
+      onCloseModal(createdItem);
+    }
   };
+
+  if (isModal) {
+    if (!showForm) return null;
+    return (
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-[9999] flex items-start justify-center p-4 overflow-y-auto"
+            onClick={(e) => e.target === e.currentTarget && resetForm()}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: -20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -20, scale: 0.95 }}
+              className="bg-white rounded-md shadow-2xl w-full max-w-lg my-8 overflow-hidden border border-slate-200"
+            >
+              <div className="flex items-center justify-between p-4 bg-[#32423D] text-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-[#E0E800]/20 text-[#E0E800] flex items-center justify-center">
+                    <Briefcase size={18} />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-bold">
+                      Novo Recurso / Processo de Fabricação
+                    </h2>
+                    <p className="text-[11px] text-gray-300">
+                      Cadastre um novo recurso de fabricação e retorne ao cadastro
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => resetForm()}
+                  className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                  title="Fechar e retornar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSubmit} className="p-5 space-y-4">
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 rounded bg-red-50 border border-red-200 text-red-700 text-xs flex justify-between items-center"
+                  >
+                    <span>{error}</span>
+                    <button type="button" onClick={() => setError(null)} className="text-red-700 hover:bg-red-100 rounded p-0.5"><X size={13} /></button>
+                  </motion.div>
+                )}
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Nome do Processo <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        name="processofabricacao"
+                        value={formData.processofabricacao || ''}
+                        onChange={handleInputChange}
+                        className={inputRequired}
+                        placeholder="Ex: USINAGEM"
+                        required
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Código
+                      </label>
+                      <input
+                        type="text"
+                        name="CodigoProcessoFabricacao"
+                        value={formData.CodigoProcessoFabricacao || ''}
+                        onChange={handleInputChange}
+                        className={inputBaseClass + " border-gray-200"}
+                        placeholder="Ex: US-01"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Fábrica <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <select
+                        name="Fabrica"
+                        value={formData.Fabrica}
+                        onChange={handleInputChange}
+                        className={inputRequired}
+                        required
+                      >
+                        <option value="SIM">Sim</option>
+                        <option value="NAO">Não</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Data Liberada <span className="text-red-500 font-bold">*</span>
+                      </label>
+                      <select
+                        name="DataLiberada"
+                        value={formData.DataLiberada}
+                        onChange={handleInputChange}
+                        className={inputRequired}
+                        required
+                      >
+                        <option value="SIM">Sim</option>
+                        <option value="NAO">Não</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-400 pt-2 border-t border-gray-100">
+                  <span className="text-red-500 font-bold">*</span> Campos obrigatórios
+                </p>
+
+                <div className="flex justify-between items-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => resetForm()}
+                    className="px-4 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs font-medium hover:bg-gray-50 transition-colors"
+                  >
+                    Cancelar e Voltar
+                  </button>
+                  <motion.button
+                    type="submit"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className="inline-flex items-center gap-2 px-5 py-2 rounded-lg bg-[#32423D] text-white font-medium text-xs hover:bg-[#3d4f49] transition-colors disabled:opacity-50 shadow-sm"
+                    disabled={saving}
+                  >
+                    {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    Salvar Processo
+                  </motion.button>
+                </div>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    );
+  }
 
   return (
     <div className="space-y-6 h-full flex flex-col min-h-0">

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
+import RecursoFabricacaoPage from './RecursoFabricacao';
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 interface UsuarioAdmin {
@@ -123,6 +124,7 @@ export default function CadastroUsuarioPage() {
 
  // Processos
  const [showProcessos, setShowProcessos] = useState(false);
+ const [showRecursoModal, setShowRecursoModal] = useState(false);
  const [loadingProc, setLoadingProc] = useState(false);
  const [loadingUserProc, setLoadingUserProc] = useState(false);
  const [loadingAction, setLoadingAction] = useState(false); // Global flag for association actions
@@ -130,23 +132,30 @@ export default function CadastroUsuarioPage() {
  const [userProcessos, setUserProcessos] = useState<UsuarioProcesso[]>([]);
 
  // ── Carregar setores + processos no mount (independente de usuário) ──
- useEffect(() => {
- if (!token) return;
- // Setores
- fetch('/api/rnc/sectors', { headers: { 'Authorization': `Bearer ${token}` } })
- .then(r => r.json())
- .then(data => { if (data.success) setSetores(data.data || []); })
- .catch(() => {});
-
- // Processos de fabricação — carregados uma única vez, independente de seleção
- // NOTA: rota renomeada para evitar conflito com /api/usuario/:id
- setLoadingProc(true);
- fetch('/api/processosfabricacao', { headers: { 'Authorization': `Bearer ${token}` } })
- .then(r => r.json())
- .then(data => { if (data.success) setProcessos(data.data || []); })
- .catch(() => {})
- .finally(() => setLoadingProc(false));
+ const fetchProcessos = useCallback(async () => {
+   if (!token) return;
+   setLoadingProc(true);
+   try {
+     const res = await fetch('/api/processosfabricacao', { headers: { 'Authorization': `Bearer ${token}` } });
+     const data = await res.json();
+     if (data.success) setProcessos(data.data || []);
+   } catch {
+     // ignore
+   } finally {
+     setLoadingProc(false);
+   }
  }, [token]);
+
+ useEffect(() => {
+   if (!token) return;
+   // Setores
+   fetch('/api/rnc/sectors', { headers: { 'Authorization': `Bearer ${token}` } })
+   .then(r => r.json())
+   .then(data => { if (data.success) setSetores(data.data || []); })
+   .catch(() => {});
+
+   fetchProcessos();
+ }, [token, fetchProcessos]);
 
  // ── Fetchusuários ──
  const fetchUsuarios = useCallback(async () => {
@@ -517,7 +526,17 @@ export default function CadastroUsuarioPage() {
  <div className="border-t border-amber-200 bg-white overflow-auto shrink-0 max-h-64">
  <div className="flex gap-3 p-3">
  <div className="flex-1 min-w-0">
- <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Processos Disponíveis <span className="text-slate-300 font-normal">({processos.length})</span></p>
+ <div className="flex items-center gap-1.5 mb-1.5">
+ <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">Processos Disponíveis <span className="text-slate-300 font-normal">({processos.length})</span></p>
+ <button
+   type="button"
+   onClick={() => setShowRecursoModal(true)}
+   className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] p-0.5 rounded transition-colors"
+   title="Adicionar Recurso de Fabricação"
+ >
+   <Plus size={13} strokeWidth={2.5} />
+ </button>
+ </div>
  <div className="border border-slate-200 rounded-lg overflow-auto max-h-44">
  <table className="w-full text-[11px]">
  <thead className="bg-[#567469] text-white sticky top-0"><tr>
@@ -573,9 +592,19 @@ export default function CadastroUsuarioPage() {
  {/* Grid 1: Todos os processos — carregado no mount, independente de usuário */}
  <div className="flex-1 min-w-0">
  <div className="flex items-center justify-between mb-1.5">
+ <div className="flex items-center gap-1.5">
  <p className="text-[9px] font-black text-slate-400 uppercase tracking-wider">
  Processos Disponíveis <span className="text-slate-300 font-normal">({processos.length})</span>
  </p>
+ <button
+   type="button"
+   onClick={() => setShowRecursoModal(true)}
+   className="text-[#03624C] hover:text-[#0b3a2d] hover:bg-[#eaf4f1] p-0.5 rounded transition-colors"
+   title="Adicionar Recurso de Fabricação"
+ >
+   <Plus size={13} strokeWidth={2.5} />
+ </button>
+ </div>
  <button type="button" onClick={async () => {
  if(loadingAction || !form.idUsuario) return;
  setLoadingAction(true);
@@ -743,6 +772,20 @@ export default function CadastroUsuarioPage() {
  )}
  </div>
  </div>
+
+ {/* Modal de Inclusão de Recursos de Fabricação */}
+ {showRecursoModal && (
+   <RecursoFabricacaoPage
+     isModal
+     onCloseModal={() => {
+       setShowRecursoModal(false);
+       fetchProcessos();
+       if (form.idUsuario) {
+         fetchUserProcessos(form.idUsuario);
+       }
+     }}
+   />
+ )}
  </div>
  );
 }

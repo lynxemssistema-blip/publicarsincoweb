@@ -31,7 +31,7 @@ Copy-Item -Path "package-lock.json" -Destination "PublicacaoSite" -Force
 
 # 5. Commit e Push
 Write-Host "Enviando atualizações para o GitHub (sinco-web e publicarsincoweb)..."
-git add PublicacaoSite/
+git add frontend/src/ src/ PublicacaoSite/ build_deploy.ps1
 git commit -m "chore: atualiza PublicacaoSite com a ultima versao - $(Get-Date -Format 'yyyy-MM-dd HH:mm')"
 git push origin main
 git push deployrepo main --force
