@@ -18,6 +18,7 @@ import { SetorDatas } from '../components/ordem-servico/SetorDatas';
 import { useToast } from '../contexts/ToastContext';
 import { useAuth } from '../contexts/AuthContext';
 import Swal from 'sweetalert2';
+import * as XLSX from 'xlsx-js-style';
 import ModalIncluirMaterialOS from '../components/ModalIncluirMaterialOS';
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -2318,6 +2319,85 @@ function OrdemServicoContent() {
         }
     };
 
+    // Relatório Excel com todas as OS exibidas na tela (lista carregada, respeitando filtros)
+    const handleExportarListaExcel = () => {
+        if (!ordens.length) {
+            addToast({ type: 'info', title: 'Sem dados', message: 'Não há Ordens de Serviço na tela para exportar.' });
+            return;
+        }
+        try {
+            const empresa = (user?.clientName || user?.dbName || 'Empresa').toString().toUpperCase();
+            const agora = new Date();
+            const dataAtual = agora.toLocaleDateString('pt-BR');
+            const NCOLS = 9;
+
+            const rows: any[][] = [
+                [empresa, '', '', '', '', '', '', '', ''],
+                ['Ordem de Serviço', '', '', '', '', '', '', '', dataAtual],
+                [`Total de OS: ${ordens.length}`, '', '', '', '', '', '', '', ''],
+                [],
+                ['Nº OS', 'Descrição da OS', 'Projeto', 'Tag', 'Empresa', 'Data de Previsão', 'Data de Liberação', 'Responsável pela Liberação', 'Data de Finalização']
+            ];
+            const HEADER_ROW = rows.length - 1;
+
+            ordens.forEach(os => {
+                const liberada = String(os.Liberado_Engenharia || '').trim().toUpperCase() === 'S';
+                const finalizada = os.OrdemServicoFinalizado === 'S' || os.OrdemServicoFinalizado === 'Sim' || !!os.DataFinalizado;
+                rows.push([
+                    os.IdOrdemServico,
+                    os.Descricao || '',
+                    os.Projeto || '',
+                    os.Tag || '',
+                    os.DescEmpresa || '',
+                    formatDateBR(os.DataPrevisao),
+                    liberada ? formatDateBR(os.Data_Liberacao_Engenharia) : '-',
+                    liberada ? (os.UsuarioLiberacao || '-') : '-',
+                    finalizada ? formatDateBR(os.DataFinalizado) : '-'
+                ]);
+            });
+
+            const ws = XLSX.utils.aoa_to_sheet(rows);
+            ws['!cols'] = [{ wch: 10 }, { wch: 50 }, { wch: 40 }, { wch: 30 }, { wch: 30 }, { wch: 18 }, { wch: 18 }, { wch: 30 }, { wch: 20 }];
+            ws['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: NCOLS - 1 } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: NCOLS - 2 } }, // título centralizado; data fica na última coluna
+                { s: { r: 2, c: 0 }, e: { r: 2, c: NCOLS - 1 } }
+            ];
+            ws['!rows'] = [{ hpt: 26 }, { hpt: 22 }, { hpt: 18 }];
+
+            const setStyle = (addr: string, style: any) => { if (ws[addr]) ws[addr].s = style; };
+            setStyle('A1', { font: { bold: true, sz: 16, color: { rgb: '32423D' } }, alignment: { horizontal: 'center', vertical: 'center' } });
+            setStyle('A2', { font: { bold: true, sz: 13, color: { rgb: '32423D' } }, alignment: { horizontal: 'center', vertical: 'center' } });
+            setStyle('I2', { font: { sz: 11, color: { rgb: '555555' } }, alignment: { horizontal: 'right', vertical: 'center' } });
+            setStyle('A3', { font: { sz: 10, bold: true } });
+            const border = { style: 'thin', color: { rgb: 'CCCCCC' } };
+            for (let c = 0; c < NCOLS; c++) {
+                setStyle(XLSX.utils.encode_cell({ r: HEADER_ROW, c }), {
+                    font: { bold: true, color: { rgb: 'FFFFFF' } },
+                    fill: { fgColor: { rgb: '32423D' } },
+                    alignment: { horizontal: 'center', vertical: 'center' }
+                });
+            }
+            for (let r = HEADER_ROW + 1; r < rows.length; r++) {
+                for (let c = 0; c < NCOLS; c++) {
+                    setStyle(XLSX.utils.encode_cell({ r, c }), {
+                        border: { top: border, bottom: border, left: border, right: border },
+                        alignment: { horizontal: c === 0 || c >= 5 ? 'center' : 'left', vertical: 'center' }
+                    });
+                }
+            }
+            ws['!autofilter'] = { ref: `A${HEADER_ROW + 1}:I${rows.length}` };
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Ordens de Serviço');
+            const stamp = agora.toISOString().slice(0, 10);
+            XLSX.writeFile(wb, `Relatorio_Ordens_Servico_${stamp}.xlsx`);
+            addToast({ type: 'success', title: 'Concluído', message: `Relatório gerado com ${ordens.length} OS.` });
+        } catch (err: any) {
+            addToast({ type: 'error', title: 'Falha', message: `Ao gerar Excel: ${err.message}` });
+        }
+    };
+
     const handleExportarRelatorio = async (os: OrdemServico, tipo: 'pdf' | 'excel') => {
         try {
             addToast({ type: 'info', title: 'Exportação', message: `Gerando relatório em ${tipo.toUpperCase()}...` });
@@ -4200,6 +4280,17 @@ function OrdemServicoContent() {
                         </div>
                         
                         <div className="flex-1"></div>
+                        <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={handleExportarListaExcel}
+                            title="Exportar em Excel as OS exibidas na tela"
+                            disabled={loading || ordens.length === 0}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-green-200 text-green-700 hover:bg-green-50 transition-colors text-xs font-medium bg-white mr-2 disabled:opacity-50"
+                        >
+                            <FileSpreadsheet size={14} />
+                            Exportar Excel
+                        </motion.button>
                         <motion.button
                             whileHover={{ scale: 1.02 }}
                             whileTap={{ scale: 0.98 }}

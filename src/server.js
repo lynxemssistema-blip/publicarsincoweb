@@ -8237,13 +8237,15 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
             }
         }
         
+        await ensureOsUsuarioLiberacaoCol(req.tenantDbPool);
+        const loginUsuarioOS = req.tenantUser?.login || req.user?.login || req.user?.nome || 'Sistema';
         const [result] = await req.tenantDbPool.execute(
             `INSERT INTO ordemservico (
                 Projeto, Tag, DescTag, Descricao, IdEmpresa, IdProjeto, IdTag, DescEmpresa,
                 EnderecoOrdemServico, CriadoPor, DataCriacao, Estatus, DataPrevisao,
                 ProdutoPadrao, CodDesenhoProduto, DescricaoProduto, ProdutoCriadoPor, DataCriacaoProduto,
-                Fator, TipoLiberacaoOrdemServico, IdMatriz
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                Fator, TipoLiberacaoOrdemServico, IdMatriz, UsuarioLiberacao
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
             [
                 data.Projeto || '',
                 data.Tag || '',
@@ -8265,7 +8267,8 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
                 data.DataCriacaoProduto || null,
                 data.Fator || 1,
                 data.TipoLiberacaoOrdemServico || 'Total',
-                data.IdMatriz || 0
+                data.IdMatriz || 0,
+                loginUsuarioOS
             ]
         );
         const novoId = result.insertId;
@@ -8322,8 +8325,38 @@ app.post('/api/ordemservico', tenantMiddleware, async (req, res) => {
 });
 
 // LIST Ordens de Serviço com paginação e filtros
+// Garante a coluna UsuarioLiberacao (responsável pela liberação da OS) em qualquer banco tenant
+const _osLibColChecked = new WeakSet();
+async function ensureOsUsuarioLiberacaoCol(poolRef) {
+    if (!poolRef || _osLibColChecked.has(poolRef)) return;
+    try {
+        const [cols] = await poolRef.execute(
+            `SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS
+             WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'ordemservico' AND COLUMN_NAME = 'UsuarioLiberacao'`
+        );
+        if (cols.length === 0) {
+            await poolRef.execute(`ALTER TABLE ordemservico ADD COLUMN UsuarioLiberacao VARCHAR(150) NULL`);
+            console.log("[OS] Coluna 'UsuarioLiberacao' adicionada em ordemservico.");
+        }
+        // Preenche as OS sem responsável com o conteúdo de CriadoPor (executa 1x por banco a cada inicialização)
+        const [upd] = await poolRef.execute(
+            `UPDATE ordemservico SET UsuarioLiberacao = CriadoPor
+             WHERE (UsuarioLiberacao IS NULL OR TRIM(UsuarioLiberacao) = '') AND CriadoPor IS NOT NULL AND TRIM(CriadoPor) <> ''`
+        );
+        if (upd.affectedRows > 0) console.log(`[OS] UsuarioLiberacao preenchido com CriadoPor em ${upd.affectedRows} OS.`);
+        _osLibColChecked.add(poolRef);
+    } catch (e) {
+        if (!String(e.message).includes('Duplicate column')) {
+            console.warn("[OS] Aviso ao garantir coluna UsuarioLiberacao:", e.message);
+        } else {
+            _osLibColChecked.add(poolRef);
+        }
+    }
+}
+
 app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
     try {
+        await ensureOsUsuarioLiberacaoCol(req.tenantDbPool);
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 50;
         const offset = (page - 1) * limit;
@@ -8355,11 +8388,12 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
         }
 
         if (projeto) {
-            // Se for puramente numérico, filtra por IdProjeto (mais preciso)
+            // Puramente numérico: pode ser o IdProjeto OU o nome/código do projeto (ex.: '011321',
+            // que não equivale ao IdProjeto 11321 por causa dos zeros à esquerda).
             // Caso contrário, filtra pelo nome do projeto (LIKE)
             if (/^\d+$/.test(projeto.trim())) {
-                whereClause += " AND IdProjeto = ?";
-                params.push(parseInt(projeto.trim()));
+                whereClause += " AND (IdProjeto = ? OR Projeto = ? OR Projeto LIKE ?)";
+                params.push(parseInt(projeto.trim()), projeto.trim(), `${projeto.trim()}%`);
             } else {
                 whereClause += " AND Projeto LIKE ?";
                 params.push(`%${projeto.trim()}%`);
@@ -8403,7 +8437,7 @@ app.get('/api/ordemservico', tenantMiddleware, async (req, res) => {
             SELECT 
                 os.IdOrdemServico, os.Projeto, os.Tag, os.DescTag, os.Descricao,
                 os.Estatus, os.DataPrevisao, os.DataCriacao, os.CriadoPor,
-                os.Liberado_Engenharia, os.Data_Liberacao_Engenharia,
+                os.Liberado_Engenharia, os.Data_Liberacao_Engenharia, os.UsuarioLiberacao,
                 os.IdOrdemServico, os.Projeto, os.Tag, os.DescTag, os.Descricao,
                 os.Estatus, os.DataPrevisao, os.DataCriacao, os.CriadoPor,
                 os.Liberado_Engenharia, os.Data_Liberacao_Engenharia,
@@ -8863,6 +8897,10 @@ app.post('/api/ordemservico/clonar', tenantMiddleware, async (req, res) => {
         ]);
 
         const novoId = resultInsert.insertId;
+        try {
+            await connection.query('UPDATE ordemservico SET UsuarioLiberacao = ? WHERE IdOrdemServico = ?',
+                [req.tenantUser?.login || req.user?.login || req.user?.nome || 'Sistema', novoId]);
+        } catch (e) { console.warn('[OS Clone] UsuarioLiberacao não gravado:', e.message); }
 
         // Tentar formatar Diretà³rio fisà­co
         let newEndereco = os.EnderecoOrdemServico;
@@ -9635,6 +9673,7 @@ app.post('/api/ordemservico/liberar', tenantMiddleware, async (req, res) => {
             }
         }
 
+        await ensureOsUsuarioLiberacaoCol(req.tenantDbPool || pool);
         connection = await pool.getConnection();
         await connection.beginTransaction();
 
@@ -14325,6 +14364,23 @@ app.delete('/api/config/limites-recursos/:id', tenantMiddleware, async (req, res
 // Qualquer escrita (POST /api/config/menu) salva localmente e quebra o vínculo com lynxlocal.
 app.get('/api/config/menu', tenantMiddleware, async (req, res) => {
     try {
+        // O menu do lynxlocal é o padrão para TODAS as empresas (prioridade sobre o menu salvo localmente).
+        // Lido ANTES de qualquer migração do banco da empresa (que pode falhar em schemas legados).
+        try {
+            const lynxPoolDefault = await getLynxLocalPool();
+            if (lynxPoolDefault) {
+                const [lynxDefRows] = await lynxPoolDefault.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
+                if (lynxDefRows.length > 0 && lynxDefRows[0].MenuStructure) {
+                    const menu = JSON.parse(lynxDefRows[0].MenuStructure);
+                    console.log('[Config/Menu GET] Menu padrão do lynxlocal retornado (' + menu.length + ' itens).');
+                    return res.json({ success: true, menu, source: 'lynxlocal_default' });
+                }
+            }
+        } catch (lynxDefErr) {
+            console.warn('[Config/Menu GET] Falha ao ler menu padrão do lynxlocal:', lynxDefErr.message);
+        }
+
+        // Fallback: lynxlocal sem menu -> usa o menu salvo na empresa
         await ensureConfigColumns(req.tenantDbPool);
 
         // Verifica se o banco ativo já tem configuração própria (ao menos 1 linha)
@@ -14332,7 +14388,7 @@ app.get('/api/config/menu', tenantMiddleware, async (req, res) => {
         const tenantHasOwnConfig = countRows[0].cnt > 0;
 
         if (tenantHasOwnConfig) {
-            // Banco ativo tem linha própria: usa o MenuStructure local
+            // Fallback: lynxlocal sem menu -> usa o MenuStructure local
             const [rows] = await req.tenantDbPool.execute('SELECT MenuStructure FROM configuracaosistema LIMIT 1');
             if (rows.length > 0 && rows[0].MenuStructure) {
                 try {
